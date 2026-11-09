@@ -53,7 +53,8 @@ Osage is also the name of the **Osage Nation** (Wahzhazhe), a sovereign Native A
 
 ## Licence
 
-- **Code:** [GNU AGPL-3.0](LICENSE).
+- **Engine, server and tools:** [GNU AGPL-3.0](LICENSE).
+- **Protocol specification:** Apache-2.0. **Client SDKs:** MIT OR Apache-2.0 — so that any client, including proprietary and app-store apps, can join an osage world ([D-003](design/decisions.md#d-003--licences-open-protocol-and-permissive-sdks-agpl-engine-and-server)).
 - **Documentation** (including `research/` and `design/`): [CC BY-SA 4.0](LICENSE-DOCS).
 
-Whether the protocol specification and client SDKs should use a permissive licence, so that any client can join an osage world, is an [open decision](research/00-synthesis.md#open-decisions).
+Decisions taken so far are in the [decision log](design/decisions.md).

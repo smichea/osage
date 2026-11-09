@@ -122,6 +122,8 @@ Each module is a crate or package with a `SPEC.md`, a conformance test suite and
 
 ## Open decisions
 
+> **Decided on 2026-11-09:** 1 → Bevy ([D-001](../design/decisions.md#d-001--bevy-is-the-base-of-the-world-server-and-the-native-client)), 2 → three.js first, Bevy-wasm later ([D-002](../design/decisions.md#d-002--browser-client-typescript-sdk--threejs-first-bevy-wasm-later)), 3 → open spec (Apache-2.0) and SDKs MIT OR Apache-2.0, AGPL engine and server ([D-003](../design/decisions.md#d-003--licences-open-protocol-and-permissive-sdks-agpl-engine-and-server)), 4 → in-house persistence ([D-004](../design/decisions.md#d-004--in-house-persistence)). See the [decision log](../design/decisions.md).
+
 1. **Confirm Bevy** as the base of server and native client (alternative: Godot — better low-end/web/editor today, weaker on G1 and G3).
 2. **Web client strategy:** three.js first (small, already used by 2030workspace) and Bevy-wasm later for code sharing — or Bevy-wasm only.
 3. **Licence policy.**
