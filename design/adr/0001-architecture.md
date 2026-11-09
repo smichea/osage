@@ -63,11 +63,14 @@ flowchart LR
 
 | Path | Contents | Licence (D-003, D-005) |
 |---|---|---|
-| `spec/` | protocol specification and `.proto` schemas | Apache-2.0 |
+| `spec/` | protocol specification text | Community Specification License 1.0 (D-023) |
+| `spec/proto/`, spec examples | `.proto` schemas and examples | Apache-2.0 |
 | `crates/osage-sdk/` | Rust client SDK | MIT OR Apache-2.0 |
 | `packages/sdk-ts/` | TypeScript client SDK | MIT OR Apache-2.0 |
-| `crates/osage-*` (others) | gateway, region server, persistence, content, bridge, render plugins, native client, tools | AGPL-3.0 + additional permissions |
-| `packages/client-three/` | three.js browser client | AGPL-3.0 + additional permissions |
+| `crates/osage-gpu-plugin-api/`, `crates/osage-platform-api/`, `crates/osage-world-module-api/` | interfaces for vendor GPU components, platform components and world modules (§A, §C, §D) | MIT OR Apache-2.0 |
+| `crates/osage-*` (others) | gateway, region server, persistence, content, bridge, render plugins, native client, tools | AGPL-3.0-or-later WITH osage-exceptions-1.0 (D-020) |
+| `packages/client-three/` | three.js browser client | AGPL-3.0-or-later WITH osage-exceptions-1.0 |
+| separate repository | out-of-process component runner for the bridge (D-014) | MIT |
 | `research/`, `design/` | documentation | CC BY-SA 4.0 |
 
 Bevy is pinned to one version per osage release (D-001).

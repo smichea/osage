@@ -27,6 +27,7 @@ Neither a fork nor a rewrite from scratch: build on **Bevy + wgpu** for the worl
 | [03 — World server & replication](research/03-world-server-replication.md) | SpacetimeDB, replicon/lightyear, metaverse platforms, transports, content standards, agents |
 | [04 — Rendering vs RAGE](research/04-rendering-vs-rage.md) | What GTA 6 does, open renderers and libraries, ranked gaps |
 | [05 — Mixed-reality standards](research/05-mixed-reality-standards.md) | WebXR/OpenXR, georeferencing, capturing real places, Matter/Home Assistant/ROS 2/MAVLink, WoT, safety and privacy rules |
+| [06 — Licensing review](research/06-licensing-review.md) | Validity of the AGPL additional permissions, GPU vendor licences (NVIDIA, AMD, Intel), app stores, in-process vs out-of-process components, spec patents, AI-assisted contributions |
 
 Each survey is a dated snapshot (2026-11-09) with sources; claims that could not be verified are marked as such.
 
@@ -55,8 +56,8 @@ Osage is also the name of the **Osage Nation** (Wahzhazhe), a sovereign Native A
 
 ## Licence
 
-- **Engine, server and tools:** [GNU AGPL-3.0](LICENSE).
-- **Protocol specification:** Apache-2.0. **Client SDKs:** MIT OR Apache-2.0 — so that any client, including proprietary and app-store apps, can join an osage world ([D-003](design/decisions.md#d-003--licences-open-protocol-and-permissive-sdks-agpl-engine-and-server)).
+- **Engine, server, tools, device bridge:** [GNU AGPL-3.0-or-later](LICENSE) with the additional permissions of [`LICENSE-EXCEPTIONS.md`](LICENSE-EXCEPTIONS.md) — GPU vendor components, application stores, world modules, platform components (*draft, pending legal review*).
+- **Protocol specification:** Community Specification License 1.0; `.proto` schemas and examples: Apache-2.0. **Client SDKs and interface bindings:** MIT OR Apache-2.0 — so that any client, including proprietary and app-store apps, can join an osage world ([D-003](design/decisions.md#d-003--licences-open-protocol-and-permissive-sdks-agpl-engine-and-server), [D-020 to D-023](design/decisions.md#d-020--agpl-30-or-later), [licensing review](research/06-licensing-review.md)).
 - **Documentation** (including `research/` and `design/`): [CC BY-SA 4.0](LICENSE-DOCS).
 
 Decisions taken so far are in the [decision log](design/decisions.md).

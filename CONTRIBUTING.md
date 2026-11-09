@@ -18,18 +18,26 @@ which adds a line such as:
 Signed-off-by: Your Name <you@example.org>
 ```
 
-Commits produced with an AI agent are signed off by the **responsible person**, who certifies the DCO for them; credit the agent with a `Co-Authored-By:` trailer if you wish.
+**AI agents never add a `Signed-off-by` line.** Commits produced with an AI agent are signed off by the **responsible person**, after reviewing the change and checking that it copies no third-party code; credit the agent with a `Co-Authored-By:` trailer for provenance. Never name an AI in a copyright notice.
 
 ## Licences of what you contribute
 
 | Part | Licence |
 |---|---|
-| Engine, server, tools | AGPL-3.0, with the additional permissions of [D-005](design/decisions.md#d-005--dco-for-contributions-agpl-exceptions-written-before-the-first-code) |
-| Protocol specification | Apache-2.0 |
-| Client SDKs | MIT OR Apache-2.0 |
+| Engine, server, tools, device bridge | AGPL-3.0-or-later WITH the additional permissions of [`LICENSE-EXCEPTIONS.md`](LICENSE-EXCEPTIONS.md) |
+| Protocol specification text | Community Specification License 1.0 |
+| `.proto` schemas, spec examples | Apache-2.0 |
+| Client SDKs, GPU Plugin / Platform / World Module interface bindings | MIT OR Apache-2.0 |
 | Documentation (`research/`, `design/`, …) | CC BY-SA 4.0 |
 
-See the [decision log](design/decisions.md) for the reasons.
+See the [decision log](design/decisions.md) and the [licensing review](research/06-licensing-review.md) for the reasons.
+
+**Rules that keep these licences working:**
+
+- Your contribution is licensed under the licence stated in each file's header, **including the additional permissions**. Every code file carries an SPDX header, e.g. `SPDX-License-Identifier: AGPL-3.0-or-later WITH AdditionRef-osage-exceptions-1.0`; files without one are not accepted.
+- Do not add third-party GPL or AGPL code unless its authors grant the same additional permissions.
+- AGPL code never moves into the specification or SDK directories.
+- Never commit proprietary vendor headers or binaries (GPU, platform or console SDKs); they are reached only through the documented interfaces.
 
 ## Research and design notes
 

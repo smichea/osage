@@ -2,7 +2,7 @@
 
 Status: **accepted** for the choices below (D-016 to D-019); the message details are a **draft** to be refined while the phase-1 vertical slice is built · Date: 2026-11-09
 
-The osage protocol is the public contract between any client and an osage world ([ADR-0001](0001-architecture.md)). Its specification will live in `spec/` under Apache-2.0 (D-003). This ADR fixes its shape; the normative text and `.proto` files come with the first code.
+The osage protocol is the public contract between any client and an osage world ([ADR-0001](0001-architecture.md)). Its specification will live in `spec/` under the Community Specification License 1.0, with `.proto` schemas under Apache-2.0 (D-023). This ADR fixes its shape; the normative text and `.proto` files come with the first code.
 
 ## 1. Decisions
 
@@ -29,7 +29,7 @@ The osage protocol is the public contract between any client and an osage world 
 ## 4. Session lifecycle
 
 1. **`Hello`** (client → gateway): supported protocol versions; client implementation and version; role; capabilities (tier, renderer features, maximum datagram size, supported content kinds); credentials — a verifiable presentation (identity, D-013), a delegation credential (agent), or a bridge credential (device owner); requested world.
-2. **`Welcome`** (gateway → client): chosen version; session id; per-world identifier, assurance level and privileges; server time; **world descriptor** (tick rate, content service URL, optional Earth frame); **schema bundle** — the world's component types as a protobuf `FileDescriptorSet` with their type ids, sent inline or as a hash + URL for caching (D-019); the session's compact numeric ids for those types.
+2. **`Welcome`** (gateway → client): chosen version; session id; per-world identifier, assurance level and privileges; server time; **world descriptor** (tick rate, content service URL, optional Earth frame); **schema bundle** — the world's component types as a protobuf `FileDescriptorSet` with their type ids, sent inline or as a hash + URL for caching (D-019); the session's compact numeric ids for those types; a **`source_offer`** (URL and version of the Corresponding Source of the gateway and region servers as they run — AGPL section 13), which clients show to their users.
 3. **Steady state** (§5–§7).
 4. **`Goodbye`** with a reason code (normal, kicked, sanctioned, version, overload, server shutdown).
 

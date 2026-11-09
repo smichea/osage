@@ -22,7 +22,7 @@ Date: 2026-11-09
 
 ## D-003 — Licences: open protocol and permissive SDKs, AGPL engine and server
 
-Date: 2026-11-09
+Date: 2026-11-09 · **Partly superseded** by D-020 (AGPL-3.0-or-later) and D-023 (spec under the Community Specification License 1.0).
 
 - **Decision:**
   - **protocol specification:** open, under **Apache-2.0** (its patent grant protects every implementer);
@@ -42,7 +42,7 @@ Date: 2026-11-09
 
 ## D-005 — DCO for contributions, AGPL exceptions written before the first code
 
-Date: 2026-11-09
+Date: 2026-11-09 · **Wording superseded:** the permissions now live, as a draft, in [`LICENSE-EXCEPTIONS.md`](../LICENSE-EXCEPTIONS.md) (osage-exceptions-1.0, §A–§D), revised after the [licensing review](../research/06-licensing-review.md); see D-020 to D-022.
 
 - **Decision:** contributions are accepted under the **Developer Certificate of Origin** (every commit signed off, no copyright assignment — see [CONTRIBUTING.md](../CONTRIBUTING.md)). Two **additional permissions under AGPL-3.0 section 7** are added to the engine's licence **before the first line of code is committed**:
   1. **optional GPU vendor plugins** — binary-only upscaling, frame-generation or denoising libraries (DLSS, FSR 4, XeSS…) may be loaded at run time through a defined plugin interface, provided osage stays fully functional with open implementations when they are absent;
@@ -137,6 +137,12 @@ Date: 2026-11-09
 - **Decision:** the device bridge stays **AGPL-3.0**. Components whose licence is compatible with an AGPL host — MIT, BSD, Apache-2.0, LGPL, GPL-3.0, GPL-2.0-or-later, MPL-2.0 without an "incompatible with secondary licenses" notice — run **inside** the bridge's WASM runtime. Others — notably **GPL-2.0-only**, EPL-1.0, licences with non-commercial clauses — run **in a separate process** that speaks OpenDeviceDB contracts with the bridge. The bridge chooses the mode from the licence (SPDX expression) declared in each OpenDeviceDB component manifest.
 - **Why:** a WASM module executed in the bridge and calling its host functions is, conservatively, one combined work with it (untested legally for WASM); an arm's-length exchange of contract messages between separate processes keeps the programs separate, so no device is excluded for licence reasons.
 - **Caveat:** to be confirmed by the same legal review as D-005.
+- **Corrected after the [licensing review](../research/06-licensing-review.md#4-d-014--in-process-vs-out-of-process-components) (2026-11-09):**
+  - **in process:** 0BSD, BSD-2/3-Clause, ISC, Zlib, MIT, Apache-2.0; LGPL-2.1-only and LGPL-3.0; GPL-3.0 and AGPL-3.0; MPL-2.0 unless "Incompatible With Secondary Licenses"; EUPL-1.2; EPL-2.0 only with the Exhibit A secondary-licence notice; CC BY-SA 4.0;
+  - **out of process:** BSD-4-Clause, EPL-1.0, EPL-2.0 without the notice, CDDL, GPL-2.0-only (including `WITH Classpath-exception-2.0`), non-free licences; **unknown, `NOASSERTION` or `LicenseRef-` licences by default**;
+  - whole SPDX expressions are evaluated (`AND`: every part must fit; `OR`: at least one);
+  - the **out-of-process runner is a separate MIT-licensed project** containing no AGPL code (not even OpenDeviceDB's AGPL host code), with GPL-2.0-compatible host functions (wasmtime is `Apache-2.0 WITH LLVM-exception`; take the MIT side of osage SDKs);
+  - running a non-commercial component out of process does not lift its terms: osage does not redistribute such components.
 - **Alternatives:** a permissive bridge (MIT OR Apache-2.0: loads any free component, but a vendor could embed it in a closed hub without publishing improvements, including to the safety envelope); AGPL bridge loading compatible components only (devices with GPL-2.0-only code stay out).
 - **Closes:** [design/02 §9](02-mixed-worlds-and-devices.md#9-open-questions) question 3.
 
@@ -157,3 +163,45 @@ Date: 2026-11-09 · Details and reasons: [ADR-0002](adr/0002-protocol-v0.md#1-de
 - **D-017 — osage specifies its own protocol**, taking ideas but not the wire format from bevy_replicon and lightyear. *Alternative:* adopt lightyear's format.
 - **D-018 — Protocol Buffers with the canonical JSON mapping** for agents and tools. *Alternatives:* CBOR + CDDL; FlatBuffers.
 - **D-019 — Self-describing worlds:** the world sends its component schemas at join. *Alternative:* compiled-in schemas only.
+
+## D-020 — AGPL-3.0-or-later
+
+Date: 2026-11-09
+
+- **Decision:** the engine, server, tools and bridge are licensed **AGPL-3.0-or-later** with the additional permissions of `LICENSE-EXCEPTIONS.md`: `SPDX-License-Identifier: AGPL-3.0-or-later WITH AdditionRef-osage-exceptions-1.0` in every file header.
+- **Why:** consistent with OpenDeviceDB (also -or-later); a future AGPL version can be adopted without contacting every contributor.
+- **Alternative:** AGPL-3.0-only.
+
+## D-021 — World modules permission (§C)
+
+Date: 2026-11-09
+
+- **Decision:** a third additional permission lets **the logic specific to a world** — loaded only through the documented World Module Interface (e.g. WebAssembly modules in region servers), with permissively licensed bindings — be **under any licence**. The engine and every modification of it remain AGPL, including the section 13 source offer to every player and agent.
+- **Why:** consistent with D-008 and D-010 — each world decides, including whether its game logic is open; it lets studios build closed worlds on an open engine whose improvements stay shared. Permissions can be removed later but never added, so it had to be decided now.
+- **Consequence:** the World Module Interface bindings are a permissive crate (like the SDKs).
+- **Alternative:** world logic under the AGPL (open worlds by construction; studios wanting closed logic would not use the osage server).
+
+## D-022 — Platform components permission (§D)
+
+Date: 2026-11-09
+
+- **Decision:** a fourth additional permission allows combining osage with **proprietary platform components** (Steamworks, console SDKs under NDA, store and payment SDKs) through a documented Platform Interface, provided the work stays usable on at least one platform without them; the platform-specific adapter's source may be withheld **only** as far as the platform's confidentiality terms require. §B's definition of application stores also covers Steam and console stores.
+- **Why:** opens Steam and, one day, consoles (out of scope for v0 in ADR-0001, not excluded forever); the asymmetry — removable later, never addable — argues for including it now.
+- **Alternative:** GPU plugins and app stores only (no Steamworks in the official AGPL client, consoles closed for good).
+
+## D-023 — Protocol specification under the Community Specification License 1.0
+
+Date: 2026-11-09
+
+- **Decision:** the **text of the protocol specification** is licensed under the **Community Specification License 1.0**; the `.proto` schemas and example code stay **Apache-2.0**; the client SDKs stay MIT OR Apache-2.0.
+- **Why:** Apache-2.0's patent grant covers the spec text, not independent implementations; the Community Specification License grants patent rights "for Licensee's Implementation", so every independent client and server is covered.
+- **Alternatives:** Apache-2.0 plus a public patent non-assertion pledge (simpler, weaker); Apache-2.0 alone.
+- **Supersedes:** the spec part of D-003.
+
+## Follow-ups from the licensing review
+
+1. Lawyer review of `LICENSE-EXCEPTIONS.md` §A–§D, of the DCO-plus-headers mechanism, of the process and WASM boundaries (EU and US), of the spec's patent licence and of AI-generated code — **before the first code commit**.
+2. Write to NVIDIA (licence §19) about loading DLSS through the driver (Blender 5.3 model); ask AMD to confirm the MIT listing of its FSR binaries.
+3. Ask OpenDeviceDB to grant the app-store permission (§B) on its AGPL components.
+4. CI before the first code: DCO check, `reuse lint`, cargo-deny licence allowlist.
+5. Permissive crates for the GPU Plugin Interface, the Platform Interface and the World Module Interface bindings; never commit vendor headers.
