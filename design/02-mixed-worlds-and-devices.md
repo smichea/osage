@@ -2,9 +2,9 @@
 
 Status: **proposed** · Date: 2026-11-09
 
-An opage world may be purely virtual, or **mixed**: real places captured and anchored in it, real devices living in it as entities, people present physically through AR, and in-world actions driving real devices. Like accounts and agents ([design/01](01-accounts-and-agents.md)), this has to be in the protocol from v0: device entities, timestamps and staleness, georeferencing and physical actuation cannot be bolted on later.
+An osage world may be purely virtual, or **mixed**: real places captured and anchored in it, real devices living in it as entities, people present physically through AR, and in-world actions driving real devices. Like accounts and agents ([design/01](01-accounts-and-agents.md)), this has to be in the protocol from v0: device entities, timestamps and staleness, georeferencing and physical actuation cannot be bolted on later.
 
-The natural partner is **[OpenDeviceDB](https://opendevicedb.org)** ([repo](https://github.com/opendevicedb/opendevicedb)) — an open directory of 29,000+ devices whose protocols or firmware are already open, with a JSON API, an MCP server for agents and a draft specification for composable device applications. As with nexlink and ameesh, opage **uses it as the reference and imposes nothing**: other device ecosystems plug into the same interface.
+The natural partner is **[OpenDeviceDB](https://opendevicedb.org)** ([repo](https://github.com/opendevicedb/opendevicedb)) — an open directory of 29,000+ devices whose protocols or firmware are already open, with a JSON API, an MCP server for agents and a draft specification for composable device applications. As with nexlink and ameesh, osage **uses it as the reference and imposes nothing**: other device ecosystems plug into the same interface.
 
 ## 1. The four flows of a mixed world
 
@@ -15,7 +15,7 @@ flowchart LR
     DV["Devices<br/>sensors · cameras · drones · lights · robots"]
     PP["People with AR devices"]
   end
-  subgraph World["opage world"]
+  subgraph World["osage world"]
     CT["Captured / geo-anchored content"]
     DE["Device entities (twins)"]
     AV["AR participants"]
@@ -42,28 +42,28 @@ flowchart LR
 | M3 | **Physical actuation is a gated action** ([design/01](01-accounts-and-agents.md) P6). Permission is granted per device × function × participant by the device's owner. Agents need a human approval receipt for any physical effect outside a low-risk set pre-approved by the owner. Actions are never replayed automatically after a reconnection. |
 | M4 | **Only verified adapters may actuate.** An adapter whose behaviour has not been verified on real hardware (with a stated firmware) is read-only by default. |
 | M5 | **Local-first, no vendor cloud by default.** Devices stay on their owner's network; the bridge publishes only what the owner shares, to whom they share it. |
-| M6 | **Real spaces and real people are private by default.** Live camera and microphone streams and captured interiors are visible only to participants the owner authorises; interest management enforces it server-side. Recording and streaming are **visibly signalled** to people in the real place, and opage ships **no facial recognition**. A shared world likely falls outside the GDPR household exemption, so world operators must be able to act as data controllers ([research/05 §7](../research/05-mixed-reality-standards.md#7-privacy)). |
-| M7 | **One contract vocabulary.** Device data and commands in opage use OpenDeviceDB's connection contracts (state, stream, action; units, spatial frame, clock domain, session) — no parallel vocabulary. Device *descriptions* are exchanged as **W3C WoT Thing Description 1.1**, onto which those contracts map directly (state → property, stream/event → event, action → action), so twins stay interoperable with Eclipse Ditto, node-wot and other WoT tools. |
+| M6 | **Real spaces and real people are private by default.** Live camera and microphone streams and captured interiors are visible only to participants the owner authorises; interest management enforces it server-side. Recording and streaming are **visibly signalled** to people in the real place, and osage ships **no facial recognition**. A shared world likely falls outside the GDPR household exemption, so world operators must be able to act as data controllers ([research/05 §7](../research/05-mixed-reality-standards.md#7-privacy)). |
+| M7 | **One contract vocabulary.** Device data and commands in osage use OpenDeviceDB's connection contracts (state, stream, action; units, spatial frame, clock domain, session) — no parallel vocabulary. Device *descriptions* are exchanged as **W3C WoT Thing Description 1.1**, onto which those contracts map directly (state → property, stream/event → event, action → action), so twins stay interoperable with Eclipse Ditto, node-wot and other WoT tools. |
 
 ## 3. The link with OpenDeviceDB
 
-### 3.1 What OpenDeviceDB brings to opage
+### 3.1 What OpenDeviceDB brings to osage
 
-| OpenDeviceDB piece | Role in an opage mixed world |
+| OpenDeviceDB piece | Role in an osage mixed world |
 |---|---|
 | **Device directory** — identifiers (USB, BLE name, FCC id), interfaces and transports, status of the open protocol or firmware, whether the vendor cloud is still needed | The bridge **identifies** a device and knows **how it can be reached**, and whether it can join a world **without its vendor's cloud** (M5) |
 | **Browser detection** (`/detect/`, by USB id or Bluetooth name) | A **zero-install bridge**: in a browser client, plug or pair a device and it appears in the world |
-| **Composable components** (draft spec, pilot): *adapters* talk to a device, *processing* transforms data (e.g. images → 3D), *interfaces* show results or emit control intentions; WASM, sandboxed, declared permissions; hosts: browser, desktop, mobile, server | The bridge **runs OpenDeviceDB adapters** to talk to devices; opage's content pipeline **runs processing components** (e.g. spatial capture); the same WASM artifact works on every host — the same "any client" idea as opage |
-| **Connection contracts** — `odb.video.frame/1`, `odb.camera.calibration/1`, `odb.scene.revision/1`, measurements with units; kinds *value/state*, *stream/event*, *action*; spatial frame, clock domain, session; actions never auto-replayed; bounded queues | The **type system of device entities** in opage (M7) and of their protocol messages |
-| **MCP server** — `search_devices`, `lookup_device`, `claim_device`, `publish_findings`, `request_device` | An opage agent wanting to bring a device into a world **looks it up first**; if nothing exists, it claims the device, reverse-engineers it and **publishes its findings back** |
+| **Composable components** (draft spec, pilot): *adapters* talk to a device, *processing* transforms data (e.g. images → 3D), *interfaces* show results or emit control intentions; WASM, sandboxed, declared permissions; hosts: browser, desktop, mobile, server | The bridge **runs OpenDeviceDB adapters** to talk to devices; osage's content pipeline **runs processing components** (e.g. spatial capture); the same WASM artifact works on every host — the same "any client" idea as osage |
+| **Connection contracts** — `odb.video.frame/1`, `odb.camera.calibration/1`, `odb.scene.revision/1`, measurements with units; kinds *value/state*, *stream/event*, *action*; spatial frame, clock domain, session; actions never auto-replayed; bounded queues | The **type system of device entities** in osage (M7) and of their protocol messages |
+| **MCP server** — `search_devices`, `lookup_device`, `claim_device`, `publish_findings`, `request_device` | An osage agent wanting to bring a device into a world **looks it up first**; if nothing exists, it claims the device, reverse-engineers it and **publishes its findings back** |
 | **Verification** — every interface carries a confidence; the "verified" badge needs a replayable hardware test with a stated firmware | Feeds M4: actuation only through verified adapters |
-| **Policy P5** — no hosting of proprietary firmware or keys; nothing that defeats a regulatory safety function | Inherited by opage's mixed-world policy (M2) |
-| **Same licence pattern** — code AGPL-3.0-or-later, data CC BY-SA 4.0 | Compatible with opage |
+| **Policy P5** — no hosting of proprietary firmware or keys; nothing that defeats a regulatory safety function | Inherited by osage's mixed-world policy (M2) |
+| **Same licence pattern** — code AGPL-3.0-or-later, data CC BY-SA 4.0 | Compatible with osage |
 
-### 3.2 What opage brings back to OpenDeviceDB
+### 3.2 What osage brings back to OpenDeviceDB
 
-- **A shared, spatial, multi-user host for compositions.** Today a composition ends in a 3D view in one page; in opage it can be **placed in a world**, seen and used by several people and agents at once — the spatial-capture reference case becomes "scan a place and walk in it together".
-- **Server and desktop hosts.** opage needs a WASM runtime for components on native clients and bridges; it can be the desktop/server host that OpenDeviceDB's spec plans but has not built.
+- **A shared, spatial, multi-user host for compositions.** Today a composition ends in a 3D view in one page; in osage it can be **placed in a world**, seen and used by several people and agents at once — the spatial-capture reference case becomes "scan a place and walk in it together".
+- **Server and desktop hosts.** osage needs a WASM runtime for components on native clients and bridges; it can be the desktop/server host that OpenDeviceDB's spec plans but has not built.
 - **Hardware evidence.** With the owner's consent, real use in worlds produces test reports (function, firmware, environment) that feed OpenDeviceDB's verification.
 - **Demand.** Devices people want in their worlds become OpenDeviceDB requests ("wanted"), which point contributors and agents at the useful work.
 - **Continuous control.** OpenDeviceDB's first contracts deliberately exclude continuous control loops. Drones, robots and vehicles in mixed worlds need one; it should be **specified jointly**, with timing and stop behaviour.
@@ -76,7 +76,7 @@ flowchart LR
     D1["USB / BLE devices"]
     D2["Wi-Fi / Ethernet devices"]
     D3["Zigbee · Thread · Matter"]
-    subgraph BR["opage device bridge"]
+    subgraph BR["osage device bridge"]
       ID["Identify<br/>(OpenDeviceDB directory)"]
       AD["Adapters<br/>OpenDeviceDB WASM components ·<br/>or Home Assistant, Matter, MQTT, ROS 2, MAVLink"]
       SE["Safety envelope + local policy<br/>(last word, M2)"]
@@ -87,7 +87,7 @@ flowchart LR
   D3 --> AD
   ID -.-> AD
   AD <--> SE
-  SE <-->|"opage protocol<br/>role: bridge"| RS["Region server"]
+  SE <-->|"osage protocol<br/>role: bridge"| RS["Region server"]
   RS --> C["Other clients see device entities<br/>(by permission)"]
 ```
 
@@ -100,7 +100,7 @@ flowchart LR
 - **Captured places.** Spatial capture (the [Spatial Capture 3D](https://github.com/smichea/spatial-capture-3d) package is OpenDeviceDB's functional reference) produces Gaussian splats or meshes. The open pipeline exists end to end: COLMAP/GLOMAP (BSD-3) for structure from motion, gsplat or **Brush** (Rust/WebGPU, Apache-2.0) for splat training, glTF with **`KHR_gaussian_splatting` (ratified Sep 2026)**, then 3D Tiles for streaming to every client tier — **private by default** (M6).
 - **Georeference.** A world, or a region of it, may declare an Earth frame (origin and orientation in WGS84/ECEF); poses in that frame use **OGC GeoPose 1.0**. Devices with GNSS (drones) and AR clients map into it; virtual-only worlds simply have none. This reuses the large-world coordinate handling an open world needs anyway (big_space on Bevy, floating origin on Babylon).
 - **AR clients.** A new client kind: a phone or headset in the real place, rendering virtual content over the real view on a T1–T2 budget, reporting its pose in the world frame. WebXR AR works in Chrome Android, Quest Browser and Android XR; **iPhone AR needs a native client** (no WebXR in Safari iOS).
-- **Relocalisation without proprietary clouds.** There is no turnkey open visual positioning system; `opage-geo` assembles one from open pieces (OpenArCloud OSCP, stella_vslam, Kapture) instead of depending on Google, Apple or Niantic.
+- **Relocalisation without proprietary clouds.** There is no turnkey open visual positioning system; `osage-geo` assembles one from open pieces (OpenArCloud OSCP, stella_vslam, Kapture) instead of depending on Google, Apple or Niantic.
 
 ## 6. Scenarios
 
@@ -120,17 +120,17 @@ flowchart LR
 
 | Module | Scope | Builds on |
 |---|---|---|
-| `opage-bridge` | device bridge host: WASM runtime for OpenDeviceDB components, safety envelope, local policy; alternative backends (Home Assistant, Matter, MQTT, ROS 2, MAVLink) | OpenDeviceDB components and contracts (reference) |
-| `opage-geo` | georeference, Earth frames, AR anchors and AR client support | 3D Tiles, large-world coordinates |
-| `opage-content` (extended) | ingest of captured places (splats, meshes) into streamable tiles | spatial capture components, `KHR_gaussian_splatting`, 3D Tiles |
+| `osage-bridge` | device bridge host: WASM runtime for OpenDeviceDB components, safety envelope, local policy; alternative backends (Home Assistant, Matter, MQTT, ROS 2, MAVLink) | OpenDeviceDB components and contracts (reference) |
+| `osage-geo` | georeference, Earth frames, AR anchors and AR client support | 3D Tiles, large-world coordinates |
+| `osage-content` (extended) | ingest of captured places (splats, meshes) into streamable tiles | spatial capture components, `KHR_gaussian_splatting`, 3D Tiles |
 
 ## 9. Open questions
 
 1. **Risk classes for actuation** and their defaults (read-only, low-risk pre-approved, gated, on-site operator only, forbidden), aligned with the EU Machinery Regulation and drone rules.
 2. **First contracts** to align with OpenDeviceDB: images, calibration, measurements, 3D scenes, actions — and a joint continuous-control contract for drones and robots.
 3. **Component licences:** OpenDeviceDB ports keep their upstream licences; which are compatible with being loaded by an AGPL-3.0 bridge (sandboxed WASM modules exchanging messages) needs a review.
-4. **Embedding compositions:** can an OpenDeviceDB composition be placed in a world as is, or through an opage wrapper?
+4. **Embedding compositions:** can an OpenDeviceDB composition be placed in a world as is, or through an osage wrapper?
 5. **Privacy defaults** for captured interiors and live cameras in shared worlds, including bystanders, and the controller role of world operators.
-6. **WoT TD export in OpenDeviceDB:** should OpenDeviceDB records and components also publish WoT Thing Descriptions, so the mapping lives upstream rather than in opage?
+6. **WoT TD export in OpenDeviceDB:** should OpenDeviceDB records and components also publish WoT Thing Descriptions, so the mapping lives upstream rather than in osage?
 
 Standards, versions and regulations behind this note: [research/05](../research/05-mixed-reality-standards.md).

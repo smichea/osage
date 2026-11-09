@@ -85,13 +85,13 @@ Question: what open building blocks exist for an **authoritative world server wi
 - Hyperfy + ElizaOS starter: an agent joins a world over WebSocket like a normal user.
 - **Gap: no standard observation schema for agents.** Most game MCP servers are developer tools, not in-world clients; worldbox-mcp is the exception (several agents in one world under fog-of-war).
 
-## Takeaways for opage
+## Takeaways for osage
 
 1. **Nothing open source does "one world, any client, any fidelity" end to end.** The pieces exist separately: replication (replicon/lightyear), state servers (SpacetimeDB, Nakama, Colyseus), transports (WebTransport + WebSocket fallback), content standards (glTF + 3D Tiles).
 2. **The protocol and content format are the durable assets**, not a particular engine: the projects that survived are federated and community-governed; the ones that died were single-vendor stacks.
 3. **SpacetimeDB is technically the closest fit but its licence (BSL 1.1) conflicts with an AGPL community project** until each version converts four years later. Using it as an optional backend is fine; making it the core is a governance risk.
-4. **Server meshing / sharding for a large seamless world is the biggest server-side gap** — a natural place for opage to contribute.
-5. **An agent observation/action schema** (structured, interest-managed, MCP-exposed) is unclaimed territory and fits opage's "humans + agents" goal.
+4. **Server meshing / sharding for a large seamless world is the biggest server-side gap** — a natural place for osage to contribute.
+5. **An agent observation/action schema** (structured, interest-managed, MCP-exposed) is unclaimed territory and fits osage's "humans + agents" goal.
 
 ## Not verified
 

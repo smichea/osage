@@ -2,7 +2,7 @@
 
 Survey date: **2026-11-09**. Versions and dates were checked against GitHub releases, npm, caniuse raw data and official blogs on that day. Items marked *unverified* could not be confirmed from a primary source.
 
-Question: what can a **browser client** of an opage world realistically render today, and which web stack should it use?
+Question: what can a **browser client** of an osage world realistically render today, and which web stack should it use?
 
 ## 1. WebGPU availability
 
@@ -16,7 +16,7 @@ Question: what can a **browser client** of an opage world realistically render t
 
 Coverage: caniuse **88.6 %** of users (86.8 % full + 1.8 % partial); web3dsurvey (real working adapters) **81.2 %** — Linux 18.8 %, Android 72.8 %, Windows 83.3 %, Firefox 61 %.
 
-**Consequence: about 1 user in 5 (more on old laptops and Linux) still needs a WebGL2 path.** Any opage browser client must keep a WebGL2 tier.
+**Consequence: about 1 user in 5 (more on old laptops and Linux) still needs a WebGL2 path.** Any osage browser client must keep a WebGL2 tier.
 
 Feature availability across adapters (web3dsurvey):
 
@@ -71,11 +71,11 @@ Feature availability across adapters (web3dsurvey):
 - **Coordinate precision:** Babylon has a built-in floating origin; three.js does not (origin rebasing or camera-relative rendering is up to you). `reversedDepthBuffer` exists on both three.js renderers (WebGL needs `EXT_clip_control`).
 - **Gaussian splats:** three r186, Spark, PlayCanvas and Babylon 9 all render them.
 
-## Takeaways for opage
+## Takeaways for osage
 
 1. A browser client is a **first-class but mid-fidelity tier**: WebGPU (~81–89 % of users) with a mandatory WebGL2 fallback, no multi-draw-indirect, no mesh shaders.
 2. **three.js r187 and Babylon 9 are the two credible bases.** three.js has the bigger ecosystem and now a GPU-driven meshlet pipeline; Babylon ships large-world rendering (floating origin), Havok and editors out of the box.
-3. **World streaming is opage's job, not the web engine's**: the protocol must deliver content in a form both a web client and a native client can stream (chunked, HLOD, glTF/3D Tiles style) — see [03](03-world-server-replication.md).
+3. **World streaming is osage's job, not the web engine's**: the protocol must deliver content in a form both a web client and a native client can stream (chunked, HLOD, glTF/3D Tiles style) — see [03](03-world-server-replication.md).
 4. For an existing three.js/Threlte client such as 2030workspace, the blockers for moving to WebGPURenderer are **troika text and pmndrs postprocessing**; the shader path (GLSL → TSL) can be migrated gradually thanks to `WebGLNodesHandler`.
 
 ## Not verified

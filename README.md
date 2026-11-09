@@ -1,4 +1,4 @@
-# opage — OPen Advanced Game Engine
+# osage — Open Source Advanced Game Engine
 
 An open-source engine for large open worlds, built by a community of humans and AI agents.
 
@@ -15,7 +15,7 @@ An open-source engine for large open worlds, built by a community of humans and 
 
 ## Direction in one paragraph
 
-Neither a fork nor a rewrite from scratch: build on **Bevy + wgpu** for the world server and the native client, contribute upstream what belongs there, and write opage's own value where nothing open exists — **an open world protocol, content streaming in open formats (glTF, 3D Tiles), server meshing for seamless large worlds, fidelity tiers from headless agents to ray tracing, an agent interface, and world tools**. Details, architecture, module map and open decisions: [research/00-synthesis.md](research/00-synthesis.md).
+Neither a fork nor a rewrite from scratch: build on **Bevy + wgpu** for the world server and the native client, contribute upstream what belongs there, and write osage's own value where nothing open exists — **an open world protocol, content streaming in open formats (glTF, 3D Tiles), server meshing for seamless large worlds, fidelity tiers from headless agents to ray tracing, an agent interface, and world tools**. Details, architecture, module map and open decisions: [research/00-synthesis.md](research/00-synthesis.md).
 
 ## Research
 
@@ -41,9 +41,19 @@ Each survey is a dated snapshot (2026-11-09) with sources; claims that could not
 
 The first consumer is **2030workspace**, a 3D virtual workspace for IT teams whose web client runs on three.js. It is the target of the phase-1 vertical slice: one world joined at the same time by a browser client, a native client and an AI agent.
 
+## About the name
+
+**OSAGE** stands for **O**pen **S**ource **A**dvanced **G**ame **E**ngine. The project was called *opage* until November 2026.
+
+Osage is also the name of the **Osage Nation** (Wahzhazhe), a sovereign Native American nation headquartered in Pawhuska, Oklahoma. **This project is not affiliated with, endorsed by, or speaking for the Osage Nation.** The project rejects cultural appropriation, so:
+
+- osage does **not** use Osage symbols, imagery, language, stories or any other cultural element — in its branding, its art or its world content — unless the Osage Nation chooses otherwise;
+- the maintainer is writing to the Osage Nation to tell them about the name and ask for their view; their position will be published here and respected;
+- in the long term, if the project grows, it intends to support the Osage Nation's interests — on the Nation's own terms, and only in ways the Nation asks for.
+
 ## Licence
 
 - **Code:** [GNU AGPL-3.0](LICENSE).
 - **Documentation** (including `research/` and `design/`): [CC BY-SA 4.0](LICENSE-DOCS).
 
-Whether the protocol specification and client SDKs should use a permissive licence, so that any client can join an opage world, is an [open decision](research/00-synthesis.md#open-decisions).
+Whether the protocol specification and client SDKs should use a permissive licence, so that any client can join an osage world, is an [open decision](research/00-synthesis.md#open-decisions).

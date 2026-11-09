@@ -27,27 +27,27 @@ First consumer: **2030workspace**, a 3D virtual workspace for IT teams, today a 
 
 **Writing a whole engine from scratch** would spend years rebuilding what Bevy and wgpu already give (ECS, renderer, asset system, Vulkan/DX12/Metal/GLES3/WebGL2/WebGPU backends) before touching what is actually missing. **Forking an engine** creates a dead-end maintained by one community.
 
-**Proposed:** use **Bevy + wgpu** as the foundation of the world server and the native client, **contribute upstream** what belongs in Bevy (rendering, GPU-driven features), and **build opage's own value where nothing exists**: protocol, streaming, server meshing, fidelity tiers, agent interface, world tools.
+**Proposed:** use **Bevy + wgpu** as the foundation of the world server and the native client, **contribute upstream** what belongs in Bevy (rendering, GPU-driven features), and **build osage's own value where nothing exists**: protocol, streaming, server meshing, fidelity tiers, agent interface, world tools.
 
 | Goal | Why Bevy rather than Godot |
 |---|---|
 | G1 rendering | GPU-driven rendering, meshlets, Solari RT GI are on Bevy's roadmap now; Godot's renderer has none of these and would need a core rewrite |
-| G2 any hardware | Godot is better today (Compatibility renderer). Bevy covers GLES3/WebGL2 through wgpu but without compute features — opage must design the low tiers explicitly (see below) |
+| G2 any hardware | Godot is better today (Compatibility renderer). Bevy covers GLES3/WebGL2 through wgpu but without compute features — osage must design the low tiers explicitly (see below) |
 | G3 modularity | **Bevy's decisive advantage**: everything is a plugin on an ECS, crates have hard boundaries, Rust's compiler and tests give agents fast, strict feedback |
 | G4 any client | Same ECS runs headless as server; replicon/lightyear give server-authoritative replication with interest management and browser support; the Bevy Remote Protocol already exposes the world over JSON-RPC (agent access) |
 
 **Risks and mitigations**
 
-- *Breaking Bevy releases every 3–4 months* → pin one Bevy version per opage release, upgrade on a schedule, upstream early to minimise patches.
-- *No Bevy editor* → opage needs world tools anyway (G3); build them as BRP clients (web-based), so they work against any running world.
+- *Breaking Bevy releases every 3–4 months* → pin one Bevy version per osage release, upgrade on a schedule, upstream early to minimise patches.
+- *No Bevy editor* → osage needs world tools anyway (G3); build them as BRP clients (web-based), so they work against any running world.
 - *Experimental meshlets and Solari* → treat the RT tiers as a research track; tiers T0–T2 must not depend on them.
-- *Bus factor of key Bevy subsystems* → opage teams become contributors to those subsystems rather than consumers.
+- *Bus factor of key Bevy subsystems* → osage teams become contributors to those subsystems rather than consumers.
 
 ## Proposed architecture
 
 ```mermaid
 flowchart LR
-  subgraph World["opage world (server side)"]
+  subgraph World["osage world (server side)"]
     RA["Region server A<br/>(Bevy headless)"] <-->|entity handoff| RB["Region server B"]
     RA --> DB[("Persistence")]
     RB --> DB
@@ -55,7 +55,7 @@ flowchart LR
     AG["Agent gateway<br/>observation/action schema · MCP<br/>delegation · quotas · gated actions"]
     ID["Identity verifier<br/>per-world identifiers · policy · sanctions"]
   end
-  N["Native client — Bevy/wgpu<br/>tiers T2–T4"] -->|"opage protocol<br/>QUIC / WebTransport"| RA
+  N["Native client — Bevy/wgpu<br/>tiers T2–T4"] -->|"osage protocol<br/>QUIC / WebTransport"| RA
   W["Browser client — three.js or Bevy-wasm<br/>tiers T1–T2"] -->|"WebTransport / WebSocket"| RA
   L["Low-end / old hardware<br/>GLES3 · WebGL2 · tier T1"] --> RB
   AM["Agent mesh — ameesh or other<br/>AI agents, tier T0"] --> AG --> RB
@@ -69,8 +69,8 @@ flowchart LR
   L -. streams .-> CS
 ```
 
-- **One authoritative world**, split into regions; each region is a headless Bevy process. Entity handoff between regions is opage's server meshing.
-- **The opage protocol** is the contract: entity/component schema, interest management, snapshots + deltas, versioning. Transport: QUIC/WebTransport, WebSocket fallback.
+- **One authoritative world**, split into regions; each region is a headless Bevy process. Entity handoff between regions is osage's server meshing.
+- **The osage protocol** is the contract: entity/component schema, interest management, snapshots + deltas, versioning. Transport: QUIC/WebTransport, WebSocket fallback.
 - **Content is streamed separately** from state, in open formats every client can load: glTF + KTX2 + meshopt packaged as 3D Tiles HLOD; cluster-LOD (meshoptimizer) variants for high tiers. Authoring may use USD/MaterialX, baked to glTF.
 - **Agents are clients like any other**, through a gateway that serves interest-managed structured observations and accepts actions (exposed over MCP). **Every agent has a responsible human**, counts against that human's quotas, is labelled as an agent, and needs a human approval receipt for irreversible or costly actions. The agent mesh is a pluggable interface; **ameesh** is the reference implementation.
 - **Account uniqueness is built in from v0**: the world receives, from an identity provider, a stable **per-world identifier** and an assurance level — never civil identity. Uniqueness gates only scarce privileges (trade, ownership, ranked play, running agents); sanctions bind to the identifier, so ban evasion requires a new unique identity. Providers plug in through verifiable credentials; **nexlink** (socially validated identities) is the reference A2 provider, none is imposed.
@@ -95,20 +95,20 @@ Each module is a crate or package with a `SPEC.md`, a conformance test suite and
 
 | Module | Scope | Builds on |
 |---|---|---|
-| `opage-protocol` | schema, interest management, snapshots/deltas, versioning; Rust + TypeScript bindings | replicon / lightyear concepts |
-| `opage-server` | headless simulation and authority per region | Bevy, replicon/lightyear |
-| `opage-mesh` | region partitioning, entity handoff (server meshing) | **new** |
-| `opage-content` | ingest → KTX2/meshopt → cluster LOD → 3D Tiles HLOD, per-tier variants | meshoptimizer, KTX-Software, 3D Tiles |
-| `opage-render` | open-world rendering plugins: streaming, HLOD, terrain, vegetation, tier selection | Bevy renderer (contribute upstream) |
-| `opage-client-native` | native client app | Bevy |
-| `opage-client-web` | TypeScript client SDK + three.js renderer; Bevy-wasm build | three.js, 3DTilesRendererJS |
-| `opage-agent` | agent gateway: observation/action schema, MCP server, delegation credentials, quotas, gated actions; `AgentMesh` interface | Bevy Remote Protocol; **ameesh** adapter (reference) |
-| `opage-identity` | `IdentityProvider` interface, verifiable-credential verification, per-world identifiers, privilege policy, sanctions | W3C VC / DID, OpenID4VP; **nexlink** adapter (reference) |
-| `opage-bridge` | device bridge: WASM runtime for device components, safety envelope, local policy; alternative backends (Home Assistant, Matter, MQTT, ROS 2, MAVLink) | **OpenDeviceDB** components and contracts (reference) |
-| `opage-geo` | georeference, Earth frames, AR anchors, AR clients | 3D Tiles, large-world coordinates |
-| `opage-sim` | crowds and traffic at scale | **new** (Unreal Mass is the reference) |
-| `opage-tools` | world editor, inspectors, profiling, PCG — as protocol/BRP clients | **new** |
-| `opage-denoise` (long term) | open ML denoiser / upscaler | **new** — the state of the art is proprietary |
+| `osage-protocol` | schema, interest management, snapshots/deltas, versioning; Rust + TypeScript bindings | replicon / lightyear concepts |
+| `osage-server` | headless simulation and authority per region | Bevy, replicon/lightyear |
+| `osage-mesh` | region partitioning, entity handoff (server meshing) | **new** |
+| `osage-content` | ingest → KTX2/meshopt → cluster LOD → 3D Tiles HLOD, per-tier variants | meshoptimizer, KTX-Software, 3D Tiles |
+| `osage-render` | open-world rendering plugins: streaming, HLOD, terrain, vegetation, tier selection | Bevy renderer (contribute upstream) |
+| `osage-client-native` | native client app | Bevy |
+| `osage-client-web` | TypeScript client SDK + three.js renderer; Bevy-wasm build | three.js, 3DTilesRendererJS |
+| `osage-agent` | agent gateway: observation/action schema, MCP server, delegation credentials, quotas, gated actions; `AgentMesh` interface | Bevy Remote Protocol; **ameesh** adapter (reference) |
+| `osage-identity` | `IdentityProvider` interface, verifiable-credential verification, per-world identifiers, privilege policy, sanctions | W3C VC / DID, OpenID4VP; **nexlink** adapter (reference) |
+| `osage-bridge` | device bridge: WASM runtime for device components, safety envelope, local policy; alternative backends (Home Assistant, Matter, MQTT, ROS 2, MAVLink) | **OpenDeviceDB** components and contracts (reference) |
+| `osage-geo` | georeference, Earth frames, AR anchors, AR clients | 3D Tiles, large-world coordinates |
+| `osage-sim` | crowds and traffic at scale | **new** (Unreal Mass is the reference) |
+| `osage-tools` | world editor, inspectors, profiling, PCG — as protocol/BRP clients | **new** |
+| `osage-denoise` (long term) | open ML denoiser / upscaler | **new** — the state of the art is proprietary |
 
 ## Roadmap (phases, no dates)
 
@@ -125,9 +125,9 @@ Each module is a crate or package with a `SPEC.md`, a conformance test suite and
 1. **Confirm Bevy** as the base of server and native client (alternative: Godot — better low-end/web/editor today, weaker on G1 and G3).
 2. **Web client strategy:** three.js first (small, already used by 2030workspace) and Bevy-wasm later for code sharing — or Bevy-wasm only.
 3. **Licence policy.**
-   - opage code is AGPL-3.0, docs CC BY-SA 4.0. Using MIT/Apache dependencies (Bevy, wgpu, meshoptimizer, Jolt) is compatible.
+   - osage code is AGPL-3.0, docs CC BY-SA 4.0. Using MIT/Apache dependencies (Bevy, wgpu, meshoptimizer, Jolt) is compatible.
    - Work meant for upstream (Bevy, three.js) should be written in those projects under their licences.
-   - **Should the protocol spec and client SDKs be permissive (MIT/Apache)?** It would let *any* client — including proprietary ones — join opage worlds, which directly serves G4, while servers and engine stay AGPL.
+   - **Should the protocol spec and client SDKs be permissive (MIT/Apache)?** It would let *any* client — including proprietary ones — join osage worlds, which directly serves G4, while servers and engine stay AGPL.
    - Vendor SDKs: NVIDIA's RTX SDK licence forbids open-source combination; AMD FSR 2.4 and Intel XeSS are binary-only — needs a legal review before any optional integration.
    - **Consoles are out of reach** for an AGPL project (NDA SDKs).
 4. **State store:** own persistence behind the region servers (recommended) vs SpacetimeDB (technically close, but BSL 1.1 until each version converts to AGPL four years later).

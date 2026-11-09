@@ -53,7 +53,7 @@ Sources: DF's analysis of the ~26–27-minute "Extended Look" (Aug 2026), DF's l
 
 ### Vendor SDKs — mostly *not* open source
 
-- **NVIDIA** RTXGI 2.8 (NRC/SHaRC), RTXDI 3.1, NRD 4.18, DLSS 310.9 use the NVIDIA RTX SDKs License, whose clause 4e forbids using the SDK "in any manner that would cause it to become subject to an open source software license" — **not open source, and in conflict with copyleft licences such as opage's AGPL-3.0.** DLSS is NVIDIA-only. **Streamline is MIT.** RTX Remix runtime (dxvk-remix, zlib) only remasters DX8/9 games.
+- **NVIDIA** RTXGI 2.8 (NRC/SHaRC), RTXDI 3.1, NRD 4.18, DLSS 310.9 use the NVIDIA RTX SDKs License, whose clause 4e forbids using the SDK "in any manner that would cause it to become subject to an open source software license" — **not open source, and in conflict with copyleft licences such as osage's AGPL-3.0.** DLSS is NVIDIA-only. **Streamline is MIT.** RTX Remix runtime (dxvk-remix, zlib) only remasters DX8/9 games.
 - **AMD FSR SDK 2.4.0 (Oct 2026):** core is **binary-only, no reverse engineering**; only samples are MIT. Includes FSR4 ML upscaling, Ray Regeneration (ML denoiser), radiance-caching preview. **Last MIT AMD source: FidelityFX SDK 1.1.4 (May 2025)** with FSR 3.1 and **Brixelizer GI**.
 - **Intel XeSS 3.0.2:** binary-only licence.
 
@@ -87,10 +87,10 @@ Sources: DF's analysis of the ~26–27-minute "Extended Look" (Aug 2026), DF's l
 
 **Verdict:** the best open renderers can match some pieces of GTA 6 in a tech demo — Wicked has the broadest feature set, Bevy and Godot the strongest communities. None comes with the tools, the console path or the hardened RT GI needed at GTA 6 / UE5 open-world scale today.
 
-## Takeaways for opage
+## Takeaways for osage
 
 1. The renderer gap is real but **narrower than the tools/content gap**; the most valuable contributions are world tooling, streaming/HLOD and crowd/traffic simulation at scale.
-2. **Open denoising and upscaling are a strategic hole**: the state of the art is proprietary, and opage's AGPL licence rules out NVIDIA's SDKs. An open ML denoiser/upscaler is a high-leverage project.
+2. **Open denoising and upscaling are a strategic hole**: the state of the art is proprietary, and osage's AGPL licence rules out NVIDIA's SDKs. An open ML denoiser/upscaler is a high-leverage project.
 3. **Consoles are out of reach for an AGPL project** (NDA SDKs); target PC (Windows/Linux/macOS), mobile and the web.
 4. **Bevy's direction (GPU-driven, meshlets, Solari) is the closest open trajectory to the RAGE/UE5 bar**; Wicked is the reference to study for breadth; meshoptimizer and Jolt are safe dependencies.
 

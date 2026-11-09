@@ -7,7 +7,7 @@ Two things are built into the world-server mesh **from the first version**, beca
 1. **Account uniqueness** for human users — against fraud, ban evasion, multi-account farming, smurfing and bot armies.
 2. **An agent mesh** inside the server mesh — AI agents as first-class, accountable participants of the world.
 
-Both are **interfaces with pluggable providers**. opage names two reference implementations — **nexlink** for identity and **ameesh** for agents — and **imposes neither**: a world can run with other providers, or with none.
+Both are **interfaces with pluggable providers**. osage names two reference implementations — **nexlink** for identity and **ameesh** for agents — and **imposes neither**: a world can run with other providers, or with none.
 
 ## 1. Principles
 
@@ -47,7 +47,7 @@ Each world declares a **policy**: which providers and issuers it trusts, and whi
 sequenceDiagram
   participant C as Client (any tier)
   participant P as Identity provider (nexlink, eID wallet, …)
-  participant W as opage world (region server)
+  participant W as osage world (region server)
   C->>W: join (A0 guest or A1 account)
   W-->>C: privilege needs A2 → presentation request (issuers, level, world scope)
   C->>P: request presentation for world scope
@@ -69,7 +69,7 @@ sequenceDiagram
 
 ## 3. The agent mesh inside the server mesh
 
-### 3.1 What an agent is in an opage world
+### 3.1 What an agent is in an osage world
 
 An agent is a client at tier **T0** (no rendering) that:
 
@@ -91,7 +91,7 @@ flowchart LR
   subgraph Mesh["agent mesh (ameesh or other)"]
     AG["Agent runtime<br/>+ mailbox, threads, budget"]
   end
-  AG -- observations / actions --> GW["opage agent gateway"]
+  AG -- observations / actions --> GW["osage agent gateway"]
   GW --> RA["Region server A"]
   RA <-->|handoff + lease transfer| RB["Region server B"]
   GW -- gated action --> AP["Human approval<br/>(receipt bound to action)"]
@@ -100,7 +100,7 @@ flowchart LR
 
 ### 3.3 Reference mesh: ameesh
 
-**[ameesh](https://github.com/manaty/ameesh)** (AGPL-3.0, [ameesh.org](https://ameesh.org)) — "accountable teams of humans and AI agents" — already implements the pieces this design needs, outside games: a durable mailbox, one runner per host, agent **leases**, readable threads, **actions behind a gate**, **human approvals proved by passkey receipts**, and a canon that declares humans, hosts, agents and placements — **an agent without a resolved responsible human is never claimed**. It runs agents from several vendors' harnesses side by side. It is the natural first agent-mesh adapter, and also a candidate for coordinating the human + agent teams that build opage itself.
+**[ameesh](https://github.com/manaty/ameesh)** (AGPL-3.0, [ameesh.org](https://ameesh.org)) — "accountable teams of humans and AI agents" — already implements the pieces this design needs, outside games: a durable mailbox, one runner per host, agent **leases**, readable threads, **actions behind a gate**, **human approvals proved by passkey receipts**, and a canon that declares humans, hosts, agents and placements — **an agent without a resolved responsible human is never claimed**. It runs agents from several vendors' harnesses side by side. It is the natural first agent-mesh adapter, and also a candidate for coordinating the human + agent teams that build osage itself.
 
 ## 4. Protocol consequences (to put in protocol v0)
 
@@ -120,4 +120,4 @@ flowchart LR
 
 ## Licences
 
-ameesh is AGPL-3.0, compatible with opage's AGPL-3.0. nexlink and other identity providers are reached over the network through open standards — no code linking, so no licence constraint on either side.
+ameesh is AGPL-3.0, compatible with osage's AGPL-3.0. nexlink and other identity providers are reached over the network through open standards — no code linking, so no licence constraint on either side.

@@ -103,7 +103,7 @@ Question: which existing engine, if any, could serve as the foundation (or as a 
 - Licence: 5 % royalty on lifetime gross above $1M per product (3.5 % when launching first on the Epic Games Store) (*from search snippets; licence page refused the fetch*).
 - No official web export. DX11/SM5 support in 5.8 *unverified*.
 
-## Takeaways for opage
+## Takeaways for osage
 
 1. **No open-source engine matches UE5's — let alone RAGE's — open-world stack.** Each one covers a different subset.
 2. **Godot** has the strongest community and funding and the only serious low-end + web path, but terrain and large worlds come from plugins/custom builds, and it lacks virtualised geometry and GPU-driven rendering.

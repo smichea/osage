@@ -2,7 +2,7 @@
 
 Survey date: **2026-11-09**, from primary sources (W3C, Khronos, OGC, CSA, EUR-Lex, eCFR, project release notes). Four points were re-checked directly: `KHR_gaussian_splatting` ratification, Firefox Web Serial, the Matter 1.6 release and the EDPB statement on smart glasses. Items marked *unverified* could not be confirmed.
 
-Question: what exists to let real places, real devices and people in AR share an opage world — and what constraints apply when in-world actions drive real devices? Companion of [design/02](../design/02-mixed-worlds-and-devices.md).
+Question: what exists to let real places, real devices and people in AR share an osage world — and what constraints apply when in-world actions drive real devices? Companion of [design/02](../design/02-mixed-worlds-and-devices.md).
 
 ## 1. AR / XR clients
 
@@ -83,9 +83,9 @@ Question: what exists to let real places, real devices and people in AR share an
 - **Implication:** streaming real cameras or captured spaces into a shared multi-user world will likely **fall outside the household exemption**.
 - **EU AI Act Art. 5** (since Feb 2025): untargeted scraping to build facial databases is banned; the real-time biometric identification ban targets law enforcement; other remote biometric identification is high-risk (obligations delayed to Dec 2027 by Reg. 2026/1744 — found on EUR-Lex, not re-checked).
 
-## Takeaways for opage
+## Takeaways for osage
 
-1. **AR is uneven:** Chrome Android and Quest Browser cover WebXR AR; **iPhone AR needs a native client**; no open geospatial WebXR and no turnkey open VPS — opage's `opage-geo` will assemble one from OSCP, stella_vslam, Kapture/hloc-style relocalisation.
+1. **AR is uneven:** Chrome Android and Quest Browser cover WebXR AR; **iPhone AR needs a native client**; no open geospatial WebXR and no turnkey open VPS — osage's `osage-geo` will assemble one from OSCP, stella_vslam, Kapture/hloc-style relocalisation.
 2. **Georeference with standards that already exist:** OGC GeoPose for poses, 3D Tiles for anchored content, big_space (Bevy) / floating origin (Babylon) for precision.
 3. **Capture pipeline is open end to end:** COLMAP/GLOMAP (BSD-3) → gsplat or **Brush (Rust/WebGPU)** → `KHR_gaussian_splatting` → 3D Tiles.
 4. **Device vocabulary:** WoT TD 1.1 as the description envelope; OpenDeviceDB contracts map onto it (state → property, stream/event → event, action → action).
