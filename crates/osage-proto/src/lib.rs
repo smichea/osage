@@ -28,6 +28,13 @@ pub const PROTOCOL_VERSION: &str = "0.1";
 /// Encoded `FileDescriptorSet` of every schema in `spec/proto`.
 pub const DESCRIPTORS: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/osage_descriptors.bin"));
 
+/// Names of core actions.
+pub mod actions {
+    /// A human asks the world for a delegation for one agent; the token is in
+    /// `ActionResult.result` (spec/README.md, "Credentials").
+    pub const DELEGATE_AGENT: &str = "osage.delegate_agent";
+}
+
 /// Names of the core component types and their message types.
 pub mod types {
     pub const TRANSFORM: &str = "osage.transform/1";

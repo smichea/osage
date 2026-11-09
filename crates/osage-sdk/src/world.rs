@@ -69,6 +69,14 @@ impl World {
         self.entities.keys().copied()
     }
 
+    /// Encoded component values of `entity`, by type name.
+    pub fn components(&self, entity: u64) -> impl Iterator<Item = (&str, &[u8])> + '_ {
+        self.entities
+            .get(&entity)
+            .into_iter()
+            .flat_map(|c| c.iter().map(|(name, value)| (name.as_str(), value.as_slice())))
+    }
+
     /// Decodes the value of component `type_name` (e.g. `osage.transform/1`)
     /// on `entity`, if present and well-formed.
     pub fn get<M: prost::Message + Default>(&self, entity: u64, type_name: &str) -> Option<M> {

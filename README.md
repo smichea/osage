@@ -32,6 +32,23 @@ cargo test --workspace                        # end-to-end tests
 
 Requirements: Rust ≥ 1.90, Node ≥ 22. Licences of each part: see [Licence](#licence).
 
+**Identity and agents.** Start the world with `--trust-dev-issuer` (an **insecure** local issuer, for development only), then:
+
+```sh
+CRED=$(cargo run -q -p osage-credentials --bin osage-dev-credential -- alice@demo A2)   # alice's identity (A2)
+export OSAGE_DELEGATION=$(cargo run -q -p osage-agent -- delegate --credential "$CRED")  # a delegation for one agent
+cargo run -q -p osage-agent                                                             # MCP server on stdio
+```
+
+To let an AI agent harness use it, declare the MCP server, e.g. in a `.mcp.json`:
+
+```json
+{ "mcpServers": { "osage": { "command": "osage-agent-mcp", "args": ["--world", "ws://127.0.0.1:7878"],
+                             "env": { "OSAGE_DELEGATION": "<token printed by osage-agent-mcp delegate>" } } } }
+```
+
+Tools: `world_info`, `observe` (entities and components as JSON, decoded from the world's own schemas), `move`.
+
 ## Research
 
 | Document | Question |

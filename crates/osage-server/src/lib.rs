@@ -13,8 +13,8 @@ mod schema;
 use std::{collections::HashSet, net::TcpListener, thread, time::SystemTime};
 
 use anyhow::Result;
-pub use gateway::DELEGATE_AGENT;
 use osage_credentials::TrustedIssuer;
+pub use osage_proto::actions::DELEGATE_AGENT;
 
 pub use region::RegionInput;
 

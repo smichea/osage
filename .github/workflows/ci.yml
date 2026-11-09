@@ -20,8 +20,8 @@ jobs:
       - run: rustup toolchain install stable --profile minimal --component rustfmt,clippy && rustup default stable
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
       - run: cargo fmt --all --check
-      - run: cargo clippy -p osage-proto -p osage-sdk -p osage-credentials -p osage-server --all-targets -- -D warnings
-      - run: cargo test -p osage-proto -p osage-sdk -p osage-credentials -p osage-server
+      - run: cargo clippy -p osage-proto -p osage-sdk -p osage-credentials -p osage-server -p osage-agent --all-targets -- -D warnings
+      - run: cargo test -p osage-proto -p osage-sdk -p osage-credentials -p osage-server -p osage-agent
 
   native-client:
     name: Rust — native Bevy client

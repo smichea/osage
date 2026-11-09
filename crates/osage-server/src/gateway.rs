@@ -20,6 +20,7 @@ use futures_util::{SinkExt, StreamExt};
 use osage_credentials::DelegationKey;
 use osage_proto::{
     PROTOCOL_VERSION,
+    actions::DELEGATE_AGENT,
     v0::{
         ActionRequest, ActionResult, ActionStatus, ClientMessage, Goodbye, GoodbyeReason, ServerMessage,
         SessionIdentity, SourceOffer, Welcome, WorldDescriptor, client_message, server_message,
@@ -40,8 +41,6 @@ use crate::{
 };
 
 const HELLO_TIMEOUT: Duration = Duration::from_secs(5);
-/// Action a human sends to get a delegation for one agent (spec/README.md).
-pub const DELEGATE_AGENT: &str = "osage.delegate_agent";
 const DELEGATION_LIFETIME: Duration = Duration::from_secs(3600);
 
 pub(crate) struct Gateway {

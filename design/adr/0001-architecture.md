@@ -37,7 +37,7 @@ flowchart LR
 
 | Process | Responsibility | Not its job |
 |---|---|---|
-| **Replication gateway** | terminates client connections (WebTransport, WebSocket); verifies identity presentations and agent delegations (D-013); enforces rate limits, quotas and permissions; subscribes to the regions each client's interest area touches and **merges their streams**, so region boundaries and handoffs are invisible to clients (D-016); serves the agent gateway (MCP) | simulation, persistence |
+| **Replication gateway** | terminates client connections (WebTransport, WebSocket); verifies identity presentations and agent delegations (D-013); enforces rate limits, quotas and permissions; issues agent delegations; subscribes to the regions each client's interest area touches and **merges their streams**, so region boundaries and handoffs are invisible to clients (D-016) | simulation, persistence; MCP — agents use the client-side `osage-agent-mcp` adapter (D-026) |
 | **Region server** | authoritative simulation of one area (Bevy ECS, headless); interest management inside the area; border ghosts and entity handoff with neighbouring regions; appends events to the log | client connections, identity |
 | **Persistence** | PostgreSQL event log + periodic snapshots per region (D-004); replay and audit (sanctions, gated actions, time travel) | live state (regions hold it) |
 | **Content service** | stores and serves content by reference (glTF + KTX2 + meshopt, 3D Tiles HLOD, splats), per-tier variants; runs pipeline workers (tiling, capture processing, OpenDeviceDB compositions if the operator allows, D-015) | live state |
@@ -66,6 +66,8 @@ flowchart LR
 | `spec/` | protocol specification text | Community Specification License 1.0 (D-023) |
 | `spec/proto/`, spec examples | `.proto` schemas and examples | Apache-2.0 |
 | `crates/osage-sdk/` | Rust client SDK | MIT OR Apache-2.0 |
+| `crates/osage-credentials/` | v0 identity credentials and agent delegations | MIT OR Apache-2.0 |
+| `crates/osage-agent/` | MCP adapter for AI agents (`osage-agent-mcp`, D-026) | MIT OR Apache-2.0 |
 | `packages/sdk-ts/` | TypeScript client SDK | MIT OR Apache-2.0 |
 | `crates/osage-gpu-plugin-api/`, `crates/osage-platform-api/`, `crates/osage-world-module-api/` | interfaces for vendor GPU components, platform components and world modules (§A, §C, §D) | MIT OR Apache-2.0 |
 | `crates/osage-*` (others) | gateway, region server, persistence, content, bridge, render plugins, native client, tools | AGPL-3.0-or-later WITH osage-exceptions-1.0 (D-020) |
