@@ -1,0 +1,21 @@
+// SPDX-FileCopyrightText: The osage contributors
+// SPDX-License-Identifier: Apache-2.0
+
+syntax = "proto3";
+
+package osage.math.v1;
+
+// A vector in world units (metres), right-handed, Y up.
+message Vec3 {
+  float x = 1;
+  float y = 2;
+  float z = 3;
+}
+
+// A unit quaternion.
+message Quat {
+  float x = 1;
+  float y = 2;
+  float z = 3;
+  float w = 4;
+}

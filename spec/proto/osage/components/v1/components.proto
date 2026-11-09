@@ -1,0 +1,52 @@
+// SPDX-FileCopyrightText: The osage contributors
+// SPDX-License-Identifier: Apache-2.0
+
+// Core osage component types, major version 1. Each message is announced in
+// the Welcome schema bundle under a namespaced type name.
+
+syntax = "proto3";
+
+package osage.components.v1;
+
+import "osage/math/v1/math.proto";
+import "osage/v0/protocol.proto";
+
+// "osage.transform/1" — volatile.
+message Transform {
+  osage.math.v1.Vec3 translation = 1;
+  osage.math.v1.Quat rotation = 2;
+  osage.math.v1.Vec3 scale = 3;
+}
+
+enum ContentKind {
+  CONTENT_KIND_UNSPECIFIED = 0;
+  // Shapes every client draws itself, e.g. "osage:builtin/cube".
+  CONTENT_KIND_BUILTIN = 1;
+  CONTENT_KIND_GLTF = 2;
+  CONTENT_KIND_3DTILES = 3;
+  CONTENT_KIND_SPLAT = 4;
+}
+
+// "osage.content_ref/1" — what an entity looks like, by reference: no geometry
+// travels in the protocol.
+message ContentRef {
+  string uri = 1;
+  bytes sha256 = 2;
+  ContentKind kind = 3;
+  repeated osage.v0.Tier tiers = 4;
+}
+
+enum ControllerKind {
+  CONTROLLER_KIND_UNSPECIFIED = 0;
+  CONTROLLER_KIND_HUMAN = 1;
+  CONTROLLER_KIND_AGENT = 2;
+  CONTROLLER_KIND_SYSTEM = 3;
+}
+
+// "osage.controller/1" — who controls an entity (design/01 P5).
+message Controller {
+  ControllerKind kind = 1;
+  string per_world_id = 2;
+  // For agents: the per-world identifier of the responsible human.
+  string responsible_per_world_id = 3;
+}

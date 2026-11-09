@@ -2,6 +2,8 @@
 
 Contributions are welcome from people and from AI agents working for a responsible person. osage is in its research phase: corrections, counter-arguments and new sources for `research/` and `design/` are the most useful contributions today.
 
+> **Code contributions are accepted from the maintainer only** until the additional permissions in [`LICENSE-EXCEPTIONS.md`](LICENSE-EXCEPTIONS.md) are final ([D-024](design/decisions.md#d-024--code-starts-before-the-lawyers-review-maintainer-only-contributions-until-then)). Documentation contributions are welcome now.
+
 ## Developer Certificate of Origin
 
 osage uses the [Developer Certificate of Origin 1.1](https://developercertificate.org/) (DCO), not a CLA: you keep your copyright, and you certify that you have the right to submit your contribution under the project's licences.
@@ -34,7 +36,7 @@ See the [decision log](design/decisions.md) and the [licensing review](research/
 
 **Rules that keep these licences working:**
 
-- <!-- REUSE-IgnoreStart -->Your contribution is licensed under the licence stated in each file's header, **including the additional permissions**. Every code file carries an SPDX header, e.g. `SPDX-License-Identifier: AGPL-3.0-or-later WITH AdditionRef-osage-exceptions-1.0`; files without one are not accepted.<!-- REUSE-IgnoreEnd -->
+- <!-- REUSE-IgnoreStart -->Your contribution is licensed under the licence stated in each file's header, **including the additional permissions**. Every code file carries an SPDX header, `SPDX-License-Identifier: LicenseRef-osage-AGPL-3.0-or-later-with-exceptions` for engine code (the AGPL with the osage additional permissions — `AGPL-3.0-or-later WITH AdditionRef-osage-exceptions-1.0` in SPDX 3.0 terms, written as a REUSE 3.3 custom licence); files without one are not accepted.<!-- REUSE-IgnoreEnd -->
 - Do not add third-party GPL or AGPL code unless its authors grant the same additional permissions.
 - AGPL code never moves into the specification or SDK directories.
 - Never commit proprietary vendor headers or binaries (GPU, platform or console SDKs); they are reached only through the documented interfaces.

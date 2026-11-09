@@ -1,0 +1,28 @@
+# SPDX-FileCopyrightText: The osage contributors
+# SPDX-License-Identifier: LicenseRef-osage-AGPL-3.0-or-later-with-exceptions
+
+[package]
+name = "osage-server"
+description = "osage replication gateway and region server (single binary, phase 1)"
+license-file = "../../LICENSE-EXCEPTIONS.md"
+publish = false
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+
+[dependencies]
+osage-proto.workspace = true
+anyhow.workspace = true
+bevy = { workspace = true, features = ["std", "multi_threaded", "async_executor"] }
+crossbeam-channel.workspace = true
+futures-util.workspace = true
+prost.workspace = true
+prost-types.workspace = true
+tokio.workspace = true
+tokio-tungstenite.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+
+[dev-dependencies]
+osage-sdk.workspace = true

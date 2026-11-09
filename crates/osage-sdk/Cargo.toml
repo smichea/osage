@@ -1,0 +1,20 @@
+# SPDX-FileCopyrightText: The osage contributors
+# SPDX-License-Identifier: MIT OR Apache-2.0
+
+[package]
+name = "osage-sdk"
+description = "Rust client SDK for the osage protocol"
+license = "MIT OR Apache-2.0"
+publish = false
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+
+[dependencies]
+osage-proto.workspace = true
+anyhow.workspace = true
+futures-util.workspace = true
+prost.workspace = true
+tokio.workspace = true
+tokio-tungstenite.workspace = true

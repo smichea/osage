@@ -11,7 +11,14 @@ SPDX-License-Identifier = "CC-BY-SA-4.0"
 
 # Repository tooling (CI workflows, licence policy)
 [[annotations]]
-path = [".github/**", "deny.toml"]
+path = [".github/**", "deny.toml", "Cargo.lock", ".gitignore"]
 precedence = "aggregate"
 SPDX-FileCopyrightText = "The osage contributors"
 SPDX-License-Identifier = "AGPL-3.0-or-later"
+
+# Protocol specification text
+[[annotations]]
+path = ["spec/**.md"]
+precedence = "aggregate"
+SPDX-FileCopyrightText = "The osage contributors"
+SPDX-License-Identifier = "Community-Spec-1.0"

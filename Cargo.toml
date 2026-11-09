@@ -1,0 +1,28 @@
+# SPDX-FileCopyrightText: The osage contributors
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
+[workspace]
+resolver = "3"
+members = ["crates/*"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.90"
+repository = "https://github.com/smichea/osage"
+
+[workspace.dependencies]
+osage-proto = { path = "crates/osage-proto" }
+osage-sdk = { path = "crates/osage-sdk" }
+anyhow = "1.0.104"
+bevy = { version = "0.20.1", default-features = false }
+crossbeam-channel = "0.5.17"
+futures-util = "0.3.34"
+prost = "0.14.4"
+prost-types = "0.14.4"
+prost-build = "0.14.4"
+protox = "0.10.0"
+tokio = { version = "1.54.1", features = ["macros", "net", "rt-multi-thread", "sync", "time"] }
+tokio-tungstenite = "0.30.0"
+tracing = "0.1.44"
+tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }

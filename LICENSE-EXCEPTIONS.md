@@ -5,8 +5,10 @@
 These are additional permissions under section 7 of the GNU Affero General Public License version 3, granted by the licensors of every file whose header reads:
 
 ```
-SPDX-License-Identifier: AGPL-3.0-or-later WITH AdditionRef-osage-exceptions-1.0
+SPDX-License-Identifier: LicenseRef-osage-AGPL-3.0-or-later-with-exceptions
 ```
+
+(SPDX 3.0 equivalent: `AGPL-3.0-or-later WITH AdditionRef-osage-exceptions-1.0`. REUSE 3.3 and Cargo still use SPDX 2.3, which has no custom exceptions, so the AGPL text and these permissions are combined in [`LICENSES/LicenseRef-osage-AGPL-3.0-or-later-with-exceptions.txt`](LICENSES/LicenseRef-osage-AGPL-3.0-or-later-with-exceptions.txt).)
 
 As section 7 allows, anyone who conveys a copy may remove any of these permissions from that copy. They do not apply to code whose authors did not grant them (for example third-party GPL or AGPL code).
 

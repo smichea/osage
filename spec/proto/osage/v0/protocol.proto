@@ -1,0 +1,277 @@
+// SPDX-FileCopyrightText: The osage contributors
+// SPDX-License-Identifier: Apache-2.0
+
+// osage protocol v0 — messages between a client and the replication gateway.
+// Shape and reasons: design/adr/0002-protocol-v0.md. v0.x may break between
+// minor versions; unknown fields are preserved and ignored.
+
+syntax = "proto3";
+
+package osage.v0;
+
+import "google/protobuf/descriptor.proto";
+import "osage/math/v1/math.proto";
+
+// Every frame sent by a client. On WebSocket, one binary message carries one
+// ClientMessage; on WebTransport streams, frames are length-prefixed.
+message ClientMessage {
+  oneof message {
+    Hello hello = 1;
+    Intent intent = 2;
+    ActionRequest action_request = 3;
+    Subscribe subscribe = 4;
+    Unsubscribe unsubscribe = 5;
+    TimeSync time_sync = 6;
+    Goodbye goodbye = 15;
+  }
+}
+
+// Every frame sent by the gateway.
+message ServerMessage {
+  oneof message {
+    Welcome welcome = 1;
+    EntityEnter entity_enter = 2;
+    EntityLeave entity_leave = 3;
+    ComponentChanged component_changed = 4;
+    StateDatagram state = 5;
+    TimeSync time_sync = 6;
+    ActionResult action_result = 7;
+    Goodbye goodbye = 15;
+  }
+}
+
+// ---------------------------------------------------------------- handshake
+
+enum Role {
+  ROLE_UNSPECIFIED = 0;
+  ROLE_PLAYER = 1;
+  ROLE_AGENT = 2;
+  ROLE_BRIDGE = 3;
+  ROLE_OBSERVER = 4;
+}
+
+// Fidelity tiers (design/02, synthesis): T0 headless … T4 ray tracing.
+enum Tier {
+  TIER_UNSPECIFIED = 0;
+  TIER_T0_HEADLESS = 1;
+  TIER_T1_MINIMAL = 2;
+  TIER_T2_STANDARD = 3;
+  TIER_T3_HIGH = 4;
+  TIER_T4_ULTRA = 5;
+}
+
+message ClientInfo {
+  string implementation = 1;
+  string version = 2;
+}
+
+message Capabilities {
+  Tier tier = 1;
+  uint32 max_datagram_size = 2;
+  // Content kinds the client can load, e.g. "gltf", "3dtiles", "splat".
+  repeated string content_kinds = 3;
+}
+
+message Anonymous {}
+
+message Credentials {
+  oneof credential {
+    Anonymous anonymous = 1;
+    // A W3C verifiable presentation (identity, D-013).
+    bytes verifiable_presentation = 2;
+    // A delegation credential from the agent's responsible human (design/01).
+    bytes delegation = 3;
+    // A credential binding a device bridge to its owner (design/02).
+    bytes bridge = 4;
+  }
+}
+
+message Hello {
+  // Protocol versions the client speaks, preferred first, e.g. "0.1".
+  repeated string protocol_versions = 1;
+  ClientInfo client = 2;
+  Role role = 3;
+  Capabilities capabilities = 4;
+  Credentials credentials = 5;
+  string world = 6;
+}
+
+enum AssuranceLevel {
+  ASSURANCE_LEVEL_UNSPECIFIED = 0;
+  ASSURANCE_LEVEL_A0 = 1; // anonymous guest
+  ASSURANCE_LEVEL_A1 = 2; // account, not proven unique
+  ASSURANCE_LEVEL_A2 = 3; // unique human, community-attested
+  ASSURANCE_LEVEL_A3 = 4; // unique human, documented
+}
+
+message SessionIdentity {
+  // Stable per-world identifier; never a civil identity (design/01 P2).
+  string per_world_id = 1;
+  AssuranceLevel level = 2;
+  string issuer = 3;
+  repeated string privileges = 4;
+}
+
+// Where to get the Corresponding Source of the gateway and region servers as
+// they run (AGPL section 13). Clients show it to their users.
+message SourceOffer {
+  string url = 1;
+  string version = 2;
+}
+
+// Optional Earth frame of a world or region (OGC GeoPose-compatible).
+message EarthFrame {
+  double latitude_deg = 1;
+  double longitude_deg = 2;
+  double height_m = 3;
+  osage.math.v1.Quat orientation = 4;
+}
+
+message WorldDescriptor {
+  string name = 1;
+  uint32 tick_rate_hz = 2;
+  string content_base_url = 3;
+  SourceOffer source_offer = 4;
+  EarthFrame earth_frame = 5;
+}
+
+// A component type of this world, e.g. name "osage.transform/1",
+// message_type "osage.components.v1.Transform".
+message ComponentType {
+  // Compact id used on the wire for this session.
+  uint32 id = 1;
+  string name = 2;
+  string message_type = 3;
+  // Volatile types travel in StateDatagram (latest value wins); others are
+  // reliable (EntityEnter, ComponentChanged).
+  bool volatile = 4;
+}
+
+// Schemas of the world's component types (D-019), inline or by reference.
+message SchemaBundle {
+  google.protobuf.FileDescriptorSet descriptors = 1;
+  repeated ComponentType types = 2;
+  // When descriptors are not inline: where to fetch them, and their digest.
+  string url = 3;
+  bytes sha256 = 4;
+}
+
+message Welcome {
+  string protocol_version = 1;
+  uint64 session_id = 2;
+  SessionIdentity identity = 3;
+  uint64 server_time_us = 4;
+  WorldDescriptor world = 5;
+  SchemaBundle schemas = 6;
+}
+
+// ------------------------------------------------------------- replication
+
+// A component value: its session type id and its message, encoded with the
+// schema announced in the Welcome.
+message Component {
+  uint32 type = 1;
+  bytes value = 2;
+}
+
+message EntityEnter {
+  uint64 entity = 1;
+  repeated Component components = 2;
+}
+
+enum LeaveReason {
+  LEAVE_REASON_UNSPECIFIED = 0;
+  LEAVE_REASON_OUT_OF_SCOPE = 1;
+  LEAVE_REASON_DESTROYED = 2;
+  LEAVE_REASON_PERMISSION = 3;
+}
+
+message EntityLeave {
+  uint64 entity = 1;
+  LeaveReason reason = 2;
+}
+
+// A discrete component changed (full new value; v0 has no field-level delta),
+// or was removed.
+message ComponentChanged {
+  uint64 entity = 1;
+  Component component = 2;
+  bool removed = 3;
+}
+
+message EntityComponent {
+  uint64 entity = 1;
+  Component component = 2;
+}
+
+// Latest values of volatile components at a server tick.
+message StateDatagram {
+  uint64 tick = 1;
+  uint64 server_time_us = 2;
+  repeated EntityComponent values = 3;
+}
+
+// Sent by the client with its own clock; echoed by the server with its clock.
+message TimeSync {
+  uint64 client_time_us = 1;
+  uint64 server_time_us = 2;
+}
+
+// ---------------------------------------------------- intents and actions
+
+// Input for an entity the client controls; the server simulates.
+message Intent {
+  uint64 sequence = 1;
+  uint64 entity = 2;
+  Component input = 3;
+}
+
+message ActionRequest {
+  // Idempotency key; actions are never replayed automatically.
+  uint64 request_id = 1;
+  uint64 target = 2;
+  string action = 3;
+  bytes arguments = 4;
+}
+
+enum ActionStatus {
+  ACTION_STATUS_UNSPECIFIED = 0;
+  ACTION_STATUS_OK = 1;
+  ACTION_STATUS_REJECTED = 2;
+  ACTION_STATUS_FAILED = 3;
+  // Outcome unknown: reconcile, never retry blindly.
+  ACTION_STATUS_UNKNOWN = 4;
+  // Gated action waiting for a human approval receipt (design/01 P6, D-009).
+  ACTION_STATUS_PENDING_APPROVAL = 5;
+}
+
+message ActionResult {
+  uint64 request_id = 1;
+  ActionStatus status = 2;
+  string reason = 3;
+  string approval_reference = 4;
+}
+
+message Subscribe {
+  uint64 subscription_id = 1;
+  string query = 2;
+}
+
+message Unsubscribe {
+  uint64 subscription_id = 1;
+}
+
+enum GoodbyeReason {
+  GOODBYE_REASON_UNSPECIFIED = 0;
+  GOODBYE_REASON_NORMAL = 1;
+  GOODBYE_REASON_KICKED = 2;
+  GOODBYE_REASON_SANCTIONED = 3;
+  GOODBYE_REASON_VERSION = 4;
+  GOODBYE_REASON_OVERLOAD = 5;
+  GOODBYE_REASON_SHUTDOWN = 6;
+}
+
+message Goodbye {
+  GoodbyeReason reason = 1;
+  string detail = 2;
+}
