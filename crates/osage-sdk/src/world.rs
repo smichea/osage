@@ -3,7 +3,10 @@
 
 use std::collections::{BTreeMap, HashMap};
 
-use osage_proto::v0::{ComponentType, ServerMessage, Welcome, server_message};
+use osage_proto::{
+    components, types,
+    v0::{ComponentType, ServerMessage, Welcome, server_message},
+};
 
 /// Component types announced in a `Welcome`, by compact id and by name.
 #[derive(Clone, Debug, Default)]
@@ -74,6 +77,15 @@ impl World {
     pub fn get<M: prost::Message + Default>(&self, entity: u64, type_name: &str) -> Option<M> {
         let bytes = self.entities.get(&entity)?.get(type_name)?;
         M::decode(bytes.as_slice()).ok()
+    }
+
+    /// The entity whose `osage.controller/1` names `per_world_id` — for a
+    /// player, its avatar (pass `Welcome.identity.per_world_id`).
+    pub fn controlled_by(&self, per_world_id: &str) -> Option<u64> {
+        self.entities().find(|&entity| {
+            self.get::<components::Controller>(entity, types::CONTROLLER)
+                .is_some_and(|controller| controller.per_world_id == per_world_id)
+        })
     }
 
     /// Applies one server message; messages that do not change the world

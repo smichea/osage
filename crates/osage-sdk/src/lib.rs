@@ -11,5 +11,5 @@ mod session;
 mod world;
 
 pub use osage_proto::{PROTOCOL_VERSION, components, math, types, v0};
-pub use session::{Session, connect, hello};
+pub use session::{Session, SessionReceiver, SessionSender, connect, hello, intent};
 pub use world::{TypeTable, World, WorldEvent};

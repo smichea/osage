@@ -3,13 +3,18 @@
 
 import { create, toBinary } from "@bufbuild/protobuf";
 import { describe, expect, it } from "vitest";
-import { TransformSchema } from "../src/gen/osage/components/v1/components_pb.js";
+import { ControllerSchema, TransformSchema } from "../src/gen/osage/components/v1/components_pb.js";
 import { ServerMessageSchema, WelcomeSchema } from "../src/gen/osage/v0/protocol_pb.js";
 import { World, types } from "../src/world.js";
 
 const welcome = create(WelcomeSchema, {
   protocolVersion: "0.1",
-  schemas: { types: [{ id: 1, name: types.transform, messageType: "osage.components.v1.Transform", volatile: true }] },
+  schemas: {
+    types: [
+      { id: 1, name: types.transform, messageType: "osage.components.v1.Transform", volatile: true },
+      { id: 3, name: types.controller, messageType: "osage.components.v1.Controller" },
+    ],
+  },
 });
 
 const transform = (x: number) => toBinary(TransformSchema, create(TransformSchema, { translation: { x, y: 1, z: 0 } }));
@@ -45,5 +50,18 @@ describe("World", () => {
       }),
     );
     expect(world.get(1n, "unknown/1", TransformSchema)).toBeUndefined();
+  });
+
+  it("finds the entity a player controls", () => {
+    const world = new World(welcome);
+    const controller = toBinary(ControllerSchema, create(ControllerSchema, { kind: 1, perWorldId: "guest-2" }));
+    world.apply(
+      create(ServerMessageSchema, {
+        message: { case: "entityEnter", value: { entity: 5n, components: [{ type: 3, value: controller }] } },
+      }),
+    );
+    expect(world.typeId(types.controller)).toBe(3);
+    expect(world.controlledBy("guest-2")).toBe(5n);
+    expect(world.controlledBy("guest-9")).toBeUndefined();
   });
 });

@@ -19,8 +19,8 @@ use futures_util::{SinkExt, StreamExt};
 use osage_proto::{
     PROTOCOL_VERSION,
     v0::{
-        AssuranceLevel, ClientMessage, Goodbye, GoodbyeReason, Hello, ServerMessage, SessionIdentity, SourceOffer,
-        Welcome, WorldDescriptor, client_message, server_message,
+        AssuranceLevel, ClientMessage, Goodbye, GoodbyeReason, ServerMessage, SessionIdentity, SourceOffer, Welcome,
+        WorldDescriptor, client_message, server_message,
     },
 };
 use prost::Message as _;
@@ -83,10 +83,15 @@ impl Gateway {
         }
 
         let session = self.next_session.fetch_add(1, Ordering::Relaxed);
+        // Phase 1 skeleton: every session is an anonymous guest (A0); the
+        // verifier of D-013 comes next.
+        let per_world_id = format!("guest-{session}");
         let (out, mut outbox) = mpsc::unbounded_channel();
-        out.send(self.welcome(session, &hello))?;
+        out.send(self.welcome(session, &per_world_id))?;
         self.region.send(RegionInput::Join {
             session,
+            role: hello.role(),
+            per_world_id,
             out: out.clone(),
         })?;
         tracing::info!(session, client = ?hello.client, "session joined");
@@ -114,11 +119,9 @@ impl Gateway {
         Ok(())
     }
 
-    fn welcome(&self, session: u64, _hello: &Hello) -> ServerMessage {
-        // Phase 1 skeleton: every session is an anonymous guest (A0); the
-        // verifier of D-013 comes next.
+    fn welcome(&self, session: u64, per_world_id: &str) -> ServerMessage {
         let identity = SessionIdentity {
-            per_world_id: format!("guest-{session}"),
+            per_world_id: per_world_id.to_owned(),
             level: AssuranceLevel::A0.into(),
             issuer: String::new(),
             privileges: vec!["visit".to_owned()],

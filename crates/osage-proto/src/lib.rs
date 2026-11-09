@@ -36,6 +36,10 @@ pub mod types {
     pub const CONTENT_REF_MESSAGE: &str = "osage.components.v1.ContentRef";
     pub const CONTROLLER: &str = "osage.controller/1";
     pub const CONTROLLER_MESSAGE: &str = "osage.components.v1.Controller";
+    pub const MOVE_INTENT: &str = "osage.move_intent/1";
+    pub const MOVE_INTENT_MESSAGE: &str = "osage.components.v1.MoveIntent";
     /// Built-in unit cube, drawn by every client.
     pub const BUILTIN_CUBE: &str = "osage:builtin/cube";
+    /// Built-in avatar shape (a capsule about 1.8 m tall), drawn by every client.
+    pub const BUILTIN_AVATAR: &str = "osage:builtin/avatar";
 }

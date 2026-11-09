@@ -20,7 +20,8 @@ message Transform {
 
 enum ContentKind {
   CONTENT_KIND_UNSPECIFIED = 0;
-  // Shapes every client draws itself, e.g. "osage:builtin/cube".
+  // Shapes every client draws itself: "osage:builtin/cube",
+  // "osage:builtin/avatar".
   CONTENT_KIND_BUILTIN = 1;
   CONTENT_KIND_GLTF = 2;
   CONTENT_KIND_3DTILES = 3;
@@ -43,7 +44,16 @@ enum ControllerKind {
   CONTROLLER_KIND_SYSTEM = 3;
 }
 
-// "osage.controller/1" — who controls an entity (design/01 P5).
+// "osage.move_intent/1" — intent type: where the controlled entity wants to
+// go. Sent in Intent; the server simulates the movement.
+message MoveIntent {
+  // Desired horizontal direction in world space; the server clamps its
+  // length to 1 and ignores the vertical part.
+  osage.math.v1.Vec3 direction = 1;
+}
+
+// "osage.controller/1" — who controls an entity (design/01 P5). A client
+// finds the entities it controls by matching per_world_id with its identity.
 message Controller {
   ControllerKind kind = 1;
   string per_world_id = 2;

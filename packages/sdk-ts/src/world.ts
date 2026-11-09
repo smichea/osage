@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 import { type DescMessage, type MessageShape, fromBinary } from "@bufbuild/protobuf";
+import { ControllerSchema } from "./gen/osage/components/v1/components_pb.js";
 import type { ComponentType, ServerMessage, Welcome } from "./gen/osage/v0/protocol_pb.js";
 
 /** Names of the core component types. */
@@ -9,7 +10,9 @@ export const types = {
   transform: "osage.transform/1",
   contentRef: "osage.content_ref/1",
   controller: "osage.controller/1",
+  moveIntent: "osage.move_intent/1",
   builtinCube: "osage:builtin/cube",
+  builtinAvatar: "osage:builtin/avatar",
 } as const;
 
 export type WorldEvent =
@@ -29,6 +32,20 @@ export class World {
 
   entities(): IterableIterator<bigint> {
     return this.entityMap.keys();
+  }
+
+  /** Session id of component type `typeName`, as announced in the Welcome. */
+  typeId(typeName: string): number | undefined {
+    for (const [id, type] of this.typesById) if (type.name === typeName) return id;
+    return undefined;
+  }
+
+  /** The entity whose `osage.controller/1` names `perWorldId` — for a player, its avatar. */
+  controlledBy(perWorldId: string): bigint | undefined {
+    for (const entity of this.entityMap.keys()) {
+      if (this.get(entity, types.controller, ControllerSchema)?.perWorldId === perWorldId) return entity;
+    }
+    return undefined;
   }
 
   /** Decodes component `typeName` (e.g. `osage.transform/1`) of `entity` with `schema`. */

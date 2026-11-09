@@ -14,5 +14,6 @@ Status: **v0, draft** — grows with the phase-1 vertical slice. Design and reas
 - **Component types** are announced in the `Welcome` schema bundle: a `FileDescriptorSet` plus a table mapping compact ids to names such as `osage.transform/1` and message types such as `osage.components.v1.Transform`. A `Component` on the wire is that id plus the encoded message.
 - **Replication:** `EntityEnter` (entity + all its components), `EntityLeave`, `ComponentChanged` (reliable, discrete types), `StateDatagram` (volatile types, latest value wins).
 - **Client input:** `Intent` for controlled entities, `ActionRequest` → `ActionResult` (never replayed automatically; may be `PENDING_APPROVAL`).
-- **Core component types (v1):** `osage.transform/1` (volatile), `osage.content_ref/1` (built-in shapes such as `osage:builtin/cube`, glTF, 3D Tiles, splats), `osage.controller/1` (human, agent or system).
+- **Core component types (v1):** `osage.transform/1` (volatile), `osage.content_ref/1` (built-in shapes `osage:builtin/cube` and `osage:builtin/avatar`, glTF, 3D Tiles, splats), `osage.controller/1` (human, agent or system).
+- **Avatars:** a `player` session gets an avatar entity whose `osage.controller/1` carries the session's `per_world_id`; the client moves it with `Intent` messages of type `osage.move_intent/1` (a direction; the server clamps it and stops the avatar when intents stop arriving for 0.5 s). Other sessions see it enter, move and leave.
 - **Version string:** `"0.1"`.

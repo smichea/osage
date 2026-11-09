@@ -60,6 +60,11 @@ export class Session {
     this.socket.send(toBinary(ClientMessageSchema, create(ClientMessageSchema, { message })));
   }
 
+  /** Sends an Intent for `entity`: `value` encoded as component type `typeId` (see `World.typeId`). */
+  sendIntent(sequence: bigint, entity: bigint, typeId: number, value: Uint8Array): void {
+    this.send({ case: "intent", value: { sequence, entity, input: { type: typeId, value } } });
+  }
+
   close(): void {
     this.send({ case: "goodbye", value: { reason: GoodbyeReason.NORMAL } });
     this.socket.close();

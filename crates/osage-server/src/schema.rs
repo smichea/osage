@@ -12,6 +12,7 @@ use prost::Message;
 pub const TRANSFORM: u32 = 1;
 pub const CONTENT_REF: u32 = 2;
 pub const CONTROLLER: u32 = 3;
+pub const MOVE_INTENT: u32 = 4;
 
 pub fn bundle() -> SchemaBundle {
     let component_type = |id, name: &str, message_type: &str, volatile| ComponentType {
@@ -26,6 +27,7 @@ pub fn bundle() -> SchemaBundle {
             component_type(TRANSFORM, types::TRANSFORM, types::TRANSFORM_MESSAGE, true),
             component_type(CONTENT_REF, types::CONTENT_REF, types::CONTENT_REF_MESSAGE, false),
             component_type(CONTROLLER, types::CONTROLLER, types::CONTROLLER_MESSAGE, false),
+            component_type(MOVE_INTENT, types::MOVE_INTENT, types::MOVE_INTENT_MESSAGE, false),
         ],
         url: String::new(),
         sha256: Vec::new(),
