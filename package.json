@@ -1,9 +1,11 @@
 {
   "name": "osage",
   "private": true,
-  "workspaces": ["packages/*"],
+  "workspaces": [
+    "packages/*"
+  ],
   "scripts": {
-    "build": "npm run build --workspaces --if-present",
-    "test": "npm run test --workspaces --if-present"
+    "build": "npm run build -w @osage/sdk && npm run build -w @osage/client-three",
+    "test": "npm test -w @osage/sdk"
   }
 }
