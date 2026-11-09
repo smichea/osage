@@ -83,3 +83,39 @@ Date: 2026-11-09
 - **Decision:** osage does **not** decide where agents may play (ranked modes or not) nor how many each person may run. It provides the **mechanisms** — delegation credentials with scopes, a controller kind (`human` / `agent` / `system`) always carried by the protocol, quota enforcement in the agent gateway, per-world policy hooks — and **each world sets its own rules**.
 - **Why:** these are game-design choices, not engine choices.
 - **Closes:** [design/01 §5](01-accounts-and-agents.md#5-open-questions) questions 3 and 4.
+
+## D-009 — Physical actuation: risk classes, read-only by default, the owner decides
+
+Date: 2026-11-09
+
+- **Decision:** osage defines the risk classes for acting on a real device — **read-only, pre-approved, gated (human approval receipt), on-site operator only, forbidden** — and the device bridge ships **read-only**. **Only the device's owner raises a class; a world never can.** The local watchdog and emergency stop are always active, whatever the class.
+- **Why:** physical safety is enforced next to the device (EU Machinery Regulation 2023/1230 from 2027, drone line-of-sight rules); a world, compromised or not, must not be able to widen what a device does.
+- **Alternatives:** classes with no default (the owner configures everything at install); defaults per OpenDeviceDB device category (more convenient, but osage would take a position device by device).
+- **Closes:** [design/02 §9](02-mixed-worlds-and-devices.md#9-open-questions) question 1.
+
+## D-010 — Privacy of real cameras and captured places: osage imposes nothing
+
+Date: 2026-11-09
+
+- **Decision:** osage imposes **no privacy policy** on real cameras, microphones or captured places. It provides the **mechanisms** — per-stream permissions set by the owner, server-side interest management, a recording/streaming state carried by the protocol — and **world operators and device owners decide** how to use them.
+- **Why:** consistent with D-008: policy belongs to the people who run worlds and own devices, who are also the ones legally responsible (a shared world likely falls outside the GDPR household exemption, making them data controllers).
+- **Alternatives:** private by default with visible signalling and no facial recognition imposed by osage; private by default only.
+- **Closes:** [design/02 §9](02-mixed-worlds-and-devices.md#9-open-questions) question 5.
+
+## D-011 — Device contracts live in OpenDeviceDB
+
+Date: 2026-11-09
+
+- **Decision:** the device contracts (video frames, calibration, measurements, 3D scenes, actions, and the future continuous-control contract) are **specified and versioned in OpenDeviceDB**. osage consumes them and contributes to them; it keeps no device vocabulary of its own. The continuous-control contract for drones and robots is written jointly there.
+- **Why:** one vocabulary for every project that talks to devices; OpenDeviceDB already defines the contracts its components use.
+- **Alternatives:** contracts in osage with converters to OpenDeviceDB (two vocabularies); a neutral third repository (one more governance).
+- **Closes:** [design/02 §9](02-mixed-worlds-and-devices.md#9-open-questions) question 2 (where the contracts live).
+
+## D-012 — OpenDeviceDB publishes WoT Thing Descriptions
+
+Date: 2026-11-09
+
+- **Decision:** OpenDeviceDB publishes a **W3C WoT Thing Description 1.1** for its device records and components; osage, Eclipse Ditto, node-wot and other tools read them directly.
+- **Why:** the mapping lives where the contracts are defined (D-011), and every WoT tool benefits, not only osage.
+- **Alternatives:** conversion inside the osage bridge (only osage benefits); no WoT for now.
+- **Closes:** [design/02 §9](02-mixed-worlds-and-devices.md#9-open-questions) question 6.
