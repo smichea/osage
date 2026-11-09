@@ -29,7 +29,7 @@ Both are **interfaces with pluggable providers**. osage names two reference impl
 |---|---|---|
 | **A0** | Anonymous guest, no attestation | none |
 | **A1** | Account controlled by someone (device key, e-mail, phone) — not proven unique | any login |
-| **A2** | **Unique human, community-attested** — other people vouched, no documents | social validation (e.g. nexlink) |
+| **A2** | **Unique human, community-attested** — other people vouched, no documents | an issuer that attests uniqueness without documents (none identified yet, see D-025) |
 | **A3** | **Unique human, documented** — civil documents checked by the provider | document-based providers, government eID wallets |
 
 Each world declares a **policy**: which providers and issuers it trusts, and which level gates which privilege. Example default:
@@ -65,7 +65,7 @@ sequenceDiagram
 
 ### 2.4 Reference provider: nexlink
 
-**[nexlink](https://www.nexlink.ph)** is a social network "built on trust", where people connect "through socially validated identities": people are validated by other people. That is exactly level **A2**, and the natural first provider adapter. Other providers must fit the same interface — for example government eID wallets (the EU Digital Identity Wallet) for A3, or other proof-of-personhood systems — so that no world depends on one company.
+**[nexlink](https://www.nexlink.ph)** is a social network "built on trust", where people connect "through socially validated identities": people are validated by other people. Its levels map to osage as follows ([D-025](decisions.md#d-025--how-nexlink-levels-map-to-osage-assurance-levels)): a nexlink account is **A1**; a social validation is a **reputation signal**, not a proof of uniqueness; an identity whose documents have been checked is **A3**. nexlink becomes an **A2** issuer if and when it attests uniqueness without documents. Other providers must fit the same interface — for example government eID wallets (the EU Digital Identity Wallet) for A3, or other proof-of-personhood systems — so that no world depends on one company.
 
 ## 3. The agent mesh inside the server mesh
 
@@ -115,7 +115,7 @@ flowchart LR
 1. ~~Cross-world sanctions~~ — decided: voluntary federations only ([D-007](decisions.md#d-007--cross-world-sanctions-only-within-voluntary-federations)).
 2. ~~Default policy~~ — decided: the table of §2.1 ([D-006](decisions.md#d-006--default-identity-levels-a2-for-scarce-privileges-a3-to-take-value-out)).
 3. ~~Agents in competitive play~~ and 4. ~~agent quotas~~ — decided: each world's rules, not osage's; osage provides the mechanisms ([D-008](decisions.md#d-008--game-rules-for-agents-belong-to-each-world-not-to-osage)).
-5. ~~Provider diversity~~ — decided: a generic verifier, proven with nexlink (A2) and an EUDI wallet or national eID (A3) before phase 2 ([D-013](decisions.md#d-013--identity-a-generic-verifier-tested-with-two-different-providers-before-phase-2)).
+5. ~~Provider diversity~~ — decided: a generic verifier, proven with two providers of different natures — nexlink (social validation: A1, A3 for documented identities) and an EUDI wallet or national eID (A3) — before phase 2 ([D-013](decisions.md#d-013--identity-a-generic-verifier-tested-with-two-different-providers-before-phase-2)).
 
 ## Licences
 
