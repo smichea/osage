@@ -1,0 +1,53 @@
+name: licensing
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  reuse:
+    name: REUSE compliance
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: fsfe/reuse-action@676e2d560c9a403aa252096d99fcab3e1132b0f5 # v6.0.0
+
+  dco:
+    name: DCO sign-off
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - name: Every commit is signed off by a human
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+        run: |
+          status=0
+          for sha in $(git rev-list --no-merges "$BASE..$HEAD"); do
+            signoffs=$(git show -s --format='%(trailers:key=Signed-off-by,valueonly)' "$sha")
+            if [ -z "$signoffs" ]; then
+              echo "::error::$sha has no Signed-off-by line (see CONTRIBUTING.md, DCO)"
+              status=1
+            elif echo "$signoffs" | grep -qiE 'noreply@anthropic\.com|openai\.com|deepseek|\bclaude\b|\bcodex\b|copilot'; then
+              echo "::error::$sha is signed off by an AI agent; only the responsible human signs off (CONTRIBUTING.md)"
+              status=1
+            fi
+          done
+          exit $status
+
+  cargo-deny:
+    name: Dependency licences
+    if: hashFiles('Cargo.toml') != ''
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: EmbarkStudios/cargo-deny-action@3c6349835b2b7b196a839186cb8b78e02f7b5f25 # v2.1.1
+        with:
+          command: check licenses bans sources

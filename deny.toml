@@ -1,0 +1,35 @@
+# cargo-deny policy for osage (D-005, D-014, D-020, research/06).
+# Third-party dependencies must be permissive: copyleft dependencies would
+# cancel the additional permissions of LICENSE-EXCEPTIONS.md for the binaries
+# that contain them, and must never reach the SDK or interface crates.
+
+[licenses]
+allow = [
+    "0BSD",
+    "Apache-2.0",
+    "Apache-2.0 WITH LLVM-exception",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "BSL-1.0",
+    "CC0-1.0",
+    "ISC",
+    "MIT",
+    "MIT-0",
+    "MPL-2.0",
+    "Unicode-3.0",
+    "Zlib",
+]
+confidence-threshold = 0.9
+
+# osage's own crates carry AGPL-3.0-or-later WITH AdditionRef-osage-exceptions-1.0
+# (declared through `license-file`) or MIT OR Apache-2.0; they are not published
+# dependencies of each other's licence checks.
+[licenses.private]
+ignore = true
+
+[bans]
+multiple-versions = "warn"
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"

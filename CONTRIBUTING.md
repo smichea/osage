@@ -34,7 +34,7 @@ See the [decision log](design/decisions.md) and the [licensing review](research/
 
 **Rules that keep these licences working:**
 
-- Your contribution is licensed under the licence stated in each file's header, **including the additional permissions**. Every code file carries an SPDX header, e.g. `SPDX-License-Identifier: AGPL-3.0-or-later WITH AdditionRef-osage-exceptions-1.0`; files without one are not accepted.
+- <!-- REUSE-IgnoreStart -->Your contribution is licensed under the licence stated in each file's header, **including the additional permissions**. Every code file carries an SPDX header, e.g. `SPDX-License-Identifier: AGPL-3.0-or-later WITH AdditionRef-osage-exceptions-1.0`; files without one are not accepted.<!-- REUSE-IgnoreEnd -->
 - Do not add third-party GPL or AGPL code unless its authors grant the same additional permissions.
 - AGPL code never moves into the specification or SDK directories.
 - Never commit proprietary vendor headers or binaries (GPU, platform or console SDKs); they are reached only through the documented interfaces.

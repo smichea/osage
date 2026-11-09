@@ -1,0 +1,17 @@
+# SPDX-FileCopyrightText: The osage contributors
+# SPDX-License-Identifier: CC-BY-SA-4.0
+version = 1
+
+# Documentation: research, design notes, decision log, README, guides
+[[annotations]]
+path = ["research/**", "design/**", "README.md", "CONTRIBUTING.md", "LICENSE-EXCEPTIONS.md"]
+precedence = "aggregate"
+SPDX-FileCopyrightText = "The osage contributors"
+SPDX-License-Identifier = "CC-BY-SA-4.0"
+
+# Repository tooling (CI workflows, licence policy)
+[[annotations]]
+path = [".github/**", "deny.toml"]
+precedence = "aggregate"
+SPDX-FileCopyrightText = "The osage contributors"
+SPDX-License-Identifier = "AGPL-3.0-or-later"

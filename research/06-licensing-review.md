@@ -72,10 +72,12 @@ The set-up holds, with corrections:
 
 **Placement:** `LICENSE` stays the unmodified AGPL; add `LICENSE-EXCEPTIONS.md` (versioned §A, §B). File headers:
 
+<!-- REUSE-IgnoreStart -->
 ```
 SPDX-FileCopyrightText: The osage contributors
 SPDX-License-Identifier: AGPL-3.0-or-later WITH AdditionRef-osage-exceptions-1.0
 ```
+<!-- REUSE-IgnoreEnd -->
 
 plus a line pointing to `LICENSE-EXCEPTIONS.md` (§7 notice). Crates: Cargo `license-file`; REUSE 3.3: a `LicenseRef-` file embedding the AGPL text plus the exceptions.
 
