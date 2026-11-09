@@ -84,7 +84,12 @@ pub struct Led {
 
 impl Led {
     pub fn open(name: &str) -> Result<Self, String> {
-        let dir = PathBuf::from("/sys/class/leds").join(name);
+        Self::open_in("/sys/class", name)
+    }
+
+    /// Opens `sysfs_class/leds/name` (e.g. a fixture directory in tests).
+    pub fn open_in(sysfs_class: &str, name: &str) -> Result<Self, String> {
+        let dir = PathBuf::from(sysfs_class).join("leds").join(name);
         let max = read_number(dir.join("max_brightness")).ok_or_else(|| format!("no LED named {name}"))?;
         Ok(Self { name: name.to_owned(), dir, max })
     }

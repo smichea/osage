@@ -56,7 +56,7 @@ export OSAGE_BRIDGE_DELEGATION=$(cargo run -q -p osage-bridge -- delegate --cred
 cargo run -q -p osage-bridge                      # observers, clients and agents now see the device and its readings
 ```
 
-To **open** a function to the world, the owner says so explicitly: `--open-led tpacpi::kbd_backlight` makes that LED's brightness pre-approved (any participant may set it, within 0…max, checked by the bridge itself); it is switched off when the bridge stops. The bridge writes `/sys/class/leds/NAME/brightness` directly if it may, otherwise asks systemd-logind (allowed for the user of the active session, no root needed). Agents use the MCP tool `set_device`.
+To **open** a function to the world, the owner says so explicitly: `--open-led tpacpi::kbd_backlight` makes that LED's brightness pre-approved (any participant may set it, within 0…max, checked by the bridge itself); it is switched off when the bridge stops — world link lost, Ctrl+C, SIGTERM or SIGHUP. A SIGKILL or a power cut cannot be caught by any process: a device whose safe state matters needs its own fail-safe as well. The bridge writes `/sys/class/leds/NAME/brightness` directly if it may, otherwise asks systemd-logind (allowed for the user of the active session, no root needed). Agents use the MCP tool `set_device`.
 
 ## Research
 
@@ -97,7 +97,7 @@ Osage is also the name of the **Osage Nation** (Wahzhazhe), a sovereign Native A
 
 ## Licence
 
-- **Engine, server, tools, device bridge:** [GNU AGPL-3.0-or-later](LICENSE) with the additional permissions of [`LICENSE-EXCEPTIONS.md`](LICENSE-EXCEPTIONS.md) — GPU vendor components, application stores, world modules, platform components (*draft, pending legal review*).
+- **Engine, server, tools, device bridge:** [GNU AGPL-3.0-or-later](LICENSE) with the additional permissions of [`LICENSE-EXCEPTIONS.md`](LICENSE-EXCEPTIONS.md) — GPU vendor components, application stores, world modules, platform components.
 - **Protocol specification:** Community Specification License 1.0; `.proto` schemas and examples: Apache-2.0. **Client SDKs and interface bindings:** MIT OR Apache-2.0 — so that any client, including proprietary and app-store apps, can join an osage world ([D-003](design/decisions.md#d-003--licences-open-protocol-and-permissive-sdks-agpl-engine-and-server), [D-020 to D-023](design/decisions.md#d-020--agpl-30-or-later), [licensing review](research/06-licensing-review.md)).
 - **Documentation** (including `research/` and `design/`): [CC BY-SA 4.0](LICENSE-DOCS).
 
