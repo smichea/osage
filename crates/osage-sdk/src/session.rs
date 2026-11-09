@@ -1,21 +1,41 @@
 // SPDX-FileCopyrightText: The osage contributors
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+use std::{
+    fmt,
+    sync::{
+        Arc,
+        atomic::{AtomicU64, Ordering},
+    },
+    time::Duration,
+};
+
 use anyhow::{Context, Result, anyhow, bail};
 use futures_util::{
     SinkExt, StreamExt,
     stream::{SplitSink, SplitStream},
 };
 use osage_proto::{
-    PROTOCOL_VERSION,
+    PROTOCOL_VERSION, WEBTRANSPORT_DISCOVERY_PATH,
+    framing::{FrameReader, frame},
     v0::{
         ActionRequest, ActionStatus, Anonymous, Capabilities, ClientInfo, ClientMessage, Component, Credentials,
-        DeviceState, Hello, Intent, Role, ServerMessage, Tier, Welcome, client_message, credentials, server_message,
+        DeviceState, GoodbyeReason, Hello, Intent, Role, ServerMessage, Tier, Welcome, client_message, credentials,
+        server_message,
     },
 };
 use prost::Message as _;
-use tokio::net::TcpStream;
+use tokio::{
+    io::{AsyncReadExt, AsyncWriteExt},
+    net::TcpStream,
+    sync::mpsc,
+    task::JoinHandle,
+    time::timeout,
+};
 use tokio_tungstenite::{MaybeTlsStream, WebSocketStream, connect_async, tungstenite::Message};
+use wtransport::{
+    ClientConfig, Connection, Endpoint, RecvStream, SendStream, endpoint::endpoint_side::Client, tls::Sha256Digest,
+};
 
 type Socket = WebSocketStream<MaybeTlsStream<TcpStream>>;
 
@@ -124,34 +144,205 @@ pub fn intent(sequence: u64, entity: u64, type_id: u32, value: &impl prost::Mess
     })
 }
 
+/// How a session reaches its gateway (ADR-0002 §3).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Transport {
+    WebSocket,
+    WebTransport,
+}
+
+/// A gateway's WebTransport endpoint, as announced by [`discover`].
+#[derive(Clone, Debug)]
+pub struct WebTransportEndpoint {
+    pub url: String,
+    /// SHA-256 hashes of the gateway's self-signed certificate (development);
+    /// empty: the certificate must be valid for the web PKI.
+    pub certificate_hashes: Vec<[u8; 32]>,
+}
+
+/// The gateway refused the session: its `Goodbye`.
+#[derive(Debug)]
+pub struct Refused {
+    pub reason: GoodbyeReason,
+    pub detail: String,
+}
+
+impl fmt::Display for Refused {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "refused by the gateway: {:?} {}", self.reason, self.detail)
+    }
+}
+
+impl std::error::Error for Refused {}
+
+const DISCOVERY_TIMEOUT: Duration = Duration::from_secs(2);
+const WEBTRANSPORT_TIMEOUT: Duration = Duration::from_secs(3);
+/// A gateway silent this long has vanished; the keep-alive keeps a quiet link open.
+const IDLE_TIMEOUT: Duration = Duration::from_secs(10);
+const KEEP_ALIVE: Duration = Duration::from_secs(3);
+
 /// An open session with an osage gateway.
 pub struct Session {
-    socket: Socket,
     welcome: Welcome,
+    sender: SessionSender,
+    receiver: SessionReceiver,
 }
 
 /// Sending half of a [`Session`], see [`Session::split`].
-pub struct SessionSender(SplitSink<Socket, Message>);
+pub struct SessionSender(Sender);
 
 /// Receiving half of a [`Session`], see [`Session::split`].
-pub struct SessionReceiver(SplitStream<Socket>);
+pub struct SessionReceiver(Receiver);
 
-/// Connects to `url` (e.g. `ws://127.0.0.1:7878`), sends `hello` and returns
-/// once the gateway has answered with a `Welcome`.
+enum Sender {
+    WebSocket(SplitSink<Socket, Message>),
+    WebTransport { stream: SendStream, connection: Connection, _endpoint: Arc<Endpoint<Client>> },
+}
+
+enum Receiver {
+    WebSocket(SplitStream<Socket>),
+    /// Fed by a task reading the stream and the datagrams; aborted on drop.
+    WebTransport {
+        messages: mpsc::Receiver<Result<ServerMessage>>,
+        task: JoinHandle<()>,
+        datagrams: Arc<AtomicU64>,
+    },
+}
+
+impl Drop for Receiver {
+    fn drop(&mut self) {
+        if let Receiver::WebTransport { task, .. } = self {
+            task.abort();
+        }
+    }
+}
+
+/// Connects to the world at `url`, sends `hello` and returns once the gateway
+/// has answered with a `Welcome`. For a `ws://` URL, uses the gateway's
+/// WebTransport endpoint if it announces one and it answers, WebSocket
+/// otherwise; `https://` is WebTransport only.
 pub async fn connect(url: &str, hello: Hello) -> Result<Session> {
-    let (mut socket, _) = connect_async(url).await.with_context(|| format!("connecting to {url}"))?;
-    let first = ClientMessage { message: Some(client_message::Message::Hello(hello)) };
-    socket.send(Message::binary(first.encode_to_vec())).await?;
+    if url.starts_with("https://") {
+        let endpoint = WebTransportEndpoint { url: url.to_owned(), certificate_hashes: Vec::new() };
+        return connect_webtransport(&endpoint, hello).await;
+    }
+    if let Ok(Ok(Some(endpoint))) = timeout(DISCOVERY_TIMEOUT, discover(url)).await {
+        match timeout(WEBTRANSPORT_TIMEOUT, connect_webtransport(&endpoint, hello.clone())).await {
+            Ok(Ok(session)) => return Ok(session),
+            Ok(Err(error)) if error.is::<Refused>() => return Err(error),
+            _ => {} // UDP blocked, endpoint down…: WebSocket.
+        }
+    }
+    connect_websocket(url, hello).await
+}
 
+/// Asks the gateway at `url` (`ws://`) for its WebTransport endpoint;
+/// `None` if it has none.
+pub async fn discover(url: &str) -> Result<Option<WebTransportEndpoint>> {
+    let Some(rest) = url.strip_prefix("ws://") else { return Ok(None) };
+    let authority = rest.split(['/', '?', '#']).next().unwrap_or(rest);
+    let mut stream = TcpStream::connect(authority).await.with_context(|| format!("connecting to {authority}"))?;
+    let request =
+        format!("GET {WEBTRANSPORT_DISCOVERY_PATH} HTTP/1.1\r\nHost: {authority}\r\nConnection: close\r\n\r\n");
+    stream.write_all(request.as_bytes()).await?;
+    let mut response = Vec::new();
+    stream.take(64 * 1024).read_to_end(&mut response).await?;
+    let response = String::from_utf8_lossy(&response);
+    let (head, body) = response.split_once("\r\n\r\n").context("malformed discovery answer")?;
+    if head.split(' ').nth(1) != Some("200") {
+        return Ok(None);
+    }
+    let advert: serde_json::Value = serde_json::from_str(body).context("malformed discovery answer")?;
+    let url = advert["url"].as_str().context("discovery answer without url")?.to_owned();
+    let certificate_hashes = advert["certificateHashes"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .map(|hash| hash.as_str().and_then(from_hex).context("malformed certificate hash"))
+        .collect::<Result<_>>()?;
+    Ok(Some(WebTransportEndpoint { url, certificate_hashes }))
+}
+
+/// Connects over WebSocket (`ws://…`) only.
+pub async fn connect_websocket(url: &str, hello: Hello) -> Result<Session> {
+    let (socket, _) = connect_async(url).await.with_context(|| format!("connecting to {url}"))?;
+    let (sink, stream) = socket.split();
+    let (sender, receiver) = (SessionSender(Sender::WebSocket(sink)), SessionReceiver(Receiver::WebSocket(stream)));
+    handshake(sender, receiver, hello).await
+}
+
+/// Connects over WebTransport only.
+pub async fn connect_webtransport(endpoint: &WebTransportEndpoint, hello: Hello) -> Result<Session> {
+    let config = ClientConfig::builder().with_bind_default();
+    let config = if endpoint.certificate_hashes.is_empty() {
+        config.with_native_certs()
+    } else {
+        config.with_server_certificate_hashes(endpoint.certificate_hashes.iter().map(|h| Sha256Digest::new(*h)))
+    };
+    let config = config.keep_alive_interval(Some(KEEP_ALIVE)).max_idle_timeout(Some(IDLE_TIMEOUT))?.build();
+    let client = Arc::new(Endpoint::client(config)?);
+    let connection = client.connect(&endpoint.url).await.with_context(|| format!("connecting to {}", endpoint.url))?;
+    let (stream, recv) = connection.open_bi().await?.await?;
+    let (to_receiver, messages) = mpsc::channel(1024);
+    let datagrams = Arc::new(AtomicU64::new(0));
+    let task = tokio::spawn(receive_webtransport(connection.clone(), recv, to_receiver, datagrams.clone()));
+    let sender = SessionSender(Sender::WebTransport { stream, connection, _endpoint: client });
+    handshake(sender, SessionReceiver(Receiver::WebTransport { messages, task, datagrams }), hello).await
+}
+
+async fn handshake(mut sender: SessionSender, mut receiver: SessionReceiver, hello: Hello) -> Result<Session> {
+    sender.send(client_message::Message::Hello(hello)).await?;
     loop {
-        let frame = socket.next().await.ok_or_else(|| anyhow!("connection closed before Welcome"))??;
-        let Message::Binary(bytes) = frame else { continue };
-        match ServerMessage::decode(bytes)?.message {
-            Some(server_message::Message::Welcome(welcome)) => return Ok(Session { socket, welcome }),
+        let first = receiver.next_message().await.ok_or_else(|| anyhow!("connection closed before Welcome"))??;
+        return match first.message {
+            Some(server_message::Message::Welcome(welcome)) => Ok(Session { welcome, sender, receiver }),
             Some(server_message::Message::Goodbye(goodbye)) => {
-                bail!("refused by the gateway: {:?} {}", goodbye.reason(), goodbye.detail)
+                Err(Refused { reason: goodbye.reason(), detail: goodbye.detail }.into())
             }
+            // A datagram may overtake the Welcome on the stream; its state is of no use yet.
+            Some(server_message::Message::State(_)) => continue,
             _ => bail!("expected Welcome as the first server message"),
+        };
+    }
+}
+
+/// Reads the stream's frames and the datagrams into `to_receiver` until the
+/// stream ends; a datagram is dropped rather than waited for.
+async fn receive_webtransport(
+    connection: Connection,
+    mut stream: RecvStream,
+    to_receiver: mpsc::Sender<Result<ServerMessage>>,
+    datagrams: Arc<AtomicU64>,
+) {
+    let mut frames = FrameReader::default();
+    let mut chunk = vec![0; 64 * 1024];
+    loop {
+        tokio::select! {
+            read = stream.read(&mut chunk) => {
+                match read {
+                    Ok(Some(n)) => frames.push(&chunk[..n]),
+                    Ok(None) => return,
+                    Err(error) => return drop(to_receiver.send(Err(error.into())).await),
+                }
+                loop {
+                    let message = match frames.next_frame() {
+                        Ok(Some(payload)) => ServerMessage::decode(payload.as_slice()).map_err(Into::into),
+                        Ok(None) => break,
+                        Err(error) => Err(error.into()),
+                    };
+                    let failed = message.is_err();
+                    if to_receiver.send(message).await.is_err() || failed {
+                        return;
+                    }
+                }
+            }
+            datagram = connection.receive_datagram() => {
+                let Ok(datagram) = datagram else { continue };
+                if let Ok(message) = ServerMessage::decode(datagram.payload()) {
+                    datagrams.fetch_add(1, Ordering::Relaxed);
+                    let _ = to_receiver.try_send(Ok(message));
+                }
+            }
         }
     }
 }
@@ -161,54 +352,84 @@ impl Session {
         &self.welcome
     }
 
+    pub fn transport(&self) -> Transport {
+        self.sender.transport()
+    }
+
     /// Next message from the gateway; `None` once the connection is closed.
     pub async fn next_message(&mut self) -> Option<Result<ServerMessage>> {
-        next_server_message(&mut self.socket).await
+        self.receiver.next_message().await
     }
 
     pub async fn send(&mut self, message: client_message::Message) -> Result<()> {
-        send_client_message(&mut self.socket, message).await
+        self.sender.send(message).await
     }
 
     /// Splits the session so that sending and receiving can run concurrently.
     pub fn split(self) -> (Welcome, SessionSender, SessionReceiver) {
-        let (sink, stream) = self.socket.split();
-        (self.welcome, SessionSender(sink), SessionReceiver(stream))
+        (self.welcome, self.sender, self.receiver)
     }
 }
 
 impl SessionSender {
+    pub fn transport(&self) -> Transport {
+        match self.0 {
+            Sender::WebSocket(_) => Transport::WebSocket,
+            Sender::WebTransport { .. } => Transport::WebTransport,
+        }
+    }
+
     pub async fn send(&mut self, message: client_message::Message) -> Result<()> {
-        send_client_message(&mut self.0, message).await
+        let message = ClientMessage { message: Some(message) };
+        match &mut self.0 {
+            Sender::WebSocket(sink) => sink.send(Message::binary(message.encode_to_vec())).await?,
+            Sender::WebTransport { stream, connection, .. } => {
+                // Intents are volatile: a datagram when it fits; the server keeps the latest sequence.
+                if matches!(message.message, Some(client_message::Message::Intent(_)))
+                    && connection.max_datagram_size().is_some_and(|max| message.encoded_len() <= max)
+                    && connection.send_datagram(message.encode_to_vec()).is_ok()
+                {
+                    return Ok(());
+                }
+                stream.write_all(&frame(&message)).await?;
+            }
+        }
+        Ok(())
     }
 }
 
 impl SessionReceiver {
     /// Next message from the gateway; `None` once the connection is closed.
     pub async fn next_message(&mut self) -> Option<Result<ServerMessage>> {
-        next_server_message(&mut self.0).await
-    }
-}
-
-async fn send_client_message<S>(sink: &mut S, message: client_message::Message) -> Result<()>
-where
-    S: futures_util::Sink<Message, Error = tokio_tungstenite::tungstenite::Error> + Unpin,
-{
-    let frame = ClientMessage { message: Some(message) };
-    sink.send(Message::binary(frame.encode_to_vec())).await?;
-    Ok(())
-}
-
-async fn next_server_message<S>(stream: &mut S) -> Option<Result<ServerMessage>>
-where
-    S: futures_util::Stream<Item = Result<Message, tokio_tungstenite::tungstenite::Error>> + Unpin,
-{
-    loop {
-        match stream.next().await? {
-            Ok(Message::Binary(bytes)) => return Some(ServerMessage::decode(bytes).map_err(Into::into)),
-            Ok(Message::Close(_)) => return None,
-            Ok(_) => continue,
-            Err(error) => return Some(Err(error.into())),
+        match &mut self.0 {
+            Receiver::WebSocket(stream) => loop {
+                match stream.next().await? {
+                    Ok(Message::Binary(bytes)) => return Some(ServerMessage::decode(bytes).map_err(Into::into)),
+                    Ok(Message::Close(_)) => return None,
+                    Ok(_) => continue,
+                    Err(error) => return Some(Err(error.into())),
+                }
+            },
+            Receiver::WebTransport { messages, .. } => messages.recv().await,
         }
     }
+
+    /// Server messages received as datagrams so far (WebTransport only).
+    pub fn datagrams(&self) -> u64 {
+        match &self.0 {
+            Receiver::WebSocket(_) => 0,
+            Receiver::WebTransport { datagrams, .. } => datagrams.load(Ordering::Relaxed),
+        }
+    }
+}
+
+fn from_hex(hex: &str) -> Option<[u8; 32]> {
+    let mut bytes = [0; 32];
+    if hex.len() != 64 {
+        return None;
+    }
+    for (i, byte) in bytes.iter_mut().enumerate() {
+        *byte = u8::from_str_radix(hex.get(2 * i..2 * i + 2)?, 16).ok()?;
+    }
+    Some(bytes)
 }

@@ -1,9 +1,10 @@
 // SPDX-FileCopyrightText: The osage contributors
 // SPDX-License-Identifier: LicenseRef-osage-AGPL-3.0-or-later-with-exceptions
 
-//! Replication gateway: terminates client connections, authenticates them,
-//! issues agent delegations and relays messages between sessions and the
-//! region (ADR-0001 §2).
+//! Replication gateway: authenticates clients, issues agent delegations and
+//! relays messages between sessions and the region (ADR-0001 §2). The
+//! transports — [`crate::websocket`] and [`crate::webtransport`] — hand it
+//! decoded client messages and carry its server messages.
 
 use std::{
     net::TcpListener as StdTcpListener,
@@ -16,7 +17,6 @@ use std::{
 
 use anyhow::{Result, anyhow};
 use crossbeam_channel::Sender;
-use futures_util::{SinkExt, StreamExt};
 use osage_credentials::{DelegatedRole, DelegationKey};
 use osage_proto::{
     PROTOCOL_VERSION,
@@ -26,23 +26,26 @@ use osage_proto::{
         ServerMessage, SessionIdentity, SourceOffer, Welcome, WorldDescriptor, client_message, server_message,
     },
 };
-use prost::Message as _;
 use tokio::{
     net::TcpListener,
-    sync::mpsc::{self, UnboundedSender},
+    sync::mpsc::{Receiver, UnboundedSender},
+    task::JoinHandle,
     time::timeout,
 };
-use tokio_tungstenite::{accept_async, tungstenite::Message};
 
 use crate::{
     Config, RegionInput,
     identity::{Identity, Refusal, Registry, SessionKind, credential_level, privileges},
     now_us,
     region::Member,
-    schema,
+    schema, websocket, webtransport,
 };
 
-const HELLO_TIMEOUT: Duration = Duration::from_secs(5);
+pub(crate) const HELLO_TIMEOUT: Duration = Duration::from_secs(5);
+/// Client messages a session buffers before its transport waits.
+pub(crate) const INBOX: usize = 256;
+/// How long the last server messages (e.g. a refusal) may take to leave.
+const FLUSH_TIMEOUT: Duration = Duration::from_secs(2);
 const DELEGATION_LIFETIME: Duration = Duration::from_secs(3600);
 
 pub(crate) struct Gateway {
@@ -52,11 +55,16 @@ pub(crate) struct Gateway {
     next_delegation: AtomicU64,
     pub(crate) delegations: DelegationKey,
     pub(crate) registry: Registry,
+    /// What the WebSocket host announces of the WebTransport endpoint.
+    pub(crate) webtransport: Option<webtransport::Advert>,
 }
 
 pub async fn serve(listener: StdTcpListener, config: Config, region: Sender<RegionInput>) -> Result<()> {
     let listener = TcpListener::from_std(listener)?;
-    tracing::info!(address = %listener.local_addr()?, "gateway listening (WebSocket)");
+    let endpoint = match &config.webtransport {
+        Some(webtransport) => Some(webtransport::bind(webtransport).await?),
+        None => None,
+    };
     let gateway = Arc::new(Gateway {
         delegations: DelegationKey::new(&config.world_name, &config.delegation_secret),
         config,
@@ -64,34 +72,48 @@ pub async fn serve(listener: StdTcpListener, config: Config, region: Sender<Regi
         next_session: AtomicU64::new(1),
         next_delegation: AtomicU64::new(1),
         registry: Registry::default(),
+        webtransport: endpoint.as_ref().map(|(_, advert)| advert.clone()),
     });
-    loop {
-        let (stream, peer) = listener.accept().await?;
-        let gateway = gateway.clone();
-        tokio::spawn(async move {
-            if let Err(error) = gateway.session(stream).await {
-                tracing::debug!(%peer, %error, "session ended with an error");
-            }
-        });
+    if let Some((endpoint, _)) = endpoint {
+        tokio::spawn(webtransport::serve(endpoint, gateway.clone()));
     }
+    tracing::info!(address = %listener.local_addr()?, "gateway listening (WebSocket)");
+    websocket::serve(listener, gateway).await
 }
 
 impl Gateway {
-    async fn session(&self, stream: tokio::net::TcpStream) -> Result<()> {
-        let (mut sink, mut source) = accept_async(stream).await?.split();
+    /// Runs a session with a transport's two pumps: `reader` feeds `incoming`
+    /// until the connection ends; `writer` drains `out`'s receiver.
+    pub(crate) async fn run(
+        &self,
+        transport: &'static str,
+        incoming: Receiver<ClientMessage>,
+        out: UnboundedSender<ServerMessage>,
+        reader: JoinHandle<()>,
+        mut writer: JoinHandle<()>,
+    ) -> Result<()> {
+        let result = self.session(transport, incoming, out).await;
+        reader.abort();
+        if timeout(FLUSH_TIMEOUT, &mut writer).await.is_err() {
+            writer.abort();
+        }
+        result
+    }
 
-        let hello = timeout(HELLO_TIMEOUT, async {
-            while let Some(frame) = source.next().await {
-                if let Message::Binary(bytes) = frame? {
-                    return match ClientMessage::decode(bytes)?.message {
-                        Some(client_message::Message::Hello(hello)) => Ok(hello),
-                        _ => Err(anyhow!("first client message must be Hello")),
-                    };
-                }
-            }
-            Err(anyhow!("connection closed before Hello"))
-        })
-        .await??;
+    /// One session, whatever its transport: `incoming` ends when the
+    /// connection does (or sends a malformed frame); `out` is carried to the
+    /// client until every sender — this session's and the region's — is gone.
+    async fn session(
+        &self,
+        transport: &'static str,
+        mut incoming: Receiver<ClientMessage>,
+        out: UnboundedSender<ServerMessage>,
+    ) -> Result<()> {
+        let hello = match timeout(HELLO_TIMEOUT, incoming.recv()).await? {
+            Some(ClientMessage { message: Some(client_message::Message::Hello(hello)) }) => hello,
+            Some(_) => return Err(anyhow!("first client message must be Hello")),
+            None => return Err(anyhow!("connection closed before Hello")),
+        };
 
         let session = self.next_session.fetch_add(1, Ordering::Relaxed);
         let admitted = if hello.protocol_versions.iter().any(|v| v == PROTOCOL_VERSION) {
@@ -103,13 +125,12 @@ impl Gateway {
             Ok(admission) => admission,
             Err(Refusal(reason, detail)) => {
                 tracing::info!(session, ?reason, %detail, "session refused");
-                sink.send(Message::binary(goodbye(reason, detail).encode_to_vec())).await?;
+                out.send(goodbye(reason, detail))?;
                 return Ok(());
             }
         };
         let identity = admission.identity().clone();
 
-        let (out, mut outbox) = mpsc::unbounded_channel();
         out.send(self.welcome(session, &identity))?;
         let member = Member {
             kind: identity.kind,
@@ -118,21 +139,11 @@ impl Gateway {
             owner: identity.responsible.clone().unwrap_or_default(),
         };
         self.region.send(RegionInput::Join { session, member, out: out.clone() })?;
-        tracing::info!(session, who = %identity.per_world_id, client = ?hello.client, "session joined");
-
-        let writer = tokio::spawn(async move {
-            while let Some(message) = outbox.recv().await {
-                if sink.send(Message::binary(message.encode_to_vec())).await.is_err() {
-                    break;
-                }
-            }
-        });
+        tracing::info!(session, who = %identity.per_world_id, client = ?hello.client, transport, "session joined");
 
         // Whatever ends the connection — Goodbye, close, network error or a
         // malformed frame — the region is told the session left.
-        while let Some(Ok(frame)) = source.next().await {
-            let Message::Binary(bytes) = frame else { continue };
-            let Ok(message) = ClientMessage::decode(bytes) else { break };
+        while let Some(message) = incoming.recv().await {
             match message.message {
                 Some(client_message::Message::Goodbye(_)) => break,
                 Some(client_message::Message::ActionRequest(request))
@@ -146,7 +157,6 @@ impl Gateway {
         }
 
         self.region.send(RegionInput::Leave { session })?;
-        writer.abort();
         drop(admission);
         tracing::info!(session, "session left");
         Ok(())

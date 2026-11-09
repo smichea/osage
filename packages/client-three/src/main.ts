@@ -93,7 +93,7 @@ try {
   const source = descriptor?.sourceOffer;
   // AGPL section 13: show where the server's Corresponding Source is.
   hud.innerHTML =
-    `world <b>${escape(descriptor?.name ?? "")}</b> · you are ${escape(me)} · move with WASD or arrows<br>` +
+    `world <b>${escape(descriptor?.name ?? "")}</b> · you are ${escape(me)} · via ${session.transport} · move with WASD or arrows<br>` +
     (source ? `server source: <a href="${escape(source.url)}" target="_blank" rel="noopener">${escape(source.url)}</a> (${escape(source.version)})` : "");
 
   const world = new World(session.welcome);

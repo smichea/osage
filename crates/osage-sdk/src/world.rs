@@ -49,6 +49,9 @@ pub struct World {
     types: TypeTable,
     entities: BTreeMap<u64, HashMap<String, Vec<u8>>>,
     tick: u64,
+    /// Tick of the last state applied to each (entity, type): datagrams may
+    /// arrive out of order, and an older value never replaces a newer one.
+    ticks: HashMap<(u64, u32), u64>,
 }
 
 impl World {
@@ -60,7 +63,7 @@ impl World {
         &self.types
     }
 
-    /// Last server tick seen in a `StateDatagram`.
+    /// Latest server tick seen in a `StateDatagram`.
     pub fn tick(&self) -> u64 {
         self.tick
     }
@@ -108,6 +111,7 @@ impl World {
                 events.push(WorldEvent::Entered(enter.entity));
             }
             Some(server_message::Message::EntityLeave(leave)) => {
+                self.ticks.retain(|(entity, _), _| *entity != leave.entity);
                 if self.entities.remove(&leave.entity).is_some() {
                     events.push(WorldEvent::Left(leave.entity));
                 }
@@ -118,9 +122,15 @@ impl World {
                 }
             }
             Some(server_message::Message::State(state)) => {
-                self.tick = state.tick;
+                self.tick = self.tick.max(state.tick);
                 for value in &state.values {
-                    if let Some(component) = &value.component {
+                    let Some(component) = &value.component else { continue };
+                    if !self.entities.contains_key(&value.entity) {
+                        continue;
+                    }
+                    let last = self.ticks.entry((value.entity, component.r#type)).or_default();
+                    if state.tick >= *last {
+                        *last = state.tick;
                         self.set(value.entity, component.r#type, &component.value, false, &mut events);
                     }
                 }
@@ -140,5 +150,56 @@ impl World {
             components.insert(component_type.name.clone(), value.to_vec());
         }
         events.push(WorldEvent::Changed { entity, type_name: component_type.name.clone() });
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use osage_proto::{
+        components::Transform,
+        math::Vec3,
+        v0::{Component, EntityComponent, EntityEnter, SchemaBundle, StateDatagram},
+    };
+    use prost::Message as _;
+
+    use super::*;
+
+    fn at(x: f32) -> Vec<u8> {
+        Transform { translation: Some(Vec3 { x, y: 0.0, z: 0.0 }), ..Default::default() }.encode_to_vec()
+    }
+
+    fn state(tick: u64, entity: u64, x: f32) -> ServerMessage {
+        let value = EntityComponent { entity, component: Some(Component { r#type: 1, value: at(x) }) };
+        ServerMessage {
+            message: Some(server_message::Message::State(StateDatagram {
+                tick,
+                values: vec![value],
+                ..Default::default()
+            })),
+        }
+    }
+
+    #[test]
+    fn a_late_datagram_never_replaces_a_newer_value() {
+        let transform =
+            ComponentType { id: 1, name: types::TRANSFORM.to_owned(), volatile: true, ..Default::default() };
+        let welcome = Welcome {
+            schemas: Some(SchemaBundle { types: vec![transform], ..Default::default() }),
+            ..Default::default()
+        };
+        let mut world = World::new(&welcome);
+        for entity in [1, 2] {
+            let components = vec![Component { r#type: 1, value: at(0.0) }];
+            world.apply(&ServerMessage {
+                message: Some(server_message::Message::EntityEnter(EntityEnter { entity, components })),
+            });
+        }
+        let x =
+            |world: &World, entity| world.get::<Transform>(entity, types::TRANSFORM).unwrap().translation.unwrap().x;
+
+        world.apply(&state(10, 1, 10.0));
+        world.apply(&state(9, 1, 9.0)); // late
+        world.apply(&state(9, 2, 9.0)); // late, but entity 2 has nothing newer
+        assert_eq!((x(&world, 1), x(&world, 2), world.tick()), (10.0, 9.0, 10));
     }
 }

@@ -3,7 +3,21 @@
 
 /** TypeScript client SDK for the osage protocol (spec/README.md, ADR-0002). */
 
-export { DELEGATE_AGENT, PROTOCOL_VERSION, Session, connect, hello, withDelegation, withIdentity } from "./session.js";
+export {
+  DELEGATE_AGENT,
+  PROTOCOL_VERSION,
+  RefusedError,
+  Session,
+  type Transport,
+  WEBTRANSPORT_DISCOVERY_PATH,
+  type WebTransportEndpoint,
+  connect,
+  discover,
+  hello,
+  withDelegation,
+  withIdentity,
+} from "./session.js";
+export { FrameReader, MAX_FRAME, frame } from "./framing.js";
 export { World, type WorldEvent, types } from "./world.js";
 export * as components from "./gen/osage/components/v1/components_pb.js";
 export * as math from "./gen/osage/math/v1/math_pb.js";

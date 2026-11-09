@@ -9,7 +9,12 @@ Status: **v0, draft** — grows with the phase-1 vertical slice. Design and reas
 
 ## v0 in one page
 
-- **Transport:** WebSocket today (one binary message = one `ClientMessage` or `ServerMessage`); WebTransport next, with length-prefixed frames on streams and datagrams for `StateDatagram`.
+- **Transport:** WebTransport over HTTP/3, with WebSocket as the fallback ([D-028](../design/decisions.md#d-028--webtransport-in-v0-one-reliable-stream-datagrams-discovery-on-the-websocket-host)).
+  - **WebSocket:** one binary message = one `ClientMessage` or `ServerMessage`; everything is reliable.
+  - **WebTransport:** the client opens one bidirectional stream, which carries every reliable message in both directions, each preceded by its length as a protobuf varint (protobuf's length-delimited format; frames longer than 4 MiB end the connection). `StateDatagram`s travel as datagrams — one `ServerMessage` per datagram, a tick's values cut into several datagrams of the same tick when needed — and the client's `Intent`s may too; any other message in a datagram is dropped.
+  - **Discovery:** the WebSocket host answers `GET /.well-known/osage/webtransport` with `{"url": "https://host:port/", "certificateHashes": ["<hex SHA-256>", …]}` (404: WebSocket only). The hashes are present only for a self-signed development certificate (valid 14 days, ECDSA P-256), which browsers then accept through `serverCertificateHashes`; a world with a web-PKI certificate announces none.
+  - **Losses and order:** datagrams may be lost or reordered. A client keeps, per entity and component type, the tick of the last value applied and ignores older ones; every second (one tick-rate's worth of ticks), a `StateDatagram` carries every volatile value, so a lost value is repaired within a second. The server keeps the latest intent sequence.
+  - **Liveness:** a WebTransport peer silent for 10 s has left; both sides send keep-alives every 3 s.
 - **Session:** the client sends `Hello` (versions, client info, role, capabilities, credentials, world); the gateway answers `Welcome` (chosen version, session id, identity, server time, world descriptor with `source_offer`, schema bundle).
 - **Component types** are announced in the `Welcome` schema bundle: a `FileDescriptorSet` plus a table mapping compact ids to names such as `osage.transform/1` and message types such as `osage.components.v1.Transform`. A `Component` on the wire is that id plus the encoded message.
 - **Replication:** `EntityEnter` (entity + all its components), `EntityLeave`, `ComponentChanged` (reliable, discrete types), `StateDatagram` (volatile types, latest value wins).

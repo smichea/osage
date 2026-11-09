@@ -1,20 +1,32 @@
 // SPDX-FileCopyrightText: The osage contributors
 // SPDX-License-Identifier: LicenseRef-osage-AGPL-3.0-or-later-with-exceptions
 
-//! A real server on a free port, a real client through the Rust SDK.
+//! A real server on a free port, real clients through the Rust SDK, over
+//! WebSocket and WebTransport.
 
 use std::{net::TcpListener, thread, time::Duration};
 
 use osage_sdk::{
-    World, WorldEvent, components, connect, hello, types,
+    Refused, Transport, World, WorldEvent, components, connect, connect_websocket, discover, hello, types,
     v0::{Role, Tier},
 };
 use tokio::time::timeout;
 
 fn start_server() -> String {
+    start_server_with(osage_server::Config::default())
+}
+
+/// A server that also accepts WebTransport, with a self-signed certificate.
+fn start_server_with_webtransport() -> String {
+    let address = "127.0.0.1:0".parse().unwrap();
+    let webtransport = osage_server::WebTransportConfig { address, certificate: None };
+    start_server_with(osage_server::Config { webtransport: Some(webtransport), ..Default::default() })
+}
+
+fn start_server_with(config: osage_server::Config) -> String {
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
     let url = format!("ws://{}", listener.local_addr().unwrap());
-    thread::spawn(move || osage_server::run(listener, osage_server::Config::default()));
+    thread::spawn(move || osage_server::run(listener, config));
     url
 }
 
@@ -178,4 +190,58 @@ async fn an_abrupt_disconnection_removes_the_avatar() {
     drop(player); // no Goodbye: the TCP connection just goes away
     let events = drain(&mut observer_rx, &mut observed, Duration::from_secs(2)).await;
     assert!(events.contains(&WorldEvent::Left(avatar)), "the avatar leaves with its vanished player");
+}
+
+#[tokio::test]
+async fn the_gateway_announces_its_webtransport_endpoint() {
+    let url = start_server_with_webtransport();
+    let endpoint = discover(&url).await.unwrap().expect("an endpoint is announced");
+    assert!(endpoint.url.starts_with("https://127.0.0.1:"), "{}", endpoint.url);
+    assert_eq!(endpoint.certificate_hashes.len(), 1, "the self-signed certificate's hash");
+
+    let websocket_only = start_server();
+    assert!(discover(&websocket_only).await.unwrap().is_none());
+    let session = connect(&websocket_only, hello("osage-test", "0", Role::Observer, Tier::T0Headless)).await.unwrap();
+    assert_eq!(session.transport(), Transport::WebSocket, "no endpoint: WebSocket");
+}
+
+#[tokio::test]
+async fn webtransport_and_websocket_clients_share_a_world() {
+    let url = start_server_with_webtransport();
+    let observer = connect_websocket(&url, hello("observer", "0", Role::Observer, Tier::T0Headless)).await.unwrap();
+    let (observer_welcome, _observer_sender, mut observer_rx) = observer.split();
+    let mut observed = World::new(&observer_welcome);
+
+    let player = connect(&url, hello("player", "0", Role::Player, Tier::T2Standard)).await.unwrap();
+    assert_eq!(player.transport(), Transport::WebTransport);
+    let me = player.welcome().identity.clone().unwrap().per_world_id;
+    let (welcome, mut sender, mut receiver) = player.split();
+    let mut world = World::new(&welcome);
+    drain(&mut receiver, &mut world, Duration::from_millis(300)).await;
+    let avatar = world.controlled_by(&me).expect("the player gets an avatar over the stream");
+
+    let start_x = x_of(&world, avatar);
+    walk_east(&mut sender, &mut receiver, &mut world, avatar, Duration::from_secs(1)).await;
+    let end_x = x_of(&world, avatar);
+    assert!(end_x > start_x + 2.0, "the avatar walked east on datagram intents: {start_x} → {end_x}");
+    assert!(receiver.datagrams() > 10, "states arrive as datagrams ({})", receiver.datagrams());
+
+    // Once the avatar has stopped (intents last 0.5 s) and a keyframe has gone by,
+    // both clients agree on where it is.
+    drain(&mut receiver, &mut world, Duration::from_millis(1200)).await;
+    drain(&mut observer_rx, &mut observed, Duration::from_millis(300)).await;
+    assert_eq!(x_of(&observed, avatar), x_of(&world, avatar), "the WebSocket observer sees the same avatar");
+
+    drop((sender, receiver)); // no Goodbye: the QUIC connection just goes away
+    let events = drain(&mut observer_rx, &mut observed, Duration::from_secs(3)).await;
+    assert!(events.contains(&WorldEvent::Left(avatar)), "the avatar leaves with its vanished player");
+}
+
+#[tokio::test]
+async fn a_refusal_over_webtransport_is_not_retried_over_websocket() {
+    let url = start_server_with_webtransport();
+    let mut old = hello("osage-test", "0", Role::Observer, Tier::T0Headless);
+    old.protocol_versions = vec!["9.9".to_owned()];
+    let error = connect(&url, old).await.err().expect("refused");
+    assert!(error.downcast_ref::<Refused>().is_some(), "{error}");
 }

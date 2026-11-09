@@ -2,15 +2,24 @@
 // SPDX-License-Identifier: LicenseRef-osage-AGPL-3.0-or-later-with-exceptions
 
 //! osage server, phase 1: the replication gateway and one region server in a
-//! single process (ADR-0001 §4). The gateway runs on a Tokio runtime; the
-//! region is a headless Bevy app on the calling thread.
+//! single process (ADR-0001 §4). The gateway runs on a Tokio runtime and
+//! accepts WebSocket and WebTransport clients; the region is a headless Bevy
+//! app on the calling thread.
 
 mod gateway;
 mod identity;
 mod region;
 mod schema;
+mod websocket;
+mod webtransport;
 
-use std::{collections::HashSet, net::TcpListener, thread, time::SystemTime};
+use std::{
+    collections::HashSet,
+    net::{SocketAddr, TcpListener},
+    path::PathBuf,
+    thread,
+    time::SystemTime,
+};
 
 use anyhow::Result;
 use osage_credentials::TrustedIssuer;
@@ -32,6 +41,19 @@ pub struct Config {
     pub max_agents_per_human: usize,
     /// Secret signing this world's agent delegations.
     pub delegation_secret: Vec<u8>,
+    /// WebTransport endpoint (ADR-0002 §3), announced on the WebSocket host;
+    /// `None`: WebSocket only.
+    pub webtransport: Option<WebTransportConfig>,
+}
+
+#[derive(Clone, Debug)]
+pub struct WebTransportConfig {
+    /// UDP address to listen on; port 0 picks a free port.
+    pub address: SocketAddr,
+    /// PEM certificate chain and private key. `None`: a self-signed
+    /// certificate valid for 14 days, announced with its SHA-256 hash, which
+    /// browsers accept for development (`serverCertificateHashes`).
+    pub certificate: Option<(PathBuf, PathBuf)>,
 }
 
 impl Default for Config {
@@ -44,6 +66,7 @@ impl Default for Config {
             sanctioned: HashSet::new(),
             max_agents_per_human: 3,
             delegation_secret: random_secret(),
+            webtransport: None,
         }
     }
 }

@@ -3,8 +3,9 @@
 
 //! Rust client SDK for the osage protocol (spec/README.md, ADR-0002).
 //!
-//! [`connect`] opens a session (WebSocket for now), sends the `Hello` and
-//! waits for the `Welcome`; [`World`] applies replication messages and decodes
+//! [`connect`] opens a session — over WebTransport when the gateway announces
+//! it and it answers, WebSocket otherwise — sends the `Hello` and waits for
+//! the `Welcome`; [`World`] applies replication messages and decodes
 //! component values with the types announced in the `Welcome`.
 
 mod session;
@@ -16,7 +17,8 @@ pub use osage_proto::{
     components, math, types, v0,
 };
 pub use session::{
-    Session, SessionReceiver, SessionSender, connect, device_command_result, device_set, device_state, hello, intent,
-    request_delegation, with_bridge, with_delegation, with_identity,
+    Refused, Session, SessionReceiver, SessionSender, Transport, WebTransportEndpoint, connect, connect_websocket,
+    connect_webtransport, device_command_result, device_set, device_state, discover, hello, intent, request_delegation,
+    with_bridge, with_delegation, with_identity,
 };
 pub use world::{TypeTable, World, WorldEvent};

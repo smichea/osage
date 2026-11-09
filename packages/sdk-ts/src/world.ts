@@ -28,6 +28,9 @@ export type WorldEvent =
 export class World {
   private readonly typesById = new Map<number, ComponentType>();
   private readonly entityMap = new Map<bigint, Map<string, Uint8Array>>();
+  /** Tick of the last state applied to each entity and type: datagrams may arrive out of order. */
+  private readonly ticks = new Map<string, bigint>();
+  /** Latest server tick seen in a `StateDatagram`. */
   tick = 0n;
 
   constructor(welcome: Welcome) {
@@ -74,15 +77,21 @@ export class World {
         break;
       }
       case "entityLeave":
+        for (const key of this.ticks.keys()) if (key.startsWith(`${m.value.entity}:`)) this.ticks.delete(key);
         if (this.entityMap.delete(m.value.entity)) events.push({ kind: "left", entity: m.value.entity });
         break;
       case "componentChanged":
         if (m.value.component) this.set(m.value.entity, m.value.component.type, m.value.component.value, m.value.removed, events);
         break;
       case "state":
-        this.tick = m.value.tick;
+        if (m.value.tick > this.tick) this.tick = m.value.tick;
         for (const v of m.value.values) {
-          if (v.component) this.set(v.entity, v.component.type, v.component.value, false, events);
+          if (!v.component || !this.entityMap.has(v.entity)) continue;
+          // An older value never replaces a newer one.
+          const key = `${v.entity}:${v.component.type}`;
+          if ((this.ticks.get(key) ?? 0n) > m.value.tick) continue;
+          this.ticks.set(key, m.value.tick);
+          this.set(v.entity, v.component.type, v.component.value, false, events);
         }
         break;
     }

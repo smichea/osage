@@ -22,13 +22,15 @@ Neither a fork nor a rewrite from scratch: build on **Bevy + wgpu** for the worl
 A server-driven cube, replicated by the osage protocol v0 to three kinds of client.
 
 ```sh
-cargo run -p osage-server                     # gateway + Bevy region on ws://127.0.0.1:7878
+cargo run -p osage-server                     # gateway + Bevy region: WebSocket ws://127.0.0.1:7878, WebTransport 127.0.0.1:7879 (UDP)
 cargo run -p osage-client                     # native Bevy client
 npm install && npm run build                  # TypeScript SDK and three.js client
 npm run dev -w @osage/client-three            # browser client (open the printed URL)
 node packages/sdk-ts/examples/watch.mjs       # headless observer printing the replication
 cargo test --workspace                        # end-to-end tests
 ```
+
+**Transports.** Clients given a `ws://` address ask the gateway for its WebTransport endpoint and use it — browsers, the Bevy client, agents and bridges alike — and fall back to WebSocket when it is missing or blocked; the browser client shows which one it uses. By default the server makes a self-signed certificate valid 14 days, which clients accept through its announced hash; for a public world pass `--certificate chain.pem --private-key key.pem`, or `--webtransport off` for WebSocket only.
 
 Requirements: Rust ≥ 1.90, Node ≥ 22. Licences of each part: see [Licence](#licence).
 

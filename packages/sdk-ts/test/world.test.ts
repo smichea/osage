@@ -64,4 +64,25 @@ describe("World", () => {
     expect(world.controlledBy("guest-2")).toBe(5n);
     expect(world.controlledBy("guest-9")).toBeUndefined();
   });
+
+  it("never lets a late datagram replace a newer value", () => {
+    const world = new World(welcome);
+    for (const entity of [1n, 2n]) {
+      world.apply(
+        create(ServerMessageSchema, {
+          message: { case: "entityEnter", value: { entity, components: [{ type: 1, value: transform(0) }] } },
+        }),
+      );
+    }
+    const state = (tick: bigint, entity: bigint, x: number) =>
+      create(ServerMessageSchema, {
+        message: { case: "state", value: { tick, values: [{ entity, component: { type: 1, value: transform(x) } }] } },
+      });
+    world.apply(state(10n, 1n, 10));
+    world.apply(state(9n, 1n, 9)); // late
+    world.apply(state(9n, 2n, 9)); // late, but nothing newer for entity 2
+    expect(world.get(1n, types.transform, TransformSchema)?.translation?.x).toBe(10);
+    expect(world.get(2n, types.transform, TransformSchema)?.translation?.x).toBe(9);
+    expect(world.tick).toBe(10n);
+  });
 });

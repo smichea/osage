@@ -63,6 +63,7 @@ pub fn app(inbox: Receiver<RegionInput>, tick_hz: u32) -> App {
         .init_resource::<PendingCommands>()
         .init_resource::<EntityIds>()
         .init_resource::<Tick>()
+        .insert_resource(Keyframe(u64::from(tick_hz.max(1))))
         .add_systems(Startup, spawn_demo)
         .add_systems(Update, (receive, expire_commands, orbit, walk, broadcast_state).chain());
     app
@@ -173,6 +174,16 @@ fn spawn_demo(mut commands: Commands, mut ids: ResMut<EntityIds>) {
     commands.spawn((Replicated(ids.next()), Transform::default(), Wire(wire), Orbit { radius: 3.0, speed: 0.8 }));
 }
 
+/// An avatar spawned while the current batch of inputs is handled: commands
+/// apply after the system, so later inputs of the batch find it here.
+struct Spawned {
+    id: u64,
+    entity: Entity,
+    owner: u64,
+    transform: Transform,
+    wire: BTreeMap<u32, Vec<u8>>,
+}
+
 #[allow(clippy::too_many_arguments)]
 fn receive(
     mut commands: Commands,
@@ -185,11 +196,15 @@ fn receive(
     entities: Query<(&Replicated, &Transform, &Wire)>,
     mut owned: Query<(Entity, &Replicated, &Owner, &mut MoveInput)>,
 ) {
+    let mut spawned: Vec<Spawned> = Vec::new();
     for input in inbox.0.try_iter() {
         match input {
             RegionInput::Join { session, member, out } => {
                 for (id, transform, wire) in &entities {
                     let _ = out.send(enter(id.0, transform, &wire.0));
+                }
+                for avatar in &spawned {
+                    let _ = out.send(enter(avatar.id, &avatar.transform, &avatar.wire));
                 }
                 for device in devices.0.values() {
                     let _ = out.send(enter(device.id, &device_transform(&device.components), &device.components));
@@ -205,7 +220,10 @@ fn receive(
                         (schema::CONTROLLER, controller.encode_to_vec()),
                     ]);
                     sessions.broadcast(&enter(id, &transform, &wire));
-                    commands.spawn((Replicated(id), transform, Wire(wire), Owner(session), MoveInput::default()));
+                    let entity = commands
+                        .spawn((Replicated(id), transform, Wire(wire.clone()), Owner(session), MoveInput::default()))
+                        .id();
+                    spawned.push(Spawned { id, entity, owner: session, transform, wire });
                 }
             }
             RegionInput::Leave { session } => {
@@ -224,6 +242,14 @@ fn receive(
                         sessions.broadcast(&leave(id.0, LeaveReason::Destroyed));
                     }
                 }
+                spawned.retain(|avatar| {
+                    if avatar.owner != session {
+                        return true;
+                    }
+                    commands.entity(avatar.entity).despawn();
+                    sessions.broadcast(&leave(avatar.id, LeaveReason::Destroyed));
+                    false
+                });
                 devices.0.retain(|(bridge, _), device| {
                     if *bridge != session {
                         return true;
@@ -468,20 +494,28 @@ fn walk(time: Res<Time>, mut walkers: Query<(&MoveInput, &mut Transform)>) {
     }
 }
 
+/// Every this many ticks (one second), a state carries every volatile value,
+/// not only the changed ones: a lost datagram is repaired within a second.
+#[derive(Resource)]
+struct Keyframe(u64);
+
 fn broadcast_state(
     mut tick: ResMut<Tick>,
+    keyframe: Res<Keyframe>,
     sessions: Res<Sessions>,
-    changed: Query<(&Replicated, &Transform), Changed<Transform>>,
+    transforms: Query<(&Replicated, Ref<Transform>)>,
 ) {
     tick.0 += 1;
     if sessions.0.is_empty() {
         return;
     }
-    let values: Vec<_> = changed
+    let all = tick.0.is_multiple_of(keyframe.0);
+    let values: Vec<_> = transforms
         .iter()
+        .filter(|(_, transform)| all || transform.is_changed())
         .map(|(id, transform)| EntityComponent {
             entity: id.0,
-            component: Some(wire(schema::TRANSFORM, to_proto(transform).encode_to_vec())),
+            component: Some(wire(schema::TRANSFORM, to_proto(&transform).encode_to_vec())),
         })
         .collect();
     if values.is_empty() {
@@ -540,5 +574,50 @@ fn from_proto(t: &components::Transform) -> Transform {
         translation: vec3(t.translation, Vec3::ZERO),
         rotation: t.rotation.map_or(Quat::IDENTITY, |q| Quat::from_xyzw(q.x, q.y, q.z, q.w)),
         scale: vec3(t.scale, Vec3::ONE),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use tokio::sync::mpsc::{UnboundedReceiver, unbounded_channel};
+
+    use super::*;
+
+    fn join(inbox: &crossbeam_channel::Sender<RegionInput>, session: u64) -> UnboundedReceiver<ServerMessage> {
+        let (out, messages) = unbounded_channel();
+        let controller = components::Controller { per_world_id: format!("guest-{session}"), ..Default::default() };
+        let member = Member { kind: SessionKind::Human, role: Role::Player, controller, owner: String::new() };
+        inbox.send(RegionInput::Join { session, member, out }).unwrap();
+        messages
+    }
+
+    fn entered(messages: &mut UnboundedReceiver<ServerMessage>) -> Vec<u64> {
+        std::iter::from_fn(|| messages.try_recv().ok())
+            .filter_map(|m| match m.message {
+                Some(server_message::Message::EntityEnter(enter)) => Some(enter.entity),
+                _ => None,
+            })
+            .collect()
+    }
+
+    /// Found by a flaky end-to-end test: inputs handled in the same tick did
+    /// not see the avatars spawned earlier in that tick.
+    #[test]
+    fn inputs_of_one_tick_see_the_avatars_spawned_in_it() {
+        let (inbox, rx) = crossbeam_channel::unbounded();
+        let mut app = app(rx, 30);
+        let mut alice = join(&inbox, 1);
+        let mut bob = join(&inbox, 2);
+        let carol = join(&inbox, 3);
+        inbox.send(RegionInput::Leave { session: 3 }).unwrap();
+        drop(carol);
+        app.update();
+        app.update();
+
+        let seen_by_alice = entered(&mut alice);
+        let seen_by_bob = entered(&mut bob);
+        assert_eq!(seen_by_alice, seen_by_bob, "alice and bob see the same entities");
+        let avatars = app.world_mut().query::<&Owner>().iter(app.world()).map(|o| o.0).collect::<Vec<_>>();
+        assert_eq!(avatars.len(), 2, "carol's avatar left with her: {avatars:?}");
     }
 }

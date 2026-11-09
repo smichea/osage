@@ -20,10 +20,16 @@ pub mod osage {
     }
 }
 
+pub mod framing;
+
 pub use osage::{components::v1 as components, math::v1 as math, v0};
 
 /// Protocol version spoken by this crate.
 pub const PROTOCOL_VERSION: &str = "0.1";
+
+/// Where a gateway announces its WebTransport endpoint, on its WebSocket
+/// host (spec/README.md, "Transport").
+pub const WEBTRANSPORT_DISCOVERY_PATH: &str = "/.well-known/osage/webtransport";
 
 /// Encoded `FileDescriptorSet` of every schema in `spec/proto`.
 pub const DESCRIPTORS: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/osage_descriptors.bin"));

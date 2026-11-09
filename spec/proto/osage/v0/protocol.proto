@@ -13,7 +13,8 @@ import "google/protobuf/descriptor.proto";
 import "osage/math/v1/math.proto";
 
 // Every frame sent by a client. On WebSocket, one binary message carries one
-// ClientMessage; on WebTransport streams, frames are length-prefixed.
+// ClientMessage; on the WebTransport stream, each is preceded by its length as
+// a varint (protobuf length-delimited); a datagram carries one, unframed.
 message ClientMessage {
   oneof message {
     Hello hello = 1;
