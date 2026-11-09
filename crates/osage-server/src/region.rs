@@ -30,19 +30,9 @@ const WORLD_HALF_SIZE: f32 = 20.0;
 
 /// What the gateway tells the region.
 pub enum RegionInput {
-    Join {
-        session: u64,
-        role: Role,
-        per_world_id: String,
-        out: UnboundedSender<ServerMessage>,
-    },
-    Leave {
-        session: u64,
-    },
-    Message {
-        session: u64,
-        message: client_message::Message,
-    },
+    Join { session: u64, role: Role, controller: components::Controller, out: UnboundedSender<ServerMessage> },
+    Leave { session: u64 },
+    Message { session: u64, message: client_message::Message },
 }
 
 pub fn app(inbox: Receiver<RegionInput>, tick_hz: u32) -> App {
@@ -127,14 +117,8 @@ fn spawn_demo(mut commands: Commands, mut ids: ResMut<EntityIds>) {
         Replicated(ids.next()),
         Transform::default(),
         builtin(types::BUILTIN_CUBE),
-        Controlled(components::Controller {
-            kind: components::ControllerKind::System.into(),
-            ..default()
-        }),
-        Orbit {
-            radius: 3.0,
-            speed: 0.8,
-        },
+        Controlled(components::Controller { kind: components::ControllerKind::System.into(), ..default() }),
+        Orbit { radius: 3.0, speed: 0.8 },
     ));
 }
 
@@ -150,25 +134,16 @@ fn receive(
 ) {
     for input in inbox.0.try_iter() {
         match input {
-            RegionInput::Join {
-                session,
-                role,
-                per_world_id,
-                out,
-            } => {
+            RegionInput::Join { session, role, controller, out } => {
                 for (id, transform, content, controller) in &entities {
                     let _ = out.send(enter(id.0, transform, content, controller));
                 }
                 sessions.0.insert(session, out);
-                if role == Role::Player {
+                if matches!(role, Role::Player | Role::Agent) {
                     let id = ids.next();
                     let transform = spawn_point(session);
                     let content = builtin(types::BUILTIN_AVATAR);
-                    let controller = Controlled(components::Controller {
-                        kind: components::ControllerKind::Human.into(),
-                        per_world_id,
-                        ..default()
-                    });
+                    let controller = Controlled(controller);
                     sessions.broadcast(&enter(id, &transform, &content, &controller));
                     commands.spawn((
                         Replicated(id),
@@ -194,10 +169,7 @@ fn receive(
                 client_message::Message::TimeSync(sync) => reply(
                     &sessions,
                     session,
-                    server_message::Message::TimeSync(TimeSync {
-                        server_time_us: now_us(),
-                        ..sync
-                    }),
+                    server_message::Message::TimeSync(TimeSync { server_time_us: now_us(), ..sync }),
                 ),
                 client_message::Message::ActionRequest(request) => reply(
                     &sessions,
@@ -290,11 +262,7 @@ fn broadcast_state(
         return;
     }
     sessions.broadcast(&ServerMessage {
-        message: Some(server_message::Message::State(StateDatagram {
-            tick: tick.0,
-            server_time_us: now_us(),
-            values,
-        })),
+        message: Some(server_message::Message::State(StateDatagram { tick: tick.0, server_time_us: now_us(), values })),
     });
 }
 
@@ -319,18 +287,12 @@ fn enter(id: u64, transform: &Transform, content: &Content, controller: &Control
 
 fn leave(id: u64, reason: LeaveReason) -> ServerMessage {
     ServerMessage {
-        message: Some(server_message::Message::EntityLeave(EntityLeave {
-            entity: id,
-            reason: reason.into(),
-        })),
+        message: Some(server_message::Message::EntityLeave(EntityLeave { entity: id, reason: reason.into() })),
     }
 }
 
 fn wire(type_id: u32, value: &impl prost::Message) -> WireComponent {
-    WireComponent {
-        r#type: type_id,
-        value: value.encode_to_vec(),
-    }
+    WireComponent { r#type: type_id, value: value.encode_to_vec() }
 }
 
 fn to_proto(transform: &Transform) -> components::Transform {
@@ -338,12 +300,7 @@ fn to_proto(transform: &Transform) -> components::Transform {
     let q = transform.rotation;
     components::Transform {
         translation: Some(vec3(transform.translation)),
-        rotation: Some(math::Quat {
-            x: q.x,
-            y: q.y,
-            z: q.z,
-            w: q.w,
-        }),
+        rotation: Some(math::Quat { x: q.x, y: q.y, z: q.z, w: q.w }),
         scale: Some(vec3(transform.scale)),
     }
 }

@@ -8,11 +8,7 @@ use std::{env, fs, path::PathBuf};
 
 use protox::prost::Message;
 
-const FILES: &[&str] = &[
-    "osage/math/v1/math.proto",
-    "osage/v0/protocol.proto",
-    "osage/components/v1/components.proto",
-];
+const FILES: &[&str] = &["osage/math/v1/math.proto", "osage/v0/protocol.proto", "osage/components/v1/components.proto"];
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let spec = PathBuf::from(env::var("CARGO_MANIFEST_DIR")?).join("../../spec/proto");

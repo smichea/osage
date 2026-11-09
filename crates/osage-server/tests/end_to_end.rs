@@ -21,22 +21,14 @@ fn start_server() -> String {
 #[tokio::test]
 async fn a_client_sees_the_server_driven_cube_move() {
     let url = start_server();
-    let mut session = connect(&url, hello("osage-test", "0", Role::Observer, Tier::T0Headless))
-        .await
-        .unwrap();
+    let mut session = connect(&url, hello("osage-test", "0", Role::Observer, Tier::T0Headless)).await.unwrap();
 
     let welcome = session.welcome().clone();
     assert_eq!(welcome.protocol_version, "0.1");
     let world_descriptor = welcome.world.clone().unwrap();
-    assert_eq!(
-        world_descriptor.source_offer.unwrap().url,
-        "https://github.com/smichea/osage"
-    );
+    assert_eq!(world_descriptor.source_offer.unwrap().url, "https://github.com/smichea/osage");
     let schemas = welcome.schemas.clone().unwrap();
-    assert!(
-        schemas.descriptors.is_some(),
-        "the schema bundle carries the descriptors inline"
-    );
+    assert!(schemas.descriptors.is_some(), "the schema bundle carries the descriptors inline");
 
     let mut world = World::new(&welcome);
     assert!(world.types().id(types::TRANSFORM).is_some());
@@ -96,12 +88,7 @@ async fn drain(
 }
 
 fn x_of(world: &World, entity: u64) -> f32 {
-    world
-        .get::<components::Transform>(entity, types::TRANSFORM)
-        .unwrap()
-        .translation
-        .unwrap()
-        .x
+    world.get::<components::Transform>(entity, types::TRANSFORM).unwrap().translation.unwrap().x
 }
 
 /// Sends +x movement intents for `entity` every 50 ms for `duration`.
@@ -113,17 +100,12 @@ async fn walk_east(
     duration: Duration,
 ) {
     let move_type = world.types().id(types::MOVE_INTENT).unwrap();
-    let east = components::MoveIntent {
-        direction: Some(osage_sdk::math::Vec3 { x: 1.0, y: 0.0, z: 0.0 }),
-    };
+    let east = components::MoveIntent { direction: Some(osage_sdk::math::Vec3 { x: 1.0, y: 0.0, z: 0.0 }) };
     let start = tokio::time::Instant::now();
     let mut sequence = 0;
     while start.elapsed() < duration {
         sequence += 1;
-        sender
-            .send(osage_sdk::intent(sequence, entity, move_type, &east))
-            .await
-            .unwrap();
+        sender.send(osage_sdk::intent(sequence, entity, move_type, &east)).await.unwrap();
         drain(receiver, world, Duration::from_millis(50)).await;
     }
 }
@@ -131,15 +113,11 @@ async fn walk_east(
 #[tokio::test]
 async fn a_player_moves_its_avatar_and_others_see_it_come_and_go() {
     let url = start_server();
-    let observer = connect(&url, hello("observer", "0", Role::Observer, Tier::T0Headless))
-        .await
-        .unwrap();
+    let observer = connect(&url, hello("observer", "0", Role::Observer, Tier::T0Headless)).await.unwrap();
     let (observer_welcome, _observer_sender, mut observer_rx) = observer.split();
     let mut observed = World::new(&observer_welcome);
 
-    let player = connect(&url, hello("player", "0", Role::Player, Tier::T2Standard))
-        .await
-        .unwrap();
+    let player = connect(&url, hello("player", "0", Role::Player, Tier::T2Standard)).await.unwrap();
     let me = player.welcome().identity.clone().unwrap().per_world_id;
     let (welcome, mut sender, mut receiver) = player.split();
     let mut world = World::new(&welcome);
@@ -155,58 +133,32 @@ async fn a_player_moves_its_avatar_and_others_see_it_come_and_go() {
     assert!(end_x > start_x + 2.0, "the avatar walked east: {start_x} → {end_x}");
 
     drain(&mut observer_rx, &mut observed, Duration::from_millis(300)).await;
-    assert_eq!(
-        observed.controlled_by(&me),
-        Some(avatar),
-        "the observer sees the player's avatar"
-    );
+    assert_eq!(observed.controlled_by(&me), Some(avatar), "the observer sees the player's avatar");
 
-    sender
-        .send(osage_sdk::v0::client_message::Message::Goodbye(Default::default()))
-        .await
-        .unwrap();
+    sender.send(osage_sdk::v0::client_message::Message::Goodbye(Default::default())).await.unwrap();
     drop((sender, receiver));
     let events = drain(&mut observer_rx, &mut observed, Duration::from_secs(2)).await;
-    assert!(
-        events.contains(&WorldEvent::Left(avatar)),
-        "the avatar leaves with its player"
-    );
+    assert!(events.contains(&WorldEvent::Left(avatar)), "the avatar leaves with its player");
 }
 
 #[tokio::test]
 async fn intents_for_entities_one_does_not_own_are_ignored() {
     let url = start_server();
-    let alice = connect(&url, hello("alice", "0", Role::Player, Tier::T2Standard))
-        .await
-        .unwrap();
+    let alice = connect(&url, hello("alice", "0", Role::Player, Tier::T2Standard)).await.unwrap();
     let alice_id = alice.welcome().identity.clone().unwrap().per_world_id;
     let (alice_welcome, _alice_sender, mut alice_rx) = alice.split();
     let mut alice_world = World::new(&alice_welcome);
 
-    let mallory = connect(&url, hello("mallory", "0", Role::Player, Tier::T2Standard))
-        .await
-        .unwrap();
+    let mallory = connect(&url, hello("mallory", "0", Role::Player, Tier::T2Standard)).await.unwrap();
     let (mallory_welcome, mut mallory_sender, mut mallory_rx) = mallory.split();
     let mut mallory_world = World::new(&mallory_welcome);
     drain(&mut mallory_rx, &mut mallory_world, Duration::from_millis(300)).await;
-    let alices_avatar = mallory_world
-        .controlled_by(&alice_id)
-        .expect("mallory sees alice's avatar");
+    let alices_avatar = mallory_world.controlled_by(&alice_id).expect("mallory sees alice's avatar");
 
     drain(&mut alice_rx, &mut alice_world, Duration::from_millis(100)).await;
     let before = x_of(&alice_world, alices_avatar);
-    walk_east(
-        &mut mallory_sender,
-        &mut mallory_rx,
-        &mut mallory_world,
-        alices_avatar,
-        Duration::from_millis(600),
-    )
-    .await;
+    walk_east(&mut mallory_sender, &mut mallory_rx, &mut mallory_world, alices_avatar, Duration::from_millis(600))
+        .await;
     drain(&mut alice_rx, &mut alice_world, Duration::from_millis(200)).await;
-    assert_eq!(
-        x_of(&alice_world, alices_avatar),
-        before,
-        "nobody but its owner moves an avatar"
-    );
+    assert_eq!(x_of(&alice_world, alices_avatar), before, "nobody but its owner moves an avatar");
 }

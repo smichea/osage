@@ -6,12 +6,15 @@
 //! region is a headless Bevy app on the calling thread.
 
 mod gateway;
+mod identity;
 mod region;
 mod schema;
 
-use std::{net::TcpListener, thread, time::SystemTime};
+use std::{collections::HashSet, net::TcpListener, thread, time::SystemTime};
 
 use anyhow::Result;
+pub use gateway::DELEGATE_AGENT;
+use osage_credentials::TrustedIssuer;
 
 pub use region::RegionInput;
 
@@ -21,6 +24,14 @@ pub struct Config {
     pub tick_hz: u32,
     /// Corresponding Source of this server as it runs (AGPL section 13).
     pub source_url: String,
+    /// Identity issuers this world trusts (D-013).
+    pub trusted_issuers: Vec<TrustedIssuer>,
+    /// Per-world identifiers sanctioned in this world; their agents too.
+    pub sanctioned: HashSet<String>,
+    /// Agents one responsible human may run at once (a world rule, D-008).
+    pub max_agents_per_human: usize,
+    /// Secret signing this world's agent delegations.
+    pub delegation_secret: Vec<u8>,
 }
 
 impl Default for Config {
@@ -29,6 +40,10 @@ impl Default for Config {
             world_name: "osage-demo".to_owned(),
             tick_hz: 30,
             source_url: "https://github.com/smichea/osage".to_owned(),
+            trusted_issuers: Vec::new(),
+            sanctioned: HashSet::new(),
+            max_agents_per_human: 3,
+            delegation_secret: random_secret(),
         }
     }
 }
@@ -50,9 +65,13 @@ pub fn run(listener: TcpListener, config: Config) -> Result<()> {
     Ok(())
 }
 
+fn random_secret() -> Vec<u8> {
+    let mut secret = vec![0; 32];
+    getrandom::fill(&mut secret).expect("operating system randomness");
+    secret
+}
+
 /// Microseconds since the Unix epoch: the protocol's server time.
 pub(crate) fn now_us() -> u64 {
-    SystemTime::now()
-        .duration_since(SystemTime::UNIX_EPOCH)
-        .map_or(0, |d| d.as_micros() as u64)
+    SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).map_or(0, |d| d.as_micros() as u64)
 }

@@ -1,7 +1,8 @@
 // SPDX-FileCopyrightText: The osage contributors
 // SPDX-License-Identifier: LicenseRef-osage-AGPL-3.0-or-later-with-exceptions
 
-//! `osage-server [--listen ADDR] [--tick HZ] [--world NAME] [--source-url URL]`
+//! `osage-server [--listen ADDR] [--tick HZ] [--world NAME] [--source-url URL]
+//!   [--issuers FILE.json] [--trust-dev-issuer] [--sanction PER_WORLD_ID]… [--max-agents N]`
 
 use std::net::TcpListener;
 
@@ -24,6 +25,19 @@ fn main() -> Result<()> {
             "--tick" => config.tick_hz = value()?.parse().context("--tick")?,
             "--world" => config.world_name = value()?,
             "--source-url" => config.source_url = value()?,
+            "--issuers" => {
+                let path = value()?;
+                let file = std::fs::read_to_string(&path).with_context(|| format!("reading {path}"))?;
+                config.trusted_issuers.extend(serde_json::from_str::<Vec<_>>(&file).context("--issuers")?);
+            }
+            "--trust-dev-issuer" => {
+                tracing::warn!("trusting the INSECURE development issuer: never do this in a real world");
+                config.trusted_issuers.push(osage_credentials::TestIssuer::insecure_dev().trusted());
+            }
+            "--sanction" => {
+                config.sanctioned.insert(value()?);
+            }
+            "--max-agents" => config.max_agents_per_human = value()?.parse().context("--max-agents")?,
             _ => bail!("unknown argument {flag}"),
         }
     }

@@ -23,21 +23,31 @@ type Socket = WebSocketStream<MaybeTlsStream<TcpStream>>;
 pub fn hello(implementation: &str, version: &str, role: Role, tier: Tier) -> Hello {
     Hello {
         protocol_versions: vec![PROTOCOL_VERSION.to_owned()],
-        client: Some(ClientInfo {
-            implementation: implementation.to_owned(),
-            version: version.to_owned(),
-        }),
+        client: Some(ClientInfo { implementation: implementation.to_owned(), version: version.to_owned() }),
         role: role.into(),
         capabilities: Some(Capabilities {
             tier: tier.into(),
             max_datagram_size: 0,
             content_kinds: vec!["builtin".to_owned()],
         }),
-        credentials: Some(Credentials {
-            credential: Some(credentials::Credential::Anonymous(Anonymous {})),
-        }),
+        credentials: Some(Credentials { credential: Some(credentials::Credential::Anonymous(Anonymous {})) }),
         world: String::new(),
     }
+}
+
+/// `hello` presenting an identity credential (D-013) instead of being anonymous.
+pub fn with_identity(mut hello: Hello, credential: &str) -> Hello {
+    let credential = credentials::Credential::VerifiablePresentation(credential.as_bytes().to_vec());
+    hello.credentials = Some(Credentials { credential: Some(credential) });
+    hello
+}
+
+/// `hello` for an agent presenting the delegation of its responsible human.
+pub fn with_delegation(mut hello: Hello, delegation: &str) -> Hello {
+    hello.role = Role::Agent.into();
+    hello.credentials =
+        Some(Credentials { credential: Some(credentials::Credential::Delegation(delegation.as_bytes().to_vec())) });
+    hello
 }
 
 /// An `Intent` carrying `value`, encoded as component type `type_id` of the
@@ -46,10 +56,7 @@ pub fn intent(sequence: u64, entity: u64, type_id: u32, value: &impl prost::Mess
     client_message::Message::Intent(Intent {
         sequence,
         entity,
-        input: Some(Component {
-            r#type: type_id,
-            value: value.encode_to_vec(),
-        }),
+        input: Some(Component { r#type: type_id, value: value.encode_to_vec() }),
     })
 }
 
@@ -68,19 +75,12 @@ pub struct SessionReceiver(SplitStream<Socket>);
 /// Connects to `url` (e.g. `ws://127.0.0.1:7878`), sends `hello` and returns
 /// once the gateway has answered with a `Welcome`.
 pub async fn connect(url: &str, hello: Hello) -> Result<Session> {
-    let (mut socket, _) = connect_async(url)
-        .await
-        .with_context(|| format!("connecting to {url}"))?;
-    let first = ClientMessage {
-        message: Some(client_message::Message::Hello(hello)),
-    };
+    let (mut socket, _) = connect_async(url).await.with_context(|| format!("connecting to {url}"))?;
+    let first = ClientMessage { message: Some(client_message::Message::Hello(hello)) };
     socket.send(Message::binary(first.encode_to_vec())).await?;
 
     loop {
-        let frame = socket
-            .next()
-            .await
-            .ok_or_else(|| anyhow!("connection closed before Welcome"))??;
+        let frame = socket.next().await.ok_or_else(|| anyhow!("connection closed before Welcome"))??;
         let Message::Binary(bytes) = frame else { continue };
         match ServerMessage::decode(bytes)?.message {
             Some(server_message::Message::Welcome(welcome)) => return Ok(Session { socket, welcome }),

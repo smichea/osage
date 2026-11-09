@@ -1,9 +1,10 @@
 // SPDX-FileCopyrightText: The osage contributors
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-import { type MessageInitShape, create, fromBinary, toBinary } from "@bufbuild/protobuf";
+import { type MessageInitShape, clone, create, fromBinary, toBinary } from "@bufbuild/protobuf";
 import {
   ClientMessageSchema,
+  CredentialsSchema,
   GoodbyeReason,
   type Hello,
   HelloSchema,
@@ -27,6 +28,26 @@ export function hello(implementation: string, version: string, role: Role, tier:
     credentials: { credential: { case: "anonymous", value: {} } },
   });
 }
+
+/** `hello` presenting an identity credential (D-013) instead of being anonymous. */
+export function withIdentity(helloMessage: Hello, credential: string): Hello {
+  const copy = clone(HelloSchema, helloMessage);
+  const value = new TextEncoder().encode(credential);
+  copy.credentials = create(CredentialsSchema, { credential: { case: "verifiablePresentation", value } });
+  return copy;
+}
+
+/** `hello` for an agent presenting the delegation of its responsible human. */
+export function withDelegation(helloMessage: Hello, delegation: string): Hello {
+  const copy = clone(HelloSchema, helloMessage);
+  const value = new TextEncoder().encode(delegation);
+  copy.role = Role.AGENT;
+  copy.credentials = create(CredentialsSchema, { credential: { case: "delegation", value } });
+  return copy;
+}
+
+/** Action asking the world for an agent delegation; the token is in `ActionResult.result`. */
+export const DELEGATE_AGENT = "osage.delegate_agent";
 
 type Listener = (message: ServerMessage) => void;
 

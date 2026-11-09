@@ -77,9 +77,13 @@ message Anonymous {}
 message Credentials {
   oneof credential {
     Anonymous anonymous = 1;
-    // A W3C verifiable presentation (identity, D-013).
+    // Identity (D-013). v0: a W3C VC 2.0 secured as a compact JWS (ES256) by
+    // an issuer the world trusts, whose credentialSubject carries the
+    // per-world identifier and the assurance level (spec/README.md).
     bytes verifiable_presentation = 2;
-    // A delegation credential from the agent's responsible human (design/01).
+    // A delegation for an agent (design/01 §3). v0: a token the world issued
+    // to the agent's responsible human through the "osage.delegate_agent"
+    // action.
     bytes delegation = 3;
     // A credential binding a device bridge to its owner (design/02).
     bytes bridge = 4;
@@ -250,6 +254,8 @@ message ActionResult {
   ActionStatus status = 2;
   string reason = 3;
   string approval_reference = 4;
+  // Result of a successful action, if it has one (e.g. a delegation token).
+  bytes result = 5;
 }
 
 message Subscribe {
@@ -269,6 +275,12 @@ enum GoodbyeReason {
   GOODBYE_REASON_VERSION = 4;
   GOODBYE_REASON_OVERLOAD = 5;
   GOODBYE_REASON_SHUTDOWN = 6;
+  // The credentials could not be verified.
+  GOODBYE_REASON_UNAUTHENTICATED = 7;
+  // This identity already has a session in this world.
+  GOODBYE_REASON_DUPLICATE_SESSION = 8;
+  // A quota of the world was reached (e.g. agents per responsible human).
+  GOODBYE_REASON_QUOTA = 9;
 }
 
 message Goodbye {

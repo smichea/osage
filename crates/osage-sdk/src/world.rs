@@ -53,10 +53,7 @@ pub struct World {
 
 impl World {
     pub fn new(welcome: &Welcome) -> Self {
-        Self {
-            types: TypeTable::from_welcome(welcome),
-            ..Self::default()
-        }
+        Self { types: TypeTable::from_welcome(welcome), ..Self::default() }
     }
 
     pub fn types(&self) -> &TypeTable {
@@ -109,13 +106,7 @@ impl World {
             }
             Some(server_message::Message::ComponentChanged(changed)) => {
                 if let Some(component) = &changed.component {
-                    self.set(
-                        changed.entity,
-                        component.r#type,
-                        &component.value,
-                        changed.removed,
-                        &mut events,
-                    );
+                    self.set(changed.entity, component.r#type, &component.value, changed.removed, &mut events);
                 }
             }
             Some(server_message::Message::State(state)) => {
@@ -140,9 +131,6 @@ impl World {
         } else {
             components.insert(component_type.name.clone(), value.to_vec());
         }
-        events.push(WorldEvent::Changed {
-            entity,
-            type_name: component_type.name.clone(),
-        });
+        events.push(WorldEvent::Changed { entity, type_name: component_type.name.clone() });
     }
 }

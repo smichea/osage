@@ -13,16 +13,20 @@ repository.workspace = true
 
 [dependencies]
 osage-proto.workspace = true
+osage-credentials.workspace = true
 anyhow.workspace = true
 bevy = { workspace = true, features = ["std", "multi_threaded", "async_executor"] }
 crossbeam-channel.workspace = true
 futures-util.workspace = true
+getrandom.workspace = true
 prost.workspace = true
 prost-types.workspace = true
 tokio.workspace = true
 tokio-tungstenite.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
+serde_json.workspace = true
 
 [dev-dependencies]
 osage-sdk.workspace = true
+osage-credentials.workspace = true

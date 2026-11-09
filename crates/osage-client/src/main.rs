@@ -56,9 +56,7 @@ struct Shapes {
 }
 
 fn main() {
-    let url = std::env::args()
-        .nth(1)
-        .unwrap_or_else(|| "ws://127.0.0.1:7878".to_owned());
+    let url = std::env::args().nth(1).unwrap_or_else(|| "ws://127.0.0.1:7878".to_owned());
     let (tx, rx) = crossbeam_channel::unbounded();
     let (out_tx, out_rx) = tokio::sync::mpsc::unbounded_channel();
     thread::Builder::new()
@@ -68,10 +66,7 @@ fn main() {
 
     App::new()
         .add_plugins(DefaultPlugins.set(WindowPlugin {
-            primary_window: Some(Window {
-                title: "osage — connecting…".to_owned(),
-                ..default()
-            }),
+            primary_window: Some(Window { title: "osage — connecting…".to_owned(), ..default() }),
             ..default()
         }))
         .insert_resource(NetInbox(rx))
@@ -115,15 +110,10 @@ fn network(url: String, tx: Sender<Net>, mut outbox: UnboundedReceiver<client_me
 }
 
 fn setup(mut commands: Commands, mut meshes: ResMut<Assets<Mesh>>, mut materials: ResMut<Assets<StandardMaterial>>) {
+    commands
+        .spawn((Camera3d::default(), Transform::from_xyz(6.0, 5.0, 8.0).looking_at(Vec3::new(0.0, 0.5, 0.0), Vec3::Y)));
     commands.spawn((
-        Camera3d::default(),
-        Transform::from_xyz(6.0, 5.0, 8.0).looking_at(Vec3::new(0.0, 0.5, 0.0), Vec3::Y),
-    ));
-    commands.spawn((
-        DirectionalLight {
-            illuminance: 8_000.0,
-            ..default()
-        },
+        DirectionalLight { illuminance: 8_000.0, ..default() },
         Transform::from_xyz(4.0, 8.0, 3.0).looking_at(Vec3::ZERO, Vec3::Y),
     ));
     commands.spawn((
@@ -205,24 +195,14 @@ fn spawn_object(commands: &mut Commands, replica: &Replica, shapes: &Shapes, ent
     let transform = to_bevy(world.get(entity, types::TRANSFORM));
     match content.uri.as_str() {
         types::BUILTIN_CUBE => Some(
-            commands
-                .spawn((
-                    Mesh3d(shapes.cube.clone()),
-                    MeshMaterial3d(shapes.cube_material.clone()),
-                    transform,
-                ))
-                .id(),
+            commands.spawn((Mesh3d(shapes.cube.clone()), MeshMaterial3d(shapes.cube_material.clone()), transform)).id(),
         ),
         // Avatars stand on their origin: the capsule is lifted.
         types::BUILTIN_AVATAR => {
             let mine = world
                 .get::<components::Controller>(entity, types::CONTROLLER)
                 .is_some_and(|c| c.per_world_id == replica.me);
-            let material = if mine {
-                &shapes.my_material
-            } else {
-                &shapes.others_material
-            };
+            let material = if mine { &shapes.my_material } else { &shapes.others_material };
             Some(
                 commands
                     .spawn((transform, Visibility::default()))
@@ -264,13 +244,8 @@ fn steer(
     movement.moving = moving;
     movement.since_last = 0.0;
     movement.sequence += 1;
-    let value = components::MoveIntent {
-        direction: Some(osage_sdk::math::Vec3 {
-            x: direction.x,
-            y: 0.0,
-            z: direction.z,
-        }),
-    };
+    let value =
+        components::MoveIntent { direction: Some(osage_sdk::math::Vec3 { x: direction.x, y: 0.0, z: direction.z }) };
     let _ = outbox.0.send(intent(movement.sequence, avatar, move_type, &value));
 }
 
@@ -281,9 +256,7 @@ fn to_bevy(transform: Option<components::Transform>) -> Transform {
     let vec3 = |v: Option<osage_sdk::math::Vec3>, default: Vec3| v.map_or(default, |v| Vec3::new(v.x, v.y, v.z));
     Transform {
         translation: vec3(t.translation, Vec3::ZERO),
-        rotation: t
-            .rotation
-            .map_or(Quat::IDENTITY, |q| Quat::from_xyzw(q.x, q.y, q.z, q.w)),
+        rotation: t.rotation.map_or(Quat::IDENTITY, |q| Quat::from_xyzw(q.x, q.y, q.z, q.w)),
         scale: vec3(t.scale, Vec3::ONE),
     }
 }
