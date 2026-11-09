@@ -108,13 +108,33 @@ impl Sensor for Led {
     }
 
     fn set(&mut self, _function: &str, value: f64) -> Result<(), String> {
-        fs::write(self.dir.join("brightness"), format!("{}", value.round() as u32)).map_err(|error| {
-            format!("cannot write {}: {error} (give your user write access, e.g. with a udev rule)", self.dir.display())
-        })
+        self.write(value.round() as u32)
     }
 
     fn safe_state(&mut self) {
-        let _ = fs::write(self.dir.join("brightness"), "0");
+        let _ = self.write(0);
+    }
+}
+
+impl Led {
+    /// Writes the brightness directly when the user may, otherwise through
+    /// systemd-logind, which lets the user of the active session set LED
+    /// brightness without root (`org.freedesktop.login1.Session.SetBrightness`).
+    fn write(&self, level: u32) -> Result<(), String> {
+        if fs::write(self.dir.join("brightness"), level.to_string()).is_ok() {
+            return Ok(());
+        }
+        let status = std::process::Command::new("busctl")
+            .args(["call", "org.freedesktop.login1", "/org/freedesktop/login1/session/auto"])
+            .args(["org.freedesktop.login1.Session", "SetBrightness", "ssu", "leds", &self.name, &level.to_string()])
+            .stdout(std::process::Stdio::null())
+            .status()
+            .map_err(|error| format!("cannot run busctl: {error}"))?;
+        if status.success() {
+            Ok(())
+        } else {
+            Err(format!("cannot set {}: no write access and logind refused ({status})", self.dir.display()))
+        }
     }
 }
 

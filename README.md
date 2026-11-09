@@ -56,7 +56,7 @@ export OSAGE_BRIDGE_DELEGATION=$(cargo run -q -p osage-bridge -- delegate --cred
 cargo run -q -p osage-bridge                      # observers, clients and agents now see the device and its readings
 ```
 
-To **open** a function to the world, the owner says so explicitly: `--open-led tpacpi::kbd_backlight` makes that LED's brightness pre-approved (any participant may set it, within 0…max, checked by the bridge itself); it is switched off when the bridge stops. Your user needs write access to `/sys/class/leds/NAME/brightness`. Agents use the MCP tool `set_device`.
+To **open** a function to the world, the owner says so explicitly: `--open-led tpacpi::kbd_backlight` makes that LED's brightness pre-approved (any participant may set it, within 0…max, checked by the bridge itself); it is switched off when the bridge stops. The bridge writes `/sys/class/leds/NAME/brightness` directly if it may, otherwise asks systemd-logind (allowed for the user of the active session, no root needed). Agents use the MCP tool `set_device`.
 
 ## Research
 
