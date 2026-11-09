@@ -16,8 +16,8 @@ Both are **interfaces with pluggable providers**. osage names two reference impl
 | P1 | **Uniqueness is required only where privilege is scarce.** Walking around, reading, chatting, building in a sandbox: open to anyone, even anonymous guests. Anything that is fungible or bounded — tradable value, ownership of land or rare assets, ranked play, moderation powers, vouching for others — requires a proven unique human. N accounts posting N times is just posting; N accounts receiving N rewards is theft. |
 | P2 | **The world never needs to know who you are, only that you are one.** Deduplication happens at the identity provider. The world receives a **stable per-world identifier** (a pairwise pseudonym, or *nullifier*) plus an assurance level — never civil identity. Two accounts of the same person in the same world map to the same identifier; the same person in two worlds cannot be correlated unless they choose to. |
 | P3 | **Sanctions bind to the per-world identifier, not to the account.** A ban follows the person within the world (or within a federation of worlds that opts in to a shared scope). Evading it means obtaining a new unique identity from a provider, which is exactly what a good provider makes costly. |
-| P4 | **Every agent has a responsible human.** An agent joins a world only with a delegation from a uniqueness-attested human. It acts under that human's accountability, sanctions and quotas: one human cannot multiply themselves by running agents. |
-| P5 | **Agents are always labelled as agents.** No client may present an agent as a human. Worlds may restrict where agents go and what they do. |
+| P4 | **Every agent has a responsible human.** An agent joins a world only with a delegation from a uniqueness-attested human. It acts under that human's accountability, sanctions and the quotas the world sets: one human cannot multiply themselves by running agents. |
+| P5 | **The controller kind is always known.** The protocol always carries each entity's controller kind (`human`, `agent` or `system`), so every client and world can show it. The rules built on it — where agents may go, ranked modes, quotas — belong to each world, not to osage ([D-008](decisions.md#d-008--game-rules-for-agents-belong-to-each-world-not-to-osage)). |
 | P6 | **Irreversible or costly actions go through a gate.** Trading valuable items, spending currency, destroying shared builds, moderation: when an agent proposes them, they need a human approval receipt bound to that exact action, single-use and with expiry. |
 | P7 | **Open standards at the boundary, no provider lock-in.** Identity crosses the boundary as W3C Verifiable Credentials / DIDs (presented with OpenID for Verifiable Presentations); agent delegation as a signed, scoped, expiring credential. Any provider that speaks them can plug in. |
 
@@ -75,8 +75,8 @@ An agent is a client at tier **T0** (no rendering) that:
 
 - holds a **delegation credential** issued by its responsible human (scope: world, regions, allowed actions, quotas, expiry);
 - receives **interest-managed structured observations** (only what its avatar could perceive) and sends **actions** through the agent gateway;
-- counts against its human's **quotas** (concurrent agents, actions per minute, value moved per day);
-- is **labelled** as an agent to every other participant.
+- counts against its human's **quotas**, set by the world (concurrent agents, actions per minute, value moved per day);
+- carries the `agent` controller kind, visible to every client.
 
 ### 3.2 How it fits the server mesh
 
@@ -112,10 +112,9 @@ flowchart LR
 
 ## 5. Open questions
 
-1. **Cross-world sanctions:** opt-in federation scope for per-world identifiers, or none at all?
-2. **Default policy:** which privileges need A2 vs A3 by default?
-3. **Agents in competitive play:** forbidden by default in ranked modes, or allowed and labelled?
-4. **Agent quotas:** defaults per responsible human (concurrent agents, action rate, value moved).
+1. ~~Cross-world sanctions~~ — decided: voluntary federations only ([D-007](decisions.md#d-007--cross-world-sanctions-only-within-voluntary-federations)).
+2. ~~Default policy~~ — decided: the table of §2.1 ([D-006](decisions.md#d-006--default-identity-levels-a2-for-scarce-privileges-a3-to-take-value-out)).
+3. ~~Agents in competitive play~~ and 4. ~~agent quotas~~ — decided: each world's rules, not osage's; osage provides the mechanisms ([D-008](decisions.md#d-008--game-rules-for-agents-belong-to-each-world-not-to-osage)).
 5. **Provider diversity:** minimum set of adapters before phase 2 (nexlink for A2, an eID wallet for A3?).
 
 ## Licences
