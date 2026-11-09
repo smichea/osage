@@ -17,6 +17,21 @@ An open-source engine for large open worlds, built by a community of humans and 
 
 Neither a fork nor a rewrite from scratch: build on **Bevy + wgpu** for the world server and the native client, contribute upstream what belongs there, and write osage's own value where nothing open exists — **an open world protocol, content streaming in open formats (glTF, 3D Tiles), server meshing for seamless large worlds, fidelity tiers from headless agents to ray tracing, an agent interface, and world tools**. Details, architecture, module map and open decisions: [research/00-synthesis.md](research/00-synthesis.md).
 
+## Try the phase-1 skeleton
+
+A server-driven cube, replicated by the osage protocol v0 to three kinds of client.
+
+```sh
+cargo run -p osage-server                     # gateway + Bevy region on ws://127.0.0.1:7878
+cargo run -p osage-client                     # native Bevy client
+npm install && npm run build                  # TypeScript SDK and three.js client
+npm run dev -w @osage/client-three            # browser client (open the printed URL)
+node packages/sdk-ts/examples/watch.mjs       # headless observer printing the replication
+cargo test --workspace                        # end-to-end tests
+```
+
+Requirements: Rust ≥ 1.90, Node ≥ 22. Licences of each part: see [Licence](#licence).
+
 ## Research
 
 | Document | Question |

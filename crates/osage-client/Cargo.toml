@@ -1,0 +1,19 @@
+# SPDX-FileCopyrightText: The osage contributors
+# SPDX-License-Identifier: LicenseRef-osage-AGPL-3.0-or-later-with-exceptions
+
+[package]
+name = "osage-client"
+description = "osage native client (Bevy), phase 1"
+license-file = "../../LICENSE-EXCEPTIONS.md"
+publish = false
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+
+[dependencies]
+osage-sdk.workspace = true
+anyhow.workspace = true
+bevy = { workspace = true, features = ["3d"] }
+crossbeam-channel.workspace = true
+tokio.workspace = true

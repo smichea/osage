@@ -1,0 +1,190 @@
+// SPDX-FileCopyrightText: The osage contributors
+// SPDX-License-Identifier: LicenseRef-osage-AGPL-3.0-or-later-with-exceptions
+
+//! osage native client, phase 1: renders what a world replicates.
+//! `osage-client [ws://127.0.0.1:7878]`
+
+use std::{collections::HashMap, thread};
+
+use bevy::prelude::*;
+use crossbeam_channel::{Receiver, Sender};
+use osage_sdk::{
+    World, WorldEvent, components, connect, hello, types,
+    v0::{Role, ServerMessage, Tier, Welcome},
+};
+
+/// What the network thread hands to the Bevy app.
+enum Net {
+    Welcome(Box<Welcome>),
+    Message(Box<ServerMessage>),
+    Closed(String),
+}
+
+#[derive(Resource)]
+struct NetInbox(Receiver<Net>);
+
+#[derive(Resource, Default)]
+struct Replica {
+    world: Option<World>,
+    objects: HashMap<u64, Entity>,
+}
+
+#[derive(Resource)]
+struct CubeAssets {
+    mesh: Handle<Mesh>,
+    material: Handle<StandardMaterial>,
+}
+
+fn main() {
+    let url = std::env::args()
+        .nth(1)
+        .unwrap_or_else(|| "ws://127.0.0.1:7878".to_owned());
+    let (tx, rx) = crossbeam_channel::unbounded();
+    thread::Builder::new()
+        .name("osage-net".to_owned())
+        .spawn(move || network(url, tx))
+        .expect("network thread");
+
+    App::new()
+        .add_plugins(DefaultPlugins.set(WindowPlugin {
+            primary_window: Some(Window {
+                title: "osage — connecting…".to_owned(),
+                ..default()
+            }),
+            ..default()
+        }))
+        .insert_resource(NetInbox(rx))
+        .init_resource::<Replica>()
+        .add_systems(Startup, setup)
+        .add_systems(Update, replicate)
+        .run();
+}
+
+fn network(url: String, tx: Sender<Net>) {
+    let runtime = tokio::runtime::Runtime::new().expect("network runtime");
+    runtime.block_on(async move {
+        let hello = hello("osage-client", env!("CARGO_PKG_VERSION"), Role::Player, Tier::T3High);
+        let mut session = match connect(&url, hello).await {
+            Ok(session) => session,
+            Err(error) => return drop(tx.send(Net::Closed(error.to_string()))),
+        };
+        let _ = tx.send(Net::Welcome(Box::new(session.welcome().clone())));
+        while let Some(message) = session.next_message().await {
+            match message {
+                Ok(message) => {
+                    if tx.send(Net::Message(Box::new(message))).is_err() {
+                        return;
+                    }
+                }
+                Err(error) => return drop(tx.send(Net::Closed(error.to_string()))),
+            }
+        }
+        let _ = tx.send(Net::Closed("connection closed".to_owned()));
+    });
+}
+
+fn setup(mut commands: Commands, mut meshes: ResMut<Assets<Mesh>>, mut materials: ResMut<Assets<StandardMaterial>>) {
+    commands.spawn((
+        Camera3d::default(),
+        Transform::from_xyz(6.0, 5.0, 8.0).looking_at(Vec3::new(0.0, 0.5, 0.0), Vec3::Y),
+    ));
+    commands.spawn((
+        DirectionalLight {
+            illuminance: 8_000.0,
+            ..default()
+        },
+        Transform::from_xyz(4.0, 8.0, 3.0).looking_at(Vec3::ZERO, Vec3::Y),
+    ));
+    commands.spawn((
+        Mesh3d(meshes.add(Plane3d::default().mesh().size(12.0, 12.0))),
+        MeshMaterial3d(materials.add(Color::srgb(0.13, 0.15, 0.18))),
+    ));
+    commands.insert_resource(CubeAssets {
+        mesh: meshes.add(Cuboid::new(1.0, 1.0, 1.0)),
+        material: materials.add(Color::srgb(0.25, 0.73, 0.31)),
+    });
+}
+
+fn replicate(
+    mut commands: Commands,
+    inbox: Res<NetInbox>,
+    mut replica: ResMut<Replica>,
+    assets: Res<CubeAssets>,
+    mut windows: Query<&mut Window>,
+    mut transforms: Query<&mut Transform>,
+) {
+    for net in inbox.0.try_iter() {
+        match net {
+            Net::Welcome(welcome) => {
+                let descriptor = welcome.world.clone().unwrap_or_default();
+                if let Some(source) = &descriptor.source_offer {
+                    // AGPL section 13: tell the user where the server's source is.
+                    info!("server source: {} ({})", source.url, source.version);
+                }
+                for mut window in &mut windows {
+                    window.title = format!("osage — {}", descriptor.name);
+                }
+                replica.world = Some(World::new(&welcome));
+            }
+            Net::Closed(reason) => {
+                warn!("disconnected: {reason}");
+                for mut window in &mut windows {
+                    window.title = format!("osage — disconnected ({reason})");
+                }
+            }
+            Net::Message(message) => {
+                let Some(world) = replica.world.as_mut() else { continue };
+                let events = world.apply(&message);
+                for event in events {
+                    match event {
+                        WorldEvent::Entered(entity) => {
+                            let world = replica.world.as_ref().expect("welcomed");
+                            let content: Option<components::ContentRef> = world.get(entity, types::CONTENT_REF);
+                            if content.is_none_or(|c| c.uri != types::BUILTIN_CUBE) {
+                                continue;
+                            }
+                            let transform = to_bevy(world.get(entity, types::TRANSFORM));
+                            let object = commands
+                                .spawn((
+                                    Mesh3d(assets.mesh.clone()),
+                                    MeshMaterial3d(assets.material.clone()),
+                                    transform,
+                                ))
+                                .id();
+                            replica.objects.insert(entity, object);
+                        }
+                        WorldEvent::Changed { entity, type_name } if type_name == types::TRANSFORM => {
+                            let (Some(&object), Some(world)) = (replica.objects.get(&entity), replica.world.as_ref())
+                            else {
+                                continue;
+                            };
+                            if let Ok(mut transform) = transforms.get_mut(object) {
+                                *transform = to_bevy(world.get(entity, types::TRANSFORM));
+                            }
+                        }
+                        WorldEvent::Left(entity) => {
+                            if let Some(object) = replica.objects.remove(&entity) {
+                                commands.entity(object).despawn();
+                            }
+                        }
+                        WorldEvent::Changed { .. } => {}
+                    }
+                }
+            }
+        }
+    }
+}
+
+fn to_bevy(transform: Option<components::Transform>) -> Transform {
+    let Some(t) = transform else {
+        return Transform::default();
+    };
+    let vec3 = |v: Option<osage_sdk::math::Vec3>, default: Vec3| v.map_or(default, |v| Vec3::new(v.x, v.y, v.z));
+    Transform {
+        translation: vec3(t.translation, Vec3::ZERO),
+        rotation: t
+            .rotation
+            .map_or(Quat::IDENTITY, |q| Quat::from_xyzw(q.x, q.y, q.z, q.w)),
+        scale: vec3(t.scale, Vec3::ONE),
+    }
+}

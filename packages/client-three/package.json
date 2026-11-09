@@ -1,0 +1,21 @@
+{
+  "name": "@osage/client-three",
+  "version": "0.1.0",
+  "private": true,
+  "description": "osage browser client (three.js), phase 1 demo",
+  "license": "SEE LICENSE IN ../../LICENSES/LicenseRef-osage-AGPL-3.0-or-later-with-exceptions.txt",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit -p tsconfig.json && vite build"
+  },
+  "dependencies": {
+    "@osage/sdk": "0.1.0",
+    "three": "^0.187.0"
+  },
+  "devDependencies": {
+    "@types/three": "^0.187.0",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.6"
+  }
+}

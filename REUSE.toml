@@ -22,3 +22,16 @@ path = ["spec/**.md"]
 precedence = "aggregate"
 SPDX-FileCopyrightText = "The osage contributors"
 SPDX-License-Identifier = "Community-Spec-1.0"
+
+# JavaScript workspace and package configuration
+[[annotations]]
+path = ["package.json", "package-lock.json", "packages/client-three/package.json", "packages/client-three/tsconfig.json"]
+precedence = "aggregate"
+SPDX-FileCopyrightText = "The osage contributors"
+SPDX-License-Identifier = "LicenseRef-osage-AGPL-3.0-or-later-with-exceptions"
+
+[[annotations]]
+path = ["packages/sdk-ts/package.json", "packages/sdk-ts/tsconfig.json", "packages/sdk-ts/buf.gen.yaml", "packages/sdk-ts/.gitignore"]
+precedence = "aggregate"
+SPDX-FileCopyrightText = "The osage contributors"
+SPDX-License-Identifier = "MIT OR Apache-2.0"
