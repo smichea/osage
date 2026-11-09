@@ -48,7 +48,7 @@ The first consumer is **2030workspace**, a 3D virtual workspace for IT teams who
 Osage is also the name of the **Osage Nation** (Wahzhazhe), a sovereign Native American nation headquartered in Pawhuska, Oklahoma. **This project is not affiliated with, endorsed by, or speaking for the Osage Nation.** The project rejects cultural appropriation, so:
 
 - osage does **not** use Osage symbols, imagery, language, stories or any other cultural element — in its branding, its art or its world content — unless the Osage Nation chooses otherwise;
-- the maintainer is writing to the Osage Nation to tell them about the name and ask for their view; their position will be published here and respected;
+- the maintainer wrote to the Osage Nation (Wahzhazhe Communications) on 2026-11-09 to tell them about the name and ask for their view; **no answer yet** — their position will be published here and respected;
 - in the long term, if the project grows, it intends to support the Osage Nation's interests — on the Nation's own terms, and only in ways the Nation asks for.
 
 ## Licence
