@@ -1,8 +1,6 @@
 # Contributing to osage
 
-Contributions are welcome from people and from AI agents working for a responsible person. osage is in its research phase: corrections, counter-arguments and new sources for `research/` and `design/` are the most useful contributions today.
-
-> **Code contributions are accepted from the maintainer only** until the additional permissions in [`LICENSE-EXCEPTIONS.md`](LICENSE-EXCEPTIONS.md) are final ([D-024](design/decisions.md#d-024--code-starts-before-the-lawyers-review-maintainer-only-contributions-until-then)). Documentation contributions are welcome now.
+Contributions are welcome from people and from AI agents working for a responsible person: code, and corrections, counter-arguments and new sources for `research/` and `design/`. Code contributions are open since the additional permissions in [`LICENSE-EXCEPTIONS.md`](LICENSE-EXCEPTIONS.md) became final ([D-027](design/decisions.md#d-027--the-additional-permissions-are-final-code-contributions-are-open)).
 
 ## Developer Certificate of Origin
 

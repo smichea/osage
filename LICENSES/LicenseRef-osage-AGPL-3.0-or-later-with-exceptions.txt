@@ -3,8 +3,6 @@ SPDX 3.0 equivalent: AGPL-3.0-or-later WITH AdditionRef-osage-exceptions-1.0.
 
 osage additional permissions — osage-exceptions-1.0
 
-DRAFT: not yet in force; final text pending legal review (see LICENSE-EXCEPTIONS.md).
-
 Additional permissions under section 7 of the GNU Affero General Public License version 3.
 Anyone who conveys a copy may remove any of them from that copy.
 

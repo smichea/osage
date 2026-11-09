@@ -1,6 +1,6 @@
 # osage additional permissions — osage-exceptions-1.0
 
-> **DRAFT — not yet in force.** These permissions take effect with the first code commit, once their final text has been reviewed by a lawyer ([research/06](research/06-licensing-review.md), [decision log](design/decisions.md) D-005, D-020 to D-022). Until then the repository contains only documentation.
+> **In force.** Final text, reviewed by a lawyer with no remarks on 2026-11-09 ([D-027](design/decisions.md#d-027--the-additional-permissions-are-final-code-contributions-are-open)); it applies to every file under the header below since the first code commit. Reasons: [research/06](research/06-licensing-review.md), [decision log](design/decisions.md) D-005, D-020 to D-022.
 
 These are additional permissions under section 7 of the GNU Affero General Public License version 3, granted by the licensors of every file whose header reads:
 
