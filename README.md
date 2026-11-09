@@ -10,6 +10,7 @@ An open-source engine for large open worlds, built by a community of humans and 
 2. **Any hardware** — scales down to old and low-end machines.
 3. **Modular** — many teams of humans and AI agents work in parallel on the engine and on all its tools.
 4. **Any client joins the same world** — native, browser, mobile, low-end, headless AI agents, each at its own fidelity.
+5. **Trust built in from day one** — account uniqueness against fraud and bad players, and accountable AI agents (each with a responsible human), both through open, pluggable interfaces.
 
 ## Direction in one paragraph
 
@@ -27,6 +28,12 @@ Neither a fork nor a rewrite from scratch: build on **Bevy + wgpu** for the worl
 
 Each survey is a dated snapshot (2026-11-09) with sources; claims that could not be verified are marked as such.
 
+## Design notes
+
+| Note | Subject |
+|---|---|
+| [01 — Accounts, uniqueness and the agent mesh](design/01-accounts-and-agents.md) | Per-world identifiers and assurance levels against fraud and ban evasion; AI agents as accountable participants of the server mesh. Reference adapters: [nexlink](https://www.nexlink.ph) (socially validated identities) and [ameesh](https://ameesh.org) (accountable teams of humans and AI agents) — neither is imposed |
+
 ## First world
 
 The first consumer is **2030workspace**, a 3D virtual workspace for IT teams whose web client runs on three.js. It is the target of the phase-1 vertical slice: one world joined at the same time by a browser client, a native client and an AI agent.
@@ -34,6 +41,6 @@ The first consumer is **2030workspace**, a 3D virtual workspace for IT teams who
 ## Licence
 
 - **Code:** [GNU AGPL-3.0](LICENSE).
-- **Documentation** (including `research/`): [CC BY-SA 4.0](LICENSE-DOCS).
+- **Documentation** (including `research/` and `design/`): [CC BY-SA 4.0](LICENSE-DOCS).
 
 Whether the protocol specification and client SDKs should use a permissive licence, so that any client can join an opage world, is an [open decision](research/00-synthesis.md#open-decisions).
