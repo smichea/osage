@@ -1,7 +1,7 @@
 # 00 — Synthesis and recommendation
 
 Date: **2026-11-09**. Built on the four surveys in this folder:
-[01 native engines](01-native-engines.md) · [02 browser clients](02-web-engines-webgpu.md) · [03 world server & replication](03-world-server-replication.md) · [04 rendering vs RAGE](04-rendering-vs-rage.md).
+[01 native engines](01-native-engines.md) · [02 browser clients](02-web-engines-webgpu.md) · [03 world server & replication](03-world-server-replication.md) · [04 rendering vs RAGE](04-rendering-vs-rage.md) · [05 mixed-reality standards](05-mixed-reality-standards.md).
 
 ## Goals
 
@@ -12,6 +12,7 @@ Date: **2026-11-09**. Built on the four surveys in this folder:
 | G3 | **Modular**, so many teams of humans and AI agents can work in parallel on the engine and all its tools |
 | G4 | **Any kind of client joins the same world**: native, browser, mobile, low-end, headless AI agents — each at its own fidelity |
 | G5 | **Trust from day one**: account uniqueness against fraud, ban evasion and bad players; AI agents as accountable participants — through pluggable providers, none imposed ([design/01](../design/01-accounts-and-agents.md)) |
+| G6 | **Mixed worlds**: real places captured and geo-anchored, real devices as live entities, AR participants, in-world actions driving real devices safely — OpenDeviceDB as the reference device layer, none imposed ([design/02](../design/02-mixed-worlds-and-devices.md)) |
 
 First consumer: **2030workspace**, a 3D virtual workspace for IT teams, today a three.js web client.
 
@@ -59,6 +60,8 @@ flowchart LR
   L["Low-end / old hardware<br/>GLES3 · WebGL2 · tier T1"] --> RB
   AM["Agent mesh — ameesh or other<br/>AI agents, tier T0"] --> AG --> RB
   IP["Identity providers — nexlink, eID wallets, …<br/>(verifiable credentials)"] -. attestations .-> ID
+  BR["Device bridge — real devices<br/>OpenDeviceDB components, safety envelope"] -->|"role: bridge"| RB
+  AR["AR client in a real place<br/>georeferenced pose"] --> RA
   ID --- RA
   ID --- RB
   N -. streams .-> CS
@@ -72,6 +75,7 @@ flowchart LR
 - **Agents are clients like any other**, through a gateway that serves interest-managed structured observations and accepts actions (exposed over MCP). **Every agent has a responsible human**, counts against that human's quotas, is labelled as an agent, and needs a human approval receipt for irreversible or costly actions. The agent mesh is a pluggable interface; **ameesh** is the reference implementation.
 - **Account uniqueness is built in from v0**: the world receives, from an identity provider, a stable **per-world identifier** and an assurance level — never civil identity. Uniqueness gates only scarce privileges (trade, ownership, ranked play, running agents); sanctions bind to the identifier, so ban evasion requires a new unique identity. Providers plug in through verifiable credentials; **nexlink** (socially validated identities) is the reference A2 provider, none is imposed.
 - Details: [design/01 — Accounts, uniqueness and the agent mesh](../design/01-accounts-and-agents.md).
+- **Mixed worlds are built in from v0**: `device` entities typed by OpenDeviceDB contracts, with source timestamps and staleness; a **device bridge** next to the devices that has the last word on safety; physical actuation as a gated action through verified adapters only; optional georeference per world or region; AR clients. Details: [design/02 — Mixed worlds, real devices and OpenDeviceDB](../design/02-mixed-worlds-and-devices.md).
 
 ## Fidelity tiers — same world, same source content
 
@@ -100,6 +104,8 @@ Each module is a crate or package with a `SPEC.md`, a conformance test suite and
 | `opage-client-web` | TypeScript client SDK + three.js renderer; Bevy-wasm build | three.js, 3DTilesRendererJS |
 | `opage-agent` | agent gateway: observation/action schema, MCP server, delegation credentials, quotas, gated actions; `AgentMesh` interface | Bevy Remote Protocol; **ameesh** adapter (reference) |
 | `opage-identity` | `IdentityProvider` interface, verifiable-credential verification, per-world identifiers, privilege policy, sanctions | W3C VC / DID, OpenID4VP; **nexlink** adapter (reference) |
+| `opage-bridge` | device bridge: WASM runtime for device components, safety envelope, local policy; alternative backends (Home Assistant, Matter, MQTT, ROS 2, MAVLink) | **OpenDeviceDB** components and contracts (reference) |
+| `opage-geo` | georeference, Earth frames, AR anchors, AR clients | 3D Tiles, large-world coordinates |
 | `opage-sim` | crowds and traffic at scale | **new** (Unreal Mass is the reference) |
 | `opage-tools` | world editor, inspectors, profiling, PCG — as protocol/BRP clients | **new** |
 | `opage-denoise` (long term) | open ML denoiser / upscaler | **new** — the state of the art is proprietary |
@@ -107,7 +113,7 @@ Each module is a crate or package with a `SPEC.md`, a conformance test suite and
 ## Roadmap (phases, no dates)
 
 0. **Research** (this folder), then ADRs: architecture, protocol v0, licence policy.
-1. **Vertical slice — one world, three kinds of client.** One region server (Bevy headless + replicon/lightyear), protocol v0 over WebTransport with WebSocket fallback. The 2030workspace web client, a Bevy native client and an MCP agent join the same world. The world's static content is exported as glTF tiles; the server handles dynamic entities (avatars, moving objects). **Identity and agent interfaces are in protocol v0**: a local test provider and test mesh for development, plus the first nexlink and ameesh adapters; the agent joins with a delegation from a uniqueness-attested human.
+1. **Vertical slice — one world, three kinds of client.** One region server (Bevy headless + replicon/lightyear), protocol v0 over WebTransport with WebSocket fallback. The 2030workspace web client, a Bevy native client and an MCP agent join the same world. The world's static content is exported as glTF tiles; the server handles dynamic entities (avatars, moving objects). **Identity and agent interfaces are in protocol v0**: a local test provider and test mesh for development, plus the first nexlink and ameesh adapters; the agent joins with a delegation from a uniqueness-attested human. **One real device joins through a bridge** (read-only sensors first, then one low-risk pre-approved actuation such as a light).
 2. **Scale.** Streaming + HLOD through 3D Tiles, multi-region handoff, tiers T1–T3, CI performance budgets.
 3. **High end.** Upstream work on Bevy meshlets, Solari and GPU-driven rendering; open-world rendering plugins; crowds/traffic; open denoiser research.
 4. **Tools.** World editor, PCG, content pipeline at scale.
@@ -126,3 +132,4 @@ Each module is a crate or package with a `SPEC.md`, a conformance test suite and
    - **Consoles are out of reach** for an AGPL project (NDA SDKs).
 4. **State store:** own persistence behind the region servers (recommended) vs SpacetimeDB (technically close, but BSL 1.1 until each version converts to AGPL four years later).
 5. **Accounts and agents:** default privilege policy (A2 vs A3), cross-world sanctions, agents in competitive play, agent quotas — see [design/01 §5](../design/01-accounts-and-agents.md#5-open-questions).
+6. **Mixed worlds:** actuation risk classes, first contracts aligned with OpenDeviceDB (and a joint continuous-control contract), component licences, privacy defaults — see [design/02 §9](../design/02-mixed-worlds-and-devices.md#9-open-questions).

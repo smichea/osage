@@ -11,6 +11,7 @@ An open-source engine for large open worlds, built by a community of humans and 
 3. **Modular** — many teams of humans and AI agents work in parallel on the engine and on all its tools.
 4. **Any client joins the same world** — native, browser, mobile, low-end, headless AI agents, each at its own fidelity.
 5. **Trust built in from day one** — account uniqueness against fraud and bad players, and accountable AI agents (each with a responsible human), both through open, pluggable interfaces.
+6. **Mixed worlds** — real places, real devices and people in AR share the world with virtual content; in-world actions can drive real devices, with safety enforced next to the device.
 
 ## Direction in one paragraph
 
@@ -25,6 +26,7 @@ Neither a fork nor a rewrite from scratch: build on **Bevy + wgpu** for the worl
 | [02 — Browser clients](research/02-web-engines-webgpu.md) | WebGPU coverage, three.js, Babylon.js, PlayCanvas, Bevy/Godot on the web |
 | [03 — World server & replication](research/03-world-server-replication.md) | SpacetimeDB, replicon/lightyear, metaverse platforms, transports, content standards, agents |
 | [04 — Rendering vs RAGE](research/04-rendering-vs-rage.md) | What GTA 6 does, open renderers and libraries, ranked gaps |
+| [05 — Mixed-reality standards](research/05-mixed-reality-standards.md) | WebXR/OpenXR, georeferencing, capturing real places, Matter/Home Assistant/ROS 2/MAVLink, WoT, safety and privacy rules |
 
 Each survey is a dated snapshot (2026-11-09) with sources; claims that could not be verified are marked as such.
 
@@ -33,6 +35,7 @@ Each survey is a dated snapshot (2026-11-09) with sources; claims that could not
 | Note | Subject |
 |---|---|
 | [01 — Accounts, uniqueness and the agent mesh](design/01-accounts-and-agents.md) | Per-world identifiers and assurance levels against fraud and ban evasion; AI agents as accountable participants of the server mesh. Reference adapters: [nexlink](https://www.nexlink.ph) (socially validated identities) and [ameesh](https://ameesh.org) (accountable teams of humans and AI agents) — neither is imposed |
+| [02 — Mixed worlds, real devices and OpenDeviceDB](design/02-mixed-worlds-and-devices.md) | Real places captured and geo-anchored, real devices as live entities, AR participants, safe physical actuation through a local device bridge. Reference device layer: [OpenDeviceDB](https://opendevicedb.org) (open directory of 29,000+ devices, composable WASM components, MCP server) — not imposed |
 
 ## First world
 
