@@ -128,8 +128,8 @@ flowchart LR
 
 1. ~~Risk classes for actuation~~ — decided: classes defined by osage, read-only by default, the owner decides ([D-009](decisions.md#d-009--physical-actuation-risk-classes-read-only-by-default-the-owner-decides)).
 2. ~~Where the contracts live~~ — decided: in OpenDeviceDB ([D-011](decisions.md#d-011--device-contracts-live-in-opendevicedb)). Still to write there: images, calibration, measurements, 3D scenes, actions, and the joint continuous-control contract for drones and robots.
-3. **Component licences:** OpenDeviceDB ports keep their upstream licences; which are compatible with being loaded by an AGPL-3.0 bridge (sandboxed WASM modules exchanging messages) needs a review.
-4. **Embedding compositions:** can an OpenDeviceDB composition be placed in a world as is, or through an osage wrapper?
+3. ~~Component licences~~ — decided: AGPL bridge, AGPL-compatible components in process, others out of process ([D-014](decisions.md#d-014--agpl-device-bridge-incompatible-components-run-out-of-process)).
+4. ~~Embedding compositions~~ — decided: outputs as entity components, optional isolated UI panel, placement manifest ([D-015](decisions.md#d-015--opendevicedb-compositions-in-a-world-outputs-as-entities-optional-panel)).
 5. ~~Privacy defaults~~ — decided: no policy imposed by osage, mechanisms only ([D-010](decisions.md#d-010--privacy-of-real-cameras-and-captured-places-osage-imposes-nothing)).
 6. ~~WoT TD export~~ — decided: OpenDeviceDB publishes the Thing Descriptions ([D-012](decisions.md#d-012--opendevicedb-publishes-wot-thing-descriptions)).
 

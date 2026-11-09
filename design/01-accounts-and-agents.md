@@ -115,7 +115,7 @@ flowchart LR
 1. ~~Cross-world sanctions~~ — decided: voluntary federations only ([D-007](decisions.md#d-007--cross-world-sanctions-only-within-voluntary-federations)).
 2. ~~Default policy~~ — decided: the table of §2.1 ([D-006](decisions.md#d-006--default-identity-levels-a2-for-scarce-privileges-a3-to-take-value-out)).
 3. ~~Agents in competitive play~~ and 4. ~~agent quotas~~ — decided: each world's rules, not osage's; osage provides the mechanisms ([D-008](decisions.md#d-008--game-rules-for-agents-belong-to-each-world-not-to-osage)).
-5. **Provider diversity:** minimum set of adapters before phase 2 (nexlink for A2, an eID wallet for A3?).
+5. ~~Provider diversity~~ — decided: a generic verifier, proven with nexlink (A2) and an EUDI wallet or national eID (A3) before phase 2 ([D-013](decisions.md#d-013--identity-a-generic-verifier-tested-with-two-different-providers-before-phase-2)).
 
 ## Licences
 

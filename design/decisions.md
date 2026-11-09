@@ -119,3 +119,32 @@ Date: 2026-11-09
 - **Why:** the mapping lives where the contracts are defined (D-011), and every WoT tool benefits, not only osage.
 - **Alternatives:** conversion inside the osage bridge (only osage benefits); no WoT for now.
 - **Closes:** [design/02 §9](02-mixed-worlds-and-devices.md#9-open-questions) question 6.
+
+## D-013 — Identity: a generic verifier, tested with two different providers before phase 2
+
+Date: 2026-11-09
+
+- **Decision:** osage implements a **generic verifier of W3C Verifiable Credentials presented with OpenID for Verifiable Presentations** (the mechanism); **each world chooses the issuers it trusts** (the policy). Before phase 2 it is proven with **two providers of different natures** plus a local test provider: **nexlink** for A2 (as a verifiable-credential issuer, or through an adapter) and a **European Digital Identity Wallet or a national eID** for A3.
+- **Why:** an interface tested against a single provider ends up shaped by it, which would contradict "reference, not imposed" ([design/01](01-accounts-and-agents.md)).
+- **To study:** how to derive a stable per-world identifier from an EUDI wallet presentation without the world ever seeing civil identity.
+- **Alternatives:** generic verifier + nexlink only (A3 later, risk of a nexlink-shaped interface); a direct nexlink API adapter first (fastest for phase 1, throw-away work later).
+- **Closes:** [design/01 §5](01-accounts-and-agents.md#5-open-questions) question 5.
+
+## D-014 — AGPL device bridge; incompatible components run out of process
+
+Date: 2026-11-09
+
+- **Decision:** the device bridge stays **AGPL-3.0**. Components whose licence is compatible with an AGPL host — MIT, BSD, Apache-2.0, LGPL, GPL-3.0, GPL-2.0-or-later, MPL-2.0 without an "incompatible with secondary licenses" notice — run **inside** the bridge's WASM runtime. Others — notably **GPL-2.0-only**, EPL-1.0, licences with non-commercial clauses — run **in a separate process** that speaks OpenDeviceDB contracts with the bridge. The bridge chooses the mode from the licence (SPDX expression) declared in each OpenDeviceDB component manifest.
+- **Why:** a WASM module executed in the bridge and calling its host functions is, conservatively, one combined work with it (untested legally for WASM); an arm's-length exchange of contract messages between separate processes keeps the programs separate, so no device is excluded for licence reasons.
+- **Caveat:** to be confirmed by the same legal review as D-005.
+- **Alternatives:** a permissive bridge (MIT OR Apache-2.0: loads any free component, but a vendor could embed it in a closed hub without publishing improvements, including to the safety envelope); AGPL bridge loading compatible components only (devices with GPL-2.0-only code stay out).
+- **Closes:** [design/02 §9](02-mixed-worlds-and-devices.md#9-open-questions) question 3.
+
+## D-015 — OpenDeviceDB compositions in a world: outputs as entities, optional panel
+
+Date: 2026-11-09
+
+- **Decision:** a composition **runs where its data is** — on the owner's bridge, or in a content-pipeline worker if the world operator allows it. Its **typed outputs** (scene revisions, measurements, video…) become **components of world entities**, usable by every client and agent. Clients able to show web UI (browser, desktop) may also display the composition's **interface components in an isolated panel**. The link is a small **placement manifest**: composition id, version and digest, anchor in the world, port → entity-component mapping, permissions.
+- **Why:** every client tier and every agent gets the results; third-party UI code only runs where it can be isolated; OpenDeviceDB's existing interfaces are not lost.
+- **Alternatives:** outputs as entities only (no third-party UI code at all, but OpenDeviceDB's interfaces are lost); the full composition as a world object (richest, but third-party code in every client and nothing for low tiers or agents).
+- **Closes:** [design/02 §9](02-mixed-worlds-and-devices.md#9-open-questions) question 4.
