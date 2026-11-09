@@ -17,13 +17,13 @@ use std::{
 use anyhow::{Result, anyhow};
 use crossbeam_channel::Sender;
 use futures_util::{SinkExt, StreamExt};
-use osage_credentials::DelegationKey;
+use osage_credentials::{DelegatedRole, DelegationKey};
 use osage_proto::{
     PROTOCOL_VERSION,
-    actions::DELEGATE_AGENT,
+    actions::{DELEGATE_AGENT, DELEGATE_BRIDGE},
     v0::{
-        ActionRequest, ActionResult, ActionStatus, ClientMessage, Goodbye, GoodbyeReason, ServerMessage,
-        SessionIdentity, SourceOffer, Welcome, WorldDescriptor, client_message, server_message,
+        ActionRequest, ActionResult, ActionStatus, AssuranceLevel, ClientMessage, Goodbye, GoodbyeReason,
+        ServerMessage, SessionIdentity, SourceOffer, Welcome, WorldDescriptor, client_message, server_message,
     },
 };
 use prost::Message as _;
@@ -36,8 +36,10 @@ use tokio_tungstenite::{accept_async, tungstenite::Message};
 
 use crate::{
     Config, RegionInput,
-    identity::{Identity, Refusal, Registry, credential_level, privileges},
-    now_us, schema,
+    identity::{Identity, Refusal, Registry, SessionKind, credential_level, privileges},
+    now_us,
+    region::Member,
+    schema,
 };
 
 const HELLO_TIMEOUT: Duration = Duration::from_secs(5);
@@ -47,7 +49,7 @@ pub(crate) struct Gateway {
     pub(crate) config: Config,
     region: Sender<RegionInput>,
     next_session: AtomicU64,
-    next_agent: AtomicU64,
+    next_delegation: AtomicU64,
     pub(crate) delegations: DelegationKey,
     pub(crate) registry: Registry,
 }
@@ -60,7 +62,7 @@ pub async fn serve(listener: StdTcpListener, config: Config, region: Sender<Regi
         config,
         region,
         next_session: AtomicU64::new(1),
-        next_agent: AtomicU64::new(1),
+        next_delegation: AtomicU64::new(1),
         registry: Registry::default(),
     });
     loop {
@@ -109,12 +111,13 @@ impl Gateway {
 
         let (out, mut outbox) = mpsc::unbounded_channel();
         out.send(self.welcome(session, &identity))?;
-        self.region.send(RegionInput::Join {
-            session,
+        let member = Member {
+            kind: identity.kind,
             role: hello.role(),
             controller: identity.controller(),
-            out: out.clone(),
-        })?;
+            owner: identity.responsible.clone().unwrap_or_default(),
+        };
+        self.region.send(RegionInput::Join { session, member, out: out.clone() })?;
         tracing::info!(session, who = %identity.per_world_id, client = ?hello.client, "session joined");
 
         let writer = tokio::spawn(async move {
@@ -125,11 +128,16 @@ impl Gateway {
             }
         });
 
-        while let Some(frame) = source.next().await {
-            let Message::Binary(bytes) = frame? else { continue };
-            match ClientMessage::decode(bytes)?.message {
+        // Whatever ends the connection — Goodbye, close, network error or a
+        // malformed frame — the region is told the session left.
+        while let Some(Ok(frame)) = source.next().await {
+            let Message::Binary(bytes) = frame else { continue };
+            let Ok(message) = ClientMessage::decode(bytes) else { break };
+            match message.message {
                 Some(client_message::Message::Goodbye(_)) => break,
-                Some(client_message::Message::ActionRequest(request)) if request.action == DELEGATE_AGENT => {
+                Some(client_message::Message::ActionRequest(request))
+                    if [DELEGATE_AGENT, DELEGATE_BRIDGE].contains(&request.action.as_str()) =>
+                {
                     self.delegate(&identity, &request, &out);
                 }
                 Some(message) => self.region.send(RegionInput::Message { session, message })?,
@@ -144,15 +152,29 @@ impl Gateway {
         Ok(())
     }
 
-    /// Issues a delegation for one agent to a human allowed to run agents.
+    /// Issues a delegation to a human: for one agent (needs `run_agents`, A2
+    /// by default) or for one device bridge (needs an account, A1).
     fn delegate(&self, identity: &Identity, request: &ActionRequest, out: &UnboundedSender<ServerMessage>) {
         let mut result = ActionResult { request_id: request.request_id, ..Default::default() };
-        let level = credential_level(identity.level);
-        match level {
-            Some(level) if privileges(identity.level).iter().any(|p| p == "run_agents") && !identity.is_agent() => {
-                let agent =
-                    format!("agent-{}.{}", self.next_agent.fetch_add(1, Ordering::Relaxed), identity.per_world_id);
-                match self.delegations.issue(&agent, &identity.per_world_id, level, DELEGATION_LIFETIME) {
+        let (role, prefix, allowed, requirement) = if request.action == DELEGATE_AGENT {
+            let allowed = privileges(identity.level).iter().any(|p| p == "run_agents");
+            (DelegatedRole::Agent, "agent", allowed, "running agents requires the run_agents privilege (A2 by default)")
+        } else {
+            (
+                DelegatedRole::Bridge,
+                "bridge",
+                identity.level >= AssuranceLevel::A1,
+                "bridging devices requires an account (A1)",
+            )
+        };
+        match credential_level(identity.level) {
+            Some(level) if allowed && identity.kind == SessionKind::Human => {
+                let holder = format!(
+                    "{prefix}-{}.{}",
+                    self.next_delegation.fetch_add(1, Ordering::Relaxed),
+                    identity.per_world_id
+                );
+                match self.delegations.issue(role, &holder, &identity.per_world_id, level, DELEGATION_LIFETIME) {
                     Ok(token) => {
                         result.status = ActionStatus::Ok.into();
                         result.result = token.into_bytes();
@@ -165,7 +187,7 @@ impl Gateway {
             }
             _ => {
                 result.status = ActionStatus::Rejected.into();
-                result.reason = "running agents requires the run_agents privilege (A2 by default)".to_owned();
+                result.reason = requirement.to_owned();
             }
         }
         let _ = out.send(ServerMessage { message: Some(server_message::Message::ActionResult(result)) });

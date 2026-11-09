@@ -12,11 +12,11 @@ mod mcp;
 
 use std::{collections::HashMap, sync::Arc, time::Duration};
 
-use anyhow::{Context, Result, bail};
+use anyhow::{Context, Result};
 use osage_sdk::{
     DELEGATE_AGENT, SessionSender, World, components, connect, hello, intent, types,
-    v0::{ActionRequest, ActionStatus, Role, Tier, Welcome, client_message, server_message},
-    with_delegation, with_identity,
+    v0::{Role, Tier, Welcome},
+    with_delegation,
 };
 use prost_reflect::{DescriptorPool, DynamicMessage, MessageDescriptor};
 use serde_json::{Value, json};
@@ -136,26 +136,5 @@ impl Agent {
 /// Connects as the human holding `credential` and asks the world for an agent
 /// delegation (the `osage.delegate_agent` action).
 pub async fn request_delegation(url: &str, credential: &str) -> Result<String> {
-    let hello = with_identity(
-        hello("osage-agent-mcp", env!("CARGO_PKG_VERSION"), Role::Observer, Tier::T0Headless),
-        credential,
-    );
-    let mut session = connect(url, hello).await?;
-    let request = ActionRequest { request_id: 1, action: DELEGATE_AGENT.to_owned(), ..Default::default() };
-    session.send(client_message::Message::ActionRequest(request)).await?;
-    let result = tokio::time::timeout(Duration::from_secs(10), async {
-        while let Some(message) = session.next_message().await {
-            if let Some(server_message::Message::ActionResult(result)) = message?.message {
-                return Ok(result);
-            }
-        }
-        bail!("connection closed before the delegation")
-    })
-    .await
-    .context("no answer from the world")??;
-    if result.status() != ActionStatus::Ok {
-        bail!("delegation refused: {}", result.reason);
-    }
-    let _ = session.send(client_message::Message::Goodbye(Default::default())).await;
-    Ok(String::from_utf8(result.result)?)
+    osage_sdk::request_delegation(url, credential, DELEGATE_AGENT).await
 }

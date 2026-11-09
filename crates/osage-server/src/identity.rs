@@ -10,7 +10,7 @@ use std::{
     sync::Mutex,
 };
 
-use osage_credentials::{Level, verify_identity};
+use osage_credentials::{DelegatedRole, Level, verify_identity};
 use osage_proto::{
     components::{Controller, ControllerKind},
     v0::{AssuranceLevel, GoodbyeReason, Hello, Role, credentials::Credential},
@@ -21,18 +21,27 @@ use crate::{Config, gateway::Gateway};
 /// Why a session is refused, sent in its Goodbye.
 pub struct Refusal(pub GoodbyeReason, pub String);
 
+/// What kind of participant a session is.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SessionKind {
+    Human,
+    Agent,
+    Bridge,
+}
+
 #[derive(Clone, Debug)]
 pub struct Identity {
+    pub kind: SessionKind,
     pub per_world_id: String,
     pub level: AssuranceLevel,
     pub issuer: String,
-    /// For an agent: the per-world identifier of its responsible human.
+    /// For an agent: its responsible human; for a bridge: the devices' owner.
     pub responsible: Option<String>,
 }
 
 impl Identity {
     pub fn is_agent(&self) -> bool {
-        self.responsible.is_some()
+        self.kind == SessionKind::Agent
     }
 
     /// Anonymous guests get generated identifiers and are never deduplicated.
@@ -85,41 +94,48 @@ impl Gateway {
     pub(crate) fn authenticate(&self, session: u64, hello: &Hello) -> Result<Identity, Refusal> {
         let unauthenticated = |detail: &str| Refusal(GoodbyeReason::Unauthenticated, detail.to_owned());
         let credential = hello.credentials.as_ref().and_then(|c| c.credential.as_ref());
-        let agent = hello.role() == Role::Agent;
-        match credential {
-            None | Some(Credential::Anonymous(_)) if !agent => Ok(Identity {
+        match (hello.role(), credential) {
+            (Role::Agent, Some(Credential::Delegation(token))) => self.delegated(token, DelegatedRole::Agent),
+            (Role::Agent, _) => Err(unauthenticated("agents join with a delegation from their responsible human")),
+            (Role::Bridge, Some(Credential::Bridge(token))) => self.delegated(token, DelegatedRole::Bridge),
+            (Role::Bridge, _) => Err(unauthenticated("bridges join with a delegation from the devices' owner")),
+            (_, None | Some(Credential::Anonymous(_))) => Ok(Identity {
+                kind: SessionKind::Human,
                 per_world_id: format!("guest-{session}"),
                 level: AssuranceLevel::A0,
                 issuer: String::new(),
                 responsible: None,
             }),
-            Some(Credential::VerifiablePresentation(token)) if !agent => {
+            (_, Some(Credential::VerifiablePresentation(token))) => {
                 let token = std::str::from_utf8(token).map_err(|_| unauthenticated("credential is not UTF-8"))?;
                 let verified = verify_identity(token, &self.config.world_name, &self.config.trusted_issuers)
                     .map_err(|error| unauthenticated(&format!("credential refused: {error}")))?;
                 Ok(Identity {
+                    kind: SessionKind::Human,
                     per_world_id: verified.per_world_id,
                     level: assurance(verified.level),
                     issuer: verified.issuer,
                     responsible: None,
                 })
             }
-            Some(Credential::Delegation(token)) if agent => {
-                let token = std::str::from_utf8(token).map_err(|_| unauthenticated("delegation is not UTF-8"))?;
-                let claims = self
-                    .delegations
-                    .verify(token)
-                    .map_err(|error| unauthenticated(&format!("delegation refused: {error}")))?;
-                Ok(Identity {
-                    per_world_id: claims.sub,
-                    level: assurance(claims.level),
-                    issuer: self.config.world_name.clone(),
-                    responsible: Some(claims.responsible),
-                })
-            }
-            _ if agent => Err(unauthenticated("agents join with a delegation from their responsible human")),
-            _ => Err(unauthenticated("this credential kind is not supported yet")),
+            _ => Err(unauthenticated("this credential does not fit this role")),
         }
+    }
+
+    fn delegated(&self, token: &[u8], role: DelegatedRole) -> Result<Identity, Refusal> {
+        let unauthenticated = |detail: String| Refusal(GoodbyeReason::Unauthenticated, detail);
+        let token = std::str::from_utf8(token).map_err(|_| unauthenticated("delegation is not UTF-8".to_owned()))?;
+        let claims = self.delegations.verify(token).map_err(|e| unauthenticated(format!("delegation refused: {e}")))?;
+        if claims.role != role {
+            return Err(unauthenticated(format!("this delegation is for a {:?}", claims.role)));
+        }
+        Ok(Identity {
+            kind: if role == DelegatedRole::Agent { SessionKind::Agent } else { SessionKind::Bridge },
+            per_world_id: claims.sub,
+            level: assurance(claims.level),
+            issuer: self.config.world_name.clone(),
+            responsible: Some(claims.responsible),
+        })
     }
 }
 
@@ -155,7 +171,7 @@ impl Registry {
         if !identity.is_guest() && connected.identities.contains(&identity.per_world_id) {
             return Err(Refusal(GoodbyeReason::DuplicateSession, "this identity is already connected".to_owned()));
         }
-        if let Some(human) = &identity.responsible {
+        if let (true, Some(human)) = (identity.is_agent(), &identity.responsible) {
             let running = connected.agents_by_human.get(human).copied().unwrap_or(0);
             if running >= config.max_agents_per_human {
                 return Err(Refusal(
@@ -176,7 +192,7 @@ impl Drop for Admission<'_> {
     fn drop(&mut self) {
         let mut connected = self.registry.0.lock().expect("registry lock");
         connected.identities.remove(&self.identity.per_world_id);
-        if let Some(human) = &self.identity.responsible
+        if let (true, Some(human)) = (self.identity.is_agent(), &self.identity.responsible)
             && let Some(count) = connected.agents_by_human.get_mut(human)
         {
             *count = count.saturating_sub(1);

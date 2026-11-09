@@ -49,6 +49,13 @@ To let an AI agent harness use it, declare the MCP server, e.g. in a `.mcp.json`
 
 Tools: `world_info`, `observe` (entities and components as JSON, decoded from the world's own schemas), `move`.
 
+**A real device.** Mirror this machine's sensors (CPU temperature, battery — Linux, read-only) into the world:
+
+```sh
+export OSAGE_BRIDGE_DELEGATION=$(cargo run -q -p osage-bridge -- delegate --credential "$CRED")
+cargo run -q -p osage-bridge                      # observers, clients and agents now see the device and its readings
+```
+
 ## Research
 
 | Document | Question |

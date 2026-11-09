@@ -4847,6 +4847,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "osage-bridge"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "osage-credentials",
+ "osage-sdk",
+ "osage-server",
+ "prost",
+ "tokio",
+]
+
+[[package]]
 name = "osage-client"
 version = "0.1.0"
 dependencies = [

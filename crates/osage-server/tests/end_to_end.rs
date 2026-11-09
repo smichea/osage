@@ -162,3 +162,20 @@ async fn intents_for_entities_one_does_not_own_are_ignored() {
     drain(&mut alice_rx, &mut alice_world, Duration::from_millis(200)).await;
     assert_eq!(x_of(&alice_world, alices_avatar), before, "nobody but its owner moves an avatar");
 }
+
+#[tokio::test]
+async fn an_abrupt_disconnection_removes_the_avatar() {
+    let url = start_server();
+    let observer = connect(&url, hello("observer", "0", Role::Observer, Tier::T0Headless)).await.unwrap();
+    let (observer_welcome, _observer_sender, mut observer_rx) = observer.split();
+    let mut observed = World::new(&observer_welcome);
+
+    let player = connect(&url, hello("player", "0", Role::Player, Tier::T2Standard)).await.unwrap();
+    let me = player.welcome().identity.clone().unwrap().per_world_id;
+    drain(&mut observer_rx, &mut observed, Duration::from_millis(300)).await;
+    let avatar = observed.controlled_by(&me).expect("the observer sees the avatar");
+
+    drop(player); // no Goodbye: the TCP connection just goes away
+    let events = drain(&mut observer_rx, &mut observed, Duration::from_secs(2)).await;
+    assert!(events.contains(&WorldEvent::Left(avatar)), "the avatar leaves with its vanished player");
+}

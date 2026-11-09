@@ -25,4 +25,4 @@ tokio = { workspace = true, features = ["io-std", "io-util"] }
 
 [dev-dependencies]
 osage-credentials.workspace = true
-osage-server = { path = "../osage-server" }
+osage-server.workspace = true

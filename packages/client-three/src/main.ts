@@ -37,6 +37,8 @@ resize();
 const cubeGeometry = new THREE.BoxGeometry(1, 1, 1);
 const cubeMaterial = new THREE.MeshStandardMaterial({ color: "#3fb950", roughness: 0.4 });
 const avatarGeometry = new THREE.CapsuleGeometry(0.35, 1.1, 4, 12);
+const deviceGeometry = new THREE.CylinderGeometry(0.3, 0.3, 0.6, 24);
+const deviceMaterial = new THREE.MeshStandardMaterial({ color: "#a371f7", emissive: "#3b1f6b", roughness: 0.3 });
 const myMaterial = new THREE.MeshStandardMaterial({ color: "#58a6ff", roughness: 0.5 });
 const othersMaterial = new THREE.MeshStandardMaterial({ color: "#d29922", roughness: 0.5 });
 const meshes = new Map<bigint, THREE.Object3D>();
@@ -44,6 +46,13 @@ const meshes = new Map<bigint, THREE.Object3D>();
 /** A built-in shape; avatars stand on their origin, so the capsule is lifted. */
 function builtin(uri: string, mine: boolean): THREE.Object3D | undefined {
   if (uri === types.builtinCube) return new THREE.Mesh(cubeGeometry, cubeMaterial);
+  if (uri === types.builtinDevice) {
+    const device = new THREE.Mesh(deviceGeometry, deviceMaterial);
+    device.position.y = 0.3;
+    const group = new THREE.Group();
+    group.add(device);
+    return group;
+  }
   if (uri !== types.builtinAvatar) return undefined;
   const group = new THREE.Group();
   const body = new THREE.Mesh(avatarGeometry, mine ? myMaterial : othersMaterial);
@@ -88,6 +97,25 @@ try {
     (source ? `server source: <a href="${escape(source.url)}" target="_blank" rel="noopener">${escape(source.url)}</a> (${escape(source.version)})` : "");
 
   const world = new World(session.welcome);
+
+  // Real devices and their latest readings, with their age: an old value must
+  // never look current (design/02 M1).
+  const devicesPanel = document.createElement("div");
+  hud.appendChild(devicesPanel);
+  setInterval(() => {
+    const rows: string[] = [];
+    for (const entity of world.entities()) {
+      const device = world.get(entity, types.device, components.DeviceSchema);
+      if (!device) continue;
+      const readings = world.get(entity, types.measurements, components.MeasurementsSchema)?.values ?? [];
+      const values = readings.map((m) => {
+        const age = Math.max(0, Date.now() / 1000 - Number(m.sourceTimeUs) / 1e6);
+        return `${escape(m.name)} ${m.value.toFixed(1)} ${escape(m.unit)} <small>(${age.toFixed(0)} s ago)</small>`;
+      });
+      rows.push(`<b>${escape(device.name)}</b> · owner ${escape(device.ownerPerWorldId)}<br>${values.join(" · ")}`);
+    }
+    devicesPanel.innerHTML = rows.length ? `<hr>${rows.join("<br>")}` : "";
+  }, 500);
   session.onMessage((message) => {
     for (const event of world.apply(message)) {
       if (event.kind === "entered") {

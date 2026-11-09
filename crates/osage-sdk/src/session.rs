@@ -9,8 +9,8 @@ use futures_util::{
 use osage_proto::{
     PROTOCOL_VERSION,
     v0::{
-        Anonymous, Capabilities, ClientInfo, ClientMessage, Component, Credentials, Hello, Intent, Role, ServerMessage,
-        Tier, Welcome, client_message, credentials, server_message,
+        ActionRequest, ActionStatus, Anonymous, Capabilities, ClientInfo, ClientMessage, Component, Credentials,
+        DeviceState, Hello, Intent, Role, ServerMessage, Tier, Welcome, client_message, credentials, server_message,
     },
 };
 use prost::Message as _;
@@ -48,6 +48,49 @@ pub fn with_delegation(mut hello: Hello, delegation: &str) -> Hello {
     hello.credentials =
         Some(Credentials { credential: Some(credentials::Credential::Delegation(delegation.as_bytes().to_vec())) });
     hello
+}
+
+/// `hello` for a device bridge presenting the delegation of the devices' owner.
+pub fn with_bridge(mut hello: Hello, delegation: &str) -> Hello {
+    hello.role = Role::Bridge.into();
+    hello.credentials =
+        Some(Credentials { credential: Some(credentials::Credential::Bridge(delegation.as_bytes().to_vec())) });
+    hello
+}
+
+/// Connects as the human holding the identity `credential`, sends `action`
+/// (`DELEGATE_AGENT` or `DELEGATE_BRIDGE`) and returns the delegation token.
+pub async fn request_delegation(url: &str, credential: &str, action: &str) -> Result<String> {
+    let hello =
+        with_identity(hello("osage-sdk", env!("CARGO_PKG_VERSION"), Role::Observer, Tier::T0Headless), credential);
+    let mut session = connect(url, hello).await?;
+    let request = ActionRequest { request_id: 1, action: action.to_owned(), ..Default::default() };
+    session.send(client_message::Message::ActionRequest(request)).await?;
+    let result = tokio::time::timeout(std::time::Duration::from_secs(10), async {
+        while let Some(message) = session.next_message().await {
+            if let Some(server_message::Message::ActionResult(result)) = message?.message {
+                return Ok(result);
+            }
+        }
+        bail!("connection closed before the delegation")
+    })
+    .await
+    .context("no answer from the world")??;
+    if result.status() != ActionStatus::Ok {
+        bail!("delegation refused: {}", result.reason);
+    }
+    let _ = session.send(client_message::Message::Goodbye(Default::default())).await;
+    Ok(String::from_utf8(result.result)?)
+}
+
+/// A `DeviceState` publishing `components` (type id, encoded value) of the
+/// bridge's device `local_id`.
+pub fn device_state(local_id: &str, components: Vec<(u32, Vec<u8>)>) -> client_message::Message {
+    client_message::Message::DeviceState(DeviceState {
+        local_id: local_id.to_owned(),
+        components: components.into_iter().map(|(r#type, value)| Component { r#type, value }).collect(),
+        removed: false,
+    })
 }
 
 /// An `Intent` carrying `value`, encoded as component type `type_id` of the

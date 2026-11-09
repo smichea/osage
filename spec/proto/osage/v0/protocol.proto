@@ -22,6 +22,8 @@ message ClientMessage {
     Subscribe subscribe = 4;
     Unsubscribe unsubscribe = 5;
     TimeSync time_sync = 6;
+    // From device bridges only (role bridge).
+    DeviceState device_state = 7;
     Goodbye goodbye = 15;
   }
 }
@@ -85,7 +87,8 @@ message Credentials {
     // to the agent's responsible human through the "osage.delegate_agent"
     // action.
     bytes delegation = 3;
-    // A credential binding a device bridge to its owner (design/02).
+    // A device bridge (design/02). v0: a delegation the world issued to the
+    // devices' owner through the "osage.delegate_bridge" action.
     bytes bridge = 4;
   }
 }
@@ -219,6 +222,20 @@ message StateDatagram {
 message TimeSync {
   uint64 client_time_us = 1;
   uint64 server_time_us = 2;
+}
+
+// ------------------------------------------------------------ device bridges
+
+// A bridge publishes or updates one of its devices (design/02). The bridge is
+// authoritative over its devices' state (M1): the world mirrors it. Allowed
+// component types: osage.device/1, osage.measurements/1, osage.transform/1,
+// osage.content_ref/1. The first state of a local_id creates the entity.
+message DeviceState {
+  // The bridge's own name for the device, stable while it is connected.
+  string local_id = 1;
+  repeated Component components = 2;
+  // The device is gone (unplugged, switched off…).
+  bool removed = 3;
 }
 
 // ---------------------------------------------------- intents and actions

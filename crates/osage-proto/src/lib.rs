@@ -33,6 +33,8 @@ pub mod actions {
     /// A human asks the world for a delegation for one agent; the token is in
     /// `ActionResult.result` (spec/README.md, "Credentials").
     pub const DELEGATE_AGENT: &str = "osage.delegate_agent";
+    /// A device owner asks the world for a delegation for one bridge.
+    pub const DELEGATE_BRIDGE: &str = "osage.delegate_bridge";
 }
 
 /// Names of the core component types and their message types.
@@ -43,10 +45,17 @@ pub mod types {
     pub const CONTENT_REF_MESSAGE: &str = "osage.components.v1.ContentRef";
     pub const CONTROLLER: &str = "osage.controller/1";
     pub const CONTROLLER_MESSAGE: &str = "osage.components.v1.Controller";
+    pub const DEVICE: &str = "osage.device/1";
+    pub const DEVICE_MESSAGE: &str = "osage.components.v1.Device";
+    /// Provisional, to be replaced by OpenDeviceDB's contract (opendevicedb#33).
+    pub const MEASUREMENTS: &str = "osage.measurements/1";
+    pub const MEASUREMENTS_MESSAGE: &str = "osage.components.v1.Measurements";
     pub const MOVE_INTENT: &str = "osage.move_intent/1";
     pub const MOVE_INTENT_MESSAGE: &str = "osage.components.v1.MoveIntent";
     /// Built-in unit cube, drawn by every client.
     pub const BUILTIN_CUBE: &str = "osage:builtin/cube";
     /// Built-in avatar shape (a capsule about 1.8 m tall), drawn by every client.
     pub const BUILTIN_AVATAR: &str = "osage:builtin/avatar";
+    /// Built-in marker of a real device, drawn by every client.
+    pub const BUILTIN_DEVICE: &str = "osage:builtin/device";
 }

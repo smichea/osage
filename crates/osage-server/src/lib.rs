@@ -14,7 +14,7 @@ use std::{collections::HashSet, net::TcpListener, thread, time::SystemTime};
 
 use anyhow::Result;
 use osage_credentials::TrustedIssuer;
-pub use osage_proto::actions::DELEGATE_AGENT;
+pub use osage_proto::actions::{DELEGATE_AGENT, DELEGATE_BRIDGE};
 
 pub use region::RegionInput;
 

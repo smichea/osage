@@ -103,14 +103,24 @@ pub fn verify_identity(token: &str, world: &str, trusted: &[TrustedIssuer]) -> R
 pub struct DelegationClaims {
     pub iss: String,
     pub aud: String,
-    /// The agent's per-world identifier.
+    /// The holder's per-world identifier (the agent or the bridge).
     pub sub: String,
     /// The per-world identifier of the responsible human.
     pub responsible: String,
     /// The responsible human's assurance level when the delegation was issued.
     pub level: Level,
+    /// What the delegation is for.
+    pub role: DelegatedRole,
     pub iat: u64,
     pub exp: u64,
+}
+
+/// What a delegation lets its holder be in the world.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum DelegatedRole {
+    Agent,
+    Bridge,
 }
 
 /// Issues and verifies delegations with the world's secret (HS256).
@@ -129,14 +139,22 @@ impl DelegationKey {
         }
     }
 
-    pub fn issue(&self, agent: &str, responsible: &str, level: Level, lifetime: Duration) -> Result<String> {
+    pub fn issue(
+        &self,
+        role: DelegatedRole,
+        holder: &str,
+        responsible: &str,
+        level: Level,
+        lifetime: Duration,
+    ) -> Result<String> {
         let iat = unix_now();
         let claims = DelegationClaims {
             iss: self.world.clone(),
             aud: self.world.clone(),
-            sub: agent.to_owned(),
+            sub: holder.to_owned(),
             responsible: responsible.to_owned(),
             level,
+            role,
             iat,
             exp: iat + lifetime.as_secs(),
         };
@@ -258,9 +276,10 @@ mod tests {
     #[test]
     fn delegations_are_bound_to_their_world() {
         let key = DelegationKey::new(WORLD, b"secret of the demo world");
-        let token = key.issue("agent-1", "alice@demo", Level::A2, HOUR).unwrap();
+        let token = key.issue(DelegatedRole::Agent, "agent-1", "alice@demo", Level::A2, HOUR).unwrap();
         let claims = key.verify(&token).unwrap();
         assert_eq!((claims.sub.as_str(), claims.responsible.as_str()), ("agent-1", "alice@demo"));
+        assert_eq!(claims.role, DelegatedRole::Agent);
         assert!(DelegationKey::new("another-world", b"secret of the demo world").verify(&token).is_err());
         assert!(DelegationKey::new(WORLD, b"another secret").verify(&token).is_err());
     }

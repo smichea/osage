@@ -21,7 +21,7 @@ message Transform {
 enum ContentKind {
   CONTENT_KIND_UNSPECIFIED = 0;
   // Shapes every client draws itself: "osage:builtin/cube",
-  // "osage:builtin/avatar".
+  // "osage:builtin/avatar", "osage:builtin/device".
   CONTENT_KIND_BUILTIN = 1;
   CONTENT_KIND_GLTF = 2;
   CONTENT_KIND_3DTILES = 3;
@@ -50,6 +50,51 @@ message MoveIntent {
   // Desired horizontal direction in world space; the server clamps its
   // length to 1 and ignores the vertical part.
   osage.math.v1.Vec3 direction = 1;
+}
+
+// Risk classes of a device function (D-009). A bridge ships read-only; only
+// the device's owner raises a class, never the world.
+enum RiskClass {
+  RISK_CLASS_UNSPECIFIED = 0;
+  RISK_CLASS_READ_ONLY = 1;
+  RISK_CLASS_PRE_APPROVED = 2;
+  RISK_CLASS_GATED = 3;
+  RISK_CLASS_ON_SITE_OPERATOR = 4;
+  RISK_CLASS_FORBIDDEN = 5;
+}
+
+message DeviceFunction {
+  string name = 1;
+  RiskClass risk_class = 2;
+}
+
+// "osage.device/1" — a real device mirrored by a bridge (design/02).
+message Device {
+  string name = 1;
+  // OpenDeviceDB record id, when known (e.g. "lenovo/thinkpad-x1-carbon").
+  string opendevicedb_id = 2;
+  string owner_per_world_id = 3;
+  string bridge_per_world_id = 4;
+  repeated DeviceFunction functions = 5;
+}
+
+// One reading of a real sensor.
+message Measurement {
+  // e.g. "cpu_temperature", "battery_level".
+  string name = 1;
+  double value = 2;
+  // UCUM unit code, e.g. "Cel", "%".
+  string unit = 3;
+  // When the device measured it, and on which clock (design/02 M1): clients
+  // must never show an old value as current.
+  uint64 source_time_us = 4;
+  string clock_domain = 5;
+}
+
+// "osage.measurements/1" — latest readings of a device. PROVISIONAL: to be
+// replaced by OpenDeviceDB's measurement contract (opendevicedb#33, D-011).
+message Measurements {
+  repeated Measurement values = 1;
 }
 
 // "osage.controller/1" — who controls an entity (design/01 P5). A client

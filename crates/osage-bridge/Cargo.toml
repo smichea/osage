@@ -1,0 +1,22 @@
+# SPDX-FileCopyrightText: The osage contributors
+# SPDX-License-Identifier: LicenseRef-osage-AGPL-3.0-or-later-with-exceptions
+
+[package]
+name = "osage-bridge"
+description = "osage device bridge: mirrors real devices into a world (design/02)"
+license-file = "../../LICENSE-EXCEPTIONS.md"
+publish = false
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+
+[dependencies]
+osage-sdk.workspace = true
+anyhow.workspace = true
+prost.workspace = true
+tokio.workspace = true
+
+[dev-dependencies]
+osage-credentials.workspace = true
+osage-server.workspace = true

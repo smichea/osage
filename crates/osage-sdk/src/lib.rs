@@ -10,6 +10,13 @@
 mod session;
 mod world;
 
-pub use osage_proto::{PROTOCOL_VERSION, actions::DELEGATE_AGENT, components, math, types, v0};
-pub use session::{Session, SessionReceiver, SessionSender, connect, hello, intent, with_delegation, with_identity};
+pub use osage_proto::{
+    PROTOCOL_VERSION,
+    actions::{DELEGATE_AGENT, DELEGATE_BRIDGE},
+    components, math, types, v0,
+};
+pub use session::{
+    Session, SessionReceiver, SessionSender, connect, device_state, hello, intent, request_delegation, with_bridge,
+    with_delegation, with_identity,
+};
 pub use world::{TypeTable, World, WorldEvent};

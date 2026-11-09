@@ -51,6 +51,8 @@ struct Shapes {
     cube: Handle<Mesh>,
     cube_material: Handle<StandardMaterial>,
     avatar: Handle<Mesh>,
+    device: Handle<Mesh>,
+    device_material: Handle<StandardMaterial>,
     my_material: Handle<StandardMaterial>,
     others_material: Handle<StandardMaterial>,
 }
@@ -124,6 +126,8 @@ fn setup(mut commands: Commands, mut meshes: ResMut<Assets<Mesh>>, mut materials
         cube: meshes.add(Cuboid::new(1.0, 1.0, 1.0)),
         cube_material: materials.add(Color::srgb(0.25, 0.73, 0.31)),
         avatar: meshes.add(Capsule3d::new(0.35, 1.1)),
+        device: meshes.add(Cylinder::new(0.3, 0.6)),
+        device_material: materials.add(Color::srgb(0.64, 0.44, 0.97)),
         my_material: materials.add(Color::srgb(0.35, 0.65, 1.0)),
         others_material: materials.add(Color::srgb(0.82, 0.6, 0.13)),
     });
@@ -180,6 +184,17 @@ fn replicate(
                                 commands.entity(object).despawn();
                             }
                         }
+                        WorldEvent::Changed { entity, type_name } if type_name == types::MEASUREMENTS => {
+                            let Some(world) = replica.world.as_ref() else { continue };
+                            if let Some(readings) = world.get::<components::Measurements>(entity, types::MEASUREMENTS) {
+                                let shown: Vec<_> = readings
+                                    .values
+                                    .iter()
+                                    .map(|m| format!("{} {:.1} {}", m.name, m.value, m.unit))
+                                    .collect();
+                                debug!("device {entity}: {}", shown.join(", "));
+                            }
+                        }
                         WorldEvent::Changed { .. } => {}
                     }
                 }
@@ -214,6 +229,16 @@ fn spawn_object(commands: &mut Commands, replica: &Replica, shapes: &Shapes, ent
                     .id(),
             )
         }
+        types::BUILTIN_DEVICE => Some(
+            commands
+                .spawn((transform, Visibility::default()))
+                .with_child((
+                    Mesh3d(shapes.device.clone()),
+                    MeshMaterial3d(shapes.device_material.clone()),
+                    Transform::from_xyz(0.0, 0.3, 0.0),
+                ))
+                .id(),
+        ),
         _ => None,
     }
 }

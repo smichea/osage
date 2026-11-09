@@ -15,6 +15,7 @@ repository = "https://github.com/smichea/osage"
 osage-proto = { path = "crates/osage-proto" }
 osage-sdk = { path = "crates/osage-sdk" }
 osage-credentials = { path = "crates/osage-credentials" }
+osage-server = { path = "crates/osage-server" }
 anyhow = "1.0.104"
 bevy = { version = "0.20.1", default-features = false }
 crossbeam-channel = "0.5.17"

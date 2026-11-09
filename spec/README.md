@@ -28,4 +28,6 @@ Status: **v0, draft** — grows with the phase-1 vertical slice. Design and reas
 
 **Gateway refusals:** `UNAUTHENTICATED` (credential invalid, expired, wrong world or untrusted issuer), `DUPLICATE_SESSION` (the identity is already connected), `SANCTIONED` (the identity, or an agent's responsible human, is sanctioned in this world), `QUOTA` (e.g. too many agents for one human).
 
+**Bridges** (`Credentials.bridge`, design/02): a human with an account (A1) sends `ActionRequest { action: "osage.delegate_bridge" }` and gives the token to a bridge, which joins with role `bridge`. Only bridges send `DeviceState`; the world accepts only `osage.device/1`, `osage.measurements/1` (provisional, opendevicedb#33), `osage.transform/1` and `osage.content_ref/1` on devices, records the **authenticated** owner and bridge in `osage.device/1` whatever the bridge claims, and removes the devices when their bridge leaves. Every function is `READ_ONLY` in phase 1 (D-009).
+
 **Privileges by level** (default policy of D-006, changeable per world): A0 `visit`; A1 adds `persist`; A2 adds `trade`, `own`, `ranked`, `run_agents`; A3 adds `withdraw`, `moderate`, `vouch`.

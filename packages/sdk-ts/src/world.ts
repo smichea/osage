@@ -11,8 +11,12 @@ export const types = {
   contentRef: "osage.content_ref/1",
   controller: "osage.controller/1",
   moveIntent: "osage.move_intent/1",
+  device: "osage.device/1",
+  /** Provisional, to be replaced by OpenDeviceDB's contract (opendevicedb#33). */
+  measurements: "osage.measurements/1",
   builtinCube: "osage:builtin/cube",
   builtinAvatar: "osage:builtin/avatar",
+  builtinDevice: "osage:builtin/device",
 } as const;
 
 export type WorldEvent =
