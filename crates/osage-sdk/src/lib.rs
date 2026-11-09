@@ -12,11 +12,11 @@ mod world;
 
 pub use osage_proto::{
     PROTOCOL_VERSION,
-    actions::{DELEGATE_AGENT, DELEGATE_BRIDGE},
+    actions::{DELEGATE_AGENT, DELEGATE_BRIDGE, DEVICE_SET},
     components, math, types, v0,
 };
 pub use session::{
-    Session, SessionReceiver, SessionSender, connect, device_state, hello, intent, request_delegation, with_bridge,
-    with_delegation, with_identity,
+    Session, SessionReceiver, SessionSender, connect, device_command_result, device_set, device_state, hello, intent,
+    request_delegation, with_bridge, with_delegation, with_identity,
 };
 pub use world::{TypeTable, World, WorldEvent};

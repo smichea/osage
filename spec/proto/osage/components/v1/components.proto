@@ -78,6 +78,13 @@ message Device {
   repeated DeviceFunction functions = 5;
 }
 
+// Arguments of the "osage.device.set" action: set a function of a device to
+// a value (brightness, power on/off as 0/1…). Announced as "osage.device_set/1".
+message DeviceSet {
+  string function = 1;
+  double value = 2;
+}
+
 // One reading of a real sensor.
 message Measurement {
   // e.g. "cpu_temperature", "battery_level".

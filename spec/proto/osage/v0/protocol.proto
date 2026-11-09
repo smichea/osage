@@ -24,6 +24,7 @@ message ClientMessage {
     TimeSync time_sync = 6;
     // From device bridges only (role bridge).
     DeviceState device_state = 7;
+    DeviceCommandResult device_command_result = 8;
     Goodbye goodbye = 15;
   }
 }
@@ -38,6 +39,8 @@ message ServerMessage {
     StateDatagram state = 5;
     TimeSync time_sync = 6;
     ActionResult action_result = 7;
+    // To device bridges only.
+    DeviceCommand device_command = 8;
     Goodbye goodbye = 15;
   }
 }
@@ -236,6 +239,25 @@ message DeviceState {
   repeated Component components = 2;
   // The device is gone (unplugged, switched off…).
   bool removed = 3;
+}
+
+// To a bridge: run a function of one of its devices, after the world checked
+// its risk class (design/02 M3, D-009). The bridge has the last word: it
+// applies its local safety envelope and may still refuse (M2).
+message DeviceCommand {
+  uint64 command_id = 1;
+  string local_id = 2;
+  // As requested, e.g. "osage.device.set" with an osage.components.v1.DeviceSet.
+  string action = 3;
+  bytes arguments = 4;
+  // Who asked, for the bridge's own policy and logs.
+  string requester_per_world_id = 5;
+}
+
+message DeviceCommandResult {
+  uint64 command_id = 1;
+  ActionStatus status = 2;
+  string reason = 3;
 }
 
 // ---------------------------------------------------- intents and actions

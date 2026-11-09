@@ -35,6 +35,8 @@ pub mod actions {
     pub const DELEGATE_AGENT: &str = "osage.delegate_agent";
     /// A device owner asks the world for a delegation for one bridge.
     pub const DELEGATE_BRIDGE: &str = "osage.delegate_bridge";
+    /// Set a function of a device; arguments: `osage.components.v1.DeviceSet`.
+    pub const DEVICE_SET: &str = "osage.device.set";
 }
 
 /// Names of the core component types and their message types.
@@ -50,6 +52,8 @@ pub mod types {
     /// Provisional, to be replaced by OpenDeviceDB's contract (opendevicedb#33).
     pub const MEASUREMENTS: &str = "osage.measurements/1";
     pub const MEASUREMENTS_MESSAGE: &str = "osage.components.v1.Measurements";
+    pub const DEVICE_SET: &str = "osage.device_set/1";
+    pub const DEVICE_SET_MESSAGE: &str = "osage.components.v1.DeviceSet";
     pub const MOVE_INTENT: &str = "osage.move_intent/1";
     pub const MOVE_INTENT_MESSAGE: &str = "osage.components.v1.MoveIntent";
     /// Built-in unit cube, drawn by every client.

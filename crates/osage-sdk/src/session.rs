@@ -93,6 +93,27 @@ pub fn device_state(local_id: &str, components: Vec<(u32, Vec<u8>)>) -> client_m
     })
 }
 
+/// An `ActionRequest` setting `function` of device entity `target` to `value`
+/// (the `osage.device.set` action).
+pub fn device_set(request_id: u64, target: u64, function: &str, value: f64) -> client_message::Message {
+    let arguments = osage_proto::components::DeviceSet { function: function.to_owned(), value };
+    client_message::Message::ActionRequest(ActionRequest {
+        request_id,
+        target,
+        action: osage_proto::actions::DEVICE_SET.to_owned(),
+        arguments: arguments.encode_to_vec(),
+    })
+}
+
+/// A bridge's answer to a `DeviceCommand`.
+pub fn device_command_result(command_id: u64, status: ActionStatus, reason: &str) -> client_message::Message {
+    client_message::Message::DeviceCommandResult(osage_proto::v0::DeviceCommandResult {
+        command_id,
+        status: status.into(),
+        reason: reason.to_owned(),
+    })
+}
+
 /// An `Intent` carrying `value`, encoded as component type `type_id` of the
 /// session (see [`crate::TypeTable::id`]).
 pub fn intent(sequence: u64, entity: u64, type_id: u32, value: &impl prost::Message) -> client_message::Message {

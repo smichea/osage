@@ -15,6 +15,7 @@ pub const CONTROLLER: u32 = 3;
 pub const MOVE_INTENT: u32 = 4;
 pub const DEVICE: u32 = 5;
 pub const MEASUREMENTS: u32 = 6;
+pub const DEVICE_SET: u32 = 7;
 
 pub fn bundle() -> SchemaBundle {
     let component_type = |id, name: &str, message_type: &str, volatile| ComponentType {
@@ -32,6 +33,7 @@ pub fn bundle() -> SchemaBundle {
             component_type(MOVE_INTENT, types::MOVE_INTENT, types::MOVE_INTENT_MESSAGE, false),
             component_type(DEVICE, types::DEVICE, types::DEVICE_MESSAGE, false),
             component_type(MEASUREMENTS, types::MEASUREMENTS, types::MEASUREMENTS_MESSAGE, false),
+            component_type(DEVICE_SET, types::DEVICE_SET, types::DEVICE_SET_MESSAGE, false),
         ],
         url: String::new(),
         sha256: Vec::new(),

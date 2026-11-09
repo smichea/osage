@@ -8,7 +8,9 @@ use std::{fs, path::PathBuf};
 
 use osage_sdk::components::{Device, Measurement};
 
-use crate::{Sensor, measured_now, read_only};
+use std::ops::RangeInclusive;
+
+use crate::{Sensor, measured_now, pre_approved, read_only};
 
 /// Thermal zone types worth reporting as the CPU temperature, preferred first.
 const CPU_ZONES: &[&str] = &["x86_pkg_temp", "TCPU", "cpu-thermal", "acpitz"];
@@ -68,6 +70,51 @@ impl Sensor for ThisMachine {
             readings.push(measured_now("battery_level", percent, "%"));
         }
         readings
+    }
+}
+
+/// An LED of this machine (`/sys/class/leds/NAME`, e.g. a keyboard
+/// backlight) whose brightness its owner opened to the world (D-009): the
+/// owner's explicit opt-in is the pre-approval. Safe state: off.
+pub struct Led {
+    name: String,
+    dir: PathBuf,
+    max: f64,
+}
+
+impl Led {
+    pub fn open(name: &str) -> Result<Self, String> {
+        let dir = PathBuf::from("/sys/class/leds").join(name);
+        let max = read_number(dir.join("max_brightness")).ok_or_else(|| format!("no LED named {name}"))?;
+        Ok(Self { name: name.to_owned(), dir, max })
+    }
+}
+
+impl Sensor for Led {
+    fn local_id(&self) -> &str {
+        &self.name
+    }
+
+    fn describe(&self) -> Device {
+        Device { name: self.name.clone(), functions: vec![pre_approved("brightness")], ..Default::default() }
+    }
+
+    fn read(&mut self) -> Vec<Measurement> {
+        read_number(self.dir.join("brightness")).map(|b| measured_now("brightness", b, "1")).into_iter().collect()
+    }
+
+    fn allowed(&self, function: &str) -> Option<RangeInclusive<f64>> {
+        (function == "brightness").then_some(0.0..=self.max)
+    }
+
+    fn set(&mut self, _function: &str, value: f64) -> Result<(), String> {
+        fs::write(self.dir.join("brightness"), format!("{}", value.round() as u32)).map_err(|error| {
+            format!("cannot write {}: {error} (give your user write access, e.g. with a udev rule)", self.dir.display())
+        })
+    }
+
+    fn safe_state(&mut self) {
+        let _ = fs::write(self.dir.join("brightness"), "0");
     }
 }
 

@@ -69,6 +69,19 @@ fn tools() -> Value {
             "inputSchema": { "type": "object", "properties": {} }
         },
         {
+            "name": "set_device",
+            "description": "Set a function of a real device (e.g. brightness), only if its owner opened it to the world. The world checks the function's risk class and the device's bridge enforces its own safety limits; the answer says OK, REJECTED (with the reason), PENDING_APPROVAL or UNKNOWN.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "entity": { "type": "integer", "description": "the device entity, from observe" },
+                    "function": { "type": "string", "description": "a function listed in the device's osage.device/1" },
+                    "value": { "type": "number" }
+                },
+                "required": ["entity", "function", "value"]
+            }
+        },
+        {
             "name": "move",
             "description": "Walk your avatar in a horizontal direction for some seconds (at most 5), then stop. X is east, Z is south, metres.",
             "inputSchema": {
@@ -90,6 +103,14 @@ async fn call(agent: &Agent, params: &Value) -> Value {
     let outcome = match params.get("name").and_then(Value::as_str).unwrap_or_default() {
         "world_info" => Ok(agent.world_info()),
         "observe" => Ok(agent.observe().await),
+        "set_device" => match (
+            arguments.get("entity").and_then(Value::as_u64),
+            arguments.get("function").and_then(Value::as_str),
+            number("value"),
+        ) {
+            (Some(entity), Some(function), Some(value)) => agent.set_device(entity, function, value).await,
+            _ => Err(anyhow::anyhow!("set_device needs entity (integer), function (string) and value (number)")),
+        },
         "move" => match (number("x"), number("z"), number("seconds")) {
             (Some(x), Some(z), Some(seconds)) => agent.walk(x as f32, z as f32, seconds).await,
             _ => Err(anyhow::anyhow!("move needs numbers x, z and seconds")),

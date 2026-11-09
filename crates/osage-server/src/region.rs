@@ -13,11 +13,11 @@ use std::{
 use bevy::{app::ScheduleRunnerPlugin, prelude::*};
 use crossbeam_channel::Receiver;
 use osage_proto::{
-    components, math, types,
+    actions, components, math, types,
     v0::{
-        ActionResult, ActionStatus, Component as WireComponent, ComponentChanged, DeviceState, EntityComponent,
-        EntityEnter, EntityLeave, Intent, LeaveReason, Role, ServerMessage, StateDatagram, Tier, TimeSync,
-        client_message, server_message,
+        ActionRequest, ActionResult, ActionStatus, Component as WireComponent, ComponentChanged, DeviceCommand,
+        DeviceState, EntityComponent, EntityEnter, EntityLeave, Intent, LeaveReason, Role, ServerMessage,
+        StateDatagram, Tier, TimeSync, client_message, server_message,
     },
 };
 use prost::Message as _;
@@ -31,6 +31,9 @@ const AVATAR_SPEED: f32 = 4.0;
 const INTENT_LIFETIME: Duration = Duration::from_millis(500);
 /// Avatars stay inside this square around the origin, metres.
 const WORLD_HALF_SIZE: f32 = 20.0;
+/// A relayed device command without an answer after this long has an
+/// unknown outcome.
+const COMMAND_TIMEOUT: Duration = Duration::from_secs(5);
 /// Component types a bridge may publish on its devices.
 const BRIDGE_TYPES: [u32; 4] = [schema::DEVICE, schema::MEASUREMENTS, schema::TRANSFORM, schema::CONTENT_REF];
 
@@ -57,10 +60,11 @@ pub fn app(inbox: Receiver<RegionInput>, tick_hz: u32) -> App {
         .insert_resource(Inbox(inbox))
         .init_resource::<Sessions>()
         .init_resource::<Devices>()
+        .init_resource::<PendingCommands>()
         .init_resource::<EntityIds>()
         .init_resource::<Tick>()
         .add_systems(Startup, spawn_demo)
-        .add_systems(Update, (receive, orbit, walk, broadcast_state).chain());
+        .add_systems(Update, (receive, expire_commands, orbit, walk, broadcast_state).chain());
     app
 }
 
@@ -98,6 +102,18 @@ struct Published {
     entity: Entity,
     id: u64,
     components: BTreeMap<u32, Vec<u8>>,
+}
+
+/// Device commands relayed to bridges and not answered yet, by command id.
+/// Ids only grow, so a late answer can never match a newer command.
+#[derive(Resource, Default)]
+struct PendingCommands(HashMap<u64, PendingCommand>, u64);
+
+struct PendingCommand {
+    requester: u64,
+    request_id: u64,
+    bridge: u64,
+    deadline: Duration,
 }
 
 #[derive(Resource, Default)]
@@ -164,6 +180,7 @@ fn receive(
     inbox: Res<Inbox>,
     mut sessions: ResMut<Sessions>,
     mut devices: ResMut<Devices>,
+    mut commands_out: ResMut<PendingCommands>,
     mut ids: ResMut<EntityIds>,
     entities: Query<(&Replicated, &Transform, &Wire)>,
     mut owned: Query<(Entity, &Replicated, &Owner, &mut MoveInput)>,
@@ -193,6 +210,14 @@ fn receive(
             }
             RegionInput::Leave { session } => {
                 sessions.0.remove(&session);
+                commands_out.0.retain(|_, pending| {
+                    if pending.bridge != session {
+                        return true;
+                    }
+                    let reason = "the bridge left before answering: reconcile, do not retry blindly";
+                    sessions.reply(pending.requester, result(pending.request_id, ActionStatus::Unknown, reason));
+                    false
+                });
                 for (entity, id, owner, _) in &owned {
                     if owner.0 == session {
                         commands.entity(entity).despawn();
@@ -215,15 +240,19 @@ fn receive(
                 }
                 client_message::Message::TimeSync(sync) => sessions
                     .reply(session, server_message::Message::TimeSync(TimeSync { server_time_us: now_us(), ..sync })),
-                client_message::Message::ActionRequest(request) => sessions.reply(
-                    session,
-                    server_message::Message::ActionResult(ActionResult {
-                        request_id: request.request_id,
-                        status: ActionStatus::Rejected.into(),
-                        reason: "this world has no actions yet".to_owned(),
-                        ..default()
-                    }),
-                ),
+                client_message::Message::ActionRequest(request) if request.action == actions::DEVICE_SET => {
+                    device_action(session, request, &time, &sessions, &devices, &mut commands_out)
+                }
+                client_message::Message::ActionRequest(request) => {
+                    sessions.reply(session, result(request.request_id, ActionStatus::Rejected, "unknown action"))
+                }
+                // Only the bridge the command went to may answer it.
+                client_message::Message::DeviceCommandResult(done)
+                    if commands_out.0.get(&done.command_id).is_some_and(|p| p.bridge == session) =>
+                {
+                    let pending = commands_out.0.remove(&done.command_id).expect("checked");
+                    sessions.reply(pending.requester, result(pending.request_id, done.status(), &done.reason));
+                }
                 _ => {}
             },
         }
@@ -310,6 +339,97 @@ fn publish_device(
             devices.0.insert(key, Published { entity, id, components: incoming });
         }
     }
+}
+
+/// `osage.device.set` on a device: the world checks the function's risk class
+/// as declared by the device's bridge (D-009), then relays pre-approved
+/// commands to the bridge, which has the last word (design/02 M2).
+fn device_action(
+    session: u64,
+    request: ActionRequest,
+    time: &Time,
+    sessions: &Sessions,
+    devices: &Devices,
+    pending: &mut PendingCommands,
+) {
+    let refuse = |status, reason: &str| sessions.reply(session, result(request.request_id, status, reason));
+    let Some(((bridge, local_id), published)) = devices.0.iter().find(|(_, d)| d.id == request.target) else {
+        return refuse(ActionStatus::Rejected, "no such device");
+    };
+    let Ok(set) = components::DeviceSet::decode(request.arguments.as_slice()) else {
+        return refuse(ActionStatus::Rejected, "arguments must be an osage.device_set/1");
+    };
+    let device = published.components.get(&schema::DEVICE).and_then(|b| components::Device::decode(b.as_slice()).ok());
+    let class = device
+        .and_then(|d| d.functions.into_iter().find(|f| f.name == set.function))
+        .map_or(components::RiskClass::Unspecified, |f| f.risk_class());
+    match class {
+        components::RiskClass::PreApproved => {
+            pending.1 += 1;
+            let command_id = pending.1;
+            pending.0.insert(
+                command_id,
+                PendingCommand {
+                    requester: session,
+                    request_id: request.request_id,
+                    bridge: *bridge,
+                    deadline: time.elapsed() + COMMAND_TIMEOUT,
+                },
+            );
+            let requester =
+                sessions.0.get(&session).map(|c| c.member.controller.per_world_id.clone()).unwrap_or_default();
+            sessions.reply(
+                *bridge,
+                server_message::Message::DeviceCommand(DeviceCommand {
+                    command_id,
+                    local_id: local_id.clone(),
+                    action: request.action,
+                    arguments: request.arguments,
+                    requester_per_world_id: requester,
+                }),
+            );
+        }
+        components::RiskClass::Gated => sessions.reply(
+            session,
+            server_message::Message::ActionResult(ActionResult {
+                request_id: request.request_id,
+                status: ActionStatus::PendingApproval.into(),
+                reason: "waiting for the owner's approval receipt (not available in v0)".to_owned(),
+                approval_reference: format!("device-{}/{}", request.target, set.function),
+                ..default()
+            }),
+        ),
+        components::RiskClass::OnSiteOperator => {
+            refuse(ActionStatus::Rejected, "this function needs an on-site operator")
+        }
+        components::RiskClass::Unspecified => refuse(ActionStatus::Rejected, "this device has no such function"),
+        components::RiskClass::ReadOnly | components::RiskClass::Forbidden => {
+            refuse(ActionStatus::Rejected, "the owner has not opened this function")
+        }
+    }
+}
+
+/// A bridge that does not answer in time: the outcome is unknown (never
+/// retried blindly).
+fn expire_commands(time: Res<Time>, sessions: Res<Sessions>, mut pending: ResMut<PendingCommands>) {
+    let now = time.elapsed();
+    pending.0.retain(|_, command| {
+        if command.deadline > now {
+            return true;
+        }
+        let reason = "the bridge did not answer in time: reconcile, do not retry blindly";
+        sessions.reply(command.requester, result(command.request_id, ActionStatus::Unknown, reason));
+        false
+    });
+}
+
+fn result(request_id: u64, status: ActionStatus, reason: &str) -> server_message::Message {
+    server_message::Message::ActionResult(ActionResult {
+        request_id,
+        status: status.into(),
+        reason: reason.to_owned(),
+        ..default()
+    })
 }
 
 /// A device's components without its transform, which travels separately.

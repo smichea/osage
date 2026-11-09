@@ -14,8 +14,8 @@ use std::{collections::HashMap, sync::Arc, time::Duration};
 
 use anyhow::{Context, Result};
 use osage_sdk::{
-    DELEGATE_AGENT, SessionSender, World, components, connect, hello, intent, types,
-    v0::{Role, Tier, Welcome},
+    DELEGATE_AGENT, SessionSender, World, components, connect, device_set, hello, intent, types,
+    v0::{ActionResult, Role, Tier, Welcome, server_message},
     with_delegation,
 };
 use prost_reflect::{DescriptorPool, DynamicMessage, MessageDescriptor};
@@ -35,6 +35,8 @@ pub struct Agent {
     sender: Mutex<SessionSender>,
     messages: HashMap<String, MessageDescriptor>,
     sequence: std::sync::atomic::AtomicU64,
+    /// Action results the world sent, by request id.
+    results: Arc<Mutex<HashMap<u64, ActionResult>>>,
 }
 
 impl Agent {
@@ -57,13 +59,17 @@ impl Agent {
             .collect();
 
         let world = Arc::new(Mutex::new(World::new(&welcome)));
-        let replica = world.clone();
+        let results = Arc::new(Mutex::new(HashMap::new()));
+        let (replica, answers) = (world.clone(), results.clone());
         tokio::spawn(async move {
             while let Some(Ok(message)) = receiver.next_message().await {
+                if let Some(server_message::Message::ActionResult(result)) = &message.message {
+                    answers.lock().await.insert(result.request_id, result.clone());
+                }
                 replica.lock().await.apply(&message);
             }
         });
-        Ok(Self { welcome, world, sender: Mutex::new(sender), messages, sequence: Default::default() })
+        Ok(Self { welcome, world, sender: Mutex::new(sender), messages, sequence: Default::default(), results })
     }
 
     fn me(&self) -> &str {
@@ -122,6 +128,28 @@ impl Agent {
         let world = self.world.lock().await;
         let position = world.get::<components::Transform>(avatar, types::TRANSFORM).and_then(|t| t.translation);
         Ok(json!({ "entity": avatar, "position": position.map(|p| json!({ "x": p.x, "y": p.y, "z": p.z })) }))
+    }
+
+    /// `set_device`: sets a function of a real device, if its owner opened it.
+    /// The world checks the risk class, the device's bridge its local envelope.
+    pub async fn set_device(&self, entity: u64, function: &str, value: f64) -> Result<Value> {
+        let request_id = self.sequence.fetch_add(1, std::sync::atomic::Ordering::Relaxed) + 1;
+        self.sender.lock().await.send(device_set(request_id, entity, function, value)).await?;
+        let result = tokio::time::timeout(Duration::from_secs(10), async {
+            loop {
+                if let Some(result) = self.results.lock().await.remove(&request_id) {
+                    return result;
+                }
+                tokio::time::sleep(Duration::from_millis(20)).await;
+            }
+        })
+        .await
+        .context("the world did not answer")?;
+        Ok(json!({
+            "status": result.status().as_str_name(),
+            "reason": result.reason,
+            "approval_reference": result.approval_reference,
+        }))
     }
 
     fn decode(&self, type_name: &str, bytes: &[u8]) -> Value {
