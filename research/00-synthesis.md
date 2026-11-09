@@ -112,7 +112,7 @@ Each module is a crate or package with a `SPEC.md`, a conformance test suite and
 
 ## Roadmap (phases, no dates)
 
-0. **Research** (this folder), then ADRs: architecture, protocol v0, licence policy.
+0. **Research** (this folder), then ADRs: architecture, protocol v0, licence policy. *Done 2026-11-09: [ADR-0001](../design/adr/0001-architecture.md), [ADR-0002](../design/adr/0002-protocol-v0.md), licence policy in D-003, D-005, D-014 (legal review pending).*
 1. **Vertical slice — one world, three kinds of client.** One region server (Bevy headless + replicon/lightyear), protocol v0 over WebTransport with WebSocket fallback. The 2030workspace web client, a Bevy native client and an MCP agent join the same world. The world's static content is exported as glTF tiles; the server handles dynamic entities (avatars, moving objects). **Identity and agent interfaces are in protocol v0**: a local test provider and test mesh for development, plus the first nexlink and ameesh adapters; the agent joins with a delegation from a uniqueness-attested human. **One real device joins through a bridge** (read-only sensors first, then one low-risk pre-approved actuation such as a light).
 2. **Scale.** Streaming + HLOD through 3D Tiles, multi-region handoff, tiers T1–T3, CI performance budgets.
 3. **High end.** Upstream work on Bevy meshlets, Solari and GPU-driven rendering; open-world rendering plugins; crowds/traffic; open denoiser research.

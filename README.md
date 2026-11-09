@@ -32,6 +32,8 @@ Each survey is a dated snapshot (2026-11-09) with sources; claims that could not
 
 ## Design notes
 
+Architecture decision records: [ADR-0001 — Architecture](design/adr/0001-architecture.md) · [ADR-0002 — Protocol v0](design/adr/0002-protocol-v0.md). All decisions: [decision log](design/decisions.md).
+
 | Note | Subject |
 |---|---|
 | [01 — Accounts, uniqueness and the agent mesh](design/01-accounts-and-agents.md) | Per-world identifiers and assurance levels against fraud and ban evasion; AI agents as accountable participants of the server mesh. Reference adapters: [nexlink](https://www.nexlink.ph) (socially validated identities) and [ameesh](https://ameesh.org) (accountable teams of humans and AI agents) — neither is imposed |
