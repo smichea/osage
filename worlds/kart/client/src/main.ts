@@ -87,10 +87,14 @@ try {
 
   const source = session.welcome.world?.sourceOffer;
   // AGPL section 13: show where the server's Corresponding Source is.
-  $("status").innerHTML =
-    `world <b>${escape(session.welcome.world?.name ?? "")}</b> · you are ${escape(me)} · via ${session.transport}<br>` +
-    `drive: ↑ ↓ ← → or WASD · drift: Space or Shift (hold through a bend, release for a mini-turbo) · gamepad works too<br>` +
-    (source ? `server source: <a href="${escape(source.url)}" target="_blank" rel="noopener">${escape(source.url)}</a> (${escape(source.version)})` : "");
+  const sourceLink = source
+    ? `<a href="${escape(source.url)}" target="_blank" rel="noopener">${input.touchScreen ? "server source" : escape(source.url)}</a> (${escape(source.version)})`
+    : "";
+  $("status").innerHTML = input.touchScreen
+    ? `${escape(me)} · via ${session.transport} · ${sourceLink}<br>hold DRIFT through bends, release for a turbo`
+    : `world <b>${escape(session.welcome.world?.name ?? "")}</b> · you are ${escape(me)} · via ${session.transport}<br>` +
+      `drive: ↑ ↓ ← → or WASD · drift: Space or Shift (hold through a bend, release for a mini-turbo) · gamepad works too<br>` +
+      (source ? `server source: ${sourceLink}` : "");
 
   const race = (): Race | undefined => {
     for (const entity of world.entities()) {

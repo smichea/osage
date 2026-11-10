@@ -4,11 +4,11 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <title>osage kart</title>
     <style>
       html, body { margin: 0; height: 100%; overflow: hidden; background: #87b5e0; color: #fff; font: 15px system-ui, sans-serif; }
-      canvas { display: block; }
+      canvas { display: block; touch-action: none; }
       .panel { position: fixed; padding: 8px 12px; background: #0d1117b0; border-radius: 10px; line-height: 1.45; }
       #race { top: 12px; left: 12px; font-size: 18px; }
       #race b { font-size: 34px; }
@@ -23,6 +23,26 @@
       .dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 6px; }
       .gauge { display: inline-block; width: 120px; height: 8px; background: #ffffff33; border-radius: 4px; overflow: hidden; vertical-align: middle; }
       .gauge i { display: block; height: 100%; }
+      /* Touch screens: a steering pad on the left, drift and brake on the right. */
+      #touch { position: fixed; inset: 0; pointer-events: none; }
+      #touch > div { position: absolute; bottom: max(4vh, env(safe-area-inset-bottom)); pointer-events: auto; touch-action: none; user-select: none; -webkit-user-select: none;
+        display: flex; align-items: center; justify-content: center; font-weight: 800; letter-spacing: 1px; background: #0d111766; border: 2px solid #ffffff66; }
+      #touch > div.held { background: #ffffff55; }
+      #pad { left: max(3vw, env(safe-area-inset-left)); width: min(42vw, 360px); height: max(22vh, 90px); border-radius: 999px; }
+      #knob { width: 60px; height: 60px; border-radius: 50%; background: #ffffffcc; pointer-events: none; }
+      #drift { right: max(3vw, env(safe-area-inset-right)); width: min(24vw, 190px); height: max(22vh, 90px); border-radius: 24px; }
+      #brake { right: calc(max(3vw, env(safe-area-inset-right)) + min(24vw, 190px) + 12px); width: min(15vw, 110px); height: max(15vh, 64px); border-radius: 20px; }
+      .touch .panel { font-size: 11px; padding: 4px 8px; line-height: 1.35; }
+      .touch #race b { font-size: 22px; }
+      .touch #board { min-width: 0; }
+      #rotate { display: none; }
+      @media (orientation: portrait) {
+        .touch #rotate { display: block; position: fixed; top: 40%; width: 100%; text-align: center; pointer-events: none; }
+        .touch #rotate span { background: #0d1117cc; padding: 6px 12px; border-radius: 8px; }
+      }
+      .touch #speed { bottom: calc(max(4vh, env(safe-area-inset-bottom)) + max(22vh, 90px) + 10px); }
+      .touch #status { bottom: auto; top: 8px; left: 50%; transform: translateX(-50%); font-size: 10px; max-width: 34vw; text-align: center; }
+      .touch #lights { font-size: 80px; }
     </style>
   </head>
   <body>
@@ -32,6 +52,7 @@
     <div id="status" class="panel"></div>
     <div id="lights"></div>
     <div id="banner"></div>
+    <div id="rotate"><span>turn your phone sideways ↻</span></div>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

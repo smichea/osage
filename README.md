@@ -71,6 +71,8 @@ npm run dev -w @osage/kart-client              # open the printed URL: the race 
 
 Drive with the arrows or WASD, drift with Space or Shift: hold it through a bend and release it for a mini-turbo (blue, then orange sparks). A gamepad works too. `?debug` shows the prediction diagnostics.
 
+**On a phone** on the same Wi-Fi, the left thumb steers on a pad, the right one holds DRIFT or BRAKE, and the kart accelerates by itself. Serve on the local network — `cargo run --release -p osage-kart-server -- --listen 0.0.0.0:7878 --webtransport 0.0.0.0:7879` and `npm run dev -w @osage/kart-client -- --host` — open the "Network" URL Vite prints, and let the firewall accept TCP 5173 and 7878 (and UDP 7879) from the local network. A page served over plain HTTP from a LAN address is not a secure context, so the phone plays over WebSocket; WebTransport needs the page over HTTPS.
+
 **An AI agent can race.** Start the server with `--trust-dev-issuer`, give the agent a delegation as above, and let it call `world_info`. It finds `kart.autopilot/1` with its description and drives through `send_intent`, e.g. `{"type": "kart.autopilot/1", "value": {"pace": 0.9, "line": 0.2, "drift": true}}`.
 
 ## Research
