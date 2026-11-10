@@ -38,7 +38,8 @@ use crate::{
     identity::{Identity, Refusal, Registry, SessionKind, credential_level, privileges},
     now_us,
     region::Member,
-    schema, websocket, webtransport,
+    schema::Schema,
+    websocket, webtransport,
 };
 
 pub(crate) const HELLO_TIMEOUT: Duration = Duration::from_secs(5);
@@ -55,11 +56,17 @@ pub(crate) struct Gateway {
     next_delegation: AtomicU64,
     pub(crate) delegations: DelegationKey,
     pub(crate) registry: Registry,
+    schema: Schema,
     /// What the WebSocket host announces of the WebTransport endpoint.
     pub(crate) webtransport: Option<webtransport::Advert>,
 }
 
-pub async fn serve(listener: StdTcpListener, config: Config, region: Sender<RegionInput>) -> Result<()> {
+pub async fn serve(
+    listener: StdTcpListener,
+    config: Config,
+    schema: Schema,
+    region: Sender<RegionInput>,
+) -> Result<()> {
     let listener = TcpListener::from_std(listener)?;
     let endpoint = match &config.webtransport {
         Some(webtransport) => Some(webtransport::bind(webtransport).await?),
@@ -72,6 +79,7 @@ pub async fn serve(listener: StdTcpListener, config: Config, region: Sender<Regi
         next_session: AtomicU64::new(1),
         next_delegation: AtomicU64::new(1),
         registry: Registry::default(),
+        schema,
         webtransport: endpoint.as_ref().map(|(_, advert)| advert.clone()),
     });
     if let Some((endpoint, _)) = endpoint {
@@ -226,7 +234,7 @@ impl Gateway {
                 }),
                 server_time_us: now_us(),
                 world: Some(world),
-                schemas: Some(schema::bundle()),
+                schemas: Some(self.schema.bundle()),
             })),
         }
     }

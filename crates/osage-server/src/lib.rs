@@ -4,14 +4,16 @@
 //! osage server, phase 1: the replication gateway and one region server in a
 //! single process (ADR-0001 §4). The gateway runs on a Tokio runtime and
 //! accepts WebSocket and WebTransport clients; the region is a headless Bevy
-//! app on the calling thread.
+//! app on the calling thread, running a world module ([`world`]).
 
+pub mod demo;
 mod gateway;
 mod identity;
 mod region;
 mod schema;
 mod websocket;
 mod webtransport;
+pub mod world;
 
 use std::{
     collections::HashSet,
@@ -71,20 +73,27 @@ impl Default for Config {
     }
 }
 
-/// Serves the world on `listener` until the process ends.
+/// Serves the demo world ([`demo::DemoWorld`]) on `listener` until the
+/// process ends.
 pub fn run(listener: TcpListener, config: Config) -> Result<()> {
+    serve(listener, config, demo::DemoWorld)
+}
+
+/// Serves `world` on `listener` until the process ends.
+pub fn serve(listener: TcpListener, config: Config, world: impl world::WorldModule) -> Result<()> {
     listener.set_nonblocking(true)?;
     let (region_tx, region_rx) = crossbeam_channel::unbounded();
+    let schema = schema::Schema::new(&world);
 
-    let gateway_config = config.clone();
+    let (gateway_config, gateway_schema) = (config.clone(), schema.clone());
     thread::Builder::new().name("osage-gateway".to_owned()).spawn(move || {
         let runtime = tokio::runtime::Runtime::new().expect("gateway runtime");
-        if let Err(error) = runtime.block_on(gateway::serve(listener, gateway_config, region_tx)) {
+        if let Err(error) = runtime.block_on(gateway::serve(listener, gateway_config, gateway_schema, region_tx)) {
             tracing::error!(%error, "gateway stopped");
         }
     })?;
 
-    region::app(region_rx, config.tick_hz).run();
+    region::app(region_rx, config.tick_hz, schema, world).run();
     Ok(())
 }
 

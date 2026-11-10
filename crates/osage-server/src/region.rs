@@ -2,8 +2,10 @@
 // SPDX-License-Identifier: LicenseRef-osage-AGPL-3.0-or-later-with-exceptions
 
 //! Region server: authoritative simulation of one area as a headless Bevy app.
-//! It replicates every entity to every session; interest management by cells
-//! comes with the second region.
+//! The region provides the mechanisms — sessions, replication, intents routed
+//! to their entity's owner, devices — and the world module the rules
+//! ([`crate::world`]). It replicates every entity to every session; interest
+//! management by cells comes with the second region.
 
 use std::{
     collections::{BTreeMap, HashMap},
@@ -13,24 +15,26 @@ use std::{
 use bevy::{app::ScheduleRunnerPlugin, prelude::*};
 use crossbeam_channel::Receiver;
 use osage_proto::{
-    actions, components, math, types,
+    actions, components, types,
     v0::{
         ActionRequest, ActionResult, ActionStatus, Component as WireComponent, ComponentChanged, DeviceCommand,
-        DeviceState, EntityComponent, EntityEnter, EntityLeave, Intent, LeaveReason, Role, ServerMessage,
-        StateDatagram, Tier, TimeSync, client_message, server_message,
+        DeviceState, EntityComponent, EntityEnter, EntityLeave, LeaveReason, Role, ServerMessage, StateDatagram,
+        TimeSync, client_message, server_message,
     },
 };
 use prost::Message as _;
 use tokio::sync::mpsc::UnboundedSender;
 
-use crate::{identity::SessionKind, now_us, schema};
+use crate::{
+    identity::SessionKind,
+    now_us,
+    schema::{self, Schema},
+    world::{
+        Discrete, EntityIds, IntentReceived, Joined, Left, Owner, RegionSet, Replicated, Tick, Volatile, WorldModule,
+        builtin, transform_from_proto, transform_to_proto,
+    },
+};
 
-/// Avatar walking speed, metres per second.
-const AVATAR_SPEED: f32 = 4.0;
-/// An avatar stops when its controller has sent no intent for this long.
-const INTENT_LIFETIME: Duration = Duration::from_millis(500);
-/// Avatars stay inside this square around the origin, metres.
-const WORLD_HALF_SIZE: f32 = 20.0;
 /// A relayed device command without an answer after this long has an
 /// unknown outcome.
 const COMMAND_TIMEOUT: Duration = Duration::from_secs(5);
@@ -53,19 +57,29 @@ pub enum RegionInput {
     Message { session: u64, message: client_message::Message },
 }
 
-pub fn app(inbox: Receiver<RegionInput>, tick_hz: u32) -> App {
+pub fn app(inbox: Receiver<RegionInput>, tick_hz: u32, schema: Schema, world: impl WorldModule) -> App {
     let tick = Duration::from_secs_f64(1.0 / f64::from(tick_hz.max(1)));
     let mut app = App::new();
     app.add_plugins(MinimalPlugins.set(ScheduleRunnerPlugin::run_loop(tick)))
         .insert_resource(Inbox(inbox))
+        .insert_resource(schema)
         .init_resource::<Sessions>()
         .init_resource::<Devices>()
         .init_resource::<PendingCommands>()
         .init_resource::<EntityIds>()
+        .init_resource::<Index>()
         .init_resource::<Tick>()
         .insert_resource(Keyframe(u64::from(tick_hz.max(1))))
-        .add_systems(Startup, spawn_demo)
-        .add_systems(Update, (receive, expire_commands, orbit, walk, broadcast_state).chain());
+        .add_message::<Joined>()
+        .add_message::<Left>()
+        .add_message::<IntentReceived>()
+        .configure_sets(Update, (RegionSet::Receive, RegionSet::World, RegionSet::Replicate).chain())
+        .add_systems(Update, (receive, expire_commands).chain().in_set(RegionSet::Receive))
+        .add_systems(
+            Update,
+            (despawn_orphans, announce, retire, publish_changes, broadcast_state).chain().in_set(RegionSet::Replicate),
+        )
+        .add_plugins(world);
     app
 }
 
@@ -94,6 +108,17 @@ impl Sessions {
     }
 }
 
+/// Replicated entities clients have been told about, both ways.
+#[derive(Resource, Default)]
+struct Index {
+    ids: HashMap<Entity, u64>,
+    entities: HashMap<u64, Entity>,
+}
+
+/// The discrete values clients have, to send only what changes.
+#[derive(Component, Default)]
+struct DiscreteSent(BTreeMap<u32, Vec<u8>>);
+
 /// Devices published by bridges: the region's copy of their components,
 /// keyed by (bridge session, the bridge's local id).
 #[derive(Resource, Default)]
@@ -117,114 +142,42 @@ struct PendingCommand {
     deadline: Duration,
 }
 
-#[derive(Resource, Default)]
-struct EntityIds(u64);
-
-impl EntityIds {
-    fn next(&mut self) -> u64 {
-        self.0 += 1;
-        self.0
-    }
-}
-
-#[derive(Resource, Default)]
-struct Tick(u64);
-
-/// World-unique id, stable across region handoffs (ADR-0002 §5).
-#[derive(Component)]
-struct Replicated(u64);
-
-/// Discrete (reliable) components of an entity, encoded, by type id.
-#[derive(Component, Default)]
-struct Wire(BTreeMap<u32, Vec<u8>>);
-
-/// The session whose intents drive this entity.
-#[derive(Component)]
-struct Owner(u64);
-
-/// Latest movement intent of an owned entity.
-#[derive(Component, Default)]
-struct MoveInput {
-    direction: Vec3,
-    sequence: u64,
-    received: Duration,
-}
-
-#[derive(Component)]
-struct Orbit {
-    radius: f32,
-    speed: f32,
-}
-
-fn builtin(uri: &str) -> components::ContentRef {
-    components::ContentRef {
-        uri: uri.to_owned(),
-        kind: components::ContentKind::Builtin.into(),
-        tiers: vec![Tier::T0Headless.into()],
-        ..default()
-    }
-}
-
-fn spawn_demo(mut commands: Commands, mut ids: ResMut<EntityIds>) {
-    let system = components::Controller { kind: components::ControllerKind::System.into(), ..default() };
-    let wire = BTreeMap::from([
-        (schema::CONTENT_REF, builtin(types::BUILTIN_CUBE).encode_to_vec()),
-        (schema::CONTROLLER, system.encode_to_vec()),
-    ]);
-    commands.spawn((Replicated(ids.next()), Transform::default(), Wire(wire), Orbit { radius: 3.0, speed: 0.8 }));
-}
-
-/// An avatar spawned while the current batch of inputs is handled: commands
-/// apply after the system, so later inputs of the batch find it here.
-struct Spawned {
-    id: u64,
-    entity: Entity,
-    owner: u64,
-    transform: Transform,
-    wire: BTreeMap<u32, Vec<u8>>,
-}
+/// Every this many ticks (one second), a state carries every volatile value,
+/// not only the changed ones: a lost datagram is repaired within a second.
+#[derive(Resource)]
+struct Keyframe(u64);
 
 #[allow(clippy::too_many_arguments)]
 fn receive(
     mut commands: Commands,
     time: Res<Time>,
     inbox: Res<Inbox>,
+    index: Res<Index>,
+    mut tick: ResMut<Tick>,
     mut sessions: ResMut<Sessions>,
     mut devices: ResMut<Devices>,
     mut commands_out: ResMut<PendingCommands>,
     mut ids: ResMut<EntityIds>,
-    entities: Query<(&Replicated, &Transform, &Wire)>,
-    mut owned: Query<(Entity, &Replicated, &Owner, &mut MoveInput)>,
+    entities: Query<(Entity, &Replicated, &Transform, Option<&Discrete>, Option<&Volatile>)>,
+    owners: Query<&Owner>,
+    (mut joined, mut left, mut intents): (MessageWriter<Joined>, MessageWriter<Left>, MessageWriter<IntentReceived>),
 ) {
-    let mut spawned: Vec<Spawned> = Vec::new();
+    tick.0 += 1;
     for input in inbox.0.try_iter() {
         match input {
             RegionInput::Join { session, member, out } => {
-                for (id, transform, wire) in &entities {
-                    let _ = out.send(enter(id.0, transform, &wire.0));
+                for (entity, id, transform, discrete, volatile) in &entities {
+                    if index.ids.contains_key(&entity) {
+                        let _ = out.send(enter(id.0, transform, discrete, volatile));
+                    }
                 }
-                for avatar in &spawned {
-                    let _ = out.send(enter(avatar.id, &avatar.transform, &avatar.wire));
-                }
-                for device in devices.0.values() {
-                    let _ = out.send(enter(device.id, &device_transform(&device.components), &device.components));
-                }
-                let avatar = member.role == Role::Player || member.kind == SessionKind::Agent;
-                let controller = member.controller.clone();
+                joined.write(Joined {
+                    session,
+                    kind: member.kind,
+                    role: member.role,
+                    controller: member.controller.clone(),
+                });
                 sessions.0.insert(session, Connected { out, member });
-                if avatar {
-                    let id = ids.next();
-                    let transform = spawn_point(session);
-                    let wire = BTreeMap::from([
-                        (schema::CONTENT_REF, builtin(types::BUILTIN_AVATAR).encode_to_vec()),
-                        (schema::CONTROLLER, controller.encode_to_vec()),
-                    ]);
-                    sessions.broadcast(&enter(id, &transform, &wire));
-                    let entity = commands
-                        .spawn((Replicated(id), transform, Wire(wire.clone()), Owner(session), MoveInput::default()))
-                        .id();
-                    spawned.push(Spawned { id, entity, owner: session, transform, wire });
-                }
             }
             RegionInput::Leave { session } => {
                 sessions.0.remove(&session);
@@ -236,31 +189,25 @@ fn receive(
                     sessions.reply(pending.requester, result(pending.request_id, ActionStatus::Unknown, reason));
                     false
                 });
-                for (entity, id, owner, _) in &owned {
-                    if owner.0 == session {
-                        commands.entity(entity).despawn();
-                        sessions.broadcast(&leave(id.0, LeaveReason::Destroyed));
-                    }
-                }
-                spawned.retain(|avatar| {
-                    if avatar.owner != session {
-                        return true;
-                    }
-                    commands.entity(avatar.entity).despawn();
-                    sessions.broadcast(&leave(avatar.id, LeaveReason::Destroyed));
-                    false
-                });
-                devices.0.retain(|(bridge, _), device| {
-                    if *bridge != session {
-                        return true;
-                    }
-                    commands.entity(device.entity).despawn();
-                    sessions.broadcast(&leave(device.id, LeaveReason::Destroyed));
-                    false
-                });
+                // Its entities, devices included, go in `despawn_orphans`.
+                devices.0.retain(|(bridge, _), _| *bridge != session);
+                left.write(Left { session });
             }
             RegionInput::Message { session, message } => match message {
-                client_message::Message::Intent(intent) => apply_intent(session, &intent, &time, &mut owned),
+                // Only an entity's owner may send it intents; the world decides what they do.
+                client_message::Message::Intent(intent) => {
+                    let Some(input) = intent.input else { continue };
+                    let Some(&entity) = index.entities.get(&intent.entity) else { continue };
+                    if owners.get(entity).is_ok_and(|owner| owner.0 == session) {
+                        intents.write(IntentReceived {
+                            session,
+                            entity,
+                            sequence: intent.sequence,
+                            type_id: input.r#type,
+                            value: input.value,
+                        });
+                    }
+                }
                 client_message::Message::DeviceState(state) => {
                     publish_device(session, state, &mut commands, &sessions, &mut devices, &mut ids)
                 }
@@ -285,26 +232,57 @@ fn receive(
     }
 }
 
-/// Accepts a movement intent only for an entity the session owns, and only if
-/// it is newer than the last one applied.
-fn apply_intent(
-    session: u64,
-    intent: &Intent,
-    time: &Time,
-    owned: &mut Query<(Entity, &Replicated, &Owner, &mut MoveInput)>,
-) {
-    let Some(input) = &intent.input else { return };
-    if input.r#type != schema::MOVE_INTENT {
-        return;
-    }
-    let Ok(move_intent) = components::MoveIntent::decode(input.value.as_slice()) else { return };
-    for (_, id, owner, mut state) in owned.iter_mut() {
-        if id.0 == intent.entity && owner.0 == session && intent.sequence > state.sequence {
-            let d = move_intent.direction.unwrap_or_default();
-            state.direction = Vec3::new(d.x, 0.0, d.z).clamp_length_max(1.0);
-            state.sequence = intent.sequence;
-            state.received = time.elapsed();
+/// Entities whose owner left go with it — also those the world spawned for a
+/// session that left in the same tick.
+fn despawn_orphans(mut commands: Commands, sessions: Res<Sessions>, owned: Query<(Entity, &Owner)>) {
+    for (entity, owner) in &owned {
+        if !sessions.0.contains_key(&owner.0) {
+            commands.entity(entity).despawn();
         }
+    }
+}
+
+/// Tells every session about the entities that appeared this tick.
+#[allow(clippy::type_complexity)]
+fn announce(
+    mut commands: Commands,
+    sessions: Res<Sessions>,
+    mut index: ResMut<Index>,
+    added: Query<(Entity, &Replicated, &Transform, Option<&Discrete>, Option<&Volatile>), Added<Replicated>>,
+) {
+    for (entity, id, transform, discrete, volatile) in &added {
+        sessions.broadcast(&enter(id.0, transform, discrete, volatile));
+        index.ids.insert(entity, id.0);
+        index.entities.insert(id.0, entity);
+        commands.entity(entity).insert(DiscreteSent(discrete.map(|d| d.0.clone()).unwrap_or_default()));
+    }
+}
+
+/// Tells every session about the entities that are gone, however they went.
+fn retire(sessions: Res<Sessions>, mut index: ResMut<Index>, mut removed: RemovedComponents<Replicated>) {
+    for entity in removed.read() {
+        if let Some(id) = index.ids.remove(&entity) {
+            index.entities.remove(&id);
+            sessions.broadcast(&leave(id, LeaveReason::Destroyed));
+        }
+    }
+}
+
+/// Sends the discrete values that changed since clients last had them.
+fn publish_changes(
+    sessions: Res<Sessions>,
+    mut changed: Query<(&Replicated, &Discrete, &mut DiscreteSent), Changed<Discrete>>,
+) {
+    for (id, discrete, mut sent) in &mut changed {
+        for (type_id, value) in &discrete.0 {
+            if sent.0.get(type_id) != Some(value) {
+                sessions.broadcast(&component_changed(id.0, *type_id, value.clone(), false));
+            }
+        }
+        for type_id in sent.0.keys().filter(|t| !discrete.0.contains_key(t)) {
+            sessions.broadcast(&component_changed(id.0, *type_id, Vec::new(), true));
+        }
+        sent.0 = discrete.0.clone();
     }
 }
 
@@ -324,7 +302,6 @@ fn publish_device(
     if state.removed {
         if let Some(device) = devices.0.remove(&key) {
             commands.entity(device.entity).despawn();
-            sessions.broadcast(&leave(device.id, LeaveReason::Destroyed));
         }
         return;
     }
@@ -343,26 +320,17 @@ fn publish_device(
 
     match devices.0.get_mut(&key) {
         Some(device) => {
-            for (type_id, value) in incoming {
-                if device.components.get(&type_id) == Some(&value) {
-                    continue;
-                }
-                device.components.insert(type_id, value.clone());
-                if type_id != schema::TRANSFORM {
-                    sessions.broadcast(&changed(device.id, type_id, value));
-                }
-            }
+            device.components.extend(incoming);
             commands
                 .entity(device.entity)
-                .insert((device_transform(&device.components), Wire(discrete(&device.components))));
+                .insert((device_transform(&device.components), Discrete(discrete(&device.components))));
         }
         None => {
             incoming.entry(schema::CONTENT_REF).or_insert_with(|| builtin(types::BUILTIN_DEVICE).encode_to_vec());
             let id = ids.next();
-            let transform = device_transform(&incoming);
-            sessions.broadcast(&enter(id, &transform, &discrete(&incoming)));
-            let entity = commands.spawn((Replicated(id), transform, Wire(discrete(&incoming)))).id();
-            devices.0.insert(key, Published { entity, id, components: incoming });
+            let parts = (id, device_transform(&incoming), Discrete(discrete(&incoming)), Owner(session));
+            let entity = commands.spawn(parts).id();
+            devices.0.insert(key, Published { entity, id: id.0, components: incoming });
         }
     }
 }
@@ -467,57 +435,31 @@ fn device_transform(components: &BTreeMap<u32, Vec<u8>>) -> Transform {
     components
         .get(&schema::TRANSFORM)
         .and_then(|bytes| components::Transform::decode(bytes.as_slice()).ok())
-        .map_or_else(Transform::default, |t| from_proto(&t))
+        .map_or_else(Transform::default, |t| transform_from_proto(&t))
 }
-
-fn orbit(time: Res<Time>, mut bodies: Query<(&Orbit, &mut Transform)>) {
-    let t = time.elapsed_secs();
-    for (orbit, mut transform) in &mut bodies {
-        let angle = t * orbit.speed;
-        transform.translation = Vec3::new(orbit.radius * angle.cos(), 1.0, orbit.radius * angle.sin());
-        transform.rotation = Quat::from_rotation_y(-angle);
-    }
-}
-
-fn walk(time: Res<Time>, mut walkers: Query<(&MoveInput, &mut Transform)>) {
-    for (input, mut transform) in &mut walkers {
-        let fresh = time.elapsed().saturating_sub(input.received) < INTENT_LIFETIME;
-        if !fresh || input.direction == Vec3::ZERO {
-            continue;
-        }
-        let next = transform.translation + input.direction * AVATAR_SPEED * time.delta_secs();
-        transform.translation = next.clamp(
-            Vec3::new(-WORLD_HALF_SIZE, 0.0, -WORLD_HALF_SIZE),
-            Vec3::new(WORLD_HALF_SIZE, 0.0, WORLD_HALF_SIZE),
-        );
-        transform.rotation = Quat::from_rotation_arc(Vec3::NEG_Z, input.direction.normalize());
-    }
-}
-
-/// Every this many ticks (one second), a state carries every volatile value,
-/// not only the changed ones: a lost datagram is repaired within a second.
-#[derive(Resource)]
-struct Keyframe(u64);
 
 fn broadcast_state(
-    mut tick: ResMut<Tick>,
+    tick: Res<Tick>,
     keyframe: Res<Keyframe>,
     sessions: Res<Sessions>,
-    transforms: Query<(&Replicated, Ref<Transform>)>,
+    replicated: Query<(&Replicated, Ref<Transform>, Option<Ref<Volatile>>)>,
 ) {
-    tick.0 += 1;
     if sessions.0.is_empty() {
         return;
     }
     let all = tick.0.is_multiple_of(keyframe.0);
-    let values: Vec<_> = transforms
-        .iter()
-        .filter(|(_, transform)| all || transform.is_changed())
-        .map(|(id, transform)| EntityComponent {
-            entity: id.0,
-            component: Some(wire(schema::TRANSFORM, to_proto(&transform).encode_to_vec())),
-        })
-        .collect();
+    let mut values = Vec::new();
+    for (id, transform, volatile) in &replicated {
+        if all || transform.is_changed() {
+            let value = transform_to_proto(&transform).encode_to_vec();
+            values.push(EntityComponent { entity: id.0, component: Some(wire(schema::TRANSFORM, value)) });
+        }
+        if let Some(volatile) = volatile.filter(|v| all || v.is_changed()) {
+            for (type_id, value) in &volatile.0 {
+                values.push(EntityComponent { entity: id.0, component: Some(wire(*type_id, value.clone())) });
+            }
+        }
+    }
     if values.is_empty() {
         return;
     }
@@ -526,24 +468,20 @@ fn broadcast_state(
     });
 }
 
-/// Avatars appear on a ring around the origin, one slot per session.
-fn spawn_point(session: u64) -> Transform {
-    let angle = session as f32 * 2.399_963; // golden angle, radians
-    Transform::from_xyz(6.0 * angle.cos(), 0.0, 6.0 * angle.sin())
-}
-
-fn enter(id: u64, transform: &Transform, discrete: &BTreeMap<u32, Vec<u8>>) -> ServerMessage {
-    let mut components = vec![wire(schema::TRANSFORM, to_proto(transform).encode_to_vec())];
-    components.extend(discrete.iter().map(|(type_id, value)| wire(*type_id, value.clone())));
+fn enter(id: u64, transform: &Transform, discrete: Option<&Discrete>, volatile: Option<&Volatile>) -> ServerMessage {
+    let mut components = vec![wire(schema::TRANSFORM, transform_to_proto(transform).encode_to_vec())];
+    for values in [discrete.map(|d| &d.0), volatile.map(|v| &v.0)].into_iter().flatten() {
+        components.extend(values.iter().map(|(type_id, value)| wire(*type_id, value.clone())));
+    }
     ServerMessage { message: Some(server_message::Message::EntityEnter(EntityEnter { entity: id, components })) }
 }
 
-fn changed(id: u64, type_id: u32, value: Vec<u8>) -> ServerMessage {
+fn component_changed(id: u64, type_id: u32, value: Vec<u8>, removed: bool) -> ServerMessage {
     ServerMessage {
         message: Some(server_message::Message::ComponentChanged(ComponentChanged {
             entity: id,
             component: Some(wire(type_id, value)),
-            removed: false,
+            removed,
         })),
     }
 }
@@ -558,30 +496,12 @@ fn wire(type_id: u32, value: Vec<u8>) -> WireComponent {
     WireComponent { r#type: type_id, value }
 }
 
-fn to_proto(transform: &Transform) -> components::Transform {
-    let vec3 = |v: Vec3| math::Vec3 { x: v.x, y: v.y, z: v.z };
-    let q = transform.rotation;
-    components::Transform {
-        translation: Some(vec3(transform.translation)),
-        rotation: Some(math::Quat { x: q.x, y: q.y, z: q.z, w: q.w }),
-        scale: Some(vec3(transform.scale)),
-    }
-}
-
-fn from_proto(t: &components::Transform) -> Transform {
-    let vec3 = |v: Option<math::Vec3>, default: Vec3| v.map_or(default, |v| Vec3::new(v.x, v.y, v.z));
-    Transform {
-        translation: vec3(t.translation, Vec3::ZERO),
-        rotation: t.rotation.map_or(Quat::IDENTITY, |q| Quat::from_xyzw(q.x, q.y, q.z, q.w)),
-        scale: vec3(t.scale, Vec3::ONE),
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use tokio::sync::mpsc::{UnboundedReceiver, unbounded_channel};
 
     use super::*;
+    use crate::demo::DemoWorld;
 
     fn join(inbox: &crossbeam_channel::Sender<RegionInput>, session: u64) -> UnboundedReceiver<ServerMessage> {
         let (out, messages) = unbounded_channel();
@@ -592,12 +512,14 @@ mod tests {
     }
 
     fn entered(messages: &mut UnboundedReceiver<ServerMessage>) -> Vec<u64> {
-        std::iter::from_fn(|| messages.try_recv().ok())
+        let mut entered: Vec<u64> = std::iter::from_fn(|| messages.try_recv().ok())
             .filter_map(|m| match m.message {
                 Some(server_message::Message::EntityEnter(enter)) => Some(enter.entity),
                 _ => None,
             })
-            .collect()
+            .collect();
+        entered.sort();
+        entered
     }
 
     /// Found by a flaky end-to-end test: inputs handled in the same tick did
@@ -605,7 +527,7 @@ mod tests {
     #[test]
     fn inputs_of_one_tick_see_the_avatars_spawned_in_it() {
         let (inbox, rx) = crossbeam_channel::unbounded();
-        let mut app = app(rx, 30);
+        let mut app = app(rx, 30, Schema::new(&DemoWorld), DemoWorld);
         let mut alice = join(&inbox, 1);
         let mut bob = join(&inbox, 2);
         let carol = join(&inbox, 3);
@@ -617,6 +539,7 @@ mod tests {
         let seen_by_alice = entered(&mut alice);
         let seen_by_bob = entered(&mut bob);
         assert_eq!(seen_by_alice, seen_by_bob, "alice and bob see the same entities");
+        assert_eq!(seen_by_alice.len(), 3, "the cube and two avatars: {seen_by_alice:?}");
         let avatars = app.world_mut().query::<&Owner>().iter(app.world()).map(|o| o.0).collect::<Vec<_>>();
         assert_eq!(avatars.len(), 2, "carol's avatar left with her: {avatars:?}");
     }

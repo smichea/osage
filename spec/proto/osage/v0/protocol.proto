@@ -156,6 +156,9 @@ message ComponentType {
   // Volatile types travel in StateDatagram (latest value wins); others are
   // reliable (EntityEnter, ComponentChanged).
   bool volatile = 4;
+  // What the type means and, for an intent type, what sending it does —
+  // written for people and AI agents discovering the world.
+  string description = 5;
 }
 
 // Schemas of the world's component types (D-019), inline or by reference.
