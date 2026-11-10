@@ -393,3 +393,12 @@ Date: 2026-11-10 · From the architecture review of 2026-11-10, with the maintai
   3. Adding fields within a major version stays compatible without translation (protobuf rules); a new major version is a new type name.
 - **Why:** "any client joins any world" must hold for clients that update slowly — a browser tab kept open, an app store release, an AI agent written against an older world. Worlds should not have to carry their past in their logic.
 - **Alternatives:** worlds serving several versions themselves (each world carries its past); refusing old clients (breaks the promise above). The difficulty of translating between modular, distributed versions is accepted: it is work, not a reason to give up the promise.
+
+## D-040 — A machine computing for others answers through a responsible human
+
+Date: 2026-11-10 · From the architecture review of 2026-11-10, with the maintainer.
+
+- **Decision:** a machine that computes for others (D-038) joins a world like an agent (design/01, P4): with a **delegation from a responsible human**. If a world chooses to set a peer aside, it is that person's delegation that is set aside. Nothing else is required of it: trust stays total by default.
+- **Priority:** performance comes first. Cheating is not the first concern; the verification layers of D-038 come when a world needs them, and are not built before.
+- **Why:** the identity model knows people, agents and device bridges; compute peers fit the existing agent pattern without a new mechanism.
+- **Alternatives:** anonymous compute paid as a service (no one to set aside, and payment is a policy for worlds, not a mechanism to build now).
