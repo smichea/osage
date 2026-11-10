@@ -6,7 +6,7 @@ resource: https://github.com/smichea/osage/tree/main/crates/osage-render
 licence: LicenseRef-osage-AGPL-3.0-or-later-with-exceptions
 status: draft
 tags: [rendering, tiers, bevy]
-generated: { by: "claude-code/claude-fable-5-2", at: "2026-11-10T06:45:00Z" }
+generated: { by: "claude-code/claude-opus-5-5", at: "2026-11-10T09:30:00Z" }
 ---
 
 # Purpose
@@ -39,7 +39,7 @@ Let many people improve rendering in parallel: one technique is one plugin, and 
 
 # Knowledge
 
-- Techniques: [sky and sun](/techniques/sky-and-sun.md), [sun shadows](/techniques/sun-shadows.md), [ambient occlusion](/techniques/ambient-occlusion.md), [post-processing](/techniques/post-processing.md), [resolution and upscaling](/techniques/resolution-and-upscaling.md).
+- Techniques: [sky and sun](/techniques/sky-and-sun.md), [light from the sky](/techniques/sky-light.md), [sun shadows](/techniques/sun-shadows.md), [ambient occlusion](/techniques/ambient-occlusion.md), [post-processing](/techniques/post-processing.md), [resolution and upscaling](/techniques/resolution-and-upscaling.md).
 - Oracle: [the render bench](/oracles/render-bench.md).
 
 # Reuse

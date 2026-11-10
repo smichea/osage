@@ -15,7 +15,7 @@ within the tier's budget. Deterministic; standard library only.
 import json
 import sys
 
-SANCTIONED = "kart-lap/1"
+SANCTIONED = "kart-lap/2"
 FEWEST_FRAMES = 2000
 
 
@@ -25,6 +25,8 @@ def attest(report: dict, tier: str | None, allow_dirty: bool) -> tuple[bool, lis
         reasons.append(f"not the sanctioned bench: {report.get('bench')!r}, expected {SANCTIONED!r}")
     if tier is not None and report.get("tier") != tier:
         reasons.append(f"run for tier {report.get('tier')}, not {tier}")
+    if report.get("camera", "race") != "race":
+        reasons.append("the camera was held at a place, not following the race")
     if report.get("without"):
         reasons.append(f"techniques left out: {', '.join(report['without'])}")
     timed = report.get("frames", {}).get("timed", 0)

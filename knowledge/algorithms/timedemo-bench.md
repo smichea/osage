@@ -10,7 +10,7 @@ sources:
   - id: own
     resource: "osage's own design and measurements, 2026-11-09 and 2026-11-10"
     title: osage design
-generated: { by: "claude-code/claude-fable-5-2", at: "2026-11-10T06:45:00Z" }
+generated: { by: "claude-code/claude-opus-5-5", at: "2026-11-10T09:30:00Z" }
 ---
 
 # Problem
@@ -23,7 +23,7 @@ Take time away from the machine. The simulation advances one fixed step per draw
 
 # Method
 
-1. **No server, no input:** six karts on the grid are driven by the world's autopilot with the world's physics, both deterministic.
+1. **No server, no input:** six karts on the grid are driven by the world's autopilot with the world's physics, both deterministic. The autopilot does not see other karts, so the bench adds one rule: a kart that finds another less than 16 m ahead within 2.6 m of its line moves to the side with more room, and returns to its line once that is clear (version `kart-lap/2`; in version 1 the followed kart ran into the karts ahead and was slowed).
 2. **One step per frame:** the application's clock is advanced by exactly 1/60 s each frame, whatever the real time.
 3. **Off screen at a fixed size:** the scene is drawn into a picture of the tier's resolution and only shown in the window ([resolution and upscaling](/techniques/resolution-and-upscaling.md)); vertical sync is off.
 4. **Shaders first:** pipelines are compiled synchronously, so that the first frames are complete; the stall this causes is reported apart as the worst warm-up frame.

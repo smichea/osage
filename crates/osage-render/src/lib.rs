@@ -8,7 +8,8 @@
 //!
 //! | Module | Workstream | Tiers |
 //! |---|---|---|
-//! | [`sky`] | R1 sky and sun | T1 flat sky; T2 physical atmosphere; T3+ the sky also lights the scene |
+//! | [`sky`] | R1 sky and sun | T1 flat sky and fog; T2+ physical atmosphere |
+//! | [`sky_light`] | R1 light from the sky | T1–T2 a constant ambient light; T3+ the atmosphere, every frame (a clear day computed once, without an atmosphere) |
 //! | [`shadows`] | R2 shadows | all: cascades per tier; contact shadows T3+ |
 //! | [`ambient_occlusion`] | R3 ambient occlusion | T3+ |
 //! | [`post`] | R10 post-processing and anti-aliasing | all: HDR, tonemapping, exposure; FXAA T1–T2, bloom T2+; TAA and motion blur T3+ |
@@ -23,6 +24,7 @@ pub mod post;
 pub mod resolution;
 pub mod shadows;
 pub mod sky;
+pub mod sky_light;
 
 use std::{fmt, str::FromStr};
 
@@ -92,11 +94,14 @@ pub struct Look {
     pub saturation: f32,
     /// Stops added to the exposure of a sunny day; above 0, brighter.
     pub exposure: f32,
+    /// The colour of the land, which tints the light that comes back from
+    /// below ([`sky_light`]).
+    pub ground: Color,
 }
 
 impl Default for Look {
     fn default() -> Self {
-        Self { tonemapping: Tonemapping::AgX, saturation: 1.0, exposure: 0.0 }
+        Self { tonemapping: Tonemapping::AgX, saturation: 1.0, exposure: 0.0, ground: Color::srgb(0.42, 0.44, 0.36) }
     }
 }
 
@@ -112,6 +117,9 @@ pub struct Sun;
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Technique {
     Sky,
+    /// The sky and the ground as lights ([`sky_light`]); without it, a
+    /// constant ambient light.
+    SkyLight,
     Shadows,
     AmbientOcclusion,
     Post,
@@ -121,12 +129,19 @@ pub enum Technique {
 }
 
 impl Technique {
-    pub const ALL: [Technique; 5] =
-        [Technique::Sky, Technique::Shadows, Technique::AmbientOcclusion, Technique::Post, Technique::Upscaling];
+    pub const ALL: [Technique; 6] = [
+        Technique::Sky,
+        Technique::SkyLight,
+        Technique::Shadows,
+        Technique::AmbientOcclusion,
+        Technique::Post,
+        Technique::Upscaling,
+    ];
 
     pub fn name(self) -> &'static str {
         match self {
             Technique::Sky => "sky",
+            Technique::SkyLight => "sky-light",
             Technique::Shadows => "shadows",
             Technique::AmbientOcclusion => "ambient-occlusion",
             Technique::Post => "post",
@@ -160,10 +175,12 @@ impl Plugin for OsageRenderPlugin {
         app.insert_resource(self.tier)
             .insert_resource(LeftOut(self.without.clone()))
             .init_resource::<Look>()
+            .insert_resource(sky_light::constant_ambient())
             .add_plugins(resolution::ResolutionPlugin);
         for technique in Technique::ALL.into_iter().filter(|t| !self.without.contains(t)) {
             match technique {
                 Technique::Sky => app.add_plugins(sky::SkyPlugin),
+                Technique::SkyLight => app.add_plugins(sky_light::SkyLightPlugin),
                 Technique::Shadows => app.add_plugins(shadows::ShadowsPlugin),
                 Technique::AmbientOcclusion => app.add_plugins(ambient_occlusion::AmbientOcclusionPlugin),
                 Technique::Post => app.add_plugins(post::PostPlugin),

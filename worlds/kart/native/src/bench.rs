@@ -54,6 +54,8 @@ pub struct BenchPlugin {
     pub resolution: (u32, u32),
     /// Techniques left out of this run, by name.
     pub without: Vec<String>,
+    /// Whether the camera is held at a place (`--camera`) instead of following the race.
+    pub held: bool,
 }
 
 impl Plugin for BenchPlugin {
@@ -68,6 +70,7 @@ impl Plugin for BenchPlugin {
                 out: self.out.clone(),
                 resolution: self.resolution,
                 without: self.without.clone(),
+                held: self.held,
                 shots,
                 frame: 0,
                 last: None,
@@ -89,6 +92,7 @@ struct Bench {
     out: PathBuf,
     resolution: (u32, u32),
     without: Vec<String>,
+    held: bool,
     shots: Vec<u32>,
     frame: u32,
     last: Option<Instant>,
@@ -104,7 +108,12 @@ struct Bench {
 struct Racer {
     kart: Kart,
     autopilot: Autopilot,
+    /// The line it keeps when nobody is in its way.
+    line: f32,
 }
+
+/// How far ahead a kart looks for one in its way, metres.
+const LOOK_AHEAD: f32 = 16.0;
 
 fn line_up(mut commands: Commands) {
     let circuit = Circuit::new();
@@ -117,8 +126,8 @@ fn line_up(mut commands: Commands) {
             line: if slot % 2 == 0 { -0.3 } else { 0.3 },
             drift: true,
         };
-        let kart = circuit.grid_slot(slot);
-        let mut racer = commands.spawn((Racer { kart, autopilot }, Pose { kart, color: slot as u32 }));
+        let (kart, line) = (circuit.grid_slot(slot), autopilot.line);
+        let mut racer = commands.spawn((Racer { kart, autopilot, line }, Pose { kart, color: slot as u32 }));
         if last {
             racer.insert(Followed);
         }
@@ -126,8 +135,34 @@ fn line_up(mut commands: Commands) {
     commands.insert_resource(Course(circuit));
 }
 
-/// One physics step per frame.
+/// One physics step per frame. The world's autopilot does not know about
+/// other karts: here a kart that finds another just ahead on its line moves
+/// to the side with more room, and back to its own line once past.
 fn simulate(course: Res<Course>, mut racers: Query<(&mut Racer, &mut Pose)>) {
+    let track = &course.0.track;
+    let room = track.half_width - 1.5;
+    let spots: Vec<_> = racers.iter().map(|(racer, _)| track.locate(racer.kart.x, racer.kart.z)).collect();
+    for (mut racer, _) in &mut racers {
+        let me = track.locate(racer.kart.x, racer.kart.z);
+        let aim = racer.autopilot.line * room;
+        let in_the_way = spots.iter().find(|other| {
+            let ahead = (other.along - me.along).rem_euclid(track.length());
+            ahead > 0.5 && ahead < LOOK_AHEAD && (other.lateral - aim).abs() < 2.6
+        });
+        racer.autopilot.line = match in_the_way {
+            Some(other) if other.lateral > 0.0 => -0.65,
+            Some(_) => 0.65,
+            // Past it: back to its own line, unless that would cut in front.
+            None if (me.lateral - racer.line * room).abs() > 0.5 => {
+                let clear = spots.iter().all(|other| {
+                    let ahead = (other.along - me.along).rem_euclid(track.length());
+                    !(ahead > 0.5 && ahead < LOOK_AHEAD) || (other.lateral - racer.line * room).abs() > 2.6
+                });
+                if clear { racer.line } else { racer.autopilot.line }
+            }
+            None => racer.line,
+        };
+    }
     for (mut racer, _) in &mut racers {
         let controls = autopilot(&racer.kart, &racer.autopilot, &course.0);
         step(&mut racer.kart, controls, &course.0.track);
@@ -194,9 +229,10 @@ fn report(bench: &Bench, rendered: UVec2, adapter: &RenderAdapterInfo) -> anyhow
     let round = |ms: f32| (f64::from(ms) * 100.0).round() / 100.0;
 
     let report = json!({
-        "bench": "kart-lap/1",
+        "bench": "kart-lap/2",
         "tier": bench.tier.to_string(),
         "without": bench.without,
+        "camera": if bench.held { "held" } else { "race" },
         "commit": commit(),
         "unix_time": SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).map_or(0, |d| d.as_secs()),
         "machine": {
@@ -238,7 +274,7 @@ fn report(bench: &Bench, rendered: UVec2, adapter: &RenderAdapterInfo) -> anyhow
         without => format!("{} without {}", bench.tier, without.join(", ")),
     };
     Ok(format!(
-        "kart-lap/1 · {tier} · {size} · {gpu}\n  frame time: mean {mean:.2} ms ({fps:.0} fps) · p50 {p50:.2} · p95 {p95:.2} · p99 {p99:.2} · worst {worst:.2}\n  \
+        "kart-lap/2 · {tier} · {size} · {gpu}\n  frame time: mean {mean:.2} ms ({fps:.0} fps) · p50 {p50:.2} · p95 {p95:.2} · p99 {p99:.2} · worst {worst:.2}\n  \
          budget {budget:.1} ms: {over:.1} % of frames over · warm-up worst {warm:.0} ms\n  written to {out}",
         gpu = adapter.name,
         fps = 1000.0 / mean,

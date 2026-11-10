@@ -31,9 +31,12 @@ pub const PALETTE: [(f32, f32, f32); 8] = [
     (0.969, 0.471, 0.729),
 ];
 
+/// The colour of the meadows, which the light from below takes.
+pub const GRASS: Color = Color::srgb(0.36, 0.66, 0.2);
+
 /// The kart world's look: vivid and sunny, like a toy circuit.
 pub fn look() -> Look {
-    Look { tonemapping: Tonemapping::TonyMcMapface, saturation: 1.2, exposure: 0.9 }
+    Look { tonemapping: Tonemapping::TonyMcMapface, saturation: 1.2, exposure: 0.9, ground: GRASS }
 }
 
 pub struct ScenePlugin;
@@ -56,6 +59,13 @@ pub struct Pose {
     pub color: u32,
 }
 
+/// A place the camera is held at, looking at another, instead of following a kart.
+#[derive(Resource, Clone, Copy)]
+pub struct Viewpoint {
+    pub from: Vec3,
+    pub to: Vec3,
+}
+
 /// The kart the camera follows.
 #[derive(Component)]
 pub struct Followed;
@@ -71,7 +81,17 @@ impl Plugin for ScenePlugin {
             .add_systems(Startup, (setup, karts::setup, effects::setup))
             .add_systems(
                 Update,
-                (circuit, karts::dress, karts::animate, effects::emit, effects::update, scenery::bob, follow)
+                (
+                    circuit,
+                    karts::dress,
+                    karts::animate,
+                    effects::emit,
+                    effects::update,
+                    scenery::bob,
+                    scenery::turn,
+                    track::flow,
+                    follow,
+                )
                     .chain()
                     .in_set(Stage::Draw),
             );
@@ -102,9 +122,14 @@ fn setup(mut commands: Commands) {
 /// the kart and widens its view with speed, more when the kart boosts.
 fn follow(
     time: Res<Time>,
+    viewpoint: Option<Res<Viewpoint>>,
     followed: Query<&Pose, With<Followed>>,
     mut camera: Query<(&mut Transform, &mut Chase, &mut Projection)>,
 ) {
+    if let (Some(viewpoint), Ok((mut camera, ..))) = (viewpoint, camera.single_mut()) {
+        *camera = Transform::from_translation(viewpoint.from).looking_at(viewpoint.to, Vec3::Y);
+        return;
+    }
     let (Some(pose), Ok((mut camera, mut chase, mut projection))) = (followed.iter().next(), camera.single_mut())
     else {
         return;

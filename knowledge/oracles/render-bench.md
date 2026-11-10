@@ -9,7 +9,7 @@ parameters:
   - { name: tier, type: string, required: true }
 executor:
   resource: https://github.com/smichea/osage/blob/main/bench/README.md
-  receipt: [bench, tier, without, commit, machine, resolution, rendered, assets, frames, frame_ms, budget_ms, over_budget_percent, screenshots]
+  receipt: [bench, tier, camera, without, commit, machine, resolution, rendered, assets, frames, frame_ms, budget_ms, over_budget_percent, screenshots]
 attester:
   resource: https://github.com/smichea/osage/blob/main/tools/attest-bench.py
 generated: { by: "claude-code/claude-fable-5-2", at: "2026-11-10T06:45:00Z" }
@@ -25,7 +25,8 @@ The run writes `report.json` and four screenshots; `report.json` is the receipt.
 
 A claim such as "T2 holds 60 frames a second on an integrated GPU" is accepted with a receipt, not on a statement. The attester reads the receipt and answers **pass** only if:
 
-- it comes from the sanctioned bench (`bench` is `kart-lap/1`) run for the claimed tier;
+- it comes from the sanctioned bench (`bench` is `kart-lap/2`: version 2 lets karts overtake instead of running into each other, so its frames differ from version 1) run for the claimed tier;
+- the camera followed the race (`camera` is `race`), not held at a place;
 - no technique was left out and at least 2000 frames were timed;
 - it was run from a committed state of the code (`commit` does not end in `-dirty`);
 - the mean frame time is within the tier's budget.

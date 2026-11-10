@@ -51,6 +51,19 @@ impl Surface {
         })
     }
 
+    /// Loads Poly Haven texture set `id` at 1k as a grain: its light and
+    /// dark without its colour, so that whatever is painted under it (a
+    /// material's colour, a mesh's vertex colours) shows through with the
+    /// surface's texture.
+    pub fn load_grain(root: &Path, id: &str, images: &mut Assets<Image>) -> Option<Self> {
+        let file = |map: &str| root.join("polyhaven").join(id).join(format!("{id}_{map}_1k.jpg"));
+        Some(Self {
+            colour: images.add(texture(&file("diff"), Kind::Grain, |p| p)?),
+            normal: images.add(texture(&file("nor_gl"), Kind::Normal, |p| p)?),
+            arm: images.add(texture(&file("arm"), Kind::Data, |p| p)?),
+        })
+    }
+
     /// A material of this surface, repeated every `tile` metres on meshes
     /// whose texture coordinates are in metres.
     pub fn material(&self, tile: f32) -> StandardMaterial {
@@ -68,35 +81,57 @@ impl Surface {
     }
 }
 
+/// A grain is stored at this mean, in linear light: what it covers is
+/// painted `1 / GRAIN` times brighter to come out as meant.
+pub const GRAIN: f32 = 0.5;
+
 #[derive(Clone, Copy, PartialEq)]
-enum Kind {
+pub enum Kind {
     /// sRGB colour: mipmaps are averaged in linear light.
     Colour,
+    /// sRGB colour reduced to its brightness, around a mean of [`GRAIN`].
+    Grain,
     /// Unit vectors: mipmaps are renormalised.
     Normal,
     /// Linear data.
     Data,
 }
 
-/// A JPEG as a repeating texture with its mipmaps.
+/// A JPEG as a repeating texture with its mipmaps; `grade` adjusts each
+/// pixel (sRGB bytes) first.
 fn texture(path: &Path, kind: Kind, grade: impl Fn([u8; 3]) -> [u8; 3]) -> Option<Image> {
     let bytes = std::fs::read(path).ok()?;
     let mut decoder = JpegDecoder::new(&bytes);
     let rgb = decoder.decode().inspect_err(|error| warn!("{}: {error}", path.display())).ok()?;
     let (width, height) = decoder.dimensions()?;
-    let mut level: Vec<[f32; 3]> = rgb
+    let coloured = matches!(kind, Kind::Colour | Kind::Grain);
+    let mut pixels: Vec<[f32; 3]> = rgb
         .as_chunks::<3>()
         .0
         .iter()
-        .map(|p| grade(*p).map(|c| if kind == Kind::Colour { to_linear(c) } else { f32::from(c) / 255.0 }))
+        .map(|p| grade(*p).map(|c| if coloured { to_linear(c) } else { f32::from(c) / 255.0 }))
         .collect();
+    if kind == Kind::Grain {
+        let brightness = |p: &[f32; 3]| 0.2126 * p[0] + 0.7152 * p[1] + 0.0722 * p[2];
+        let mean = pixels.iter().map(brightness).sum::<f32>() / pixels.len().max(1) as f32;
+        for pixel in &mut pixels {
+            // Half of its contrast is kept: a texture, not a pattern.
+            *pixel = [(GRAIN * (0.5 + 0.5 * brightness(pixel) / mean.max(1e-4))).min(1.0); 3];
+        }
+    }
+    Some(tiled(pixels, width, height, kind))
+}
 
+/// A repeating texture with its mipmaps, from `width` by `height` pixels in
+/// linear values.
+pub fn tiled(mut level: Vec<[f32; 3]>, width: usize, height: usize, kind: Kind) -> Image {
+    let coloured = matches!(kind, Kind::Colour | Kind::Grain);
     let (mut w, mut h) = (width, height);
     let mut data = Vec::with_capacity(width * height * 4 * 4 / 3);
     let mut levels = 0;
     loop {
         for pixel in &level {
-            let pixel = pixel.map(|c| if kind == Kind::Colour { to_srgb(c) } else { (c * 255.0 + 0.5) as u8 });
+            let pixel = pixel.map(|c| if coloured { to_srgb(c) } else { (c * 255.0 + 0.5) as u8 });
             data.extend_from_slice(&[pixel[0], pixel[1], pixel[2], 255]);
         }
         levels += 1;
@@ -124,7 +159,7 @@ fn texture(path: &Path, kind: Kind, grade: impl Fn([u8; 3]) -> [u8; 3]) -> Optio
         (level, w, h) = (next, nw, nh);
     }
 
-    let format = if kind == Kind::Colour { TextureFormat::Rgba8UnormSrgb } else { TextureFormat::Rgba8Unorm };
+    let format = if coloured { TextureFormat::Rgba8UnormSrgb } else { TextureFormat::Rgba8Unorm };
     let size = Extent3d { width: width as u32, height: height as u32, depth_or_array_layers: 1 };
     let top = data[..width * height * 4].to_vec();
     let mut image = Image::new(size, TextureDimension::D2, top, format, RenderAssetUsages::RENDER_WORLD);
@@ -139,7 +174,7 @@ fn texture(path: &Path, kind: Kind, grade: impl Fn([u8; 3]) -> [u8; 3]) -> Optio
         anisotropy_clamp: 8,
         ..default()
     });
-    Some(image)
+    image
 }
 
 fn to_linear(c: u8) -> f32 {

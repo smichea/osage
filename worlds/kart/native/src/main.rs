@@ -12,19 +12,24 @@
 //! - `kart-native --bench [--tier T…] [--frames N] [--resolution WxH] [--out DIR]`
 //!   runs the bench without a server and writes `report.json` and screenshots
 //!   to `bench/out/<tier>-<time>/`.
-//! - `--without TECHNIQUE` (sky, shadows, ambient-occlusion, post; repeatable)
-//!   leaves a rendering technique out, to measure its cost or to find the
-//!   cause of a defect.
+//! - `--without TECHNIQUE` (sky, sky-light, shadows, ambient-occlusion, post,
+//!   upscaling; repeatable) leaves a rendering technique out, to measure its
+//!   cost or to find the cause of a defect.
+//! - `--camera X,Y,Z,TX,TY,TZ` holds the camera at a place, looking at
+//!   another: pictures of a place rather than of the race. A bench run with
+//!   it is not the sanctioned bench, and its report says so.
 
 mod bench;
 mod content;
 mod effects;
 mod hud;
 mod karts;
+mod landmarks;
 mod play;
 mod predict;
 mod scene;
 mod scenery;
+mod sculpt;
 mod track;
 
 use std::{path::PathBuf, time::SystemTime};
@@ -43,7 +48,7 @@ use osage_sdk::v0;
 fn main() -> Result<()> {
     let (mut url, mut tier, mut bench) = ("ws://127.0.0.1:7878".to_owned(), Tier::T2, false);
     let (mut frames, mut resolution, mut out, mut without) = (2400u32, None, None, Vec::new());
-    let (mut autodrive, mut screenshot_after) = (false, None);
+    let (mut autodrive, mut screenshot_after, mut viewpoint) = (false, None, None);
     let mut args = std::env::args().skip(1);
     while let Some(arg) = args.next() {
         let mut value = || args.next().with_context(|| format!("{arg} needs a value"));
@@ -55,6 +60,15 @@ fn main() -> Result<()> {
             "--frames" => frames = value()?.parse().context("--frames")?,
             "--out" => out = Some(PathBuf::from(value()?)),
             "--without" => without.push(value()?.parse().map_err(anyhow::Error::msg)?),
+            "--camera" => {
+                let numbers: Vec<f32> = value()?
+                    .split(',')
+                    .map(str::parse)
+                    .collect::<Result<_, _>>()
+                    .context("--camera takes six numbers")?;
+                let [x, y, z, tx, ty, tz] = numbers[..] else { bail!("--camera takes X,Y,Z,TX,TY,TZ") };
+                viewpoint = Some(scene::Viewpoint { from: [x, y, z].into(), to: [tx, ty, tz].into() });
+            }
             "--resolution" => {
                 let value = value()?;
                 let (width, height) = value.split_once(['x', 'X']).context("--resolution takes WIDTHxHEIGHT")?;
@@ -83,12 +97,16 @@ fn main() -> Result<()> {
     .insert_resource(scene::look())
     .add_plugins(OsageRenderPlugin { tier, without: without.clone() })
     .add_plugins(scene::ScenePlugin);
+    if let Some(viewpoint) = viewpoint {
+        app.insert_resource(viewpoint);
+    }
     if bench {
         let now = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).map_or(0, |d| d.as_secs());
         let out = out.unwrap_or_else(|| PathBuf::from(format!("bench/out/{tier}-{now}")));
         std::fs::create_dir_all(&out).with_context(|| format!("creating {}", out.display()))?;
         let without = without.iter().map(|t| t.name().to_owned()).collect();
-        app.add_plugins(bench::BenchPlugin { tier, frames, out, resolution: (width, height), without });
+        let held = viewpoint.is_some();
+        app.add_plugins(bench::BenchPlugin { tier, frames, out, resolution: (width, height), without, held });
     } else {
         let tier = match tier {
             Tier::T1 => v0::Tier::T1Minimal,

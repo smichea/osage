@@ -1,21 +1,20 @@
 // SPDX-FileCopyrightText: The osage contributors
 // SPDX-License-Identifier: LicenseRef-osage-AGPL-3.0-or-later-with-exceptions
 
-//! R1 — sky and sun. The sun has its physical brightness at every tier.
+//! R1 — sky and sun, as they are seen. The sun has its physical brightness
+//! at every tier. How the sky lights the scene is [`crate::sky_light`]'s.
 //!
-//! - T1: a flat sky colour, distance fog, and a constant ambient light of a
-//!   clear sky's brightness.
+//! - T1: a flat sky colour and distance fog.
 //! - T2: Bevy's physical atmosphere with small lookup tables — sky, sun disk
-//!   and aerial perspective — and the same constant ambient light.
-//! - T3+: the full atmosphere, whose sky also lights the scene (image-based
-//!   lighting), recomputed every frame.
+//!   and aerial perspective.
+//! - T3+: the full atmosphere.
 //!
 //! Measured on the Iris Xe reference at 1080p (bench/README): the atmosphere
-//! costs about 4 ms with default tables, lighting the scene from it 5 ms
-//! more — too much for T2's 16.7 ms.
+//! costs about 4 ms with default tables — too much for T2's 16.7 ms, hence
+//! the small ones.
 
 use bevy::{
-    light::{Atmosphere, AtmosphereEnvironmentMapLight, SunDisk, atmosphere::ScatteringMedium, light_consts::lux},
+    light::{Atmosphere, SunDisk, atmosphere::ScatteringMedium, light_consts::lux},
     pbr::{AtmosphereSettings, DistanceFog, FogFalloff},
     prelude::*,
 };
@@ -23,8 +22,6 @@ use bevy::{
 use crate::{OsageCamera, Sun, Tier};
 
 const SKY_BLUE: Color = Color::srgb(0.53, 0.71, 0.88);
-/// Luminance of a clear sky, cd/m², for the tiers the sky does not light.
-const CLEAR_SKY: f32 = 6000.0;
 
 pub struct SkyPlugin;
 
@@ -40,11 +37,6 @@ fn spawn_atmosphere(mut commands: Commands, tier: Res<Tier>, mut media: ResMut<A
     } else {
         commands.insert_resource(ClearColor(SKY_BLUE));
     }
-    commands.insert_resource(if *tier >= Tier::T3 {
-        GlobalAmbientLight::NONE
-    } else {
-        GlobalAmbientLight { color: Color::srgb(0.78, 0.87, 1.0), brightness: CLEAR_SKY, ..default() }
-    });
 }
 
 fn camera(mut commands: Commands, tier: Res<Tier>, cameras: Query<Entity, Added<OsageCamera>>) {
@@ -68,11 +60,7 @@ fn camera(mut commands: Commands, tier: Res<Tier>, cameras: Query<Entity, Added<
                 sky_max_samples: 8,
                 ..default()
             }),
-            Tier::T3 => camera.insert((AtmosphereSettings::default(), AtmosphereEnvironmentMapLight::default())),
-            Tier::T4 => camera.insert((
-                AtmosphereSettings::default(),
-                AtmosphereEnvironmentMapLight { size: UVec2::splat(256), ..default() },
-            )),
+            Tier::T3 | Tier::T4 => camera.insert(AtmosphereSettings::default()),
         };
     }
 }

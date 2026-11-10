@@ -64,7 +64,7 @@ Each workstream has a scope, a state, its next milestones and its oracle. Milest
 
 | # | Workstream | State (2026-11) | Next milestones | Accepted when |
 |---|---|---|---|---|
-| R1 | **Sky and sun**: physical atmosphere, sun, time of day | `osage_render::sky`: physical atmosphere lighting the scene (T2+), flat sky and fog (T1) | time of day; clouds (with R12) | bench screenshots at three times of day; no budget regression |
+| R1 | **Sky and sun**: physical atmosphere, sun, time of day | `osage_render::sky`: physical atmosphere (T2+), flat sky and fog (T1); `osage_render::sky_light`: the atmosphere lights the scene (T3+), a constant light below | time of day; clouds (with R12) | bench screenshots at three times of day; no budget regression |
 | R2 | **Shadows**: cascades, contact shadows, soft shadows | `osage_render::shadows`: cascades per tier, contact shadows T3+ | soft shadows (PCSS) T3+; tuning from the bench shots | no visible shadow acne or peter-panning in shots; budget held |
 | R3 | **Ambient occlusion** | `osage_render::ambient_occlusion`: screen-space, T2+ | cost on integrated GPUs; GTAO-class quality T3 | shots; budget |
 | R4 | **Global illumination** | none (T1–T3); Solari experimental (T4) | probe GI (T2–T3: irradiance volumes or DDGI-like); Solari on the desktop (T4) | indirect light visible under the bridge/barriers; budget per tier |

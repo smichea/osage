@@ -4825,6 +4825,7 @@ name = "osage-render"
 version = "0.1.0"
 dependencies = [
  "bevy",
+ "half",
 ]
 
 [[package]]

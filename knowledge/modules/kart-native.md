@@ -6,7 +6,7 @@ resource: https://github.com/smichea/osage/tree/main/worlds/kart/native
 licence: MIT OR Apache-2.0
 status: draft
 tags: [kart, client, bevy, benchmark]
-generated: { by: "claude-code/claude-fable-5-2", at: "2026-11-10T06:45:00Z" }
+generated: { by: "claude-code/claude-opus-5-5", at: "2026-11-10T09:30:00Z" }
 ---
 
 # Purpose
@@ -21,11 +21,11 @@ Show that a native client joins the same world as a browser, and give rendering 
 
 # Architecture
 
-Each frame has two stages. In `Simulate`, one of two plugins writes the poses: `play` applies what the world sent and predicts the player's kart; `bench` steps a local race. In `Draw`, the scene modules read the poses: `track` (road, markings, kerbs, barriers, land), `scenery` (trees, clouds, grandstand, tyre stacks), `karts` (model and motion), `effects` (particles), and the chase camera. `hud` shows a `RaceView`, a plain description of the race that `play` fills.
+Each frame has two stages. In `Simulate`, one of two plugins writes the poses: `play` applies what the world sent and predicts the player's kart; `bench` steps a local race. In `Draw`, the scene modules read the poses: `track` (road, markings, kerbs, mown verges, barriers, the land with its knoll and lake), `scenery` (trees, bushes, flowers, rocks, clouds, balloons, mountains) and `landmarks` (start gantry and grandstand, tyre stacks and chevrons, arches, windmill, jetty and boat, fair with a big wheel), both built with `sculpt`, `karts` (model and motion), `effects` (particles), and the chase camera. `hud` shows a `RaceView`, a plain description of the race that `play` fills.
 
 # Interfaces
 
-Command line: a world's address to play, `--bench` to measure, `--tier`, `--without TECHNIQUE`, `--autodrive`, `--screenshot-after`. `OSAGE_ASSETS` names the content directory, or `none`.
+Command line: a world's address to play, `--bench` to measure, `--tier`, `--without TECHNIQUE`, `--autodrive`, `--screenshot-after`, `--camera X,Y,Z,TX,TY,TZ` to hold the camera at a place (pictures of the landmarks; a bench run with it is not the sanctioned bench). `OSAGE_ASSETS` names the content directory, or `none`.
 
 # Invariants
 
@@ -35,7 +35,7 @@ Command line: a world's address to play, `--bench` to measure, `--tier`, `--with
 
 # Knowledge
 
-- Algorithms: [exact client prediction](/algorithms/exact-client-prediction.md), [timedemo bench](/algorithms/timedemo-bench.md), [land around a track](/algorithms/land-around-a-track.md), [particle pool](/algorithms/particle-pool.md).
+- Algorithms: [exact client prediction](/algorithms/exact-client-prediction.md), [timedemo bench](/algorithms/timedemo-bench.md), [land around a track](/algorithms/land-around-a-track.md), [sculpted scenery](/algorithms/sculpted-scenery.md), [particle pool](/algorithms/particle-pool.md).
 - Module it draws with: [osage-render](/modules/osage-render.md). Physics: [osage-kart-physics](/modules/kart-physics.md).
 - Oracle: [the render bench](/oracles/render-bench.md).
 
