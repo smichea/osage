@@ -15,6 +15,8 @@
 //! - `--without TECHNIQUE` (sky, sky-light, shadows, ambient-occlusion, post,
 //!   upscaling; repeatable) leaves a rendering technique out, to measure its
 //!   cost or to find the cause of a defect.
+//! - `--headless` (with `--bench`) opens no window and needs no display: for
+//!   machines without a screen, such as cloud GPUs (D-042).
 //! - `--camera X,Y,Z,TX,TY,TZ` holds the camera at a place, looking at
 //!   another: pictures of a place rather than of the race. A bench run with
 //!   it is not the sanctioned bench, and its report says so.
@@ -32,15 +34,19 @@ mod scenery;
 mod sculpt;
 mod track;
 
-use std::{path::PathBuf, time::SystemTime};
+use std::{
+    path::PathBuf,
+    time::{Duration, SystemTime},
+};
 
 use anyhow::{Context, Result, bail};
 // Not Bevy's prelude here: its error helpers clash with anyhow's.
 use bevy::{
     DefaultPlugins,
-    app::{App, PluginGroup},
+    app::{App, PluginGroup, ScheduleRunnerPlugin},
     render::RenderPlugin,
-    window::{PresentMode, Window, WindowPlugin, WindowResolution},
+    window::{ExitCondition, PresentMode, Window, WindowPlugin, WindowResolution},
+    winit::WinitPlugin,
 };
 use osage_render::{OsageRenderPlugin, Tier};
 use osage_sdk::v0;
@@ -48,13 +54,14 @@ use osage_sdk::v0;
 fn main() -> Result<()> {
     let (mut url, mut tier, mut bench) = ("ws://127.0.0.1:7878".to_owned(), Tier::T2, false);
     let (mut frames, mut resolution, mut out, mut without) = (2400u32, None, None, Vec::new());
-    let (mut autodrive, mut screenshot_after, mut viewpoint) = (false, None, None);
+    let (mut autodrive, mut screenshot_after, mut viewpoint, mut headless) = (false, None, None, false);
     let mut args = std::env::args().skip(1);
     while let Some(arg) = args.next() {
         let mut value = || args.next().with_context(|| format!("{arg} needs a value"));
         match arg.as_str() {
             "--bench" => bench = true,
             "--autodrive" => autodrive = true,
+            "--headless" => headless = true,
             "--screenshot-after" => screenshot_after = Some(value()?.parse().context("--screenshot-after")?),
             "--tier" => tier = value()?.parse().map_err(anyhow::Error::msg)?,
             "--frames" => frames = value()?.parse().context("--frames")?,
@@ -79,6 +86,9 @@ fn main() -> Result<()> {
         }
     }
 
+    if headless && !bench {
+        bail!("--headless goes with --bench: playing needs a window");
+    }
     let mut window = Window { title: format!("osage kart · {tier}"), ..Default::default() };
     let (width, height) = resolution.unwrap_or(tier.bench_resolution());
     if bench {
@@ -91,12 +101,21 @@ fn main() -> Result<()> {
     // The bench compiles its shaders before drawing, so that every frame is
     // complete and the same everywhere; playing, they compile in the background.
     let render = RenderPlugin { synchronous_pipeline_compilation: bench, ..Default::default() };
-    app.add_plugins(
-        DefaultPlugins.set(WindowPlugin { primary_window: Some(window), ..Default::default() }).set(render),
-    )
-    .insert_resource(scene::look())
-    .add_plugins(OsageRenderPlugin { tier, without: without.clone() })
-    .add_plugins(scene::ScenePlugin);
+    if headless {
+        // No window and no windowing system: frames are drawn into the
+        // off-screen picture only, as fast as the machine can.
+        let windowless =
+            WindowPlugin { primary_window: None, exit_condition: ExitCondition::DontExit, ..Default::default() };
+        app.add_plugins(DefaultPlugins.set(windowless).set(render).disable::<WinitPlugin>())
+            .add_plugins(ScheduleRunnerPlugin::run_loop(Duration::ZERO));
+    } else {
+        app.add_plugins(
+            DefaultPlugins.set(WindowPlugin { primary_window: Some(window), ..Default::default() }).set(render),
+        );
+    }
+    app.insert_resource(scene::look())
+        .add_plugins(OsageRenderPlugin { tier, without: without.clone() })
+        .add_plugins(scene::ScenePlugin);
     if let Some(viewpoint) = viewpoint {
         app.insert_resource(viewpoint);
     }

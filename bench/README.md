@@ -6,7 +6,7 @@ The oracle of the rendering programme ([design/03 §3](../design/03-rendering.md
 cargo run --release -p osage-kart-native -- --bench --tier T2
 ```
 
-It plays 2400 frames (40 s of race) as fast as the machine can, and writes `report.json` and four screenshots to `bench/out/<tier>-<time>/` (not committed). The scene is drawn off screen at the tier's resolution and only shown in a window, so the display's scale factor and the window manager do not change what is measured. Options: `--frames N`, `--resolution WIDTHxHEIGHT`, `--out DIR`, and `--without TECHNIQUE` (sky, sky-light, shadows, ambient-occlusion, post, upscaling) to measure what one technique costs. `OSAGE_ASSETS=none` runs without the manifest's content.
+It plays 2400 frames (40 s of race) as fast as the machine can, and writes `report.json` and four screenshots to `bench/out/<tier>-<time>/` (not committed). The scene is drawn off screen at the tier's resolution and only shown in a window, so the display's scale factor and the window manager do not change what is measured. Options: `--frames N`, `--resolution WIDTHxHEIGHT`, `--out DIR`, and `--without TECHNIQUE` (sky, sky-light, shadows, ambient-occlusion, post, upscaling) to measure what one technique costs. `OSAGE_ASSETS=none` runs without the manifest's content; `--headless` opens no window and needs no display (machines without a screen, such as cloud GPUs).
 
 - Close other programs; on a laptop, plug it in. Run `python3 tools/fetch-assets.py` first: the report says which content was there.
 - Shaders are compiled before the first frame is drawn; the report gives that stall apart, as the worst warm-up frame.
