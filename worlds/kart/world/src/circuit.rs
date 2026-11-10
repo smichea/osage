@@ -5,7 +5,8 @@
 //! long start straight, a sweeping right-hander, an S, a chicane and a
 //! hairpin.
 
-use osage_kart_physics::Track;
+use libm::{cosf, sinf};
+use osage_kart_physics::{Kart, Track};
 
 use crate::proto;
 
@@ -61,6 +62,21 @@ impl Circuit {
         // The start line sits at the second control point, on the straight.
         let start = track.locate(CONTROL[1][0], CONTROL[1][1]).along;
         Self { track, start }
+    }
+
+    /// The circuit a world announced in its `kart.track/1`.
+    pub fn from_proto(track: &proto::Track) -> Self {
+        let points = track.points.as_chunks::<2>().0.to_vec();
+        Self { track: Track::new(points, track.half_width, track.verge), start: track.start }
+    }
+
+    /// Slot `n` of the starting grid: two columns, rows every 7 m behind the line.
+    pub fn grid_slot(&self, n: usize) -> Kart {
+        let along = self.start - 8.0 - 7.0 * (n / 2) as f32;
+        let (centre, heading) = self.track.at(along);
+        let side = if n.is_multiple_of(2) { -3.0 } else { 3.0 };
+        // Right of the road is (-cos h, sin h).
+        Kart { x: centre[0] - cosf(heading) * side, z: centre[1] + sinf(heading) * side, heading, ..Kart::default() }
     }
 
     /// Distance from the start line, `0..length`.

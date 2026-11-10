@@ -4,7 +4,7 @@ version = 1
 
 # Documentation: research, design notes, decision log, README, guides
 [[annotations]]
-path = ["research/**", "design/**", "README.md", "CONTRIBUTING.md", "LICENSE-EXCEPTIONS.md"]
+path = ["research/**", "design/**", "bench/**", "README.md", "CONTRIBUTING.md", "AGENTS.md", "CLAUDE.md", "LICENSE-EXCEPTIONS.md"]
 precedence = "aggregate"
 SPDX-FileCopyrightText = "The osage contributors"
 SPDX-License-Identifier = "CC-BY-SA-4.0"

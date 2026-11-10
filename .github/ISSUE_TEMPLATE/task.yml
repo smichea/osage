@@ -1,0 +1,31 @@
+name: Task
+description: A piece of work small enough for one person or agent, with the check that proves it done
+labels: ["task"]
+body:
+  - type: input
+    id: module
+    attributes:
+      label: Module or workstream
+      description: "A crate, package or rendering workstream (design/03), e.g. osage-render · R2 shadows"
+    validations:
+      required: true
+  - type: textarea
+    id: goal
+    attributes:
+      label: Goal
+      description: What should exist or be true when this is done, and why.
+    validations:
+      required: true
+  - type: textarea
+    id: oracle
+    attributes:
+      label: Oracle — done when
+      description: "The check a machine can run: a test that passes, a budget held on the bench (tier, machine), a reference image, a determinism hash."
+      placeholder: "kart-native --bench --tier T2 on the Iris Xe reference: mean frame time within 16.7 ms, shots show soft shadow edges"
+    validations:
+      required: true
+  - type: textarea
+    id: notes
+    attributes:
+      label: Pointers
+      description: Files, decisions, papers or talks to start from (public sources only).

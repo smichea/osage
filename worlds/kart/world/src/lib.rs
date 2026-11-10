@@ -16,6 +16,7 @@ use osage_kart_physics::Kart;
 use osage_world_module_api::{Discrete, EntityIds, RegionSet, Schema, TypeSpec, WorldModule};
 
 pub use circuit::Circuit;
+pub use driving::autopilot;
 
 /// Generated from `proto/kart/v1/kart.proto`.
 pub mod proto {

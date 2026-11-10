@@ -14,6 +14,7 @@ repository.workspace = true
 [dependencies]
 osage-world-module-api.workspace = true
 osage-kart-physics.workspace = true
+libm.workspace = true
 bevy = { workspace = true, features = ["std", "multi_threaded", "async_executor"] }
 prost.workspace = true
 

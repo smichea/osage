@@ -288,3 +288,27 @@ Date: 2026-11-10
   - **AI agents:** agents drive through the world's autopilot (`kart.autopilot/1`: pace, line, drift), discovered and sent through the generic MCP tool `send_intent`. An LLM cannot steer 60 times a second.
   - **Bots** fill the grid.
 - **Alternatives:** a TypeScript copy of the physics (two implementations that would drift apart); repeating a late human's last controls (it made every late step a misprediction); one datagram per step.
+
+## D-032 — Rendering programme: one plugin per technique, tiers, and the bench as oracle
+
+Date: 2026-11-10
+
+- **Decision:** rendering advances as a programme many people and agents can work on in parallel ([design/03](03-rendering.md)):
+  - `osage-render` holds **one Bevy plugin per technique**, each configured per fidelity tier (T1–T4); the first four are sky and sun, shadows, ambient occlusion, post-processing;
+  - the **native kart client** (`worlds/kart/native`) is the testbed: it plays online like any client and runs **the bench**, a timedemo that draws the same frames on every machine and reports frame times and screenshots;
+  - every rendering change shows the bench before and after on a reference machine; each tier has a frame-time budget;
+  - content comes from CC0 libraries or procedural generation, listed in an asset manifest;
+  - work is cut into fourteen workstreams (R1–R14), each with milestones and an oracle.
+- **Why:** reaching the GTA 6 bar is a multi-year, many-hands effort ([research/04](../research/04-rendering-vs-rage.md)); what one session can give it is the structure that makes each contribution small, independent and measurable.
+- **Owner's choices:** the high end is carried by the native Bevy client, the three.js client stays the light tier; the high-end reference machine is the maintainer's desktop with ray tracing, the modest one an Intel Iris Xe laptop.
+- **Alternatives:** one monolithic "quality" setting (no room for parallel work or old hardware); the browser as the only client (no ray tracing in WebGPU).
+
+## D-033 — Tasks carry their oracle; clean sources
+
+Date: 2026-11-10
+
+- **Decision:** two rules taken from how decompilation communities work and from what they may not be used for ([research/07](../research/07-zelda-reverse-engineering.md)):
+  1. **Every task names its oracle** — the check a machine can run to say it is done (a test, a budget held on the bench, a reference image, a determinism hash). The issue and pull-request templates ask for it; [AGENTS.md](../AGENTS.md) tells AI agents which checks to run before reporting.
+  2. **Clean sources:** nothing from commercial games enters osage — no decompiled, recompiled, extracted or leaked code or content, no port built on them, no proprietary SDK headers. Techniques are learnt from public talks, papers and experiments; someone who worked on a game's decompilation does not write the equivalent part of osage from memory ([CONTRIBUTING](../CONTRIBUTING.md#clean-sources)).
+- **Why:** the matching decompilation of a game is a translation of its publisher's code, whatever licence its repository carries; and what makes those communities finish whole games with thousands of contributors and agents is small tasks with an objective check and public progress — which osage can have with budgets, reference images and hashes instead of byte-for-byte matches.
+- **What is reused:** ideas from the MIT-licensed RT64 renderer (a universal shader while specialised ones compile, frames drawn between simulation steps, background texture streaming), listed as milestones of workstream R13.

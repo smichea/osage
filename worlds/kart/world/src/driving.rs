@@ -7,13 +7,13 @@
 use std::collections::BTreeMap;
 
 use bevy::prelude::*;
-use osage_kart_physics::{Controls, Kart, MAX_SPEED, step, wrap};
+use libm::{atan2f, cosf, fabsf, sinf};
+use osage_kart_physics::{Controls, Kart, MAX_SPEED, bump, step, wrap};
 use osage_world_module_api::IntentReceived;
 use prost::Message as _;
 
 use crate::{
-    Body, Course, Ids,
-    circuit::HALF_WIDTH,
+    Body, Circuit, Course, Ids,
     proto::{self, Phase},
     race::{Progress, Race},
 };
@@ -26,7 +26,6 @@ const BACKLOG: usize = 6;
 const CREDIT: u32 = 8;
 /// Ticks a kart waits for a late step before coasting: its driver is gone.
 const PATIENCE: u32 = 8;
-const KART_RADIUS: f32 = 0.9;
 
 #[derive(Component)]
 pub enum Pilot {
@@ -102,11 +101,11 @@ pub fn drive(race: Res<Race>, course: Res<Course>, mut karts: Query<(&mut Body, 
     for (mut body, mut pilot, progress) in &mut karts {
         let mut controls = match &mut *pilot {
             Pilot::Human(steps) => next_steps(steps),
-            Pilot::Agent(autopilot) | Pilot::Bot(autopilot) => vec![drive_for(&body.0, autopilot, &course)],
+            Pilot::Agent(wanted) | Pilot::Bot(wanted) => vec![autopilot(&body.0, wanted, &course.0)],
         };
         // Past the line, the autopilot brings the kart round gently.
         if progress.finish_ms.is_some() {
-            controls = vec![drive_for(&body.0, &proto::Autopilot { pace: 0.5, line: 0.0, drift: false }, &course)];
+            controls = vec![autopilot(&body.0, &proto::Autopilot { pace: 0.5, line: 0.0, drift: false }, &course.0)];
         }
         for mut controls in controls {
             // The lights hold the karts; after the race, they coast.
@@ -141,17 +140,19 @@ fn next_steps(steps: &mut Steps) -> Vec<Controls> {
     taken
 }
 
-/// The autopilot: aims at a point ahead on its line, holds its pace, slows
-/// for sharp bends and drifts through them if allowed.
-fn drive_for(kart: &Kart, autopilot: &proto::Autopilot, course: &Course) -> Controls {
-    let track = &course.0.track;
+/// The world's autopilot, which drives bots and AI agents' karts: it aims at
+/// a point ahead on its line, holds its pace, slows for sharp bends and
+/// drifts through them if allowed. Same bits on every platform (`libm`), so
+/// that a local simulation — a benchmark, a replay — is reproducible.
+pub fn autopilot(kart: &Kart, wanted: &proto::Autopilot, circuit: &Circuit) -> Controls {
+    let track = &circuit.track;
     let spot = track.locate(kart.x, kart.z);
     let (centre, road) = track.at(spot.along + 6.0 + kart.speed.max(0.0) * 0.55);
-    let offset = autopilot.line.clamp(-1.0, 1.0) * (HALF_WIDTH - 1.5);
-    let target = [centre[0] - road.cos() * offset, centre[1] + road.sin() * offset];
-    let error = wrap((target[0] - kart.x).atan2(target[1] - kart.z) - kart.heading);
-    let bend = error.abs();
-    let pace = autopilot.pace.clamp(0.0, 1.0) * if bend > 0.5 { 0.75 } else { 1.0 };
+    let offset = wanted.line.clamp(-1.0, 1.0) * (track.half_width - 1.5);
+    let target = [centre[0] - cosf(road) * offset, centre[1] + sinf(road) * offset];
+    let error = wrap(atan2f(target[0] - kart.x, target[1] - kart.z) - kart.heading);
+    let bend = fabsf(error);
+    let pace = wanted.pace.clamp(0.0, 1.0) * if bend > 0.5 { 0.75 } else { 1.0 };
     let throttle = if pace <= 0.0 {
         if kart.speed > 0.5 { -1.0 } else { 0.0 }
     } else if kart.speed < pace * MAX_SPEED {
@@ -162,7 +163,7 @@ fn drive_for(kart: &Kart, autopilot: &proto::Autopilot, course: &Course) -> Cont
     Controls {
         throttle,
         steer: (-error * 2.2).clamp(-1.0, 1.0),
-        drift: autopilot.drift && bend > 0.18 && kart.speed > 14.0,
+        drift: wanted.drift && bend > 0.18 && kart.speed > 14.0,
     }
 }
 
@@ -170,17 +171,6 @@ fn drive_for(kart: &Kart, autopilot: &proto::Autopilot, course: &Course) -> Cont
 pub fn collide(mut karts: Query<&mut Body>) {
     let mut pairs = karts.iter_combinations_mut();
     while let Some([mut a, mut b]) = pairs.fetch_next() {
-        let (dx, dz) = (b.0.x - a.0.x, b.0.z - a.0.z);
-        let distance = (dx * dx + dz * dz).sqrt();
-        let overlap = 2.0 * KART_RADIUS - distance;
-        if overlap <= 0.0 {
-            continue;
-        }
-        let (nx, nz) = if distance > 1e-4 { (dx / distance, dz / distance) } else { (1.0, 0.0) };
-        let push = overlap / 2.0;
-        (a.0.x, a.0.z) = (a.0.x - nx * push, a.0.z - nz * push);
-        (b.0.x, b.0.z) = (b.0.x + nx * push, b.0.z + nz * push);
-        a.0.speed *= 0.97;
-        b.0.speed *= 0.97;
+        bump(&mut a.0, &mut b.0);
     }
 }

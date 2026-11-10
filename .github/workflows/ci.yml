@@ -24,14 +24,16 @@ jobs:
       - run: cargo test -p osage-proto -p osage-sdk -p osage-credentials -p osage-server -p osage-agent -p osage-bridge -p osage-kart-physics -p osage-world-kart
 
   native-client:
-    name: Rust — native Bevy client
+    name: Rust — native Bevy clients and rendering
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libasound2-dev libudev-dev libwayland-dev libxkbcommon-dev
       - run: rustup toolchain install stable --profile minimal --component clippy && rustup default stable
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
-      - run: cargo clippy -p osage-client --all-targets -- -D warnings
+      - run: cargo clippy -p osage-client -p osage-render -p osage-kart-native --all-targets -- -D warnings
+      # Unoptimised dependencies here: the tests are light and Bevy builds much faster.
+      - run: cargo test -p osage-kart-native --config 'profile.dev.package."*".opt-level=0'
 
   typescript:
     name: TypeScript — SDK, three.js and kart clients

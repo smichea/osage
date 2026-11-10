@@ -40,6 +40,21 @@ See the [decision log](design/decisions.md) and the [licensing review](research/
 - AGPL code never moves into the specification or SDK directories.
 - Never commit proprietary vendor headers or binaries (GPU, platform or console SDKs); they are reached only through the documented interfaces.
 
+## Clean sources
+
+osage is written from public knowledge and its contributors' own work ([research/07](research/07-zelda-reverse-engineering.md)).
+
+- **Never bring in code or content from a commercial game**: nothing decompiled, recompiled, extracted, leaked or copied from a port built on those — code, assets, level data, SDK headers or names. A decompilation repository's own licence covers its contributors' rights only, never the game's.
+- **Learn techniques from talks, papers, documentation and your own experiments.** If you worked on the decompilation or a port of a game, do not write the equivalent part of osage from memory; say so and let someone else take the task.
+- **Third-party code** enters only with a licence compatible with the file's licence (`cargo deny` checks dependencies) and with its attribution kept.
+- **Content** (models, textures, sounds) enters only with a known free licence, listed in the asset manifest ([design/03 §5](design/03-rendering.md#5-content)).
+- AI agents follow the same rules and do not fetch such sources while writing code ([AGENTS.md](AGENTS.md)). Some projects refuse AI-written contributions: respect their policy when contributing upstream.
+- In doubt, ask a maintainer before writing.
+
+## Tasks and their proof
+
+Work is cut into tasks small enough for one person or agent, each with an **oracle**: the check a machine can run to say it is done — a test, a budget held on the bench, a reference image, a determinism hash ([design/03 §3](design/03-rendering.md#3-oracles-how-done-is-decided)). Say in the pull request which oracle you ran and what it printed.
+
 ## Research and design notes
 
 - Every factual claim carries a source; claims you could not verify are marked as such.

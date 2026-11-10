@@ -167,7 +167,7 @@ fn line_up(
         (Some(*session), controller.per_world_id.clone(), controller.clone(), pilot)
     });
     for (slot, (owner, name, controller, pilot)) in people.chain(bots).take(seats).enumerate() {
-        let kart = grid_slot(course, slot);
+        let kart = course.0.grid_slot(slot);
         let bot = owner.is_none();
         let progress = Progress {
             name,
@@ -190,16 +190,6 @@ fn line_up(
             spawned.insert(Owner(session));
         }
     }
-}
-
-/// Slot `n` of the grid: two columns, rows every 7 m behind the line.
-fn grid_slot(course: &Course, n: usize) -> Kart {
-    let track = &course.0.track;
-    let along = course.0.start - 8.0 - 7.0 * (n / 2) as f32;
-    let (centre, heading) = track.at(along);
-    let side = if n.is_multiple_of(2) { -3.0 } else { 3.0 };
-    // Right of the road is (-cos h, sin h).
-    Kart { x: centre[0] - heading.cos() * side, z: centre[1] + heading.sin() * side, heading, ..default() }
 }
 
 /// Laps through every sector in order, finishes, ranking (on the grid: the

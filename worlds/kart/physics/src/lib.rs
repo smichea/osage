@@ -252,6 +252,25 @@ pub fn step(kart: &mut Kart, controls: Controls, track: &Track) {
     }
 }
 
+/// Half the distance at which two karts touch, metres.
+pub const KART_RADIUS: f32 = 0.9;
+
+/// Karts bump: two overlapping karts are pushed apart and lose a little speed.
+pub fn bump(a: &mut Kart, b: &mut Kart) {
+    let (dx, dz) = (b.x - a.x, b.z - a.z);
+    let distance = sqrtf(dx * dx + dz * dz);
+    let overlap = 2.0 * KART_RADIUS - distance;
+    if overlap <= 0.0 {
+        return;
+    }
+    let (nx, nz) = if distance > 1e-4 { (dx / distance, dz / distance) } else { (1.0, 0.0) };
+    let push = overlap / 2.0;
+    (a.x, a.z) = (a.x - nx * push, a.z - nz * push);
+    (b.x, b.z) = (b.x + nx * push, b.z + nz * push);
+    a.speed *= 0.97;
+    b.speed *= 0.97;
+}
+
 /// An angle in `(-π, π]`.
 pub fn wrap(angle: f32) -> f32 {
     atan2f(sinf(angle), cosf(angle))

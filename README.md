@@ -73,6 +73,15 @@ Drive with the arrows or WASD, drift with Space or Shift: hold it through a bend
 
 **On a phone** on the same Wi-Fi, the left thumb steers on a pad, the right one holds DRIFT or BRAKE, and the kart accelerates by itself. Serve on the local network — `cargo run --release -p osage-kart-server -- --listen 0.0.0.0:7878 --webtransport 0.0.0.0:7879` and `npm run dev -w @osage/kart-client -- --host` — open the "Network" URL Vite prints, and let the firewall accept TCP 5173 and 7878 (and UDP 7879) from the local network. A page served over plain HTTP from a LAN address is not a secure context, so the phone plays over WebSocket; WebTransport needs the page over HTTPS.
 
+**The native client** (Bevy) joins the same races and is the testbed of the [rendering programme](design/03-rendering.md): physical sky lighting the scene, cascaded shadows, ambient occlusion, HDR, temporal anti-aliasing and bloom, chosen per fidelity tier.
+
+```sh
+cargo run --release -p osage-kart-native -- --tier T2             # play: same controls, same world (F12: screenshot; --autodrive: demo)
+cargo run --release -p osage-kart-native -- --bench --tier T2     # the bench: same frames on every machine, timed
+```
+
+The bench is the programme's oracle — see [`bench/README.md`](bench/README.md).
+
 **An AI agent can race.** Start the server with `--trust-dev-issuer`, give the agent a delegation as above, and let it call `world_info`. It finds `kart.autopilot/1` with its description and drives through `send_intent`, e.g. `{"type": "kart.autopilot/1", "value": {"pace": 0.9, "line": 0.2, "drift": true}}`.
 
 ## Research
@@ -86,8 +95,10 @@ Drive with the arrows or WASD, drift with Space or Shift: hold it through a bend
 | [04 — Rendering vs RAGE](research/04-rendering-vs-rage.md) | What GTA 6 does, open renderers and libraries, ranked gaps |
 | [05 — Mixed-reality standards](research/05-mixed-reality-standards.md) | WebXR/OpenXR, georeferencing, capturing real places, Matter/Home Assistant/ROS 2/MAVLink, WoT, safety and privacy rules |
 | [06 — Licensing review](research/06-licensing-review.md) | Validity of the AGPL additional permissions, GPU vendor licences (NVIDIA, AMD, Intel), app stores, in-process vs out-of-process components, spec patents, AI-assisted contributions |
+| [07 — Ocarina of Time reverse engineering](research/07-zelda-reverse-engineering.md) | What exists around the decompilation, what is legally usable (MIT renderer and tools: ideas), red lines, and what its community teaches about organising many contributors and AI agents |
+| [08 — Recent kart racers](research/08-kart-racers.md) | What Mario Kart World, Sonic Racing: CrossWorlds and open-source kart games do; reusable code and CC0 assets; ten prioritised features for kart v2; how items fit exact prediction; red lines |
 
-Each survey is a dated snapshot (2026-11-09) with sources; claims that could not be verified are marked as such.
+Each survey is a dated snapshot (2026-11-09 or 2026-11-10) with sources; claims that could not be verified are marked as such.
 
 ## Design notes
 
@@ -97,6 +108,7 @@ Architecture decision records: [ADR-0001 — Architecture](design/adr/0001-archi
 |---|---|
 | [01 — Accounts, uniqueness and the agent mesh](design/01-accounts-and-agents.md) | Per-world identifiers and assurance levels against fraud and ban evasion; AI agents as accountable participants of the server mesh. Reference adapters: [nexlink](https://www.nexlink.ph) (socially validated identities) and [ameesh](https://ameesh.org) (accountable teams of humans and AI agents) — neither is imposed |
 | [02 — Mixed worlds, real devices and OpenDeviceDB](design/02-mixed-worlds-and-devices.md) | Real places captured and geo-anchored, real devices as live entities, AR participants, safe physical actuation through a local device bridge. Reference device layer: [OpenDeviceDB](https://opendevicedb.org) (open directory of 29,000+ devices, composable WASM components, MCP server) — not imposed |
+| [03 — Rendering programme](design/03-rendering.md) | Towards the GTA 6 bar, together: one plugin per technique, fidelity tiers T1–T4, oracles (the bench, reference images), workstreams R1–R14, content rules, how to contribute a technique |
 
 ## First world
 

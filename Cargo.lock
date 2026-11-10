@@ -1062,6 +1062,7 @@ dependencies = [
  "bevy_render",
  "bevy_shader",
  "bevy_shape",
+ "bevy_sprite_render",
  "bevy_transform",
  "bevy_utils",
  "bytemuck",
@@ -1222,6 +1223,8 @@ dependencies = [
  "bevy_time",
  "bevy_transform",
  "bevy_ui",
+ "bevy_ui_render",
+ "bevy_ui_widgets",
  "bevy_utils",
  "bevy_window",
  "bevy_winit",
@@ -4776,6 +4779,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "osage-kart-native"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "bevy",
+ "crossbeam-channel",
+ "osage-kart-physics",
+ "osage-render",
+ "osage-sdk",
+ "osage-world-kart",
+ "serde_json",
+ "tokio",
+]
+
+[[package]]
 name = "osage-kart-physics"
 version = "0.1.0"
 dependencies = [
@@ -4799,6 +4817,13 @@ dependencies = [
  "prost-build",
  "prost-types",
  "protox",
+]
+
+[[package]]
+name = "osage-render"
+version = "0.1.0"
+dependencies = [
+ "bevy",
 ]
 
 [[package]]
@@ -4843,6 +4868,7 @@ name = "osage-world-kart"
 version = "0.1.0"
 dependencies = [
  "bevy",
+ "libm",
  "osage-agent",
  "osage-credentials",
  "osage-kart-physics",
