@@ -381,3 +381,15 @@ Date: 2026-11-10 · From the architecture review of 2026-11-10, with the maintai
   - **identity and permissions:** who is who and who may do what are never delegated to a peer.
 - **Why:** old hardware and phones should join any world, and idle machines can help those that cannot keep up; a world among friends should not pay for checks it does not need, while a public competitive world can buy the guarantees it wants.
 - **Alternatives:** fixed placement (server computes, clients display — simple, but wastes clients and excludes weak ones); untrusted by default (every world pays for verification it may not need).
+
+## D-039 — Versions are bridged by translation modules
+
+Date: 2026-11-10 · From the architecture review of 2026-11-10, with the maintainer.
+
+- **Decision:** when a world type or the protocol itself changes major version (`kart.state/1` → `kart.state/2`, protocol v0 → v1), old clients keep working through **translation modules**: small components (D-035) that convert one version into another, supplied by the world for its types and by osage for the protocol. Like any computation (D-038), they run where they can — on the gateway, or on the client itself — and each is checked by an oracle: recorded messages of one version and their expected translation.
+- **Rules:**
+  1. A world announces, for each type, the versions it can serve directly or by translation; a client says which it understands; the gateway chooses.
+  2. A translation may lose information. When a version cannot express something (a concept that did not exist), **only that type is degraded**, with a message the client can show; the rest of the connection keeps working.
+  3. Adding fields within a major version stays compatible without translation (protobuf rules); a new major version is a new type name.
+- **Why:** "any client joins any world" must hold for clients that update slowly — a browser tab kept open, an app store release, an AI agent written against an older world. Worlds should not have to carry their past in their logic.
+- **Alternatives:** worlds serving several versions themselves (each world carries its past); refusing old clients (breaks the promise above). The difficulty of translating between modular, distributed versions is accepted: it is work, not a reason to give up the promise.
