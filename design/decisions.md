@@ -312,3 +312,17 @@ Date: 2026-11-10
   2. **Clean sources:** nothing from commercial games enters osage — no decompiled, recompiled, extracted or leaked code or content, no port built on them, no proprietary SDK headers. Techniques are learnt from public talks, papers and experiments; someone who worked on a game's decompilation does not write the equivalent part of osage from memory ([CONTRIBUTING](../CONTRIBUTING.md#clean-sources)).
 - **Why:** the matching decompilation of a game is a translation of its publisher's code, whatever licence its repository carries; and what makes those communities finish whole games with thousands of contributors and agents is small tasks with an objective check and public progress — which osage can have with budgets, reference images and hashes instead of byte-for-byte matches.
 - **What is reused:** ideas from the MIT-licensed RT64 renderer (a universal shader while specialised ones compile, frames drawn between simulation steps, background texture streaming), listed as milestones of workstream R13.
+
+## D-034 — Knowledge is kept as an OKF bundle with an osage profile
+
+Date: 2026-11-10
+
+- **Decision:** the knowledge behind each module — its architecture, the algorithms and techniques it uses, their invariants, costs and limits, and the oracle that proves each claim — is recorded in [`knowledge/`](../knowledge/index.md) as a bundle in the [Open Knowledge Format](https://github.com/GoogleCloudPlatform/knowledge-catalog/blob/main/okf/SPEC.md) v0.2, following the [osage engineering profile](../knowledge/profile.md):
+  1. **Four kinds of card:** `Module`, `Technique`, `Algorithm`, and OKF's `Attested Computation` for oracles. The profile adds the fields `resource` (the code described), `licence`, `sources` and `tiers`, and fixed sections per kind; it removes nothing from OKF.
+  2. **A card is written to be read without the code**, well enough to rebuild the idea in another engine or language, and cites where the idea comes from.
+  3. **A card changes with its code**, in the same change. Whoever writes it signs it; agents propose, people verify.
+  4. **A machine checks the bundle** (`tools/check-knowledge.py`, in continuous integration): format, required fields and sections, citations, links, and that every address into the repository exists.
+- **Why:** an idea can be reused where code cannot — in another language, under another licence, by an agent that has no room to read a whole crate. A community of people and agents needs a way into a module that is shorter than its source and that cannot silently rot. An existing open format gives tools and readers for free; the profile is what makes cards comparable and checkable.
+- **Federation:** the bundle is a valid member bundle of an [OKF Federation](https://github.com/manaty/okf-federation) and passes its bundle validator; nothing in osage requires a federation, and a federation chooses to register it.
+- **Scope of the first version:** the rendering crate and the kart world's physics and native client: 3 modules, 5 techniques, 5 algorithms, 2 oracles. The other modules get their cards as they are next changed; decisions, design notes and research surveys stay in `design/` and `research/` and join the bundle in a later version of the profile.
+- **Alternatives:** documentation comments only (bound to the code and its language, no place for sources, costs or alternatives); a wiki (outside review and version control); a format of our own (no shared tools, one more thing to learn).

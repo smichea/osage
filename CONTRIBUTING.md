@@ -55,6 +55,15 @@ osage is written from public knowledge and its contributors' own work ([research
 
 Work is cut into tasks small enough for one person or agent, each with an **oracle**: the check a machine can run to say it is done — a test, a budget held on the bench, a reference image, a determinism hash ([design/03 §3](design/03-rendering.md#3-oracles-how-done-is-decided)). Say in the pull request which oracle you ran and what it printed.
 
+## Knowledge cards
+
+An idea is worth as much as its code, and travels further. Each module, rendering technique and reusable algorithm has a card in [`knowledge/`](knowledge/index.md) that explains it well enough to rebuild it elsewhere: the problem, the method, the invariants, the cost, the limits, and the oracle that proves it. The format is the [osage profile](knowledge/profile.md) of the Open Knowledge Format.
+
+- A change that makes a card wrong updates the card in the same pull request; a new module, technique or algorithm comes with its card.
+- A card cites where its idea comes from: papers, talks, documentation, or osage's own design. This is also the record of its [clean sources](#clean-sources).
+- Whoever writes a card signs it in `generated`; a person who has checked it against the code adds themselves under `verified`. Agents never write a person's verification.
+- `python3 tools/check-knowledge.py` checks the bundle; continuous integration runs it.
+
 ## Research and design notes
 
 - Every factual claim carries a source; claims you could not verify are marked as such.

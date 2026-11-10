@@ -35,6 +35,14 @@ jobs:
       # Unoptimised dependencies here: the tests are light and Bevy builds much faster.
       - run: cargo test -p osage-kart-native --config 'profile.dev.package."*".opt-level=0'
 
+  knowledge:
+    name: Knowledge bundle — OKF and the osage profile
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends python3-yaml
+      - run: python3 tools/check-knowledge.py
+
   typescript:
     name: TypeScript — SDK, three.js and kart clients
     runs-on: ubuntu-latest

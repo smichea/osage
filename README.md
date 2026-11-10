@@ -104,6 +104,10 @@ The bench is the programme's oracle — see [`bench/README.md`](bench/README.md)
 
 Each survey is a dated snapshot (2026-11-09 or 2026-11-10) with sources; claims that could not be verified are marked as such.
 
+## Knowledge
+
+The ideas behind the code — architectures, algorithms, rendering techniques and the checks that prove their claims — are kept in [`knowledge/`](knowledge/index.md), written to be read **without the code** and reused in other engines. It is a bundle in the [Open Knowledge Format](https://github.com/GoogleCloudPlatform/knowledge-catalog/blob/main/okf/SPEC.md) v0.2 with an [osage profile](knowledge/profile.md): one card per module, technique, algorithm and oracle, each with its sources, its invariants, its limits and what it costs. A machine checks it (`python3 tools/check-knowledge.py`), and it can join an [OKF Federation](https://github.com/manaty/okf-federation) as a member bundle ([D-034](design/decisions.md#d-034--knowledge-is-kept-as-an-okf-bundle-with-an-osage-profile)). The first cards cover rendering and the kart world; the other modules follow.
+
 ## Design notes
 
 Architecture decision records: [ADR-0001 — Architecture](design/adr/0001-architecture.md) · [ADR-0002 — Protocol v0](design/adr/0002-protocol-v0.md). All decisions: [decision log](design/decisions.md).
