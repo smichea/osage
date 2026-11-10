@@ -362,3 +362,22 @@ Date: 2026-11-10 · From the architecture review of 2026-11-10, with the maintai
 - **Decision:** the replication gateway and the region server, two modules of one process today, become **two components with a message contract** between them (D-035). In one process the messages go through channels; when regions move to other machines, the same messages go over the network. This is done **before** the content service, so that every server feature added from now on respects the boundary.
 - **Why:** ADR-0001 makes the gateway/region interface internal and free to change, but a boundary kept by function calls erodes with every feature, and splitting a process late is costly.
 - **Order of work that follows from the review:** (1) the gateway/region message boundary; (2) components and their template, starting with the pieces the content service needs (procedural models, content loading); (3) the content service. Persistence (D-004) comes after.
+
+## D-038 — Computation runs where it can; trust by default, verification by choice
+
+Date: 2026-11-10 · From the architecture review of 2026-11-10, with the maintainer.
+
+- **Decision:** where a computation runs is **not fixed**. A client runs what it can; what it cannot is supplied by the server, or by other machines — other clients, or a peer compute network that a world chooses to use. The pattern of D-036 (a client generates a recipe if it can, otherwise it receives the baked file) applies to all world logic.
+  1. **Logic components do not depend on where they run:** WebAssembly, deterministic, explicit inputs and outputs, the same result on the server, on a client or on a peer (as the kart's physics already does, D-031).
+  2. **Clients declare their capabilities** (power, budget, battery, what they can run); the world places computations accordingly, and may move them during a session.
+  3. **Computing is not being the authority:** what a client computes for itself (its prediction) engages only itself; the world's authority decides the shared state, and decides whose computations it accepts.
+- **Trust is total by default.** Security is added in layers that each world chooses, per kind of computation, knowing that each costs performance. The engine provides the layers, from cheapest to dearest:
+  1. full trust (the default);
+  2. verification by sampling: since computations are deterministic, the authority or other peers redo a share of them, and a peer caught wrong is set aside;
+  3. computation reserved to trusted machines (identity, reputation, hardware attestation);
+  4. the server alone is the authority.
+- **Two exceptions, whatever a world chooses** (the engine's safety defaults protect people from a world):
+  - **actions on real devices:** the device bridge keeps its safety envelope, watchdog and emergency stop locally (D-009); they are never computed by a third party;
+  - **identity and permissions:** who is who and who may do what are never delegated to a peer.
+- **Why:** old hardware and phones should join any world, and idle machines can help those that cannot keep up; a world among friends should not pay for checks it does not need, while a public competitive world can buy the guarantees it wants.
+- **Alternatives:** fixed placement (server computes, clients display — simple, but wastes clients and excludes weak ones); untrusted by default (every world pays for verification it may not need).
