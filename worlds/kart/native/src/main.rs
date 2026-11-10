@@ -17,9 +17,14 @@
 //!   cause of a defect.
 
 mod bench;
+mod content;
+mod effects;
+mod karts;
 mod play;
 mod predict;
 mod scene;
+mod scenery;
+mod track;
 
 use std::{path::PathBuf, time::SystemTime};
 
@@ -74,6 +79,7 @@ fn main() -> Result<()> {
     app.add_plugins(
         DefaultPlugins.set(WindowPlugin { primary_window: Some(window), ..Default::default() }).set(render),
     )
+    .insert_resource(scene::look())
     .add_plugins(OsageRenderPlugin { tier, without: without.clone() })
     .add_plugins(scene::ScenePlugin);
     if bench {

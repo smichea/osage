@@ -73,7 +73,11 @@ Drive with the arrows or WASD, drift with Space or Shift: hold it through a bend
 
 **On a phone** on the same Wi-Fi, the left thumb steers on a pad, the right one holds DRIFT or BRAKE, and the kart accelerates by itself. Serve on the local network — `cargo run --release -p osage-kart-server -- --listen 0.0.0.0:7878 --webtransport 0.0.0.0:7879` and `npm run dev -w @osage/kart-client -- --host` — open the "Network" URL Vite prints, and let the firewall accept TCP 5173 and 7878 (and UDP 7879) from the local network. A page served over plain HTTP from a LAN address is not a secure context, so the phone plays over WebSocket; WebTransport needs the page over HTTPS.
 
-**The native client** (Bevy) joins the same races and is the testbed of the [rendering programme](design/03-rendering.md): physical sky lighting the scene, cascaded shadows, ambient occlusion, HDR, temporal anti-aliasing and bloom, chosen per fidelity tier.
+**The native client** (Bevy) joins the same races and is the testbed of the [rendering programme](design/03-rendering.md): a physical sky, cascaded shadows, HDR and bloom, hills and trees, a textured road, rounded karts that lean and hop, sparks, smoke and flames — each technique chosen per fidelity tier, so that an integrated GPU holds 60 frames a second.
+
+```sh
+python3 tools/fetch-assets.py     # optional: CC0 road and grass textures (6 MB, listed in assets/manifest.toml)
+```
 
 ```sh
 cargo run --release -p osage-kart-native -- --tier T2             # play: same controls, same world (F12: screenshot; --autodrive: demo)

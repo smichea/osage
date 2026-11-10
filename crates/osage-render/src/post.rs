@@ -1,9 +1,10 @@
 // SPDX-FileCopyrightText: The osage contributors
 // SPDX-License-Identifier: LicenseRef-osage-AGPL-3.0-or-later-with-exceptions
 
-//! R10 — post-processing and anti-aliasing. All tiers render in HDR with a
-//! filmic tonemapper and the exposure of a sunny day, since the sun has its
-//! physical brightness ([`crate::sky`]).
+//! R10 — post-processing and anti-aliasing. All tiers render in HDR, with
+//! the exposure of a sunny day since the sun has its physical brightness
+//! ([`crate::sky`]), and with the world's [`Look`]: its tonemapper, its
+//! saturation, its exposure offset.
 //!
 //! - T1, T2: FXAA, which needs no depth prepass; T2 adds bloom.
 //! - T3+: temporal anti-aliasing, bloom and motion blur.
@@ -16,12 +17,12 @@
 use bevy::{
     anti_alias::{fxaa::Fxaa, taa::TemporalAntiAliasing},
     camera::{Exposure, Hdr},
-    core_pipeline::tonemapping::Tonemapping,
     post_process::{bloom::Bloom, motion_blur::MotionBlur},
     prelude::*,
+    render::view::{ColorGrading, ColorGradingGlobal},
 };
 
-use crate::{OsageCamera, Tier};
+use crate::{Look, OsageCamera, Tier};
 
 pub struct PostPlugin;
 
@@ -31,11 +32,13 @@ impl Plugin for PostPlugin {
     }
 }
 
-fn camera(mut commands: Commands, tier: Res<Tier>, cameras: Query<Entity, Added<OsageCamera>>) {
+fn camera(mut commands: Commands, tier: Res<Tier>, look: Res<Look>, cameras: Query<Entity, Added<OsageCamera>>) {
     for camera in &cameras {
         let mut camera = commands.entity(camera);
+        let grading = ColorGradingGlobal { exposure: look.exposure, post_saturation: look.saturation, ..default() };
         // A physical sun is about 100 000 lux: expose as a camera does in full sun.
-        camera.insert((Hdr, Tonemapping::AgX, Exposure::SUNLIGHT, Msaa::Off));
+        camera.insert((Hdr, look.tonemapping, Exposure::SUNLIGHT, Msaa::Off));
+        camera.insert(ColorGrading { global: grading, ..default() });
         match *tier {
             Tier::T1 => camera.insert(Fxaa::default()),
             Tier::T2 => camera.insert((Fxaa::default(), Bloom::NATURAL)),

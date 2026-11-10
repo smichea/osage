@@ -25,3 +25,4 @@ bevy = { workspace = true, features = ["3d", "ui"] }
 crossbeam-channel.workspace = true
 serde_json.workspace = true
 tokio.workspace = true
+zune-jpeg.workspace = true

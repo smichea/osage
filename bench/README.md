@@ -6,9 +6,9 @@ The oracle of the rendering programme ([design/03 §3](../design/03-rendering.md
 cargo run --release -p osage-kart-native -- --bench --tier T2
 ```
 
-It plays 2400 frames (40 s of race) as fast as the machine can, and writes `report.json` and four screenshots to `bench/out/<tier>-<time>/` (not committed). The scene is drawn off screen at the tier's resolution and only shown in a window, so the display's scale factor and the window manager do not change what is measured. Options: `--frames N`, `--resolution WIDTHxHEIGHT`, `--out DIR`, and `--without TECHNIQUE` (sky, shadows, ambient-occlusion, post) to measure what one technique costs.
+It plays 2400 frames (40 s of race) as fast as the machine can, and writes `report.json` and four screenshots to `bench/out/<tier>-<time>/` (not committed). The scene is drawn off screen at the tier's resolution and only shown in a window, so the display's scale factor and the window manager do not change what is measured. Options: `--frames N`, `--resolution WIDTHxHEIGHT`, `--out DIR`, and `--without TECHNIQUE` (sky, shadows, ambient-occlusion, post, upscaling) to measure what one technique costs. `OSAGE_ASSETS=none` runs without the manifest's content.
 
-- Close other programs; on a laptop, plug it in.
+- Close other programs; on a laptop, plug it in. Run `python3 tools/fetch-assets.py` first: the report says which content was there.
 - Shaders are compiled before the first frame is drawn; the report gives that stall apart, as the worst warm-up frame.
 - A change to rendering is proposed with the summary printed at the end, **before and after**, on the same machine.
 
@@ -34,16 +34,20 @@ Add yours: one line here, and your reports in the pull requests you measure.
 
 Latest results of the reference machines, one line per machine and tier.
 
-| Date | Machine | Tier | Resolution | Mean | p95 | p99 | Over budget | Shader warm-up |
+| Date | Scene | Machine | Tier | Output (drawn at) | Mean | p95 | p99 | Over budget |
 |---|---|---|---|---|---|---|---|---|
-| 2026-11-10 | ThinkPad E14 Gen 5 (Iris Xe) | T1 | 1280×720 | 11.2 ms (89 fps) | 13.9 ms | 16.6 ms | 0 % of frames | 3.9 s |
-| 2026-11-10 | ThinkPad E14 Gen 5 (Iris Xe) | T2 | 1920×1080 | 15.9 ms (63 fps) | 22.3 ms | 27.1 ms | 33 % of frames | 2.4 s |
+| 2026-11-10 | first scene: flat ground, box karts | ThinkPad E14 Gen 5 (Iris Xe) | T1 | 1280×720 | 11.2 ms (89 fps) | 13.9 ms | 16.6 ms | 0 % of frames |
+| 2026-11-10 | first scene | ThinkPad E14 Gen 5 (Iris Xe) | T2 | 1920×1080 | 15.9 ms (63 fps) | 22.3 ms | 27.1 ms | 33 % |
+| 2026-11-10 | hills, scenery, textured road, rounded karts, particles | ThinkPad E14 Gen 5 (Iris Xe), under load | T1 | 1280×720 | 13.4 ms (75 fps) | 16.8 ms | 19.6 ms | 0 % |
+| 2026-11-10 | same | ThinkPad E14 Gen 5 (Iris Xe), under load | T2 | 1920×1080 (1632×918) | 16.9 ms (59 fps) | 23.9 ms | 31.4 ms | 41 % |
 
-T2 holds its budget on average on the integrated GPU, not yet for every frame: a third are over. T3 and T4 await the high-end reference machine.
+- "Under load": other programs were using the machine during these runs (load average 8 to 9 on 10 cores); a quiet run is expected to do better and will replace them.
+- T2 holds its budget on average on the integrated GPU, not for every frame. Without drawing under the output size it took 23.2 ms in the same conditions against 18.0 ms with: the scene is bound by the number of pixels there.
+- T3 and T4 await the high-end reference machine.
 
 ### What each technique costs
 
-Measured on the Iris Xe at 1080p with `--without`, before the tiers were cut to fit (2026-11-10):
+Measured on the Iris Xe at 1080p with `--without`, on the first scene, before the tiers were cut to fit (2026-11-10):
 
 | Technique, as first configured | Cost | Decision |
 |---|---|---|

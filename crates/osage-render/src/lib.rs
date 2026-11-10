@@ -12,6 +12,7 @@
 //! | [`shadows`] | R2 shadows | all: cascades per tier; contact shadows T3+ |
 //! | [`ambient_occlusion`] | R3 ambient occlusion | T3+ |
 //! | [`post`] | R10 post-processing and anti-aliasing | all: HDR, tonemapping, exposure; FXAA T1–T2, bloom T2+; TAA and motion blur T3+ |
+//! | [`resolution`] | R11 resolution and upscaling | all: a picture no taller than the tier allows, stretched to the window; T2 draws 85 % |
 //!
 //! Each tier's set is what its budget allows on the reference hardware,
 //! measured with the bench (`bench/README.md`); each module says what it
@@ -19,12 +20,13 @@
 
 pub mod ambient_occlusion;
 pub mod post;
+pub mod resolution;
 pub mod shadows;
 pub mod sky;
 
 use std::{fmt, str::FromStr};
 
-use bevy::prelude::*;
+use bevy::{core_pipeline::tonemapping::Tonemapping, prelude::*};
 
 /// Fidelity tiers (research/00): the same world at every tier, each with
 /// its own techniques and budget. T0 (headless) renders nothing.
@@ -80,6 +82,24 @@ impl fmt::Display for Tier {
     }
 }
 
+/// How a world wants its picture to look. The engine gives the means; the
+/// look is the world's: a world inserts its own before adding
+/// [`OsageRenderPlugin`], and the post-processing technique applies it.
+#[derive(Resource, Clone, Debug)]
+pub struct Look {
+    pub tonemapping: Tonemapping,
+    /// 1 leaves colours as rendered; above, more vivid.
+    pub saturation: f32,
+    /// Stops added to the exposure of a sunny day; above 0, brighter.
+    pub exposure: f32,
+}
+
+impl Default for Look {
+    fn default() -> Self {
+        Self { tonemapping: Tonemapping::AgX, saturation: 1.0, exposure: 0.0 }
+    }
+}
+
 /// The main 3D camera, which the techniques configure.
 #[derive(Component, Default)]
 pub struct OsageCamera;
@@ -95,10 +115,14 @@ pub enum Technique {
     Shadows,
     AmbientOcclusion,
     Post,
+    /// Drawing under the output size ([`resolution`]); without it, the
+    /// picture has the output's size, up to the tier's height.
+    Upscaling,
 }
 
 impl Technique {
-    pub const ALL: [Technique; 4] = [Technique::Sky, Technique::Shadows, Technique::AmbientOcclusion, Technique::Post];
+    pub const ALL: [Technique; 5] =
+        [Technique::Sky, Technique::Shadows, Technique::AmbientOcclusion, Technique::Post, Technique::Upscaling];
 
     pub fn name(self) -> &'static str {
         match self {
@@ -106,9 +130,14 @@ impl Technique {
             Technique::Shadows => "shadows",
             Technique::AmbientOcclusion => "ambient-occlusion",
             Technique::Post => "post",
+            Technique::Upscaling => "upscaling",
         }
     }
 }
+
+/// The techniques left out of this run.
+#[derive(Resource, Clone, Default)]
+pub struct LeftOut(pub Vec<Technique>);
 
 impl FromStr for Technique {
     type Err = String;
@@ -128,13 +157,18 @@ pub struct OsageRenderPlugin {
 
 impl Plugin for OsageRenderPlugin {
     fn build(&self, app: &mut App) {
-        app.insert_resource(self.tier);
+        app.insert_resource(self.tier)
+            .insert_resource(LeftOut(self.without.clone()))
+            .init_resource::<Look>()
+            .add_plugins(resolution::ResolutionPlugin);
         for technique in Technique::ALL.into_iter().filter(|t| !self.without.contains(t)) {
             match technique {
                 Technique::Sky => app.add_plugins(sky::SkyPlugin),
                 Technique::Shadows => app.add_plugins(shadows::ShadowsPlugin),
                 Technique::AmbientOcclusion => app.add_plugins(ambient_occlusion::AmbientOcclusionPlugin),
                 Technique::Post => app.add_plugins(post::PostPlugin),
+                // Always there: leaving it out only sets its scale to one.
+                Technique::Upscaling => app,
             };
         }
     }

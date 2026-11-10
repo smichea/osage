@@ -56,7 +56,7 @@ How to run it, and the results of the reference machines: [`bench/README.md`](..
 | T3 | 1440p | 16.7 ms |
 | T4 | 1440p | 33.3 ms |
 
-First results (2026-11-10, Iris Xe): T1 11.2 ms; T2 15.9 ms on average, with a third of the frames over budget. To get there, T2 gave up ambient occlusion, temporal anti-aliasing and sky lighting, each measured with `--without` ([bench/README](../bench/README.md#what-each-technique-costs)).
+First results (2026-11-10, Iris Xe, [bench/README](../bench/README.md#results)): T1 within budget; T2 at its budget on average, with a good third of the frames over. To get there, T2 gave up ambient occlusion, temporal anti-aliasing and sky lighting, each measured with `--without`, and draws 85 % of its output size (R11).
 
 ## 4. Workstreams
 
@@ -69,22 +69,23 @@ Each workstream has a scope, a state, its next milestones and its oracle. Milest
 | R3 | **Ambient occlusion** | `osage_render::ambient_occlusion`: screen-space, T2+ | cost on integrated GPUs; GTAO-class quality T3 | shots; budget |
 | R4 | **Global illumination** | none (T1–T3); Solari experimental (T4) | probe GI (T2–T3: irradiance volumes or DDGI-like); Solari on the desktop (T4) | indirect light visible under the bridge/barriers; budget per tier |
 | R5 | **Reflections** | Bevy SSR; Solari reflections (T4) | SSR T3; RT reflections T4; reflection probes | wet asphalt and kart paint shots |
-| R6 | **Materials and textures** | flat colours | PBR asphalt, grass, kerbs, barriers from CC0 sets; texture streaming later | shots; asset manifest checks |
-| R7 | **Vegetation and terrain** | none | instanced grass and trees with LOD; terrain beyond the track | 10 000+ plants within T2 budget |
+| R6 | **Materials and textures** | road and grass from Poly Haven texture sets (colour, normal, occlusion-roughness), with mipmaps and anisotropic filtering; plain colours without them | texture quality per tier; road wear and tyre marks; texture streaming | shots; asset manifest checks |
+| R7 | **Vegetation and terrain** | hills from noise around a flat track corridor; about 400 procedural trees of three kinds | modelled trees (CC0 kits); grass blades near the camera; merged or instanced scenery with levels of detail | 10 000+ plants within T2 budget |
 | R8 | **Geometry and LOD** | none | glTF kart; meshlets (T3+); HLOD for scenery | dense scenery shot within budget |
-| R9 | **Vehicles and effects** | primitive kart | glTF kart model, wheel/suspension visuals, drift smoke and sparks, boost flame | shots; effects within budget |
-| R10 | **Post-processing and anti-aliasing** | `osage_render::post`: HDR and tonemapping (all), TAA and bloom (T2+), motion blur (T3+) | SMAA for T1; auto exposure; colour grading | shots; budget |
-| R11 | **Upscaling and denoising** | none | open temporal upscaler; open denoiser research (research/04 takeaway 2); DLSS behind licence answer (§A) | quality vs native resolution at equal time |
+| R9 | **Vehicles and effects** | a rounded procedural kart with its driver; wheels that spin and steer, a body that leans, pitches and hops; drift sparks, smoke, boost flames, dust from a fixed pool of particles | modelled karts and drivers (CC0 kits); tyre marks; speed lines | shots; effects within budget |
+| R10 | **Post-processing and anti-aliasing** | `osage_render::post`: HDR and exposure (all), FXAA (T1–T2), bloom (T2+), TAA and motion blur (T3+); the tonemapper, saturation and exposure offset are the world's `Look` | SMAA; auto exposure; depth of field for replays | shots; budget |
+| R11 | **Upscaling and denoising** | `osage_render::resolution`: the scene is drawn into a picture no taller than the tier allows and stretched to the window under a sharp interface; T2 draws 85 % of its output size | a sharper upscaler than bilinear; temporal upscaling (T3+); open denoiser research (research/04 takeaway 2); DLSS behind licence answer | quality vs native resolution at equal time |
 | R12 | **Weather, water, volumetrics** | none | volumetric fog, clouds, rain, wet surfaces | shots; budget |
 | R13 | **Performance and scalability** | the bench | GPU timings per pass; automatic tier detection; frames drawn between physics steps on fast displays; a universal shader while specialised ones compile (no first-use stutter); CI budgets on reference machines | every PR shows its bench |
-| R14 | **Content pipeline and tools** | none | asset manifest + fetch + licence check; glTF/KTX2 import; debug views (wireframe, overdraw, GI probes) | CI checks the manifest |
+| R14 | **Content pipeline and tools** | `assets/manifest.toml` and `tools/fetch-assets.py` (download, hash check; files a person must download are marked); content is optional at run time | glTF import of the CC0 kits; KTX2 textures; a CI check that nothing outside the manifest is used; debug views (wireframe, overdraw) | CI checks the manifest |
 
 The research is clear that the hardest gap is **content and tools** (research/04 §C): R6–R9 and R14 are as important as the techniques.
 
 ## 5. Content
 
 - Sources: **CC0** libraries — Poly Haven (HDRIs, textures, models), ambientCG (textures), Kenney (models) — and procedural generation.
-- Every downloaded file is listed in [`assets/manifest.toml`](../assets/manifest.toml) (URL, SHA-256, licence, author, what uses it). Large binaries stay out of git. To come (R14): a fetch script that downloads and verifies them, and a CI check that nothing outside the manifest is used.
+- Every downloaded file is listed in [`assets/manifest.toml`](../assets/manifest.toml) (URL, SHA-256, licence, author, what uses it). Large binaries stay out of git: `python3 tools/fetch-assets.py` downloads and checks them. The game runs without them, in procedural form. To come (R14): a CI check that nothing outside the manifest is used.
+- Some publishers ask automated clients not to crawl their site (Kenney does): their files are marked `manual` in the manifest and downloaded by a person.
 - Content generated by AI tools waits for the legal review of AI-generated works (follow-up 1 of the decision log).
 - Never: assets or code taken from commercial games, including decompiled, recompiled or extracted ones — see the clean-sources rule in [CONTRIBUTING](../CONTRIBUTING.md#clean-sources) and [research/07](../research/07-zelda-reverse-engineering.md).
 

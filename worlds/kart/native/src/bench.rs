@@ -8,9 +8,10 @@
 //! and their times recorded. It writes `report.json` and screenshots taken at
 //! fixed frames, to compare a change before and after, and machines.
 //!
-//! The scene is drawn off screen at the bench's resolution and only shown in
-//! the window, so that neither the display's scale factor nor the window
-//! manager changes what is measured.
+//! The bench fixes the output size (`osage_render::resolution`): the scene is
+//! drawn off screen for that size and only shown in the window, so that
+//! neither the display's scale factor nor the window manager changes what
+//! is measured.
 
 use std::{
     path::PathBuf,
@@ -19,18 +20,18 @@ use std::{
 
 use bevy::{
     app::AppExit,
-    camera::RenderTarget,
     prelude::*,
     render::{
-        render_resource::TextureFormat,
         renderer::RenderAdapterInfo,
         view::screenshot::{Screenshot, ScreenshotCaptured, save_to_disk},
     },
     time::TimeUpdateStrategy,
-    ui::IsDefaultUiCamera,
 };
 use osage_kart_physics::{DT, Kart, bump, step};
-use osage_render::{OsageCamera, Tier};
+use osage_render::{
+    Tier,
+    resolution::{Output, Picture},
+};
 use osage_world_kart::{Circuit, autopilot, proto::Autopilot};
 use serde_json::json;
 
@@ -60,6 +61,7 @@ impl Plugin for BenchPlugin {
         // Screenshots at fixed frames spread over the run.
         let shots = [1, 3, 5, 7].map(|eighths| self.frames * eighths / 8).to_vec();
         app.insert_resource(TimeUpdateStrategy::ManualDuration(Duration::from_secs_f32(DT)))
+            .insert_resource(Output(Some(self.resolution.into())))
             .insert_resource(Bench {
                 tier: self.tier,
                 total: self.frames,
@@ -75,7 +77,6 @@ impl Plugin for BenchPlugin {
                 saved: Vec::new(),
             })
             .add_systems(Startup, line_up)
-            .add_systems(PostStartup, draw_off_screen)
             .add_systems(Update, simulate.in_set(Stage::Simulate))
             .add_systems(Last, measure);
     }
@@ -125,29 +126,6 @@ fn line_up(mut commands: Commands) {
     commands.insert_resource(Course(circuit));
 }
 
-/// What the scene's camera draws into, at the bench's resolution.
-#[derive(Resource)]
-struct Picture(Handle<Image>);
-
-/// Points the scene's camera at an image of the bench's resolution, and
-/// shows that image in the window.
-fn draw_off_screen(
-    mut commands: Commands,
-    bench: Res<Bench>,
-    mut images: ResMut<Assets<Image>>,
-    cameras: Query<Entity, With<OsageCamera>>,
-) {
-    let (width, height) = bench.resolution;
-    let format = (TextureFormat::Rgba8Unorm, Some(TextureFormat::Rgba8UnormSrgb));
-    let picture = images.add(Image::new_target_texture(width, height, format.0, format.1));
-    for camera in &cameras {
-        commands.entity(camera).insert(RenderTarget::Image(picture.clone().into()));
-    }
-    commands.spawn((Camera2d, Camera { order: 1, ..default() }, IsDefaultUiCamera));
-    commands.spawn((ImageNode::new(picture.clone()), Node { width: percent(100), height: percent(100), ..default() }));
-    commands.insert_resource(Picture(picture));
-}
-
 /// One physics step per frame.
 fn simulate(course: Res<Course>, mut racers: Query<(&mut Racer, &mut Pose)>) {
     for (mut racer, _) in &mut racers {
@@ -190,7 +168,7 @@ fn measure(
     if bench.shots.contains(&frame) {
         let name = format!("shot-{frame:05}.png");
         commands
-            .spawn(Screenshot::image(picture.0.clone()))
+            .spawn(Screenshot::image(picture.image.clone()))
             // Encoding the picture takes time that is not rendering's.
             .observe(|_: On<ScreenshotCaptured>, mut bench: ResMut<Bench>| bench.skip = bench.skip.max(1))
             .observe(save_to_disk(bench.out.join(&name)));
@@ -198,14 +176,14 @@ fn measure(
         bench.skip = AFTER_SHOT;
     }
     if frame == bench.total {
-        match report(&bench, &adapter) {
+        match report(&bench, picture.size, &adapter) {
             Ok(summary) => println!("{summary}"),
             Err(error) => eprintln!("kart-native: cannot write the report: {error}"),
         }
     }
 }
 
-fn report(bench: &Bench, adapter: &RenderAdapterInfo) -> anyhow::Result<String> {
+fn report(bench: &Bench, rendered: UVec2, adapter: &RenderAdapterInfo) -> anyhow::Result<String> {
     let mut sorted = bench.times.clone();
     sorted.sort_by(f32::total_cmp);
     anyhow::ensure!(!sorted.is_empty(), "no frame was timed: run more than {WARM_UP} frames");
@@ -230,6 +208,9 @@ fn report(bench: &Bench, adapter: &RenderAdapterInfo) -> anyhow::Result<String> 
             "os": std::env::consts::OS,
         },
         "resolution": [bench.resolution.0, bench.resolution.1],
+        "rendered": [rendered.x, rendered.y],
+        // Whether the asset manifest's content was there: it changes the picture.
+        "assets": crate::content::root().is_some(),
         "frames": { "total": bench.total, "timed": sorted.len(), "warm_up": WARM_UP },
         "frame_ms": {
             "mean": round(mean),
@@ -247,7 +228,11 @@ fn report(bench: &Bench, adapter: &RenderAdapterInfo) -> anyhow::Result<String> 
     std::fs::create_dir_all(&bench.out)?;
     std::fs::write(bench.out.join("report.json"), serde_json::to_string_pretty(&report)? + "\n")?;
 
-    let size = format!("{}×{}", bench.resolution.0, bench.resolution.1);
+    let size = if rendered == UVec2::from(bench.resolution) {
+        format!("{}×{}", rendered.x, rendered.y)
+    } else {
+        format!("{}×{} (drawn at {}×{})", bench.resolution.0, bench.resolution.1, rendered.x, rendered.y)
+    };
     let tier = match bench.without.as_slice() {
         [] => bench.tier.to_string(),
         without => format!("{} without {}", bench.tier, without.join(", ")),

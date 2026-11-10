@@ -42,6 +42,7 @@ tokio-tungstenite = "0.30.0"
 tracing = "0.1.44"
 tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }
 wtransport = "0.7.2"
+zune-jpeg = "0.4"
 
 # Dependencies (Bevy above all) are optimised even in development builds: a
 # 60 Hz region needs it, while osage's own crates stay quick to build and debug.

@@ -2,3 +2,5 @@
 node_modules/
 dist/
 bench/out/
+assets/*
+!assets/manifest.toml
