@@ -422,3 +422,12 @@ Date: 2026-11-10 · Amends [D-041](#d-041--performance-is-guarded-by-the-referen
 - **How:** the bench binary is built on an ordinary CI machine; only the bench itself runs on the GPU machine, which renders without a window and is deleted when the report is back. The cloud project used for it is separate from any other, with a spending limit, and CI reaches it with short-lived credentials (no stored keys).
 - **Why:** nothing of the maintainer's is at risk; the machine is the same at every run, so measurements are steadier than on a desktop in use; anyone can reproduce a result on the same instance type. The cost is a few minutes of GPU per change to `main`.
 - **Later:** a dedicated mini PC with integrated graphics may replace the laptop for T1 and T2.
+
+## D-043 — Few CI runs: the developer's machine first, the cloud GPU at most once an hour
+
+Date: 2026-11-10 · Amends [D-041](#d-041--performance-is-guarded-by-the-reference-machines-on-every-change-to-main) and [D-042](#d-042--the-high-tiers-are-benched-on-cloud-gpus), with the maintainer.
+
+- **Decision:** continuous integration runs as few times a day as the work allows, especially while development is intense. The oracles run first on the developer's machine; commits are pushed in batches rather than one push each, and changes can be grouped into one pull request. The cloud GPU bench runs **only when needed and never twice within an hour**: on a push to `main` that touches what can be drawn, by hand, and once a night to catch up. It benches only if something drawn changed since the last benched commit, and a commit already benched is not benched again, even if it failed its budget.
+- **How:** the workflow `cloud-bench` first asks whether anything is to be benched: the newest artefact of receipts says which commit was benched last, and when. Only then is the bench built and a GPU machine made.
+- **Why:** every run costs money (the GPU machine) or shared resources (CI minutes and quota), and the developer's machine is at hand. A slowdown is still caught, at most an hour or a night after the change that caused it, among the changes pushed together.
+- **Consequence for D-041:** "every change to `main`" becomes every batch of changes, for the cloud bench as for the laptop's runner once it exists.

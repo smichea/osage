@@ -287,8 +287,13 @@ fn report(bench: &Bench, rendered: UVec2, adapter: &RenderAdapterInfo) -> anyhow
     ))
 }
 
-/// The commit this was run from, with `-dirty` if the tree has changes.
+/// The commit this was run from, with `-dirty` if the tree has changes. A
+/// build made elsewhere than where it runs (a cloud bench machine has no
+/// checkout) carries it from its build: `OSAGE_COMMIT` when it was compiled.
 fn commit() -> String {
+    if let Some(commit) = option_env!("OSAGE_COMMIT") {
+        return commit.to_owned();
+    }
     let git = |args: &[&str]| {
         let output = std::process::Command::new("git").args(args).output().ok()?;
         output.status.success().then(|| String::from_utf8_lossy(&output.stdout).trim().to_owned())

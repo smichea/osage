@@ -28,7 +28,15 @@ Add yours: one line here, and your reports in the pull requests you measure.
 | Machine | GPU | Tiers | Role |
 |---|---|---|---|
 | ThinkPad E14 Gen 5 | Intel Iris Xe (Raptor Lake-P), Mesa | T1, T2 | the modest-hardware reference |
-| Maintainer's desktop | ray-tracing GPU | T3, T4 | the high-end reference |
+| Google Cloud g2-standard-4, Singapore | NVIDIA L4 | T3, T4 | the high-end reference, for the changes merged into `main` (D-042, D-043) |
+
+## On a cloud GPU
+
+The workflow `cloud-bench` ([.github/workflows/cloud-bench.yml](../.github/workflows/cloud-bench.yml)) benches T3 and T4 when a push to `main` changes what can be drawn, once a night to catch up, and on demand (`gh workflow run cloud-bench -f tiers="T3"`). It benches only if something drawn changed since the last benched commit, and never twice within an hour (D-043): run the bench on your own machine first, and push in batches. An ordinary runner builds the bench; a machine with one NVIDIA L4 is made for the run, benches with `--headless`, puts its receipts in a bucket, and is deleted. The receipts and the attester's verdicts are the run's artefact `bench-receipts`, and its summary is a table. A run takes about ten minutes of the machine, about 0.15 USD.
+
+- No key is stored: GitHub Actions acts as the project's `bench-ci` account through workload identity, only for this repository's `main` branch, pushed or started by hand. Pull requests never run it (D-041).
+- The machine is deleted when the run ends, and by Google after 40 minutes if the run dies first. It sits on a network that lets nothing in.
+- To set up a project of your own: `tools/cloud-bench/setup.sh PROJECT OWNER/REPOSITORY`, then `tools/cloud-bench/make-image.sh PROJECT` (Ubuntu 24.04 with NVIDIA's driver and Vulkan), then the three repository variables `setup.sh` prints. To bench by hand from a build: `tools/cloud-bench/bench.sh PROJECT kart.tar.gz OUT T3 T4`.
 
 ## Results
 
@@ -47,7 +55,7 @@ Latest results of the reference machines, one line per machine and tier.
 - T2 holds its budget on average on the integrated GPU, not for every frame. Without drawing under the output size it took 23.2 ms in the same conditions against 18.0 ms with: the scene is bound by the number of pixels there.
 - Bench version 2 (`kart-lap/2`) lets the karts overtake one another; in version 1 the followed kart ran into the karts ahead. Its frames differ, so compare runs of the same version only.
 - The landmarks scene against the previous one, same binary bench (version 1), alternated under the same load (load average 9 to 11): T2 15.5 ms against 17.4 ms, 28 % of frames over budget against 53 %; T1 16.2 ms against 16.3 ms. Merging the static scenery ([sculpted scenery](../knowledge/algorithms/sculpted-scenery.md)) more than paid for three times the content.
-- T3 and T4 await the high-end reference machine.
+- T3 and T4 await the first cloud runs.
 
 ### What each technique costs
 

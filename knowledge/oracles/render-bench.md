@@ -21,6 +21,8 @@ generated: { by: "claude-code/claude-fable-5-2", at: "2026-11-10T06:45:00Z" }
 
 The run writes `report.json` and four screenshots; `report.json` is the receipt. How the bench makes every machine draw the same frames is described in [timedemo bench](/algorithms/timedemo-bench.md).
 
+Tiers T3 and T4 also run on a cloud GPU for the changes merged into `main`, at most once an hour (D-042, D-043): the workflow `cloud-bench` builds the bench, runs it with `--headless` on a Google Cloud machine with an NVIDIA L4, and attests the receipts it brings back ([tools/cloud-bench](https://github.com/smichea/osage/tree/main/tools/cloud-bench)). That machine has no checkout, so the commit is compiled into the build (`OSAGE_COMMIT`) instead of asked of `git`.
+
 # What it proves
 
 A claim such as "T2 holds 60 frames a second on an integrated GPU" is accepted with a receipt, not on a statement. The attester reads the receipt and answers **pass** only if:
