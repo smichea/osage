@@ -27,6 +27,12 @@ confidence-threshold = 0.9
 [licenses.private]
 ignore = true
 
+[advisories]
+# Vulnerabilities fail wherever they are in the tree. "Unmaintained" notices
+# count only for osage's direct dependencies: deep in Bevy's tree (e.g.
+# ttf-parser under winit) they are Bevy's to replace.
+unmaintained = "workspace"
+
 [bans]
 multiple-versions = "warn"
 

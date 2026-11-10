@@ -17,16 +17,18 @@ osage-sdk = { path = "crates/osage-sdk" }
 osage-credentials = { path = "crates/osage-credentials" }
 osage-server = { path = "crates/osage-server" }
 anyhow = "1.0.104"
+base64ct = { version = "1.8.3", features = ["alloc"] }
 bevy = { version = "0.20.1", default-features = false }
 crossbeam-channel = "0.5.17"
 futures-util = "0.3.34"
 getrandom = "0.4.3"
-jsonwebtoken = { version = "11.1.0", default-features = false, features = ["rust_crypto"] }
-p256 = { version = "0.14.0", features = ["ecdsa", "pkcs8"] }
+hmac = "0.13.0"
+p256 = { version = "0.14.0", features = ["ecdsa"] }
 prost = "0.14.4"
 prost-types = "0.14.4"
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.154"
+sha2 = "0.11.1"
 prost-build = "0.14.4"
 prost-reflect = { version = "0.16.5", features = ["serde"] }
 protox = "0.10.0"

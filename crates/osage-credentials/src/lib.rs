@@ -10,14 +10,20 @@
 //! v0 credentials are short-lived bearer tokens bound to one world; holder
 //! binding comes with OpenID4VP.
 
+mod jws;
+
 use std::time::{Duration, SystemTime};
 
 use anyhow::{Context, Result, bail, ensure};
-use jsonwebtoken::{Algorithm, DecodingKey, EncodingKey, Header, Validation, decode, decode_header, encode};
+use jws::Header;
+use p256::ecdsa::{SigningKey, VerifyingKey};
 use serde::{Deserialize, Serialize};
 
 /// Longest accepted lifetime of an identity credential.
 pub const MAX_IDENTITY_LIFETIME: Duration = Duration::from_secs(3600);
+
+/// Clock difference tolerated when checking expiry.
+const LEEWAY_SECS: u64 = 60;
 
 const VC_CONTEXT: &str = "https://www.w3.org/ns/credentials/v2";
 const ASSURANCE_TYPE: &str = "OsageAssuranceCredential";
@@ -66,6 +72,13 @@ pub struct TrustedIssuer {
     pub y: String,
 }
 
+impl TrustedIssuer {
+    fn verifying_key(&self) -> Result<VerifyingKey> {
+        let point = [vec![4], jws::decode(&self.x)?, jws::decode(&self.y)?].concat();
+        VerifyingKey::from_sec1_bytes(&point).context("issuer key")
+    }
+}
+
 /// What a world learns from a valid identity credential.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct VerifiedIdentity {
@@ -76,18 +89,14 @@ pub struct VerifiedIdentity {
 
 /// Verifies an identity credential for `world` against the issuers it trusts.
 pub fn verify_identity(token: &str, world: &str, trusted: &[TrustedIssuer]) -> Result<VerifiedIdentity> {
-    let header = decode_header(token).context("not a JWS")?;
-    ensure!(header.alg == Algorithm::ES256, "identity credentials are ES256");
-    let kid = header.kid.context("no key id")?;
+    let token = jws::parse(token).context("not a JWS")?;
+    let kid = token.header.kid.as_deref().context("no key id")?;
     let issuer = trusted.iter().find(|i| i.kid == kid).context("untrusted issuer key")?;
-    let key = DecodingKey::from_ec_components(&issuer.x, &issuer.y).context("issuer key")?;
+    let claims: IdentityClaims = token.verify_es256(&issuer.verifying_key()?)?;
 
-    let mut validation = Validation::new(Algorithm::ES256);
-    validation.set_audience(&[world]);
-    validation.set_issuer(&[&issuer.issuer]);
-    validation.set_required_spec_claims(&["exp", "aud", "iss", "sub"]);
-    let claims = decode::<IdentityClaims>(token, &key, &validation)?.claims;
-
+    ensure!(claims.iss == issuer.issuer, "issuer mismatch");
+    ensure!(claims.aud == world, "credential for another world");
+    ensure!(unix_now() <= claims.exp + LEEWAY_SECS, "expired");
     ensure!(claims.types.iter().any(|t| t == ASSURANCE_TYPE), "not an osage assurance credential");
     ensure!(claims.sub == claims.credential_subject.id, "subject mismatch");
     ensure!(claims.exp.saturating_sub(claims.iat) <= MAX_IDENTITY_LIFETIME.as_secs(), "lifetime too long");
@@ -126,17 +135,12 @@ pub enum DelegatedRole {
 /// Issues and verifies delegations with the world's secret (HS256).
 pub struct DelegationKey {
     world: String,
-    encoding: EncodingKey,
-    decoding: DecodingKey,
+    secret: Vec<u8>,
 }
 
 impl DelegationKey {
     pub fn new(world: &str, secret: &[u8]) -> Self {
-        Self {
-            world: world.to_owned(),
-            encoding: EncodingKey::from_secret(secret),
-            decoding: DecodingKey::from_secret(secret),
-        }
+        Self { world: world.to_owned(), secret: secret.to_vec() }
     }
 
     pub fn issue(
@@ -158,15 +162,15 @@ impl DelegationKey {
             iat,
             exp: iat + lifetime.as_secs(),
         };
-        Ok(encode(&Header::new(Algorithm::HS256), &claims, &self.encoding)?)
+        let header = Header { typ: Some("JWT".to_owned()), ..Header::new("HS256") };
+        jws::sign_hs256(&header, &claims, &self.secret)
     }
 
     pub fn verify(&self, token: &str) -> Result<DelegationClaims> {
-        let mut validation = Validation::new(Algorithm::HS256);
-        validation.set_audience(&[&self.world]);
-        validation.set_issuer(&[&self.world]);
-        validation.set_required_spec_claims(&["exp", "aud", "iss", "sub"]);
-        Ok(decode::<DelegationClaims>(token, &self.decoding, &validation)?.claims)
+        let claims: DelegationClaims = jws::parse(token).context("not a JWS")?.verify_hs256(&self.secret)?;
+        ensure!(claims.iss == self.world && claims.aud == self.world, "delegation for another world");
+        ensure!(unix_now() <= claims.exp + LEEWAY_SECS, "expired");
+        Ok(claims)
     }
 }
 
@@ -175,7 +179,7 @@ impl DelegationKey {
 pub struct TestIssuer {
     issuer: String,
     kid: String,
-    encoding: EncodingKey,
+    key: SigningKey,
     trusted: TrustedIssuer,
 }
 
@@ -186,20 +190,14 @@ impl TestIssuer {
     }
 
     pub fn from_seed(issuer: &str, kid: &str, seed: [u8; 32]) -> Result<Self> {
-        use p256::{elliptic_curve::sec1::ToSec1Point, pkcs8::EncodePrivateKey};
+        use p256::elliptic_curve::sec1::ToSec1Point;
 
-        let secret = p256::SecretKey::from_slice(&seed).context("seed is not a P-256 scalar")?;
-        let der = secret.to_pkcs8_der().context("PKCS#8")?;
-        let point = secret.public_key().to_sec1_point(false);
+        let key = SigningKey::from_slice(&seed).context("seed is not a P-256 scalar")?;
+        let point = key.verifying_key().as_affine().to_sec1_point(false);
         let (Some(x), Some(y)) = (point.x(), point.y()) else { bail!("compressed point") };
         let trusted =
-            TrustedIssuer { issuer: issuer.to_owned(), kid: kid.to_owned(), x: base64url(x), y: base64url(y) };
-        Ok(Self {
-            issuer: issuer.to_owned(),
-            kid: kid.to_owned(),
-            encoding: EncodingKey::from_ec_der(der.as_bytes()),
-            trusted,
-        })
+            TrustedIssuer { issuer: issuer.to_owned(), kid: kid.to_owned(), x: jws::encode(x), y: jws::encode(y) };
+        Ok(Self { issuer: issuer.to_owned(), kid: kid.to_owned(), key, trusted })
     }
 
     pub fn trusted(&self) -> TrustedIssuer {
@@ -219,27 +217,13 @@ impl TestIssuer {
             exp: iat + lifetime.as_secs(),
             credential_subject: Subject { id: per_world_id.to_owned(), assurance_level: level },
         };
-        let mut header = Header::new(Algorithm::ES256);
-        header.typ = Some("vc+jwt".to_owned());
-        header.kid = Some(self.kid.clone());
-        Ok(encode(&header, &claims, &self.encoding)?)
+        let header = Header { typ: Some("vc+jwt".to_owned()), kid: Some(self.kid.clone()), ..Header::new("ES256") };
+        jws::sign_es256(&header, &claims, &self.key)
     }
 }
 
 fn unix_now() -> u64 {
     SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).map_or(0, |d| d.as_secs())
-}
-
-fn base64url(bytes: &[u8]) -> String {
-    const ALPHABET: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
-    let mut out = String::with_capacity(bytes.len().div_ceil(3) * 4);
-    for chunk in bytes.chunks(3) {
-        let n = chunk.iter().enumerate().fold(0u32, |acc, (i, b)| acc | u32::from(*b) << (16 - 8 * i));
-        for i in 0..=chunk.len() {
-            out.push(ALPHABET[(n >> (18 - 6 * i) & 0x3f) as usize] as char);
-        }
-    }
-    out
 }
 
 #[cfg(test)]
@@ -285,10 +269,16 @@ mod tests {
     }
 
     #[test]
-    fn base64url_matches_rfc4648_vectors() {
-        assert_eq!(base64url(b"f"), "Zg");
-        assert_eq!(base64url(b"fo"), "Zm8");
-        assert_eq!(base64url(b"foo"), "Zm9v");
-        assert_eq!(base64url(&[0xfb, 0xff]), "-_8");
+    fn expired_credentials_are_refused() {
+        let issuer = TestIssuer::insecure_dev();
+        let mut claims = jws::parse(&issuer.issue(WORLD, "dave", Level::A1, HOUR).unwrap())
+            .unwrap()
+            .verify_es256::<IdentityClaims>(&issuer.trusted().verifying_key().unwrap())
+            .unwrap();
+        claims.iat -= 2 * HOUR.as_secs();
+        claims.exp -= 2 * HOUR.as_secs();
+        let header = Header { kid: Some("insecure-dev-1".to_owned()), ..Header::new("ES256") };
+        let expired = jws::sign_es256(&header, &claims, &issuer.key).unwrap();
+        assert!(verify_identity(&expired, WORLD, &[issuer.trusted()]).unwrap_err().to_string().contains("expired"));
     }
 }
