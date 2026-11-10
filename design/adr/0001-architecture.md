@@ -1,6 +1,6 @@
 # ADR-0001 — Architecture
 
-Status: **accepted** · Date: 2026-11-09
+Status: **accepted** · Date: 2026-11-09 · Extended by [D-035 to D-037](../decisions.md#d-035--games-are-assembled-from-reusable-components-one-crate-each) (architecture review, 2026-11-10)
 
 Gathers the decisions of the [decision log](../decisions.md) (D-001 to D-019) into one architecture. Goals G1–G6 are in the [synthesis](../../research/00-synthesis.md#goals).
 

@@ -326,3 +326,39 @@ Date: 2026-11-10
 - **Federation:** the bundle is a valid member bundle of an [OKF Federation](https://github.com/manaty/okf-federation) and passes its bundle validator; nothing in osage requires a federation, and a federation chooses to register it.
 - **Scope of the first version:** the rendering crate and the kart world's physics and native client: 3 modules, 5 techniques, 5 algorithms, 2 oracles. The other modules get their cards as they are next changed; decisions, design notes and research surveys stay in `design/` and `research/` and join the bundle in a later version of the profile.
 - **Alternatives:** documentation comments only (bound to the code and its language, no place for sources, costs or alternatives); a wiki (outside review and version control); a format of our own (no shared tools, one more thing to learn).
+
+## D-035 — Games are assembled from reusable components, one crate each
+
+Date: 2026-11-10 · From the architecture review of 2026-11-10, with the maintainer.
+
+- **Decision:** a game made with osage is assembled from **reusable components**, even those that only that game uses. A component is:
+  1. **one crate** — a Bevy plugin with a declared contract: the data it reads and writes, the events it sends, its settings; it never reaches into another component's internals;
+  2. **documented** by a knowledge card of a new `Component` type in the [osage profile](../knowledge/profile.md) (contract, settings, dependencies, licence), and **checked** by an oracle (D-033).
+- **Where a component lives does not change what it is:** a game's own components may stay beside the game (`worlds/<game>/components/`) and move to the shared catalogue (`components/`) when another game needs them, at no cost. A game is then mostly a list of components and their settings.
+- **Licence:** each crate carries its own. What other clients or games embed (models, generators, content loading, interfaces) is MIT OR Apache-2.0; engine services stay AGPL-3.0-or-later with the osage exceptions (D-020).
+- **Consequences:**
+  - Rendering techniques become component crates that register themselves; `osage-render` keeps what they share — tiers, the world's look, which techniques are active — so adding a technique edits no central file (supersedes the closed list of techniques of D-032).
+  - The kart's native client is split into components: procedural models (`sculpt`), content loading, the connection plugin (shared with `osage-client`, which becomes a library), the benchmark harness, and the kart's own pieces (karts, track, landmarks, interface).
+  - A template (`tools/new-component`) creates a component with its manifest, licence headers, card and test; continuous integration checks that every component has its card and its oracle.
+- **Why:** many teams and AI agents working in parallel need boundaries that the compiler enforces, not conventions; "reusable" is only real for something that can be depended on, versioned and licensed on its own. Bevy itself is built this way, and many small crates rebuild faster than one large one.
+- **Alternatives:** one module per component in a few crates (lighter, but the boundary is a convention); moving code out of a game only when a second game needs it (each game would grow its own engine meanwhile).
+
+## D-036 — A content service: content by hash, files or recipes
+
+Date: 2026-11-10 · From the architecture review of 2026-11-10, with the maintainer.
+
+- **Decision:** the next server work is a **content service**, so that any client can show any world:
+  1. **Every visible entity declares a generic look** — `osage.transform/1` and `osage.content_ref/1` — even when a world's own clients draw it their own way. A generic client always shows something right; a specialised one may show more.
+  2. **Content is addressed by its hash** and served by the world (in the single-binary profile, by the server itself over HTTPS, beside the WebTransport discovery); files are immutable and cached for ever. A per-world content manifest records each file's licence, author and source, as `assets/manifest.toml` does today.
+  3. **Content is a file or a recipe.** A file is glTF, 3D Tiles or splats. A recipe is "generator, version, parameters": clients that have the generator build the model locally — tiny downloads, good for old hardware, deterministic. **A baked file is always provided as well**, for clients without the generator.
+- **Recipes are run safely:** generators are WebAssembly modules, content-addressed like any file, run as pure functions (parameters in, mesh out; no network, no files, no clock, bounded work). A recipe carries the hash of the mesh it must produce; on a mismatch, a refusal or a missing generator, the client takes the file.
+- **Why:** today only the kart's own clients can show the kart, and each client re-implements a world's look. The protocol already carries content by reference (`osage.content_ref/1`); nothing served it.
+- **Alternatives:** files only (simple, standard, but heavier and the generators are not reused at run time); geometry in the protocol (rejected since ADR-0002: no geometry travels in the protocol).
+
+## D-037 — The gateway and the region talk by messages, from now on
+
+Date: 2026-11-10 · From the architecture review of 2026-11-10, with the maintainer.
+
+- **Decision:** the replication gateway and the region server, two modules of one process today, become **two components with a message contract** between them (D-035). In one process the messages go through channels; when regions move to other machines, the same messages go over the network. This is done **before** the content service, so that every server feature added from now on respects the boundary.
+- **Why:** ADR-0001 makes the gateway/region interface internal and free to change, but a boundary kept by function calls erodes with every feature, and splitting a process late is costly.
+- **Order of work that follows from the review:** (1) the gateway/region message boundary; (2) components and their template, starting with the pieces the content service needs (procedural models, content loading); (3) the content service. Persistence (D-004) comes after.
