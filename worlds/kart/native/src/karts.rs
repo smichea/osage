@@ -185,18 +185,74 @@ fn body(colour: (f32, f32, f32), suit: (f32, f32, f32)) -> Batch {
 
 /// The driver's head, around the neck: a big round face, a cap of the
 /// kart's colour with its peak, eyes that look ahead.
-fn head(colour: (f32, f32, f32), skin: (f32, f32, f32)) -> Batch {
+/// What a driver wears on the head: each colour of kart has its own, so
+/// that every driver can be told apart at a glance.
+#[derive(Clone, Copy, Debug, PartialEq)]
+enum Headwear {
+    Cap,
+    Helmet,
+    Beanie,
+    Bun,
+}
+
+const HEADWEAR: [Headwear; 4] = [Headwear::Cap, Headwear::Helmet, Headwear::Beanie, Headwear::Bun];
+/// Hair colours, for the drivers whose hair shows.
+const HAIR: [(f32, f32, f32); 4] = [(0.32, 0.18, 0.08), (0.95, 0.78, 0.36), (0.1, 0.08, 0.07), (0.72, 0.3, 0.12)];
+
+fn head(colour: (f32, f32, f32), skin: (f32, f32, f32), wear: Headwear, hair: (f32, f32, f32)) -> Batch {
     let (r, g, b) = colour;
     let round = ball(3);
     let mut head = Batch::default();
     let skin = Paint::blend((skin.0 * 0.8, skin.1 * 0.75, skin.2 * 0.75), skin);
     head.add(&round, sized(at(0.0, 0.27, 0.0), 0.29, 0.27, 0.27), skin);
-    // The cap: a dome over the top of the head, and its peak in front.
     let dome = Shape::lathe(&[(1.0, 0.0), (0.97, 0.3), (0.8, 0.66), (0.48, 0.9), (0.0, 1.0)], 16);
-    let cap = Paint::blend((r * 0.65, g * 0.65, b * 0.7), (r, g, b));
-    head.add(&dome, sized(at(0.0, 0.33, -0.01).with_rotation(Quat::from_rotation_x(-0.15)), 0.305, 0.25, 0.3), cap);
-    head.add(&round, sized(at(0.0, 0.36, 0.28).with_rotation(Quat::from_rotation_x(-0.12)), 0.22, 0.035, 0.14), cap);
-    head.add(&round, sized(at(0.0, 0.58, 0.04), 0.07, 0.04, 0.07), Paint::plain(0.98, 0.98, 0.98));
+    let kart = Paint::blend((r * 0.65, g * 0.65, b * 0.7), (r, g, b));
+    let white = Paint::plain(0.98, 0.98, 0.98);
+    let hair = Paint::blend((hair.0 * 0.6, hair.1 * 0.6, hair.2 * 0.6), hair);
+    let tilt = |y: f32, z: f32, angle: f32| at(0.0, y, z).with_rotation(Quat::from_rotation_x(angle));
+    match wear {
+        // A cap of the kart's colour, its peak in front, a button on top.
+        Headwear::Cap => {
+            head.add(&dome, sized(tilt(0.33, -0.01, -0.15), 0.305, 0.25, 0.3), kart);
+            head.add(&round, sized(tilt(0.36, 0.28, -0.12), 0.22, 0.035, 0.14), kart);
+            head.add(&round, sized(at(0.0, 0.58, 0.04), 0.07, 0.04, 0.07), white);
+        }
+        // An open-face helmet down to the ears, a white stripe over the top.
+        Headwear::Helmet => {
+            head.add(&dome, sized(tilt(0.16, -0.03, -0.25), 0.34, 0.42, 0.34), kart);
+            let stripe: Vec<Vec3> =
+                // From the back of the neck to the top of the forehead, clear of the eyes.
+                (0..=12).map(|k| Vec3::from((Vec2::from_angle(k as f32 / 12.0 * (PI - 0.75)) * 0.355, 0.0))).collect();
+            let over = Quat::from_rotation_y(FRAC_PI_2);
+            head.add(&tube(&stripe, 0.04), at(0.0, 0.2, -0.03).with_rotation(over), white);
+            for side in [-1.0, 1.0] {
+                head.add(&round, sized(at(side * 0.31, 0.25, 0.0), 0.05, 0.09, 0.09), white);
+            }
+        }
+        // A knitted beanie with a rolled brim and a pompom; a fringe shows.
+        Headwear::Beanie => {
+            head.add(&dome, sized(tilt(0.36, -0.03, -0.18), 0.3, 0.32, 0.29), kart);
+            let brim = Shape::new(
+                Torus { minor_radius: 0.045, major_radius: 0.27 }
+                    .mesh()
+                    .minor_resolution(8)
+                    .major_resolution(20)
+                    .build(),
+            );
+            head.add(&brim, tilt(0.38, 0.0, -0.18), white);
+            head.add(&round, sized(at(0.0, 0.72, -0.1), 0.09, 0.09, 0.09), white);
+            head.add(&round, sized(tilt(0.37, 0.2, -0.5), 0.2, 0.05, 0.07), hair);
+        }
+        // Hair, gathered in a bun with a ribbon of the kart's colour.
+        Headwear::Bun => {
+            head.add(&dome, sized(tilt(0.28, -0.05, -0.3), 0.305, 0.28, 0.3), hair);
+            head.add(&round, sized(at(0.0, 0.52, -0.2), 0.14, 0.14, 0.14), hair);
+            for side in [-1.0, 1.0] {
+                let loop_ = at(side * 0.1, 0.62, -0.24).with_rotation(Quat::from_rotation_z(side * 0.5));
+                head.add(&round, sized(loop_, 0.09, 0.05, 0.04), kart);
+            }
+        }
+    }
     // Eyes: white, with dark pupils looking ahead; a small round nose.
     for side in [-1.0, 1.0] {
         head.add(&round, sized(at(side * 0.1, 0.26, 0.23), 0.07, 0.09, 0.05), Paint::plain(1.0, 1.0, 1.0));
@@ -267,7 +323,8 @@ pub fn dress(
             });
             Model {
                 body: meshes.add(body(paint, suit).merged()),
-                head: meshes.add(head(paint, skins[colour % skins.len()]).merged()),
+                head: meshes
+                    .add(head(paint, skins[colour % skins.len()], HEADWEAR[colour % 4], HAIR[colour / 2 % 4]).merged()),
                 wheels,
             }
         });
