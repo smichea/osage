@@ -402,3 +402,14 @@ Date: 2026-11-10 · From the architecture review of 2026-11-10, with the maintai
 - **Priority:** performance comes first. Cheating is not the first concern; the verification layers of D-038 come when a world needs them, and are not built before.
 - **Why:** the identity model knows people, agents and device bridges; compute peers fit the existing agent pattern without a new mechanism.
 - **Alternatives:** anonymous compute paid as a service (no one to set aside, and payment is a policy for worlds, not a mechanism to build now).
+
+## D-041 — Performance is guarded by the reference machines, on every change to main
+
+Date: 2026-11-10 · From the architecture review of 2026-11-10, with the maintainer.
+
+- **Decision:** the reference machines — the Iris Xe laptop for T1 and T2, the maintainer's ray-tracing desktop for T3 and T4 — are connected to continuous integration as **self-hosted runners** and run the render bench (`kart-lap/2`) on **every change merged into `main`**. Each run is attested (`tools/attest-bench.py`) and compared with the previous one; a slowdown beyond the noise is flagged on the change that caused it.
+- **Security of the maintainer's machines:** the runners execute **only code already merged into `main`** (push events on the main branch), **never** pull requests, from forks or otherwise; they run under an unprivileged account dedicated to them, with no access to the maintainer's other files or credentials. Outside contributions are benched after review and merge, not before.
+- **Noise:** a run on a busy machine is not a measurement. A runner records the machine's load with each run; a flagged slowdown is confirmed by running the previous and the new build back to back before anyone is asked to act on it.
+- **Why:** performance is the first priority (D-040); with many contributors, a project slows down one unnoticed change at a time unless every change is measured on the hardware the tiers are defined on.
+- **To do by the maintainer:** install and register the two runners (a change of system settings, done by the maintainer).
+- **Alternatives:** receipts attached by contributors (relies on each of them running the bench); a nightly pass only (finds a slowdown a day late, among several changes).
