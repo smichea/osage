@@ -50,12 +50,14 @@ Latest results of the reference machines, one line per machine and tier.
 | 2026-11-10 | same | ThinkPad E14 Gen 5 (Iris Xe), under load | T2 | 1920×1080 (1632×918) | 16.9 ms (59 fps) | 23.9 ms | 31.4 ms | 41 % |
 | 2026-11-10 | landmarks, sculpted scenery, new karts; bench `kart-lap/2` | ThinkPad E14 Gen 5 (Iris Xe), lighter load | T1 | 1280×720 | 11.2 ms (89 fps) | 13.5 ms | 14.7 ms | 0 % |
 | 2026-11-10 | same | ThinkPad E14 Gen 5 (Iris Xe), lighter load | T2 | 1920×1080 (1632×918) | 14.0 ms (72 fps) | 16.9 ms | 19.3 ms | 6 % |
+| 2026-11-10 | same, commit 195c7e3 | Google Cloud g2-standard-4 (NVIDIA L4, driver 580), headless | T3 | 2560×1440 | 5.7 ms (174 fps) | 6.9 ms | 7.5 ms | 0 % |
+| 2026-11-10 | same, commit 195c7e3 | Google Cloud g2-standard-4 (NVIDIA L4, driver 580), headless | T4 | 2560×1440 | 6.7 ms (149 fps) | 8.2 ms | 12.8 ms | 0 % |
 
 - "Under load": other programs were using the machine during these runs (load average 8 to 9 on 10 cores); a quiet run is expected to do better and will replace them.
 - T2 holds its budget on average on the integrated GPU, not for every frame. Without drawing under the output size it took 23.2 ms in the same conditions against 18.0 ms with: the scene is bound by the number of pixels there.
 - Bench version 2 (`kart-lap/2`) lets the karts overtake one another; in version 1 the followed kart ran into the karts ahead. Its frames differ, so compare runs of the same version only.
 - The landmarks scene against the previous one, same binary bench (version 1), alternated under the same load (load average 9 to 11): T2 15.5 ms against 17.4 ms, 28 % of frames over budget against 53 %; T1 16.2 ms against 16.3 ms. Merging the static scenery ([sculpted scenery](../knowledge/algorithms/sculpted-scenery.md)) more than paid for three times the content.
-- T3 and T4 await the first cloud runs.
+- T3 and T4 on the L4 use about a third of their budget (16.7 and 33.3 ms): the high tiers have room for techniques that cost more. Shader compilation stalls the first frame for about 4.5 s on that machine (warm-up, not timed).
 
 ### What each technique costs
 
