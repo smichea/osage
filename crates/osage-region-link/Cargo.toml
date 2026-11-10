@@ -1,0 +1,19 @@
+# SPDX-FileCopyrightText: The osage contributors
+# SPDX-License-Identifier: LicenseRef-osage-AGPL-3.0-or-later-with-exceptions
+
+[package]
+name = "osage-region-link"
+description = "The message contract between osage's replication gateway and its region servers (D-037)"
+license-file = "../../LICENSE-EXCEPTIONS.md"
+publish = false
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+
+[dependencies]
+osage-proto.workspace = true
+anyhow.workspace = true
+crossbeam-channel.workspace = true
+prost.workspace = true
+tokio = { workspace = true, features = ["sync"] }

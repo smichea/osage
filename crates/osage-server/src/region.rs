@@ -13,25 +13,24 @@ use std::{
 };
 
 use bevy::{app::ScheduleRunnerPlugin, prelude::*};
-use crossbeam_channel::Receiver;
 use osage_proto::{
     actions, components, types,
     v0::{
         ActionRequest, ActionResult, ActionStatus, Component as WireComponent, ComponentChanged, DeviceCommand,
-        DeviceState, EntityComponent, EntityEnter, EntityLeave, LeaveReason, Role, ServerMessage, StateDatagram,
-        TimeSync, client_message, server_message,
+        DeviceState, EntityComponent, EntityEnter, EntityLeave, LeaveReason, ServerMessage, StateDatagram, TimeSync,
+        client_message, server_message,
     },
 };
+use osage_region_link::{Member, RegionEnd, SessionKind as Kind, ToGateway, ToRegion};
 use prost::Message as _;
 use tokio::sync::mpsc::UnboundedSender;
 
 use crate::{
-    identity::SessionKind,
     now_us,
     schema::{self, Schema},
     world::{
-        Discrete, EntityIds, IntentReceived, Joined, Left, Owner, RegionSet, Replicated, Tick, Volatile, WorldModule,
-        builtin, transform_from_proto, transform_to_proto,
+        Discrete, EntityIds, IntentReceived, Joined, Left, Owner, RegionSet, Replicated, SessionKind, Tick, Volatile,
+        WorldModule, builtin, transform_from_proto, transform_to_proto,
     },
 };
 
@@ -41,29 +40,17 @@ const COMMAND_TIMEOUT: Duration = Duration::from_secs(5);
 /// Component types a bridge may publish on its devices.
 const BRIDGE_TYPES: [u32; 4] = [schema::DEVICE, schema::MEASUREMENTS, schema::TRANSFORM, schema::CONTENT_REF];
 
-/// Who a session is, as far as the region needs to know.
-pub struct Member {
-    pub kind: SessionKind,
-    pub role: Role,
-    pub controller: components::Controller,
-    /// For a bridge: the per-world identifier of the devices' owner.
-    pub owner: String,
-}
-
-/// What the gateway tells the region.
-pub enum RegionInput {
-    Join { session: u64, member: Member, out: UnboundedSender<ServerMessage> },
-    Leave { session: u64 },
-    Message { session: u64, message: client_message::Message },
-}
-
-pub fn app(inbox: Receiver<RegionInput>, tick_hz: u32, schema: Schema, world: impl WorldModule) -> App {
+/// A region on its end of a link to the gateway (`osage-region-link`): it
+/// tells the gateway it is ready, then reads what the gateway sends once a
+/// tick and answers with messages addressed to sessions.
+pub fn app(link: RegionEnd, tick_hz: u32, schema: Schema, world: impl WorldModule) -> App {
     let tick = Duration::from_secs_f64(1.0 / f64::from(tick_hz.max(1)));
+    let _ = link.to_gateway.send(ToGateway::Ready { schemas: schema.bundle(), tick_hz });
     let mut app = App::new();
     app.add_plugins(MinimalPlugins.set(ScheduleRunnerPlugin::run_loop(tick)))
-        .insert_resource(Inbox(inbox))
+        .insert_resource(Inbox(link.from_gateway))
         .insert_resource(schema)
-        .init_resource::<Sessions>()
+        .insert_resource(Sessions { members: HashMap::new(), gateway: link.to_gateway })
         .init_resource::<Devices>()
         .init_resource::<PendingCommands>()
         .init_resource::<EntityIds>()
@@ -84,27 +71,51 @@ pub fn app(inbox: Receiver<RegionInput>, tick_hz: u32, schema: Schema, world: im
 }
 
 #[derive(Resource)]
-struct Inbox(Receiver<RegionInput>);
+struct Inbox(crossbeam_channel::Receiver<ToRegion>);
 
-struct Connected {
-    out: UnboundedSender<ServerMessage>,
-    member: Member,
+/// The sessions the region has taken in, and the way to them: the gateway.
+#[derive(Resource)]
+struct Sessions {
+    members: HashMap<u64, Member>,
+    gateway: UnboundedSender<ToGateway>,
 }
 
-#[derive(Resource, Default)]
-struct Sessions(HashMap<u64, Connected>);
-
 impl Sessions {
-    fn broadcast(&self, message: &ServerMessage) {
-        for session in self.0.values() {
-            let _ = session.out.send(message.clone());
+    /// To every member.
+    fn broadcast(&self, message: ServerMessage) {
+        if !self.members.is_empty() {
+            let _ = self.gateway.send(ToGateway::Broadcast { message });
+        }
+    }
+
+    fn send(&self, session: u64, message: ServerMessage) {
+        if self.members.contains_key(&session) {
+            let _ = self.gateway.send(ToGateway::Send { session, message });
         }
     }
 
     fn reply(&self, session: u64, message: server_message::Message) {
-        if let Some(connected) = self.0.get(&session) {
-            let _ = connected.out.send(ServerMessage { message: Some(message) });
-        }
+        self.send(session, ServerMessage { message: Some(message) });
+    }
+
+    /// Takes a session in: the gateway hears of it before anything sent to it.
+    fn join(&mut self, session: u64, member: Member) {
+        self.members.insert(session, member);
+        let _ = self.gateway.send(ToGateway::Joined { session });
+    }
+
+    fn leave(&mut self, session: u64) {
+        self.members.remove(&session);
+        let _ = self.gateway.send(ToGateway::Left { session });
+    }
+}
+
+/// The world's name for the kind of a session the gateway authenticated.
+fn kind(kind: Kind) -> SessionKind {
+    match kind {
+        Kind::Human => SessionKind::Human,
+        Kind::Agent => SessionKind::Agent,
+        Kind::Bridge => SessionKind::Bridge,
     }
 }
 
@@ -171,22 +182,22 @@ fn receive(
     tick.0 += 1;
     for input in inbox.0.try_iter() {
         match input {
-            RegionInput::Join { session, member, out } => {
-                for (entity, id, transform, discrete, volatile) in &entities {
-                    if index.ids.contains_key(&entity) {
-                        let _ = out.send(enter(id.0, transform, discrete, volatile));
-                    }
-                }
+            ToRegion::Join { session, member } => {
                 joined.write(Joined {
                     session,
-                    kind: member.kind,
+                    kind: kind(member.kind),
                     role: member.role,
                     controller: member.controller.clone(),
                 });
-                sessions.0.insert(session, Connected { out, member });
+                sessions.join(session, member);
+                for (entity, id, transform, discrete, volatile) in &entities {
+                    if index.ids.contains_key(&entity) {
+                        sessions.send(session, enter(id.0, transform, discrete, volatile));
+                    }
+                }
             }
-            RegionInput::Leave { session } => {
-                sessions.0.remove(&session);
+            ToRegion::Leave { session } => {
+                sessions.leave(session);
                 commands_out.0.retain(|_, pending| {
                     if pending.bridge != session {
                         return true;
@@ -199,7 +210,7 @@ fn receive(
                 devices.0.retain(|(bridge, _), _| *bridge != session);
                 left.write(Left { session });
             }
-            RegionInput::Message { session, message } => match message {
+            ToRegion::Client { session, message } => match message {
                 // Only an entity's owner may send it intents; the world decides what they do.
                 client_message::Message::Intent(intent) => {
                     let Some(input) = intent.input else { continue };
@@ -242,7 +253,7 @@ fn receive(
 /// session that left in the same tick.
 fn despawn_orphans(mut commands: Commands, sessions: Res<Sessions>, owned: Query<(Entity, &Owner)>) {
     for (entity, owner) in &owned {
-        if !sessions.0.contains_key(&owner.0) {
+        if !sessions.members.contains_key(&owner.0) {
             commands.entity(entity).despawn();
         }
     }
@@ -256,7 +267,7 @@ fn announce(
     added: Query<Snapshot, Added<Replicated>>,
 ) {
     for (entity, id, transform, discrete, volatile) in &added {
-        sessions.broadcast(&enter(id.0, transform, discrete, volatile));
+        sessions.broadcast(enter(id.0, transform, discrete, volatile));
         index.ids.insert(entity, id.0);
         index.entities.insert(id.0, entity);
         commands.entity(entity).insert(DiscreteSent(discrete.map(|d| d.0.clone()).unwrap_or_default()));
@@ -268,7 +279,7 @@ fn retire(sessions: Res<Sessions>, mut index: ResMut<Index>, mut removed: Remove
     for entity in removed.read() {
         if let Some(id) = index.ids.remove(&entity) {
             index.entities.remove(&id);
-            sessions.broadcast(&leave(id, LeaveReason::Destroyed));
+            sessions.broadcast(leave(id, LeaveReason::Destroyed));
         }
     }
 }
@@ -281,11 +292,11 @@ fn publish_changes(
     for (id, discrete, mut sent) in &mut changed {
         for (type_id, value) in &discrete.0 {
             if sent.0.get(type_id) != Some(value) {
-                sessions.broadcast(&component_changed(id.0, *type_id, value.clone(), false));
+                sessions.broadcast(component_changed(id.0, *type_id, value.clone(), false));
             }
         }
         for type_id in sent.0.keys().filter(|t| !discrete.0.contains_key(t)) {
-            sessions.broadcast(&component_changed(id.0, *type_id, Vec::new(), true));
+            sessions.broadcast(component_changed(id.0, *type_id, Vec::new(), true));
         }
         sent.0 = discrete.0.clone();
     }
@@ -302,7 +313,7 @@ fn publish_device(
     devices: &mut Devices,
     ids: &mut EntityIds,
 ) {
-    let Some(bridge) = sessions.0.get(&session).filter(|c| c.member.kind == SessionKind::Bridge) else { return };
+    let Some(bridge) = sessions.members.get(&session).filter(|m| m.kind == Kind::Bridge) else { return };
     let key = (session, state.local_id.clone());
     if state.removed {
         if let Some(device) = devices.0.remove(&key) {
@@ -316,8 +327,8 @@ fn publish_device(
         let mut value = component.value;
         if component.r#type == schema::DEVICE {
             let Ok(mut device) = components::Device::decode(value.as_slice()) else { continue };
-            device.owner_per_world_id = bridge.member.owner.clone();
-            device.bridge_per_world_id = bridge.member.controller.per_world_id.clone();
+            device.owner_per_world_id = bridge.owner.clone();
+            device.bridge_per_world_id = bridge.controller.per_world_id.clone();
             value = device.encode_to_vec();
         }
         incoming.insert(component.r#type, value);
@@ -376,7 +387,7 @@ fn device_action(
                 },
             );
             let requester =
-                sessions.0.get(&session).map(|c| c.member.controller.per_world_id.clone()).unwrap_or_default();
+                sessions.members.get(&session).map(|m| m.controller.per_world_id.clone()).unwrap_or_default();
             sessions.reply(
                 *bridge,
                 server_message::Message::DeviceCommand(DeviceCommand {
@@ -444,7 +455,7 @@ fn device_transform(components: &BTreeMap<u32, Vec<u8>>) -> Transform {
 }
 
 fn broadcast_state(tick: Res<Tick>, keyframe: Res<Keyframe>, sessions: Res<Sessions>, replicated: Query<Moving>) {
-    if sessions.0.is_empty() {
+    if sessions.members.is_empty() {
         return;
     }
     let all = tick.0.is_multiple_of(keyframe.0);
@@ -463,7 +474,7 @@ fn broadcast_state(tick: Res<Tick>, keyframe: Res<Keyframe>, sessions: Res<Sessi
     if values.is_empty() {
         return;
     }
-    sessions.broadcast(&ServerMessage {
+    sessions.broadcast(ServerMessage {
         message: Some(server_message::Message::State(StateDatagram { tick: tick.0, server_time_us: now_us(), values })),
     });
 }
@@ -498,18 +509,11 @@ fn wire(type_id: u32, value: Vec<u8>) -> WireComponent {
 
 #[cfg(test)]
 mod tests {
-    use tokio::sync::mpsc::{UnboundedReceiver, unbounded_channel};
+    use osage_proto::v0::Role;
+    use tokio::sync::mpsc::UnboundedReceiver;
 
     use super::*;
-    use crate::demo::DemoWorld;
-
-    fn join(inbox: &crossbeam_channel::Sender<RegionInput>, session: u64) -> UnboundedReceiver<ServerMessage> {
-        let (out, messages) = unbounded_channel();
-        let controller = components::Controller { per_world_id: format!("guest-{session}"), ..Default::default() };
-        let member = Member { kind: SessionKind::Human, role: Role::Player, controller, owner: String::new() };
-        inbox.send(RegionInput::Join { session, member, out }).unwrap();
-        messages
-    }
+    use crate::{demo::DemoWorld, world::Harness};
 
     fn entered(messages: &mut UnboundedReceiver<ServerMessage>) -> Vec<u64> {
         let mut entered: Vec<u64> = std::iter::from_fn(|| messages.try_recv().ok())
@@ -526,21 +530,38 @@ mod tests {
     /// not see the avatars spawned earlier in that tick.
     #[test]
     fn inputs_of_one_tick_see_the_avatars_spawned_in_it() {
-        let (inbox, rx) = crossbeam_channel::unbounded();
-        let mut app = app(rx, 30, Schema::new(&DemoWorld), DemoWorld);
-        let mut alice = join(&inbox, 1);
-        let mut bob = join(&inbox, 2);
-        let carol = join(&inbox, 3);
-        inbox.send(RegionInput::Leave { session: 3 }).unwrap();
-        drop(carol);
-        app.update();
-        app.update();
+        let mut region = Harness::new(DemoWorld, 30);
+        let (_, mut alice) = region.join(SessionKind::Human, Role::Player, "guest-1");
+        let (_, mut bob) = region.join(SessionKind::Human, Role::Player, "guest-2");
+        let (carol, _) = region.join(SessionKind::Human, Role::Player, "guest-3");
+        region.leave(carol);
+        region.run(2);
 
         let seen_by_alice = entered(&mut alice);
         let seen_by_bob = entered(&mut bob);
         assert_eq!(seen_by_alice, seen_by_bob, "alice and bob see the same entities");
         assert_eq!(seen_by_alice.len(), 3, "the cube and two avatars: {seen_by_alice:?}");
+        let app = &mut region.app;
         let avatars = app.world_mut().query::<&Owner>().iter(app.world()).map(|o| o.0).collect::<Vec<_>>();
         assert_eq!(avatars.len(), 2, "carol's avatar left with her: {avatars:?}");
+    }
+
+    /// The link's order (D-037): a session that joins late is told about
+    /// each entity once, by its snapshot, and not again by a broadcast from
+    /// before it joined.
+    #[test]
+    fn a_late_session_is_told_about_each_entity_once() {
+        let mut region = Harness::new(DemoWorld, 30);
+        let (_, mut alice) = region.join(SessionKind::Human, Role::Player, "guest-1");
+        region.run(3);
+        let (_, mut bob) = region.join(SessionKind::Human, Role::Player, "guest-2");
+        region.run(3);
+
+        let seen_by_bob = entered(&mut bob);
+        let mut once = seen_by_bob.clone();
+        once.dedup();
+        assert_eq!(seen_by_bob, once, "no entity entered twice: {seen_by_bob:?}");
+        assert_eq!(seen_by_bob.len(), 3, "the cube and two avatars: {seen_by_bob:?}");
+        assert_eq!(entered(&mut alice).len(), 3, "alice saw bob arrive");
     }
 }

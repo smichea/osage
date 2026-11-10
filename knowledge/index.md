@@ -16,6 +16,7 @@ What osage knows about its own modules: their architecture, the algorithms and t
 * [osage-render](modules/osage-render.md) - Rendering techniques as independent Bevy plugins, each configured for the fidelity tier the application runs at.
 * [osage-kart-physics](modules/kart-physics.md) - The kart world's arcade physics, one deterministic Rust crate run natively by the server and as WebAssembly by clients.
 * [osage-kart-native](modules/kart-native.md) - The native client of the kart world, built on Bevy, and the testbed of the rendering programme with its benchmark.
+* [osage-region-link](modules/region-link.md) - The message contract between the replication gateway and a region server, the same in one process and across machines.
 
 ## Rendering techniques
 

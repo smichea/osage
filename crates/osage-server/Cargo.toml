@@ -15,6 +15,7 @@ repository.workspace = true
 osage-proto.workspace = true
 osage-credentials.workspace = true
 osage-world-module-api.workspace = true
+osage-region-link.workspace = true
 anyhow.workspace = true
 bevy = { workspace = true, features = ["std", "multi_threaded", "async_executor"] }
 crossbeam-channel.workspace = true

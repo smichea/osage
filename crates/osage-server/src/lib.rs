@@ -4,7 +4,9 @@
 //! osage server, phase 1: the replication gateway and one region server in a
 //! single process (ADR-0001 §4). The gateway runs on a Tokio runtime and
 //! accepts WebSocket and WebTransport clients; the region is a headless Bevy
-//! app on the calling thread, running a world module ([`world`]).
+//! app on the calling thread, running a world module ([`world`]). They talk
+//! only by the messages of `osage-region-link` (D-037), here through
+//! channels.
 
 pub mod cli;
 pub mod demo;
@@ -28,8 +30,8 @@ use std::{
 use anyhow::Result;
 use osage_credentials::TrustedIssuer;
 pub use osage_proto::actions::{DELEGATE_AGENT, DELEGATE_BRIDGE};
-
-pub use region::RegionInput;
+/// The messages between the gateway and a region (D-037), for serving them apart.
+pub use osage_region_link as link;
 
 #[derive(Clone, Debug)]
 pub struct Config {
@@ -81,22 +83,37 @@ pub fn run(listener: TcpListener, config: Config) -> Result<()> {
     serve(listener, config, demo::DemoWorld)
 }
 
-/// Serves `world` on `listener` until the process ends.
+/// Serves `world` on `listener` until the process ends: the gateway on a
+/// thread of its own, the region on the calling thread, linked in the process.
 pub fn serve(listener: TcpListener, config: Config, world: impl world::WorldModule) -> Result<()> {
-    listener.set_nonblocking(true)?;
-    let (region_tx, region_rx) = crossbeam_channel::unbounded();
-    let schema = schema::Schema::new(&world);
+    let (gateway, region) = osage_region_link::in_process();
+    spawn_gateway(listener, config.clone(), gateway)?;
+    run_region(region, config.tick_hz, world);
+    Ok(())
+}
 
-    let (gateway_config, gateway_schema) = (config.clone(), schema.clone());
-    thread::Builder::new().name("osage-gateway".to_owned()).spawn(move || {
+/// The gateway alone, on a thread of its own, for the region at the other end
+/// of `link` — in this process or, through `osage_region_link::network`, on
+/// another machine. It serves sessions once the region says it is ready.
+pub fn spawn_gateway(
+    listener: TcpListener,
+    config: Config,
+    link: osage_region_link::GatewayEnd,
+) -> Result<thread::JoinHandle<()>> {
+    listener.set_nonblocking(true)?;
+    Ok(thread::Builder::new().name("osage-gateway".to_owned()).spawn(move || {
         let runtime = tokio::runtime::Runtime::new().expect("gateway runtime");
-        if let Err(error) = runtime.block_on(gateway::serve(listener, gateway_config, gateway_schema, region_tx)) {
+        if let Err(error) = runtime.block_on(gateway::serve(listener, config, link)) {
             tracing::error!(%error, "gateway stopped");
         }
-    })?;
+    })?)
+}
 
-    region::app(region_rx, config.tick_hz, schema, world).run();
-    Ok(())
+/// A region alone, running `world` on the calling thread until the process
+/// ends, for the gateway at the other end of `link`.
+pub fn run_region(link: osage_region_link::RegionEnd, tick_hz: u32, world: impl world::WorldModule) {
+    let schema = schema::Schema::new(&world);
+    region::app(link, tick_hz, schema, world).run();
 }
 
 fn random_secret() -> Vec<u8> {

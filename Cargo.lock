@@ -4821,6 +4821,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "osage-region-link"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "crossbeam-channel",
+ "osage-proto",
+ "prost",
+ "tokio",
+]
+
+[[package]]
 name = "osage-render"
 version = "0.1.0"
 dependencies = [
@@ -4853,6 +4864,7 @@ dependencies = [
  "getrandom 0.4.3",
  "osage-credentials",
  "osage-proto",
+ "osage-region-link",
  "osage-sdk",
  "osage-world-module-api",
  "prost",

@@ -21,7 +21,7 @@ use crate::{Config, gateway::Gateway};
 /// Why a session is refused, sent in its Goodbye.
 pub struct Refusal(pub GoodbyeReason, pub String);
 
-pub use osage_world_module_api::SessionKind;
+pub use osage_region_link::SessionKind;
 
 #[derive(Clone, Debug)]
 pub struct Identity {

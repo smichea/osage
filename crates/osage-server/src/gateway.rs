@@ -2,14 +2,15 @@
 // SPDX-License-Identifier: LicenseRef-osage-AGPL-3.0-or-later-with-exceptions
 
 //! Replication gateway: authenticates clients, issues agent delegations and
-//! relays messages between sessions and the region (ADR-0001 §2). The
-//! transports — [`crate::websocket`] and [`crate::webtransport`] — hand it
-//! decoded client messages and carry its server messages.
+//! relays messages between sessions and the region (ADR-0001 §2), only
+//! through the region's link (`osage-region-link`, D-037). The transports —
+//! [`crate::websocket`] and [`crate::webtransport`] — hand it decoded client
+//! messages and carry its server messages.
 
 use std::{
     net::TcpListener as StdTcpListener,
     sync::{
-        Arc,
+        Arc, Mutex,
         atomic::{AtomicU64, Ordering},
     },
     time::Duration,
@@ -22,24 +23,22 @@ use osage_proto::{
     PROTOCOL_VERSION,
     actions::{DELEGATE_AGENT, DELEGATE_BRIDGE},
     v0::{
-        ActionRequest, ActionResult, ActionStatus, AssuranceLevel, ClientMessage, Goodbye, GoodbyeReason,
+        ActionRequest, ActionResult, ActionStatus, AssuranceLevel, ClientMessage, Goodbye, GoodbyeReason, SchemaBundle,
         ServerMessage, SessionIdentity, SourceOffer, Welcome, WorldDescriptor, client_message, server_message,
     },
 };
+use osage_region_link::{GatewayEnd, Member, Router, ToGateway, ToRegion};
 use tokio::{
     net::TcpListener,
-    sync::mpsc::{Receiver, UnboundedSender},
+    sync::mpsc::{Receiver, UnboundedReceiver, UnboundedSender},
     task::JoinHandle,
     time::timeout,
 };
 
 use crate::{
-    Config, RegionInput,
+    Config,
     identity::{Identity, Refusal, Registry, SessionKind, credential_level, privileges},
-    now_us,
-    region::Member,
-    schema::Schema,
-    websocket, webtransport,
+    now_us, websocket, webtransport,
 };
 
 pub(crate) const HELLO_TIMEOUT: Duration = Duration::from_secs(5);
@@ -51,22 +50,30 @@ const DELEGATION_LIFETIME: Duration = Duration::from_secs(3600);
 
 pub(crate) struct Gateway {
     pub(crate) config: Config,
-    region: Sender<RegionInput>,
+    region: Sender<ToRegion>,
+    /// Where the region's messages go: shared by the sessions, which open
+    /// their routes, and the task that delivers ([`route`]).
+    router: Mutex<Router>,
+    /// What the region said of its world when it was ready.
+    schemas: SchemaBundle,
+    tick_hz: u32,
     next_session: AtomicU64,
     next_delegation: AtomicU64,
     pub(crate) delegations: DelegationKey,
     pub(crate) registry: Registry,
-    schema: Schema,
     /// What the WebSocket host announces of the WebTransport endpoint.
     pub(crate) webtransport: Option<webtransport::Advert>,
 }
 
-pub async fn serve(
-    listener: StdTcpListener,
-    config: Config,
-    schema: Schema,
-    region: Sender<RegionInput>,
-) -> Result<()> {
+/// Serves sessions on `listener` for the region at the other end of `link`,
+/// once it says it is ready.
+pub async fn serve(listener: StdTcpListener, config: Config, link: GatewayEnd) -> Result<()> {
+    let GatewayEnd { to_region, mut from_region } = link;
+    let (schemas, tick_hz) = match from_region.recv().await {
+        Some(ToGateway::Ready { schemas, tick_hz }) => (schemas, tick_hz),
+        Some(_) => return Err(anyhow!("the region spoke before it was ready")),
+        None => return Err(anyhow!("the region stopped before it was ready")),
+    };
     let listener = TcpListener::from_std(listener)?;
     let endpoint = match &config.webtransport {
         Some(webtransport) => Some(webtransport::bind(webtransport).await?),
@@ -75,18 +82,29 @@ pub async fn serve(
     let gateway = Arc::new(Gateway {
         delegations: DelegationKey::new(&config.world_name, &config.delegation_secret),
         config,
-        region,
+        region: to_region,
+        router: Mutex::default(),
+        schemas,
+        tick_hz,
         next_session: AtomicU64::new(1),
         next_delegation: AtomicU64::new(1),
         registry: Registry::default(),
-        schema,
         webtransport: endpoint.as_ref().map(|(_, advert)| advert.clone()),
     });
+    tokio::spawn(route(gateway.clone(), from_region));
     if let Some((endpoint, _)) = endpoint {
         tokio::spawn(webtransport::serve(endpoint, gateway.clone()));
     }
     tracing::info!(address = %listener.local_addr()?, "gateway listening (WebSocket)");
     websocket::serve(listener, gateway).await
+}
+
+/// Carries what the region sends to the sessions, in order.
+async fn route(gateway: Arc<Gateway>, mut from_region: UnboundedReceiver<ToGateway>) {
+    while let Some(message) = from_region.recv().await {
+        gateway.router.lock().expect("router").deliver(message);
+    }
+    tracing::error!("the region's link is closed");
 }
 
 impl Gateway {
@@ -146,7 +164,9 @@ impl Gateway {
             controller: identity.controller(),
             owner: identity.responsible.clone().unwrap_or_default(),
         };
-        self.region.send(RegionInput::Join { session, member, out: out.clone() })?;
+        // The route first: the region may answer as soon as it hears of the session.
+        self.router.lock().expect("router").open(session, out.clone());
+        self.region.send(ToRegion::Join { session, member })?;
         tracing::info!(session, who = %identity.per_world_id, client = ?hello.client, transport, "session joined");
 
         // Whatever ends the connection — Goodbye, close, network error or a
@@ -159,12 +179,12 @@ impl Gateway {
                 {
                     self.delegate(&identity, &request, &out);
                 }
-                Some(message) => self.region.send(RegionInput::Message { session, message })?,
+                Some(message) => self.region.send(ToRegion::Client { session, message })?,
                 None => {}
             }
         }
 
-        self.region.send(RegionInput::Leave { session })?;
+        self.region.send(ToRegion::Leave { session })?;
         drop(admission);
         tracing::info!(session, "session left");
         Ok(())
@@ -214,7 +234,7 @@ impl Gateway {
     fn welcome(&self, session: u64, identity: &Identity) -> ServerMessage {
         let world = WorldDescriptor {
             name: self.config.world_name.clone(),
-            tick_rate_hz: self.config.tick_hz,
+            tick_rate_hz: self.tick_hz,
             content_base_url: String::new(),
             source_offer: Some(SourceOffer {
                 url: self.config.source_url.clone(),
@@ -234,7 +254,7 @@ impl Gateway {
                 }),
                 server_time_us: now_us(),
                 world: Some(world),
-                schemas: Some(self.schema.bundle()),
+                schemas: Some(self.schemas.clone()),
             })),
         }
     }
