@@ -413,3 +413,12 @@ Date: 2026-11-10 · From the architecture review of 2026-11-10, with the maintai
 - **Why:** performance is the first priority (D-040); with many contributors, a project slows down one unnoticed change at a time unless every change is measured on the hardware the tiers are defined on.
 - **To do by the maintainer:** install and register the two runners (a change of system settings, done by the maintainer).
 - **Alternatives:** receipts attached by contributors (relies on each of them running the bench); a nightly pass only (finds a slowdown a day late, among several changes).
+
+## D-042 — The high tiers are benched on cloud GPUs
+
+Date: 2026-11-10 · Amends [D-041](#d-041--performance-is-guarded-by-the-reference-machines-on-every-change-to-main), with the maintainer.
+
+- **Decision:** T3 and T4 are benched on a **cloud GPU machine created for each run and deleted after it** (Google Cloud, Singapore region), instead of the maintainer's desktop. T1 and T2 stay, for now, on the Iris Xe laptop with the restrictions of D-041: no cloud provider rents integrated graphics, and a throttled data-center GPU would not measure what an old laptop sees.
+- **How:** the bench binary is built on an ordinary CI machine; only the bench itself runs on the GPU machine, which renders without a window and is deleted when the report is back. The cloud project used for it is separate from any other, with a spending limit, and CI reaches it with short-lived credentials (no stored keys).
+- **Why:** nothing of the maintainer's is at risk; the machine is the same at every run, so measurements are steadier than on a desktop in use; anyone can reproduce a result on the same instance type. The cost is a few minutes of GPU per change to `main`.
+- **Later:** a dedicated mini PC with integrated graphics may replace the laptop for T1 and T2.
