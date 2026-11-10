@@ -19,6 +19,7 @@
 mod bench;
 mod content;
 mod effects;
+mod hud;
 mod karts;
 mod play;
 mod predict;

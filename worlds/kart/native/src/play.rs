@@ -11,10 +11,9 @@ use std::{collections::HashMap, thread, time::SystemTime};
 use bevy::{
     prelude::*,
     render::view::screenshot::{Screenshot, save_to_disk},
-    text::FontSize,
 };
 use crossbeam_channel::{Receiver, Sender};
-use osage_kart_physics::{Controls, Kart, LONG_TURBO_CHARGE, wrap};
+use osage_kart_physics::{Controls, Kart, wrap};
 use osage_sdk::{
     Transport, World, WorldEvent, components, connect, hello, intent, types as core,
     v0::{self, Role, ServerMessage, Welcome, client_message, server_message},
@@ -27,6 +26,7 @@ use osage_world_kart::{
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 
 use crate::{
+    hud::{Entry, HudPlugin, Lights, RaceView},
     predict::Predictor,
     scene::{Course, Followed, Pose, Stage},
 };
@@ -60,9 +60,9 @@ impl Plugin for PlayPlugin {
             .insert_resource(Replica { status: format!("connecting to {}…", self.url), ..default() })
             .insert_resource(Driver { autodrive: self.autodrive, ..default() })
             .insert_resource(Shots { after: self.screenshot_after })
-            .add_systems(Startup, spawn_hud)
+            .add_plugins(HudPlugin)
             .add_systems(FixedUpdate, drive)
-            .add_systems(Update, (receive, send, poses, follow_someone, hud).chain().in_set(Stage::Simulate))
+            .add_systems(Update, (receive, send, poses, follow_someone, summarise).chain().in_set(Stage::Simulate))
             .add_systems(Update, screenshots);
     }
 }
@@ -372,108 +372,43 @@ fn screenshots(mut commands: Commands, time: Res<Time>, keys: Res<ButtonInput<Ke
     }
 }
 
-#[derive(Component)]
-enum Hud {
-    Race,
-    Board,
-    Speed,
-    Lights,
-    Status,
-}
-
-fn spawn_hud(mut commands: Commands) {
-    let panel = |hud: Hud, size: f32, node: Node| {
-        (
-            hud,
-            Text::default(),
-            TextFont { font_size: FontSize::Px(size), ..default() },
-            TextColor(Color::WHITE),
-            BackgroundColor(Color::srgba(0.05, 0.07, 0.09, 0.7)),
-            Node { position_type: PositionType::Absolute, padding: UiRect::all(px(8)), ..node },
-        )
-    };
-    commands.spawn(panel(Hud::Race, 24.0, Node { top: px(12), left: px(12), ..default() }));
-    commands.spawn(panel(Hud::Board, 16.0, Node { top: px(12), right: px(12), ..default() }));
-    commands.spawn(panel(Hud::Speed, 20.0, Node { bottom: px(12), right: px(12), ..default() }));
-    commands.spawn(panel(
-        Hud::Status,
-        13.0,
-        Node { bottom: px(12), left: px(12), max_width: percent(55), ..default() },
-    ));
-    commands.spawn((
-        Hud::Lights,
-        Text::default(),
-        TextFont { font_size: FontSize::Px(110.0), ..default() },
-        TextColor(Color::WHITE),
-        TextLayout::justify(Justify::Center),
-        Node { position_type: PositionType::Absolute, top: percent(18), width: percent(100), ..default() },
-    ));
-}
-
-fn clock(ms: i64) -> String {
-    let ms = ms.max(0);
-    format!("{}:{:05.2}", ms / 60_000, (ms % 60_000) as f32 / 1000.0)
-}
-
-fn hud(replica: Res<Replica>, driver: Res<Driver>, mut texts: Query<(&Hud, &mut Text)>) {
+/// What the interface shows this frame, from what the world sent.
+fn summarise(replica: Res<Replica>, driver: Res<Driver>, karts: Query<(&Remote, &Pose)>, mut view: ResMut<RaceView>) {
     let race = replica.race();
-    let mine = replica.mine.and_then(|kart| replica.racer(kart));
     let now = replica.world_time();
-    let phase = race.as_ref().map(|r| r.phase());
-    let remaining_s = race.as_ref().map_or(0, |r| ((r.phase_ends_us as i64 - now) as f32 / 1e6).ceil() as i64);
-    for (hud, mut text) in &mut texts {
-        let wanted = match hud {
-            Hud::Status => replica.status.clone(),
-            Hud::Race => match (&race, &mine) {
-                (Some(race), Some(me)) => {
-                    let lap = me.lap.clamp(1, race.laps);
-                    let time = match phase {
-                        _ if me.finish_ms > 0 => format!("finished in {}", clock(me.finish_ms as i64)),
-                        Some(Phase::Racing) => clock((now - race.started_us as i64) / 1000),
-                        Some(Phase::Finished) => format!("next race in {} s", remaining_s.max(0)),
-                        _ => String::new(),
-                    };
-                    format!("P{}/{}   lap {lap}/{}\n{time}", me.position, race.order.len().max(1), race.laps)
-                }
-                (Some(_), None) if replica.world.is_some() => {
-                    "watching: you will be on the grid of the next race".to_owned()
-                }
-                _ => String::new(),
-            },
-            Hud::Board => race.as_ref().map_or(String::new(), |race| {
-                let rows = race.order.iter().filter_map(|kart| Some((kart, replica.racer(*kart)?))).map(|(kart, r)| {
-                    let status = if r.finish_ms > 0 {
-                        clock(r.finish_ms as i64)
-                    } else {
-                        format!("lap {}", r.lap.clamp(1, race.laps))
-                    };
-                    let me = if replica.mine == Some(*kart) { ">" } else { " " };
-                    format!("{me} {}. {}{}  {status}", r.position, r.name, if r.bot { " (bot)" } else { "" })
-                });
-                rows.collect::<Vec<_>>().join("\n")
-            }),
-            Hud::Speed => match (replica.mine, driver.predictor.kart) {
-                (Some(_), Some(kart)) => {
-                    let filled = ((kart.charge / LONG_TURBO_CHARGE).min(1.0) * 10.0) as usize;
-                    format!(
-                        "{:.0} km/h{}\nturbo [{}{}]",
-                        kart.speed.abs() * 3.6,
-                        if kart.boost > 0.0 { "  TURBO" } else { "" },
-                        "#".repeat(filled),
-                        "-".repeat(10 - filled)
-                    )
-                }
-                _ => String::new(),
-            },
-            Hud::Lights => match (phase, &race) {
-                (Some(Phase::Countdown), _) => remaining_s.max(1).to_string(),
-                (Some(Phase::Racing), Some(race)) if now - (race.started_us as i64) < 1_000_000 => "GO!".to_owned(),
-                (Some(Phase::Waiting), _) => "waiting for drivers".to_owned(),
-                _ => String::new(),
-            },
-        };
-        if text.0 != wanted {
-            text.0 = wanted;
-        }
-    }
+    let seconds_left = |race: &proto::Race| ((race.phase_ends_us as i64 - now) as f32 / 1e6).ceil() as i64;
+    view.status.clone_from(&replica.status);
+    view.laps = race.as_ref().map_or(0, |race| race.laps);
+    view.clock_ms = race.as_ref().map_or(0, |race| (now - race.started_us as i64) / 1000);
+    view.stage = match &race {
+        None => Lights::Off,
+        Some(race) => match race.phase() {
+            Phase::Waiting | Phase::Unspecified => Lights::Waiting,
+            Phase::Countdown => Lights::Count(seconds_left(race)),
+            Phase::Racing if view.clock_ms < 1000 => Lights::Go,
+            Phase::Racing => Lights::Racing,
+            Phase::Finished => Lights::Results(seconds_left(race)),
+        },
+    };
+    let order = race.map(|race| race.order).unwrap_or_default();
+    view.karts = order
+        .iter()
+        .filter_map(|id| {
+            let racer = replica.racer(*id)?;
+            let (_, pose) = karts.iter().find(|(remote, _)| remote.0 == *id)?;
+            Some(Entry {
+                id: *id,
+                name: racer.name,
+                bot: racer.bot,
+                color: racer.color,
+                position: racer.position,
+                lap: racer.lap,
+                finish_ms: racer.finish_ms,
+                at: Vec2::new(pose.kart.x, pose.kart.z),
+            })
+        })
+        .collect();
+    view.me = replica.mine.and_then(|mine| view.karts.iter().position(|kart| kart.id == mine));
+    let kart = driver.predictor.kart.unwrap_or_default();
+    (view.speed, view.charge, view.boosting) = (kart.speed, kart.charge, kart.boost > 0.0);
 }
