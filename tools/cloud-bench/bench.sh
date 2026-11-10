@@ -49,6 +49,10 @@ for candidate in asia-southeast1-b asia-southeast1-a asia-southeast1-c; do
   echo "no machine in $candidate, trying the next zone" >&2
 done
 [ -n "$zone" ] || { echo "no L4 machine free in Singapore" >&2; exit 1; }
+# A machine was made: the run leaves receipts, even if only this line, so
+# that the workflow does not make another within the hour (D-043).
+mkdir -p "$out"
+echo "$name in $zone, made $(date -u +%FT%TZ)" >"$out/machine.txt"
 
 echo "benching $tiers on $name in $zone"
 status=

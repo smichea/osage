@@ -139,7 +139,7 @@ jobs:
           workload_identity_provider: ${{ vars.OSAGE_BENCH_PROVIDER }}
           service_account: ${{ vars.OSAGE_BENCH_SERVICE_ACCOUNT }}
       - uses: google-github-actions/setup-gcloud@aa5489c8933f4cc7a4f7d45035b3b1440c9c10db # v3.0.1
-      - run: tools/cloud-bench/bench.sh "${{ vars.OSAGE_BENCH_PROJECT }}" kart.tar.gz out $TIERS
+      - run: bash tools/cloud-bench/bench.sh "${{ vars.OSAGE_BENCH_PROJECT }}" kart.tar.gz out $TIERS
       - name: Attest
         run: |
           status=0

@@ -9,6 +9,8 @@
 # `done` with a one-line status. Then it powers off; bench.sh deletes it.
 
 set -uo pipefail
+# Start-up scripts run with a bare environment: gcloud lives in /snap/bin.
+export PATH="$PATH:/usr/local/bin:/usr/bin:/bin:/snap/bin" HOME=/root
 
 metadata() {
   curl -sf -H 'Metadata-Flavor: Google' "http://metadata.google.internal/computeMetadata/v1/instance/attributes/$1"
