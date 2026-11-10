@@ -2,10 +2,11 @@
   "name": "osage",
   "private": true,
   "workspaces": [
-    "packages/*"
+    "packages/*",
+    "worlds/kart/client"
   ],
   "scripts": {
-    "build": "npm run build -w @osage/sdk && npm run build -w @osage/client-three",
-    "test": "npm test -w @osage/sdk"
+    "build": "npm run build -w @osage/sdk && npm run build -w @osage/client-three && npm run build -w @osage/kart-client",
+    "test": "npm test -w @osage/sdk && npm test -w @osage/kart-client"
   }
 }

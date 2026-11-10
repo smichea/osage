@@ -35,3 +35,10 @@ path = ["packages/sdk-ts/package.json", "packages/sdk-ts/tsconfig.json", "packag
 precedence = "aggregate"
 SPDX-FileCopyrightText = "The osage contributors"
 SPDX-License-Identifier = "MIT OR Apache-2.0"
+
+# The kart world: an example game, permissive like the SDKs (D-031)
+[[annotations]]
+path = ["worlds/kart/client/package.json", "worlds/kart/client/tsconfig.json", "worlds/kart/client/buf.gen.yaml", "worlds/kart/client/.gitignore", "worlds/kart/physics/tests/golden.txt"]
+precedence = "aggregate"
+SPDX-FileCopyrightText = "The osage contributors"
+SPDX-License-Identifier = "MIT OR Apache-2.0"

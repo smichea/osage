@@ -142,6 +142,12 @@ struct PendingCommand {
     deadline: Duration,
 }
 
+/// A replicated entity as clients first see it.
+type Snapshot<'a> = (Entity, &'a Replicated, &'a Transform, Option<&'a Discrete>, Option<&'a Volatile>);
+
+/// A replicated entity's volatile values, with their change ticks.
+type Moving<'a> = (&'a Replicated, Ref<'a, Transform>, Option<Ref<'a, Volatile>>);
+
 /// Every this many ticks (one second), a state carries every volatile value,
 /// not only the changed ones: a lost datagram is repaired within a second.
 #[derive(Resource)]
@@ -158,7 +164,7 @@ fn receive(
     mut devices: ResMut<Devices>,
     mut commands_out: ResMut<PendingCommands>,
     mut ids: ResMut<EntityIds>,
-    entities: Query<(Entity, &Replicated, &Transform, Option<&Discrete>, Option<&Volatile>)>,
+    entities: Query<Snapshot>,
     owners: Query<&Owner>,
     (mut joined, mut left, mut intents): (MessageWriter<Joined>, MessageWriter<Left>, MessageWriter<IntentReceived>),
 ) {
@@ -243,12 +249,11 @@ fn despawn_orphans(mut commands: Commands, sessions: Res<Sessions>, owned: Query
 }
 
 /// Tells every session about the entities that appeared this tick.
-#[allow(clippy::type_complexity)]
 fn announce(
     mut commands: Commands,
     sessions: Res<Sessions>,
     mut index: ResMut<Index>,
-    added: Query<(Entity, &Replicated, &Transform, Option<&Discrete>, Option<&Volatile>), Added<Replicated>>,
+    added: Query<Snapshot, Added<Replicated>>,
 ) {
     for (entity, id, transform, discrete, volatile) in &added {
         sessions.broadcast(&enter(id.0, transform, discrete, volatile));
@@ -327,7 +332,7 @@ fn publish_device(
         }
         None => {
             incoming.entry(schema::CONTENT_REF).or_insert_with(|| builtin(types::BUILTIN_DEVICE).encode_to_vec());
-            let id = ids.next();
+            let id = ids.next_id();
             let parts = (id, device_transform(&incoming), Discrete(discrete(&incoming)), Owner(session));
             let entity = commands.spawn(parts).id();
             devices.0.insert(key, Published { entity, id: id.0, components: incoming });
@@ -438,12 +443,7 @@ fn device_transform(components: &BTreeMap<u32, Vec<u8>>) -> Transform {
         .map_or_else(Transform::default, |t| transform_from_proto(&t))
 }
 
-fn broadcast_state(
-    tick: Res<Tick>,
-    keyframe: Res<Keyframe>,
-    sessions: Res<Sessions>,
-    replicated: Query<(&Replicated, Ref<Transform>, Option<Ref<Volatile>>)>,
-) {
+fn broadcast_state(tick: Res<Tick>, keyframe: Res<Keyframe>, sessions: Res<Sessions>, replicated: Query<Moving>) {
     if sessions.0.is_empty() {
         return;
     }

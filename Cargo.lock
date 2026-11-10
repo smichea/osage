@@ -4776,6 +4776,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "osage-kart-physics"
+version = "0.1.0"
+dependencies = [
+ "libm",
+]
+
+[[package]]
+name = "osage-kart-server"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "osage-server",
+ "osage-world-kart",
+]
+
+[[package]]
 name = "osage-proto"
 version = "0.1.0"
 dependencies = [
@@ -4811,6 +4827,7 @@ dependencies = [
  "osage-credentials",
  "osage-proto",
  "osage-sdk",
+ "osage-world-module-api",
  "prost",
  "prost-types",
  "serde_json",
@@ -4819,6 +4836,34 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "wtransport",
+]
+
+[[package]]
+name = "osage-world-kart"
+version = "0.1.0"
+dependencies = [
+ "bevy",
+ "osage-agent",
+ "osage-credentials",
+ "osage-kart-physics",
+ "osage-sdk",
+ "osage-server",
+ "osage-world-module-api",
+ "prost",
+ "prost-build",
+ "protox",
+ "serde_json",
+ "tokio",
+]
+
+[[package]]
+name = "osage-world-module-api"
+version = "0.1.0"
+dependencies = [
+ "bevy",
+ "osage-proto",
+ "prost",
+ "prost-types",
 ]
 
 [[package]]

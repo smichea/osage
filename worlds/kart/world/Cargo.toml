@@ -1,0 +1,30 @@
+# SPDX-FileCopyrightText: The osage contributors
+# SPDX-License-Identifier: MIT OR Apache-2.0
+
+[package]
+name = "osage-world-kart"
+description = "A kart racing world for osage: circuit, race rules, bots and an autopilot for AI agents"
+license = "MIT OR Apache-2.0"
+publish = false
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+
+[dependencies]
+osage-world-module-api.workspace = true
+osage-kart-physics.workspace = true
+bevy = { workspace = true, features = ["std", "multi_threaded", "async_executor"] }
+prost.workspace = true
+
+[build-dependencies]
+prost-build.workspace = true
+protox.workspace = true
+
+[dev-dependencies]
+osage-agent = { path = "../../../crates/osage-agent" }
+osage-credentials.workspace = true
+osage-sdk.workspace = true
+osage-server.workspace = true
+serde_json.workspace = true
+tokio.workspace = true

@@ -89,7 +89,11 @@ impl Agent {
                 "level": identity.level().as_str_name(),
                 "privileges": identity.privileges,
             },
-            "component_types": self.messages.keys().collect::<Vec<_>>(),
+            "component_types": self.welcome.schemas.iter().flat_map(|s| &s.types).map(|t| json!({
+                "name": t.name,
+                "description": t.description,
+                "volatile": t.volatile,
+            })).collect::<Vec<_>>(),
         })
     }
 
@@ -150,6 +154,25 @@ impl Agent {
             "reason": result.reason,
             "approval_reference": result.approval_reference,
         }))
+    }
+
+    /// `send_intent`: an intent of a type the world describes, its value
+    /// given as JSON, for `entity` — by default the one this agent controls.
+    pub async fn send_intent(&self, entity: Option<u64>, type_name: &str, value: Value) -> Result<Value> {
+        let descriptor = self.messages.get(type_name).with_context(|| format!("this world has no type {type_name}"))?;
+        let message = DynamicMessage::deserialize(descriptor.clone(), value)
+            .with_context(|| format!("not a valid {}", descriptor.full_name()))?;
+        let (entity, type_id) = {
+            let world = self.world.lock().await;
+            let entity = match entity {
+                Some(entity) => entity,
+                None => world.controlled_by(self.me()).context("you control no entity in scope yet")?,
+            };
+            (entity, world.types().id(type_name).context("unknown type id")?)
+        };
+        let sequence = self.sequence.fetch_add(1, std::sync::atomic::Ordering::Relaxed) + 1;
+        self.sender.lock().await.send(intent(sequence, entity, type_id, &message)).await?;
+        Ok(json!({ "sent": type_name, "entity": entity, "sequence": sequence }))
     }
 
     fn decode(&self, type_name: &str, bytes: &[u8]) -> Value {

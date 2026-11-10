@@ -1,0 +1,37 @@
+<!doctype html>
+<!-- SPDX-FileCopyrightText: The osage contributors -->
+<!-- SPDX-License-Identifier: MIT OR Apache-2.0 -->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>osage kart</title>
+    <style>
+      html, body { margin: 0; height: 100%; overflow: hidden; background: #87b5e0; color: #fff; font: 15px system-ui, sans-serif; }
+      canvas { display: block; }
+      .panel { position: fixed; padding: 8px 12px; background: #0d1117b0; border-radius: 10px; line-height: 1.45; }
+      #race { top: 12px; left: 12px; font-size: 18px; }
+      #race b { font-size: 34px; }
+      #board { top: 12px; right: 12px; min-width: 190px; }
+      #board .me { color: #ffd33d; }
+      #speed { bottom: 12px; right: 12px; text-align: right; font-size: 18px; }
+      #status { bottom: 12px; left: 12px; font-size: 12px; max-width: 46vw; }
+      #status a { color: #79c0ff; }
+      #lights { position: fixed; top: 22%; width: 100%; text-align: center; font-size: 110px; font-weight: 800; text-shadow: 0 4px 18px #000a; pointer-events: none; }
+      #banner { position: fixed; top: 38%; width: 100%; text-align: center; pointer-events: none; }
+      #banner .panel { position: static; display: inline-block; font-size: 18px; }
+      .dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 6px; }
+      .gauge { display: inline-block; width: 120px; height: 8px; background: #ffffff33; border-radius: 4px; overflow: hidden; vertical-align: middle; }
+      .gauge i { display: block; height: 100%; }
+    </style>
+  </head>
+  <body>
+    <div id="race" class="panel">connecting…</div>
+    <div id="board" class="panel"></div>
+    <div id="speed" class="panel"></div>
+    <div id="status" class="panel"></div>
+    <div id="lights"></div>
+    <div id="banner"></div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

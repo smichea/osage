@@ -60,6 +60,19 @@ cargo run -q -p osage-bridge                      # observers, clients and agent
 
 To **open** a function to the world, the owner says so explicitly: `--open-led tpacpi::kbd_backlight` makes that LED's brightness pre-approved (any participant may set it, within 0…max, checked by the bridge itself); it is switched off when the bridge stops — world link lost, Ctrl+C, SIGTERM or SIGHUP. A SIGKILL or a power cut cannot be caught by any process: a device whose safe state matters needs its own fail-safe as well. The bridge writes `/sys/class/leds/NAME/brightness` directly if it may, otherwise asks systemd-logind (allowed for the user of the active session, no root needed). Agents use the MCP tool `set_device`.
 
+## Race in the kart world
+
+The first game on osage: an original kart race for humans in the browser, AI agents and bots ([D-031](design/decisions.md#d-031--the-kart-world-shared-physics-exact-prediction-a-world-that-never-makes-up-a-step)). The world is a module ([D-030](design/decisions.md#d-030--world-modules-the-engine-provides-the-mechanisms-the-world-its-rules)) in [`worlds/kart`](worlds/kart), MIT OR Apache-2.0.
+
+```sh
+cargo run --release -p osage-kart-server       # the kart world (WebSocket 7878, WebTransport 7879)
+npm run dev -w @osage/kart-client              # open the printed URL: the race starts with you
+```
+
+Drive with the arrows or WASD, drift with Space or Shift: hold it through a bend and release it for a mini-turbo (blue, then orange sparks). A gamepad works too. `?debug` shows the prediction diagnostics.
+
+**An AI agent can race.** Start the server with `--trust-dev-issuer`, give the agent a delegation as above, and let it call `world_info`. It finds `kart.autopilot/1` with its description and drives through `send_intent`, e.g. `{"type": "kart.autopilot/1", "value": {"pace": 0.9, "line": 0.2, "drift": true}}`.
+
 ## Research
 
 | Document | Question |
@@ -100,6 +113,7 @@ Osage is also the name of the **Osage Nation** (Wahzhazhe), a sovereign Native A
 ## Licence
 
 - **Engine, server, tools, device bridge:** [GNU AGPL-3.0-or-later](LICENSE) with the additional permissions of [`LICENSE-EXCEPTIONS.md`](LICENSE-EXCEPTIONS.md) — GPU vendor components, application stores, world modules, platform components.
+- **World Module Interface** (`osage-world-module-api`) and **example worlds** (`worlds/`): MIT OR Apache-2.0 — a world module may carry its authors' licence ([`LICENSE-EXCEPTIONS.md`](LICENSE-EXCEPTIONS.md) §C).
 - **Protocol specification:** Community Specification License 1.0; `.proto` schemas and examples: Apache-2.0. **Client SDKs and interface bindings:** MIT OR Apache-2.0 — so that any client, including proprietary and app-store apps, can join an osage world ([D-003](design/decisions.md#d-003--licences-open-protocol-and-permissive-sdks-agpl-engine-and-server), [D-020 to D-023](design/decisions.md#d-020--agpl-30-or-later), [licensing review](research/06-licensing-review.md)).
 - **Documentation** (including `research/` and `design/`): [CC BY-SA 4.0](LICENSE-DOCS).
 

@@ -21,13 +21,7 @@ use crate::{Config, gateway::Gateway};
 /// Why a session is refused, sent in its Goodbye.
 pub struct Refusal(pub GoodbyeReason, pub String);
 
-/// What kind of participant a session is.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum SessionKind {
-    Human,
-    Agent,
-    Bridge,
-}
+pub use osage_world_module_api::SessionKind;
 
 #[derive(Clone, Debug)]
 pub struct Identity {

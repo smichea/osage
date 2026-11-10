@@ -27,7 +27,8 @@ Signed-off-by: Your Name <you@example.org>
 | Engine, server, tools, device bridge | AGPL-3.0-or-later WITH the additional permissions of [`LICENSE-EXCEPTIONS.md`](LICENSE-EXCEPTIONS.md) |
 | Protocol specification text | Community Specification License 1.0 |
 | `.proto` schemas, spec examples | Apache-2.0 |
-| Client SDKs, GPU Plugin / Platform / World Module interface bindings | MIT OR Apache-2.0 |
+| Client SDKs, GPU Plugin / Platform / World Module interface bindings (`osage-world-module-api`) | MIT OR Apache-2.0 |
+| Example worlds (`worlds/`, e.g. the kart world) | MIT OR Apache-2.0 |
 | Documentation (`research/`, `design/`, …) | CC BY-SA 4.0 |
 
 See the [decision log](design/decisions.md) and the [licensing review](research/06-licensing-review.md) for the reasons.

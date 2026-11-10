@@ -45,7 +45,9 @@ pub async fn handle(agent: &Agent, request: &Value) -> Option<Value> {
                 "capabilities": { "tools": {} },
                 "serverInfo": { "name": "osage-agent-mcp", "version": env!("CARGO_PKG_VERSION") },
                 "instructions": "You are an agent inside an osage world, acting for a responsible human whose \
-                    identifier is in your per_world_id. Call world_info first, then observe; move walks your avatar.",
+                    identifier is in your per_world_id. Call world_info first: it describes the world's component \
+                    types, including the intents you can send. Then observe; `mine` marks what you control. \
+                    send_intent acts through any intent the world describes; move walks an avatar.",
             })
         }
         "ping" => json!({}),
@@ -82,6 +84,19 @@ fn tools() -> Value {
             }
         },
         {
+            "name": "send_intent",
+            "description": "Act in the world: send an intent of a type world_info describes (its description says what it does), with its value as JSON in the type's protobuf JSON form. It goes to the entity you control unless you name another one you own.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "type": { "type": "string", "description": "an intent type from world_info, e.g. kart.autopilot/1" },
+                    "value": { "type": "object", "description": "the intent's fields, e.g. {\"pace\": 0.8, \"line\": 0}" },
+                    "entity": { "type": "integer", "description": "optional: an entity you own; default: the one you control" }
+                },
+                "required": ["type", "value"]
+            }
+        },
+        {
             "name": "move",
             "description": "Walk your avatar in a horizontal direction for some seconds (at most 5), then stop. X is east, Z is south, metres.",
             "inputSchema": {
@@ -110,6 +125,12 @@ async fn call(agent: &Agent, params: &Value) -> Value {
         ) {
             (Some(entity), Some(function), Some(value)) => agent.set_device(entity, function, value).await,
             _ => Err(anyhow::anyhow!("set_device needs entity (integer), function (string) and value (number)")),
+        },
+        "send_intent" => match (arguments.get("type").and_then(Value::as_str), arguments.get("value")) {
+            (Some(type_name), Some(value)) => {
+                agent.send_intent(arguments.get("entity").and_then(Value::as_u64), type_name, value.clone()).await
+            }
+            _ => Err(anyhow::anyhow!("send_intent needs type (string) and value (object)")),
         },
         "move" => match (number("x"), number("z"), number("seconds")) {
             (Some(x), Some(z), Some(seconds)) => agent.walk(x as f32, z as f32, seconds).await,

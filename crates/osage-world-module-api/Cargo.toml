@@ -1,0 +1,18 @@
+# SPDX-FileCopyrightText: The osage contributors
+# SPDX-License-Identifier: MIT OR Apache-2.0
+
+[package]
+name = "osage-world-module-api"
+description = "World Module Interface of osage (phase 1): what a world's rules see of its region"
+license = "MIT OR Apache-2.0"
+publish = false
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+
+[dependencies]
+osage-proto.workspace = true
+bevy = { workspace = true, features = ["std"] }
+prost.workspace = true
+prost-types.workspace = true

@@ -1,0 +1,21 @@
+# SPDX-FileCopyrightText: The osage contributors
+# SPDX-License-Identifier: MIT OR Apache-2.0
+
+[package]
+name = "osage-kart-server"
+description = "The kart world served by osage-server: this binary combines the AGPL server with the kart world module"
+license = "MIT OR Apache-2.0"
+publish = false
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+
+[[bin]]
+name = "kart-server"
+path = "src/main.rs"
+
+[dependencies]
+osage-server.workspace = true
+osage-world-kart.workspace = true
+anyhow.workspace = true

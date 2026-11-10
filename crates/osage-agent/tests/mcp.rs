@@ -39,12 +39,15 @@ async fn an_agent_observes_the_world_and_walks_through_mcp() {
 
     let tools = call(&agent, 2, "tools/list", json!({})).await;
     let names: Vec<_> = tools["tools"].as_array().unwrap().iter().map(|t| t["name"].as_str().unwrap()).collect();
-    assert_eq!(names, ["world_info", "observe", "set_device", "move"]);
+    assert_eq!(names, ["world_info", "observe", "set_device", "send_intent", "move"]);
 
     let info = call(&agent, 3, "tools/call", json!({ "name": "world_info", "arguments": {} })).await;
     let me = &info["structuredContent"]["me"];
     assert!(me["per_world_id"].as_str().unwrap().ends_with(".alice@demo"));
     assert_eq!(me["level"], "ASSURANCE_LEVEL_A2");
+    let types = info["structuredContent"]["component_types"].as_array().unwrap();
+    let walking = types.iter().find(|t| t["name"] == "osage.move_intent/1").expect("the intent is described");
+    assert!(walking["description"].as_str().unwrap().starts_with("Intent"), "{walking}");
 
     tokio::time::sleep(Duration::from_millis(300)).await;
     let seen = call(&agent, 4, "tools/call", json!({ "name": "observe", "arguments": {} })).await;

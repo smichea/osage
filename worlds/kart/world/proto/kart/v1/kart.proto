@@ -1,0 +1,104 @@
+// SPDX-FileCopyrightText: The osage contributors
+// SPDX-License-Identifier: Apache-2.0
+
+// Component types of the osage kart world. The world announces them, with
+// these descriptions, in its Welcome: clients and AI agents need nothing else.
+
+syntax = "proto3";
+
+package kart.v1;
+
+// kart.controls/1 — intent from a human driver: one physics step (1/60 s) of
+// driving, with the few steps before it in case a datagram was lost.
+message Controls {
+  // Oldest first; the last one is the newest.
+  repeated Step steps = 1;
+}
+
+message Step {
+  // Counts the driver's steps from 1.
+  uint64 sequence = 1;
+  // 1 full throttle, -1 brake then reverse.
+  float throttle = 2;
+  // 1 full right, -1 full left.
+  float steer = 3;
+  // The drift button is held: steer and hold it at speed to drift; release
+  // after a long drift for a mini-turbo.
+  bool drift = 4;
+}
+
+// kart.autopilot/1 — intent for AI agents: how the world's autopilot drives
+// your kart. Your kart waits on the grid until you send one.
+message Autopilot {
+  // 0 stopped … 1 flat out.
+  float pace = 1;
+  // Where on the road: -1 left edge, 0 centre, 1 right edge.
+  float line = 2;
+  // Drift through bends for mini-turbos: faster, riskier.
+  bool drift = 3;
+}
+
+// kart.state/1 — a kart's physics state, sent every step.
+message KartState {
+  float x = 1;
+  float z = 2;
+  float heading = 3;
+  float speed = 4;
+  float slide = 5;
+  float drift = 6;
+  float charge = 7;
+  float boost = 8;
+  // The last Step.sequence the server applied to this kart: a predicting
+  // client replays its later steps from this state.
+  uint64 applied = 9;
+}
+
+// kart.racer/1 — who drives a kart and how their race goes.
+message Racer {
+  string name = 1;
+  uint32 color = 2;
+  bool bot = 3;
+  // 0 on the grid, 1 on the first lap … laps + 1 once finished.
+  uint32 lap = 4;
+  // 1 = leading.
+  uint32 position = 5;
+  // Race time at the finish line, milliseconds; 0 while racing.
+  uint64 finish_ms = 6;
+}
+
+// kart.track/1 — the circuit: centre line, road and walls.
+message Track {
+  // x0, z0, x1, z1, …: a closed loop, metres.
+  repeated float points = 1;
+  float half_width = 2;
+  // Grass between the road and the walls, metres.
+  float verge = 3;
+  // Distance along the centre line where the start/finish line is.
+  float start = 4;
+  // Sectors a lap is cut into; a lap counts only through all of them, in order.
+  uint32 sectors = 5;
+}
+
+// kart.race/1 — the race in progress.
+message Race {
+  Phase phase = 1;
+  // Server time (microseconds since the Unix epoch) when the phase ends;
+  // 0 if it has no set end.
+  uint64 phase_ends_us = 2;
+  uint32 laps = 3;
+  // Server time of the start, once racing.
+  uint64 started_us = 4;
+  // Kart entities in race order.
+  repeated uint64 order = 5;
+}
+
+enum Phase {
+  PHASE_UNSPECIFIED = 0;
+  // No driver connected.
+  PHASE_WAITING = 1;
+  // Lights: karts on the grid, frozen.
+  PHASE_COUNTDOWN = 2;
+  PHASE_RACING = 3;
+  // Results; the next race follows.
+  PHASE_FINISHED = 4;
+}

@@ -51,7 +51,7 @@ fn spawn_cube(mut commands: Commands, mut ids: ResMut<EntityIds>) {
     let system = components::Controller { kind: components::ControllerKind::System.into(), ..default() };
     let discrete =
         Discrete::default().with(schema::CONTENT_REF, &builtin(types::BUILTIN_CUBE)).with(schema::CONTROLLER, &system);
-    commands.spawn((ids.next(), Transform::default(), discrete, Orbit { radius: 3.0, speed: 0.8 }));
+    commands.spawn((ids.next_id(), Transform::default(), discrete, Orbit { radius: 3.0, speed: 0.8 }));
 }
 
 fn spawn_avatars(mut commands: Commands, mut ids: ResMut<EntityIds>, mut joined: MessageReader<Joined>) {
@@ -63,7 +63,7 @@ fn spawn_avatars(mut commands: Commands, mut ids: ResMut<EntityIds>, mut joined:
             .with(schema::CONTENT_REF, &builtin(types::BUILTIN_AVATAR))
             .with(schema::CONTROLLER, &joined.controller);
         let place = spawn_point(joined.session);
-        commands.spawn((ids.next(), place, discrete, Owner(joined.session), MoveInput::default()));
+        commands.spawn((ids.next_id(), place, discrete, Owner(joined.session), MoveInput::default()));
     }
 }
 

@@ -1,0 +1,28 @@
+{
+  "name": "@osage/kart-client",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Browser client of the osage kart world (three.js), predicting its kart with the world's physics in WebAssembly",
+  "license": "MIT OR Apache-2.0",
+  "type": "module",
+  "scripts": {
+    "generate": "buf generate ../world/proto",
+    "wasm": "node scripts/build-wasm.mjs",
+    "dev": "npm run generate && npm run wasm && vite",
+    "build": "npm run generate && npm run wasm && tsc --noEmit -p tsconfig.json && vite build",
+    "test": "npm run generate && npm run wasm && vitest run"
+  },
+  "dependencies": {
+    "@bufbuild/protobuf": "^2.17.0",
+    "@osage/sdk": "0.1.0",
+    "three": "^0.187.0"
+  },
+  "devDependencies": {
+    "@bufbuild/buf": "^1.75.0",
+    "@bufbuild/protoc-gen-es": "^2.17.0",
+    "@types/three": "^0.187.0",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.6",
+    "vitest": "^5.1.0"
+  }
+}

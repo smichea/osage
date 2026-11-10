@@ -6,14 +6,16 @@
 //! accepts WebSocket and WebTransport clients; the region is a headless Bevy
 //! app on the calling thread, running a world module ([`world`]).
 
+pub mod cli;
 pub mod demo;
 mod gateway;
 mod identity;
 mod region;
-mod schema;
 mod websocket;
 mod webtransport;
 pub mod world;
+
+pub(crate) use osage_world_module_api::schema;
 
 use std::{
     collections::HashSet,

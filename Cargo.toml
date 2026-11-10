@@ -3,7 +3,7 @@
 
 [workspace]
 resolver = "3"
-members = ["crates/*"]
+members = ["crates/*", "worlds/kart/physics", "worlds/kart/world", "worlds/kart/server"]
 
 [workspace.package]
 version = "0.1.0"
@@ -16,6 +16,9 @@ osage-proto = { path = "crates/osage-proto" }
 osage-sdk = { path = "crates/osage-sdk" }
 osage-credentials = { path = "crates/osage-credentials" }
 osage-server = { path = "crates/osage-server" }
+osage-kart-physics = { path = "worlds/kart/physics" }
+osage-world-kart = { path = "worlds/kart/world" }
+osage-world-module-api = { path = "crates/osage-world-module-api" }
 anyhow = "1.0.104"
 base64ct = { version = "1.8.3", features = ["alloc"] }
 bevy = { version = "0.20.1", default-features = false }
@@ -23,6 +26,7 @@ crossbeam-channel = "0.5.17"
 futures-util = "0.3.34"
 getrandom = "0.4.3"
 hmac = "0.13.0"
+libm = "0.2.16"
 p256 = { version = "0.14.0", features = ["ecdsa"] }
 prost = "0.14.4"
 prost-types = "0.14.4"
@@ -37,3 +41,8 @@ tokio-tungstenite = "0.30.0"
 tracing = "0.1.44"
 tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }
 wtransport = "0.7.2"
+
+# Dependencies (Bevy above all) are optimised even in development builds: a
+# 60 Hz region needs it, while osage's own crates stay quick to build and debug.
+[profile.dev.package."*"]
+opt-level = 2

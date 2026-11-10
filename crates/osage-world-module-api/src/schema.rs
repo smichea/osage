@@ -1,5 +1,5 @@
 // SPDX-FileCopyrightText: The osage contributors
-// SPDX-License-Identifier: LicenseRef-osage-AGPL-3.0-or-later-with-exceptions
+// SPDX-License-Identifier: MIT OR Apache-2.0
 
 //! The component types a world announces in its Welcome (D-019): the core
 //! ones, then the world module's own.
@@ -14,7 +14,7 @@ use osage_proto::{
 use prost::Message;
 use prost_types::FileDescriptorSet;
 
-use crate::world::{TypeSpec, WorldModule};
+use crate::{TypeSpec, WorldModule};
 
 pub const TRANSFORM: u32 = 1;
 pub const CONTENT_REF: u32 = 2;
@@ -32,7 +32,7 @@ pub struct Schema {
 }
 
 impl Schema {
-    pub(crate) fn new(world: &impl WorldModule) -> Self {
+    pub fn new(world: &impl WorldModule) -> Self {
         let core = [
             (
                 TRANSFORM,
@@ -93,7 +93,8 @@ impl Schema {
         self.ids.get(name).copied()
     }
 
-    pub(crate) fn bundle(&self) -> SchemaBundle {
+    /// The schema bundle sent in the Welcome.
+    pub fn bundle(&self) -> SchemaBundle {
         self.bundle.clone()
     }
 }
