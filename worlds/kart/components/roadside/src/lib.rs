@@ -302,13 +302,16 @@ pub fn woods(
             {
                 continue;
             }
-            // Pines are saplings grown tall; firs and broadleaf trees full grown.
+            // Pines are saplings grown tall; firs and broadleaf trees full
+            // grown. Woods mix ages: mostly grown trees, some young ones,
+            // a few old giants above the canopy.
+            let age = 0.6 + 0.9 * dice.roll().powf(1.6);
             if kind < 0.45 {
-                pines.push(verge.stand(at, 0.2, turn, dice.between(5.5, 9.0)));
+                pines.push(verge.stand(at, 0.2, turn, dice.between(5.5, 9.0) * age));
             } else if kind < 0.85 {
-                firs.push(verge.stand(at, 0.2, turn, dice.between(0.9, 1.35)));
+                firs.push(verge.stand(at, 0.2, turn, dice.between(0.9, 1.35) * age));
             } else {
-                broadleaves.push(verge.stand(at, 0.2, turn, dice.between(1.7, 2.5)));
+                broadleaves.push(verge.stand(at, 0.2, turn, dice.between(1.7, 2.5) * age));
             }
         }
     }
