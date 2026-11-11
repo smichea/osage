@@ -268,6 +268,12 @@ fn stickers(livery: Livery) -> decals::Decals {
         let centre = panel.transform_point(Vec3::new(side * 0.145, -0.08, 0.0135));
         decals.add(next(), centre, panel.rotation * Vec3::X, panel.rotation * Vec3::Y, 0.1);
     }
+    // A sponsor's mark on the white patch of the driver's back, which the
+    // chasing camera sees: the trunk leans back, so the back faces a
+    // little down.
+    let lean = Quat::from_rotation_x(-0.38);
+    let back = Vec3::new(0.0, 0.5, -0.33) + lean * Vec3::NEG_Z * 0.114 + lean * Vec3::NEG_Y * 0.04;
+    decals.add(next(), back, -Vec3::X, lean * Vec3::Y, 0.15);
     // Along the rear bumper, facing back.
     decals.add(next(), Vec3::new(-0.36, 0.165, -0.985), -Vec3::X, Vec3::Y, 0.22);
     decals.add(next(), Vec3::new(0.36, 0.165, -0.985), -Vec3::X, Vec3::Y, 0.22);
@@ -479,7 +485,6 @@ mod worn {
     pub const BOOTS: usize = 4;
     pub const RIBS: usize = 5;
     pub const PATCH: usize = 6;
-    pub const MARK: usize = 7;
 }
 
 /// The driver's body, sitting low with legs ahead, hands on the wheel:
@@ -525,12 +530,11 @@ fn sculpted_driver() -> &'static [(usize, Shape)] {
                 .paint_cone(PANELS, knee, knee, 0.07, 0.07);
         }
         // A band of the second colour across the chest and shoulders, the
-        // collar in the team's colour, and a white patch on the back with a
-        // dark mark standing for a sponsor, where the chasing camera sees it.
+        // collar in the team's colour, and a white patch on the back, where
+        // the chasing camera sees it, for a sponsor's sticker ([`stickers`]).
         body.paint_box(BAND, Vec3::new(0.0, 0.53, -0.31), Vec3::new(0.3, 0.035, 0.2), lean)
             .paint_cone(PANELS, Vec3::new(0.0, 0.66, -0.3), Vec3::new(0.0, 0.7, -0.29), 0.075, 0.07)
-            .paint_box(PATCH, Vec3::new(0.0, 0.46, -0.44), Vec3::new(0.09, 0.06, 0.08), lean)
-            .paint_box(MARK, Vec3::new(0.0, 0.46, -0.45), Vec3::new(0.06, 0.016, 0.08), lean);
+            .paint_box(PATCH, Vec3::new(0.0, 0.46, -0.44), Vec3::new(0.09, 0.06, 0.08), lean);
         body.shapes(0.012)
     })
 }

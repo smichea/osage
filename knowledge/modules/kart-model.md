@@ -16,7 +16,7 @@ The karts of the kart game as a real racing kart looks: the replacement of the t
 # Concepts
 
 - **Finish:** how a surface reflects light; one material each, shared by every kart: glossy paint, satin plastic, rubber, painted steel, machined alloy, chrome, race-suit cloth, a tinted visor, and stickers (glossy, alpha-tested, their marks from an atlas the client gives the material).
-- **Stickers:** an atlas of 32 abstract sponsors' marks drawn by the program — a panel, a disc or a ring, a stripe or a chevron, bars standing for a name, in sponsors' colour pairs, no real brand — laid as quads on the pods' sloping faces, the nose, beside the front panel's number and along the rear bumper, a set for each racing number.
+- **Stickers:** an atlas of 32 abstract sponsors' marks drawn by the program — a panel, a disc or a ring, a stripe or a chevron, bars standing for a name, in sponsors' colour pairs, no real brand — laid as quads on the pods' sloping faces, the nose, beside the front panel's number, on the white patch of the driver's back and along the rear bumper, a set for each racing number.
 - **Livery:** a team's colours in sRGB: the main colour, a second for stripes and the helmet's lower half, the frame's paint, the suit's own colour (rarely the kart's: a driver in the kart's colour from head to foot reads as a toy; the team's colour goes on the suit's panels), and its racing number, drawn in seven segments on the front panel, on plates on the side pods and on the rear bumper's plate.
 - **Parts:** the body (frame, bodywork, engine, seat, steering, the driver below the neck), the helmet, and a front and a rear wheel; each part is a mesh per finish.
 
