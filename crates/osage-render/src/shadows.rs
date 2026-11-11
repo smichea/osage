@@ -3,14 +3,13 @@
 
 //! R2 — shadows: the sun's cascaded shadow maps, more cascades, reach and
 //! resolution as the tier rises; contact shadows for small details and soft
-//! shadows whose edges widen with distance (PCSS, filtered over time with
-//! TAA) at T3+.
+//! shadows whose edges widen with distance (PCSS, smoothed by TAA) at T3+.
 //!
 //! Measured on the Iris Xe reference at 1080p (T2): two cascades of 1024
 //! over 80 m cost 2.6 ms, three of 2048 over 120 m 4.7 ms.
 
 use bevy::{
-    light::{CascadeShadowConfigBuilder, DirectionalLightShadowMap, ShadowFilteringMethod},
+    light::{CascadeShadowConfigBuilder, DirectionalLightShadowMap},
     pbr::ContactShadows,
     prelude::*,
 };
@@ -66,7 +65,10 @@ fn sun(mut commands: Commands, tier: Res<Tier>, mut suns: Query<(Entity, &mut Di
 fn camera(mut commands: Commands, tier: Res<Tier>, cameras: Query<Entity, Added<OsageCamera>>) {
     if *tier >= Tier::T3 {
         for camera in &cameras {
-            commands.entity(camera).insert((ContactShadows::default(), ShadowFilteringMethod::Temporal));
+            // Bevy's temporal shadow filter hung the Iris Xe (Mesa) a few
+            // hundred frames into a lap (2026-11-11): the default filter,
+            // under TAA, keeps soft shadows clean enough.
+            commands.entity(camera).insert(ContactShadows::default());
         }
     }
 }
