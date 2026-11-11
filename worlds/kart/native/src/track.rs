@@ -23,6 +23,7 @@ pub use osage_kart_land::{BARRIER, Frame, HILLS, LAND, Land, Site, WATER, frames
 
 use osage_content::{self as content, GRAIN, Kind, Surface};
 use osage_procedural::{Batch, Paint, Shape};
+use osage_render::ground::{Ground, GroundMaterial};
 
 use crate::scene::{Course, GRASS, Part};
 
@@ -259,6 +260,7 @@ pub fn build(
     old: Query<Entity, With<Part>>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
+    mut grounds: ResMut<Assets<GroundMaterial>>,
     mut images: ResMut<Assets<Image>>,
 ) {
     for part in &old {
@@ -273,7 +275,17 @@ pub fn build(
     if let Some(root) = assets.as_deref().filter(|root| root.join("polyhaven/asphalt_02").exists())
         && let Some(set) = Photographed::load(root, &mut images)
     {
-        photographed(&mut commands, &mut meshes, &mut materials, &mut images, &course.0, &frames, &land, set);
+        photographed(
+            &mut commands,
+            &mut meshes,
+            &mut materials,
+            &mut grounds,
+            &mut images,
+            &course.0,
+            &frames,
+            &land,
+            set,
+        );
         commands.insert_resource(land);
         return;
     }
@@ -594,6 +606,7 @@ fn photographed(
     commands: &mut Commands,
     meshes: &mut Assets<Mesh>,
     materials: &mut Assets<StandardMaterial>,
+    grounds: &mut Assets<GroundMaterial>,
     images: &mut Assets<Image>,
     circuit: &osage_world_kart::Circuit,
     frames: &[Frame],
@@ -603,7 +616,13 @@ fn photographed(
     let track = &circuit.track;
     let (half, verge) = (track.half_width, track.verge);
     let road = materials.add(set.asphalt.material(5.0));
-    let grass = materials.add(set.grass.material(2.6));
+    // Grass varies in clumps and patches, so that its grain never reads as a carpet.
+    let grass = grounds.add(GroundMaterial { base: set.grass.material(2.6), extension: Ground::meadow() });
+    // Mown grass varies less: clumps only, and faint patches.
+    let mown_grass = grounds.add(GroundMaterial {
+        base: set.grass.material(2.6),
+        extension: Ground { variation: Vec4::new(0.3, 0.35, 1.2, 18.0), ..Ground::meadow() },
+    });
     let gravel = materials.add(set.gravel.material(2.4));
     let painted = materials.add(StandardMaterial { perceptual_roughness: 0.75, ..set.paint.material(2.0) });
     let concrete = materials.add(set.concrete.material(3.0));
@@ -611,7 +630,9 @@ fn photographed(
         commands.spawn((Part, Mesh3d(meshes.add(mesh)), MeshMaterial3d(material.clone()), NotShadowCaster));
     };
 
-    flat(with_tangents(land_mesh(land, |at, height| meadow(land, at, height))), &grass);
+    // Laid once `flat` is done with the commands.
+    let mut grassed: Vec<(Mesh, &Handle<GroundMaterial>)> = Vec::new();
+    grassed.push((with_tangents(land_mesh(land, |at, height| meadow(land, at, height))), &grass));
     // Beyond the land, fields as far as the haze.
     let fields = materials.add(StandardMaterial {
         base_color: Color::srgb(0.2, 0.25, 0.12),
@@ -651,12 +672,13 @@ fn photographed(
         let outer_bend = |i: usize| frames[i].bend.abs() > 0.011 && frames[i].bend.signum() == side;
         let (kerb, wall) = (side * (half + 1.0), side * (half + verge + BARRIER));
         let stripes = |i: usize| (!outer_bend(i)).then(|| mown((i / 2).is_multiple_of(2)));
-        flat(with_tangents(ribbon(frames, (kerb, 0.012), (wall, 0.012), (0.0, 1.0), stripes)), &grass);
+        grassed.push((with_tangents(ribbon(frames, (kerb, 0.012), (wall, 0.012), (0.0, 1.0), stripes)), &mown_grass));
         let trap = |i: usize| outer_bend(i).then_some(WHITE);
         flat(with_tangents(ribbon(frames, (kerb, 0.015), (wall, 0.015), (0.0, 1.0), trap)), &gravel);
         let (behind, apron) = (wall + side * 0.7, wall + side * 4.0);
         let stripes = |i: usize| Some(mown(i / 2 % 2 == 1));
-        flat(with_tangents(ribbon(frames, (behind, 0.012), (apron, 0.012), (0.0, 1.0), stripes)), &grass);
+        grassed
+            .push((with_tangents(ribbon(frames, (behind, 0.012), (apron, 0.012), (0.0, 1.0), stripes)), &mown_grass));
     }
 
     // Road markings, worn into the asphalt.
@@ -756,5 +778,8 @@ fn photographed(
             NotShadowCaster,
         ));
         commands.insert_resource(Water(water));
+    }
+    for (mesh, material) in grassed {
+        commands.spawn((Part, Mesh3d(meshes.add(mesh)), MeshMaterial3d(material.clone()), NotShadowCaster));
     }
 }

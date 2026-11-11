@@ -6,7 +6,7 @@ resource: https://github.com/smichea/osage/tree/main/crates/osage-render
 licence: LicenseRef-osage-AGPL-3.0-or-later-with-exceptions
 status: draft
 tags: [rendering, tiers, bevy]
-generated: { by: "claude-code/claude-opus-5-5", at: "2026-11-10T09:30:00Z" }
+generated: { by: "claude-code/claude-opus-5-5", at: "2026-11-11T10:00:00Z" }
 ---
 
 # Purpose
@@ -30,6 +30,7 @@ Let many people improve rendering in parallel: one technique is one plugin, and 
 - `OsageRenderPlugin`, `Tier`, `Technique`, `Look`, `OsageCamera`, `Sun`.
 - `resolution::Output` (follow the window, or a fixed size) and `resolution::Picture` (the image and its size).
 - `Tier::budget_ms`, `Tier::bench_resolution`, `Tier::max_height`, `Tier::render_scale`.
+- `ground::{GroundMaterial, Ground}`: a standard material extended for ground that varies, registered at every tier for worlds to use.
 
 # Invariants
 
@@ -39,7 +40,7 @@ Let many people improve rendering in parallel: one technique is one plugin, and 
 
 # Knowledge
 
-- Techniques: [sky and sun](/techniques/sky-and-sun.md), [a photographed sky](/techniques/panorama.md), [light from the sky](/techniques/sky-light.md), [sun shadows](/techniques/sun-shadows.md), [ambient occlusion](/techniques/ambient-occlusion.md), [post-processing](/techniques/post-processing.md), [resolution and upscaling](/techniques/resolution-and-upscaling.md).
+- Techniques: [sky and sun](/techniques/sky-and-sun.md), [a photographed sky](/techniques/panorama.md), [light from the sky](/techniques/sky-light.md), [sun shadows](/techniques/sun-shadows.md), [ambient occlusion](/techniques/ambient-occlusion.md), [post-processing](/techniques/post-processing.md), [resolution and upscaling](/techniques/resolution-and-upscaling.md), [ground that varies](/techniques/ground-variation.md).
 - Oracle: [the render bench](/oracles/render-bench.md).
 
 # Reuse

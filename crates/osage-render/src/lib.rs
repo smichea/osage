@@ -15,12 +15,14 @@
 //! | [`ambient_occlusion`] | R3 ambient occlusion | T3+ |
 //! | [`post`] | R10 post-processing and anti-aliasing | all: HDR, tonemapping, exposure; FXAA T1–T2, bloom T2+; TAA and motion blur T3+ |
 //! | [`resolution`] | R11 resolution and upscaling | all: a picture no taller than the tier allows, stretched to the window; T2 draws 85 % |
+//! | [`ground`] | R6 materials | all: a material for ground that varies in clumps and patches, for worlds to use |
 //!
 //! Each tier's set is what its budget allows on the reference hardware,
 //! measured with the bench (`bench/README.md`); each module says what it
 //! measured.
 
 pub mod ambient_occlusion;
+pub mod ground;
 pub mod panorama;
 pub mod post;
 pub mod resolution;
@@ -190,7 +192,7 @@ impl Plugin for OsageRenderPlugin {
             .insert_resource(LeftOut(self.without.clone()))
             .init_resource::<Look>()
             .insert_resource(sky_light::constant_ambient())
-            .add_plugins(resolution::ResolutionPlugin);
+            .add_plugins((resolution::ResolutionPlugin, ground::GroundPlugin));
         for technique in Technique::ALL.into_iter().filter(|t| !self.without.contains(t)) {
             match technique {
                 Technique::Sky => app.add_plugins(sky::SkyPlugin),

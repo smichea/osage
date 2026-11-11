@@ -28,6 +28,7 @@ What osage knows about its own modules: their architecture, the algorithms and t
 
 * [Sky and sun](techniques/sky-and-sun.md) - A physically based atmosphere and sun whose cost is cut per tier, down to a flat sky with fog.
 * [A photographed sky](techniques/panorama.md) - An unclipped HDR photograph of the sky drawn as the sky, lighting the scene with its sun taken out, and calibrated by its own sun so that the sky has its true brightness.
+* [Ground that varies](techniques/ground-variation.md) - A tiled ground texture multiplied in world space by clumps a metre or two across and by drier and lusher patches tens of metres across, so that grass never reads as a carpet; octaves smaller than a few pixels fade out.
 * [Light from the sky](techniques/sky-light.md) - How the sky and the ground light what the sun does not, chosen per tier because lighting from a cubemap costs 2 to 3 ms on an integrated GPU whatever its size.
 * [Sun shadows](techniques/sun-shadows.md) - Cascaded shadow maps for the sun, with cascades, reach and resolution chosen per tier from measurements.
 * [Ambient occlusion](techniques/ambient-occlusion.md) - Screen-space ambient occlusion from T3, kept out of T2 by its measured cost and by a defect on integrated graphics.

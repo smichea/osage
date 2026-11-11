@@ -1,6 +1,7 @@
 # Knowledge Update Log
 
 ## 2026-11-11
+* **Creation**: Added the technique [ground that varies](/techniques/ground-variation.md) to [osage-render](/modules/osage-render.md); the kart circuit's meadows, verges and aprons use it.
 * **Update**: [osage-kart-model](/modules/kart-model.md): a livery names the suit's own colour; two-tone helmets, a neck brace, a black rear bumper with its number plate.
 * **Creation**: Added the algorithm [aggregate thinning](/algorithms/aggregate-thinning.md): [osage-props](/modules/osage-props.md) thins foliage instead of clustering it, and can draw blended materials opaque; [osage-kart-roadside](/modules/kart-roadside.md) plants firs and broadleaf trees.
 * **Creation**: Added the technique [a photographed sky](/techniques/panorama.md) and the modules [osage-content](/modules/osage-content.md), [osage-procedural](/modules/osage-procedural.md), [osage-props](/modules/osage-props.md), [osage-kart-land](/modules/kart-land.md), [osage-kart-roadside](/modules/kart-roadside.md) and [osage-kart-model](/modules/kart-model.md): the kart client split into components (D-035) on the way to a photographed circuit.
