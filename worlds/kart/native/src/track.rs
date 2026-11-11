@@ -454,6 +454,52 @@ fn racing_line(frames: &[Frame], half: f32) -> Vec<f32> {
         .collect()
 }
 
+/// Skid marks through the bends: two dark tracks a kart's rear width apart,
+/// along the racing line, fading in as a bend starts and out as it ends,
+/// darker where the bend is sharper. Their darkness is in the vertices' alpha.
+fn skid_marks(frames: &[Frame], half: f32) -> Mesh {
+    let line = racing_line(frames, half);
+    let n = frames.len();
+    let (mut positions, mut colours) = (Vec::new(), Vec::new());
+    // How hard each frame's bend is, averaged a little so that marks fade.
+    let grip: Vec<f32> = (0..n)
+        .map(|i| (0..9).map(|k| frames[(i + n + k - 4) % n].bend.abs()).sum::<f32>() / 9.0)
+        .map(|bend| ((bend - 0.006) / 0.014).clamp(0.0, 1.0))
+        .collect();
+    for i in 0..n {
+        let j = (i + 1) % n;
+        if grip[i] <= 0.0 && grip[j] <= 0.0 {
+            continue;
+        }
+        let (a, b) = (&frames[i], &frames[j]);
+        for track in [-0.6f32, 0.6] {
+            for wobble in [0.0f32, 0.18] {
+                let width = 0.07;
+                let at = |f: &Frame, lateral: f32| {
+                    let p = f.at + f.right * lateral;
+                    [p.x, 0.025, p.y]
+                };
+                let (la, lb) = (line[i] + track + wobble, line[j] + track + wobble);
+                let quad = [at(a, la - width), at(b, lb - width), at(b, lb + width), at(a, la + width)];
+                let alpha = |g: f32| [0.0, 0.0, 0.0, 0.55 * g * if wobble > 0.0 { 0.5 } else { 1.0 }];
+                let shade = [alpha(grip[i]), alpha(grip[j]), alpha(grip[j]), alpha(grip[i])];
+                for corner in [0, 1, 3, 3, 1, 2] {
+                    positions.push(quad[corner]);
+                    colours.push(shade[corner]);
+                }
+            }
+        }
+    }
+    let count = positions.len() as u32;
+    let normals = vec![[0.0, 1.0, 0.0]; positions.len()];
+    let mesh = Mesh::new(PrimitiveTopology::TriangleList, RenderAssetUsages::default())
+        .with_inserted_attribute(Mesh::ATTRIBUTE_POSITION, positions)
+        .with_inserted_attribute(Mesh::ATTRIBUTE_NORMAL, normals)
+        .with_inserted_attribute(Mesh::ATTRIBUTE_COLOR, colours)
+        .with_inserted_indices(Indices::U32((0..count).collect()));
+    facing_up(mesh)
+}
+
 /// The road as a grid, `LANES` across, its texture continuous, its colour
 /// darkened where tyres have laid rubber: along the racing line, most at its
 /// middle, in patches along the way.
@@ -581,6 +627,15 @@ fn photographed(
     }
 
     flat(with_tangents(road_mesh(frames, half)), &road);
+    // Skid marks through the bends, dark and half worn away.
+    let marks = materials.add(StandardMaterial {
+        base_color: Color::srgba(0.02, 0.02, 0.02, 1.0),
+        alpha_mode: AlphaMode::Blend,
+        perceptual_roughness: 0.6,
+        depth_bias: 30.0,
+        ..default()
+    });
+    flat(skid_marks(frames, half), &marks);
 
     // Verges of mown grass, in faint stripes; on the outside of a bend, a
     // gravel trap in front of the tyre wall instead.
