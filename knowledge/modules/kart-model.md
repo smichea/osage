@@ -26,7 +26,7 @@ Built from simple shapes ([osage-procedural](/modules/osage-procedural.md)): pri
 
 # Interfaces
 
-`build(Livery) -> Kart { body, helmet, wheels }`, `Finish::{ALL, material}`, `decals::atlas()`, `numerals(number, height, proud)` (seven-segment digits, for a world's signs too), and the places the client animates around: `WHEELS`, `AXLES`, `NECK`, `EXHAUSTS`, `REAR_CONTACTS`.
+`build(Livery) -> Kart { body, helmet, wheels }`, `Finish::{ALL, material}`, `decals::{atlas, Decals}` (the marks and the quads that lay them, for a world's boards too), `numerals(number, height, proud)` (seven-segment digits, for a world's signs too), and the places the client animates around: `WHEELS`, `AXLES`, `NECK`, `EXHAUSTS`, `REAR_CONTACTS`.
 
 # Invariants
 

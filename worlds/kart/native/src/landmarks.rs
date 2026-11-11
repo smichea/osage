@@ -452,9 +452,10 @@ fn pits(set: &mut Set, props: &mut Props, circuit: &Circuit) {
 }
 
 /// Advertising boards behind the walls where the circuit bends gently, from
-/// 60 m past the start: three metres wide, each in two colours with an abstract mark —
-/// a disc and bars standing for a name. No real brand.
-pub fn hoardings(set: &mut Set, circuit: &Circuit, frames: &[Frame]) {
+/// 60 m past the start: three metres wide, standing above the wall on legs,
+/// each in a colour with a sponsor's mark printed on it, from the karts'
+/// stickers. No real brand.
+pub fn hoardings(set: &mut Set, props: &mut Props, circuit: &Circuit, frames: &[Frame]) {
     let track = &circuit.track;
     let (length, offset) = (track.length(), track.half_width + track.verge + BARRIER + 1.2);
     let schemes = [
@@ -465,9 +466,11 @@ pub fn hoardings(set: &mut Set, circuit: &Circuit, frames: &[Frame]) {
         ((0.08, 0.08, 0.09), (0.9, 0.42, 0.08)),
     ];
     let board = Shape::block(Vec3::new(-1.5, 0.0, -0.03), Vec3::new(1.5, 0.9, 0.03));
-    let disc = Shape::new(Cylinder::new(0.28, 0.02).mesh().resolution(20));
-    let bar = |w: f32| Shape::block(Vec3::new(0.0, -0.05, 0.0), Vec3::new(w, 0.05, 0.02));
-    let leg = Shape::block(Vec3::new(-0.03, 0.0, -0.03), Vec3::new(0.03, 0.35, 0.03));
+    // Each board's mark, from the karts' sponsors (no real brand).
+    let mut marks = osage_kart_model::decals::Decals::default();
+    // Above the wall, as banners stand, on legs from the ground.
+    let lift = 1.05;
+    let leg = Shape::block(Vec3::new(-0.03, 0.0, -0.03), Vec3::new(0.03, lift, 0.03));
     let mut since = 0.0;
     for (i, frame) in frames.iter().enumerate() {
         let from_start = (frame.along - circuit.start + length / 2.0).rem_euclid(length) - length / 2.0;
@@ -483,29 +486,28 @@ pub fn hoardings(set: &mut Set, circuit: &Circuit, frames: &[Frame]) {
         let at = frame.at + frame.right * side * offset;
         // Facing the track: its front (+Z) towards the centre line.
         let facing = heading(-frame.right * side);
-        let place = Transform::from_xyz(at.x, 0.35, at.y).with_rotation(upright(facing));
-        let (ground, mark) = schemes[(k * 3 + 1) % schemes.len()];
-        let paint = |c: (f32, f32, f32)| Paint::plain(c.0, c.1, c.2);
-        set.satin.add_within(place.translation, &board, place, paint(ground));
-        let face = place * Transform::from_xyz(0.0, 0.45, 0.03);
-        set.satin.add_within(
-            place.translation,
-            &disc,
-            face * Transform::from_xyz(-0.95, 0.0, 0.0).with_rotation(Quat::from_rotation_x(FRAC_PI_2)),
-            paint(mark),
-        );
-        for (y, w) in [(0.1, 1.6), (-0.12, 1.1)] {
-            set.satin.add_within(place.translation, &bar(w), face * Transform::from_xyz(-0.5, y, 0.0), paint(mark));
-        }
+        let place = Transform::from_xyz(at.x, lift, at.y).with_rotation(upright(facing));
+        let (ground, _) = schemes[(k * 3 + 1) % schemes.len()];
+        set.satin.add_within(place.translation, &board, place, Paint::plain(ground.0, ground.1, ground.2));
+        let centre = place.transform_point(Vec3::new(0.0, 0.45, 0.034));
+        marks.add(k * 5 + 3, centre, place.rotation * Vec3::X, place.rotation * Vec3::Y, 1.7);
         for x in [-1.3, 1.3] {
             set.satin.add_within(
                 place.translation,
                 &leg,
-                place * Transform::from_xyz(x, -0.35, 0.0),
+                place * Transform::from_xyz(x, -lift, 0.0),
                 Paint::plain(0.45, 0.46, 0.48),
             );
         }
     }
+    let atlas = props.images.add(osage_kart_model::decals::atlas());
+    let printed = props.materials.add(StandardMaterial {
+        base_color_texture: Some(atlas),
+        alpha_mode: AlphaMode::Mask(0.5),
+        perceptual_roughness: 0.55,
+        ..default()
+    });
+    props.commands.spawn((crate::scene::Part, Mesh3d(props.meshes.add(marks.mesh())), MeshMaterial3d(printed)));
 }
 
 /// Chain-link fences along the straights near the start, between the wall

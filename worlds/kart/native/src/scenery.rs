@@ -205,7 +205,7 @@ pub fn build(
         landmarks::fences(&mut set, &mut props, &course.0, &frames);
         landmarks::onlookers(&mut set, &course.0, &land, &frames);
         landmarks::marshals(&mut set, &course.0, &land, &frames);
-        landmarks::hoardings(&mut set, &course.0, &frames);
+        landmarks::hoardings(&mut set, &mut props, &course.0, &frames);
         let look = if let Some(roadside) = roadside.as_deref().filter(|r| r.woods_only) {
             // Cards come nearer: no toy tree is left to stand in for them.
             let from = 35.0;

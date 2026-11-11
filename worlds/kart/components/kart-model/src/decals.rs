@@ -151,7 +151,7 @@ pub fn atlas() -> Image {
 
 /// Stickers being laid: quads with their place in the atlas.
 #[derive(Default)]
-pub(crate) struct Decals {
+pub struct Decals {
     positions: Vec<[f32; 3]>,
     normals: Vec<[f32; 3]>,
     uvs: Vec<[f32; 2]>,
@@ -162,7 +162,7 @@ impl Decals {
     /// Mark `k`, `width` long (its height half that), centred on `centre`,
     /// its length along `right` and its height along `up`, facing
     /// `right × up`.
-    pub(crate) fn add(&mut self, k: usize, centre: Vec3, right: Vec3, up: Vec3, width: f32) {
+    pub fn add(&mut self, k: usize, centre: Vec3, right: Vec3, up: Vec3, width: f32) {
         let (right, up) = (right.normalize() * width / 2.0, up.normalize() * width / 4.0);
         let normal = right.cross(up).normalize();
         let k = k % (COLUMNS * ROWS);
@@ -182,7 +182,7 @@ impl Decals {
         self.indices.extend([first, first + 1, first + 2, first, first + 2, first + 3]);
     }
 
-    pub(crate) fn mesh(self) -> Mesh {
+    pub fn mesh(self) -> Mesh {
         Mesh::new(PrimitiveTopology::TriangleList, RenderAssetUsages::default())
             .with_inserted_attribute(Mesh::ATTRIBUTE_POSITION, self.positions)
             .with_inserted_attribute(Mesh::ATTRIBUTE_NORMAL, self.normals)
