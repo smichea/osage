@@ -39,7 +39,7 @@ pub const EXHAUSTS: [Vec3; 2] = [Vec3::new(-0.44, 0.3, -1.0), Vec3::new(-0.44, 0
 /// Where the rear tyres touch the road.
 pub const REAR_CONTACTS: [Vec3; 2] = [Vec3::new(0.6, 0.02, -0.52), Vec3::new(-0.6, 0.02, -0.52)];
 /// Where the driver's neck is: the helmet turns around it.
-pub const NECK: Vec3 = Vec3::new(0.0, 0.74, -0.27);
+pub const NECK: Vec3 = Vec3::new(0.0, 0.705, -0.27);
 
 /// How a surface reflects light. Each is one material, shared by every kart.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -464,7 +464,7 @@ fn sculpted_driver() -> &'static [(usize, Shape)] {
             // The rib protector, hard and black over the suit at the waist.
             .ellipsoid(RIBS, Vec3::new(0.0, 0.33, -0.29), Vec3::new(0.162, 0.085, 0.115), lean)
             // The neck.
-            .cone(SUIT, Vec3::new(0.0, 0.6, -0.32), Vec3::new(0.0, 0.74, -0.27), 0.055, 0.05);
+            .cone(SUIT, Vec3::new(0.0, 0.6, -0.32), NECK, 0.055, 0.05);
         for side in [-1.0f32, 1.0] {
             let shoulder = Vec3::new(side * 0.19, 0.6, -0.27);
             let elbow = Vec3::new(side * 0.25, 0.47, -0.08);
@@ -514,11 +514,17 @@ fn driver(kart: &mut Sorted, livery: Livery) {
         };
         kart.add(finish, shape, Transform::IDENTITY, colour);
     }
-    // The foam neck brace karting drivers wear, on which the helmet rests.
+    // The foam neck brace karting drivers wear, tucked under the helmet's
+    // rim: seen from behind, a thin dark band, not a ring.
     let brace = Shape::new(
-        Torus { minor_radius: 0.035, major_radius: 0.105 }.mesh().minor_resolution(10).major_resolution(24).build(),
+        Torus { minor_radius: 0.026, major_radius: 0.088 }.mesh().minor_resolution(10).major_resolution(24).build(),
     );
-    kart.add(Finish::Satin, &brace, at(0.0, 0.725, -0.275).with_scale(Vec3::new(1.15, 1.0, 1.05)), BLACK);
+    kart.add(
+        Finish::Satin,
+        &brace,
+        at(0.0, NECK.y - 0.032, -0.275).with_scale(Vec3::new(1.12, 0.75, 1.05)),
+        Vec3::splat(0.16),
+    );
 }
 
 /// The helmet, around the neck: a varnished shell in the team's colour with
