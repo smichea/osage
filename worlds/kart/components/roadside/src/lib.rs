@@ -104,6 +104,7 @@ pub fn scatters(
         within: Some(within),
         shadows,
         lods: within >= 60.0,
+        tint: None,
     };
 
     let mut all = vec![scatter(&models.tyre, tyre_walls(frames, track), Use::Whole, 160.0, true)];
@@ -160,7 +161,7 @@ pub fn scatters(
                 grass.push(stand(at, 0.02, turn, size));
             }
         }
-        all.push(scatter(&models.grass, grass, Use::Variants, 45.0, false));
+        all.push(Scatter { tint: Some(GRASS), ..scatter(&models.grass, grass, Use::Variants, 45.0, false) });
 
         // Wild flowers, ferns, low plants and stones.
         let mut flowers = Vec::new();
@@ -194,6 +195,43 @@ pub fn scatters(
         all.push(scatter(&models.stone, stones, Use::Whole, 60.0, false));
     }
     all
+}
+
+/// The colour of the grass tufts: their texture is an atlas of blades on
+/// black, which darkens them as they shrink.
+const GRASS: Color = Color::srgb(0.29, 0.38, 0.15);
+
+/// Grass around the camera (`osage_props::Carpet`): mown short on the
+/// verges, tall beyond the wall; none on the road, the kerbs, the wall, in a
+/// gravel trap or in the lake.
+pub fn carpet(land: &Land, frames: &[Frame], track: &Track, models: &Models) -> osage_props::Carpet {
+    let (land, half, wall) = (land.clone(), track.half_width, track.half_width + track.verge + BARRIER);
+    let bends: Vec<(Vec2, Vec2, f32)> = frames.iter().map(|f| (f.at, f.right, f.bend)).collect();
+    let ground = move |at: Vec2| -> Option<(f32, f32)> {
+        let distance = land.distance_to_track(at);
+        if distance < half + 1.15 || land.wet(at) || (distance > wall - 0.05 && distance < wall + 0.75) {
+            return None;
+        }
+        if distance < wall {
+            // On the verge: no grass in a gravel trap, on the outside of a bend.
+            let &(near, right, bend) =
+                bends.iter().min_by(|a, b| a.0.distance_squared(at).total_cmp(&b.0.distance_squared(at)))?;
+            let side = (at - near).dot(right).signum();
+            if bend.abs() > 0.011 && bend.signum() == side {
+                return None;
+            }
+            return Some((land.height(at), 1.25));
+        }
+        Some((land.height(at) - 0.02, 2.6))
+    };
+    osage_props::Carpet {
+        model: models.grass.clone(),
+        using: Use::Variants,
+        spacing: 0.42,
+        radius: 12.0,
+        ground: std::sync::Arc::new(ground),
+        tint: Some(GRASS),
+    }
 }
 
 /// Tyres lying flat in stacks of three, two rows deep, along the inside of

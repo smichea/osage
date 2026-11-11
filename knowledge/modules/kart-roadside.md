@@ -24,7 +24,7 @@ One pure function, `scatters`, from the land ([osage-kart-land](/modules/kart-la
 
 # Interfaces
 
-`Models::load(server)`, `Detail`, `scatters(land, frames, track, clearings, models, detail)`.
+`Models::load(server)`, `Detail`, `scatters(land, frames, track, clearings, models, detail)`, `carpet(land, frames, track, models)`: grass around the camera, mown short on the verges, tall beyond the wall, none on the road, kerbs, wall, gravel traps or in the lake.
 
 # Invariants
 

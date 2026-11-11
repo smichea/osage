@@ -9,13 +9,19 @@
 //! before it, and can cast shadows or not: grass a hundred metres off costs
 //! nothing, a tyre wall casts its shadow.
 //!
+//! A [`Carpet`] lays a model around the camera instead, cell by cell, and
+//! moves with it: grass as seen up close.
+//!
 //! The app loads models through its asset server, whose root must be the
 //! manifest's content (`osage_content::root`); [`poly_haven`] names a Poly
 //! Haven model there.
 
 use std::collections::HashMap;
 
+pub mod carpet;
 pub mod lod;
+
+pub use carpet::Carpet;
 
 use bevy::{
     camera::visibility::VisibilityRange,
@@ -29,7 +35,10 @@ pub struct PropsPlugin;
 
 impl Plugin for PropsPlugin {
     fn build(&self, app: &mut App) {
-        app.init_resource::<Converted>().init_resource::<Waiting>().add_systems(Update, scatter);
+        app.init_resource::<Converted>()
+            .init_resource::<Waiting>()
+            .add_systems(Update, (scatter, carpet::lay).chain())
+            .add_systems(PostUpdate, carpet::follow.before(bevy::transform::TransformSystems::Propagate));
     }
 }
 
@@ -64,6 +73,21 @@ pub struct Scatter {
     /// of `within`, a simplified one to a third, a coarse one beyond. For
     /// dense models seen far away: trees, bushes, rocks.
     pub lods: bool,
+    /// A plain colour instead of the model's colour texture: for tiny
+    /// things (tufts of grass) whose texture, an atlas on black, would
+    /// darken as it shrinks.
+    pub tint: Option<Color>,
+}
+
+/// The model's material as a standard material, its colour texture
+/// replaced by `tint` if there is one.
+pub(crate) fn finish(source: &GltfMaterial, tint: Option<Color>) -> StandardMaterial {
+    let mut material = standard_material_from_gltf_material(source);
+    if let Some(tint) = tint {
+        material.base_color = tint;
+        material.base_color_texture = None;
+    }
+    material
 }
 
 /// Scatters whose model is still loading. A benchmark waits for none before
@@ -89,7 +113,7 @@ const COARSER: [f32; 2] = [0.025, 0.06];
 const LEVEL_ENDS: [f32; 2] = [0.15, 0.45];
 
 /// A mesh with its material, where the model puts it.
-type Look = (Handle<Mesh>, Handle<StandardMaterial>, Transform);
+pub(crate) type Look = (Handle<Mesh>, Handle<StandardMaterial>, Transform);
 
 /// A mesh of a model where the model puts it.
 struct Piece {
@@ -221,12 +245,17 @@ fn scatter(
         };
         let mut material = |piece: &Piece| -> Handle<StandardMaterial> {
             let Some(handle) = &piece.material else { return Handle::default() };
+            // A tinted material is this scatter's own: the shared one keeps the model's colours.
+            if scatter.tint.is_some() {
+                let source = gltf_materials.get(handle).cloned().unwrap_or_default();
+                return materials.add(finish(&source, scatter.tint));
+            }
             converted
                 .0
                 .entry(handle.id())
                 .or_insert_with(|| {
                     let source = gltf_materials.get(handle).cloned().unwrap_or_default();
-                    materials.add(standard_material_from_gltf_material(&source))
+                    materials.add(finish(&source, scatter.tint))
                 })
                 .clone()
         };

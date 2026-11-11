@@ -170,6 +170,8 @@ pub fn build(
             for scatter in scatters {
                 commands.spawn((Part, scatter));
             }
+            let carpet = osage_kart_roadside::carpet(&land, &frames, track, &roadside.models);
+            commands.spawn((Part, carpet));
             // Modelled woods stand far too: nothing procedural is needed.
             Growth::None
         } else {

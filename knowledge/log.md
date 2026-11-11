@@ -2,6 +2,7 @@
 
 ## 2026-11-11
 * **Creation**: Added the technique [a photographed sky](/techniques/panorama.md) and the modules [osage-content](/modules/osage-content.md), [osage-procedural](/modules/osage-procedural.md), [osage-props](/modules/osage-props.md), [osage-kart-land](/modules/kart-land.md), [osage-kart-roadside](/modules/kart-roadside.md) and [osage-kart-model](/modules/kart-model.md): the kart client split into components (D-035) on the way to a photographed circuit.
+* **Update**: [osage-props](/modules/osage-props.md) lays carpets — grass around the camera, moved with it — and can tint tiny models; [osage-kart-roadside](/modules/kart-roadside.md) lays one along the circuit.
 * **Update**: [Post-processing](/techniques/post-processing.md): a world's look can name a lens — vignette and colour fringes — from T3.
 * **Update**: [osage-props](/modules/osage-props.md) makes levels of detail by vertex clustering for dense models seen far.
 * **Update**: [Sculpted scenery](/algorithms/sculpted-scenery.md) and [land around a track](/algorithms/land-around-a-track.md) now live in their own crates; [the timedemo bench](/algorithms/timedemo-bench.md) waits for the scenery to load and, without a window, for the GPU.

@@ -61,7 +61,7 @@ pub struct Site {
 
 /// The land: its height and its colour at any point, how far a point is from
 /// the track, and the two places the circuit leaves room for inside its loop.
-#[derive(Resource)]
+#[derive(Resource, Clone)]
 pub struct Land {
     centre: Vec2,
     points: Vec<Vec2>,
