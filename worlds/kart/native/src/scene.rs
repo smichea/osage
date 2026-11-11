@@ -175,9 +175,26 @@ impl Plugin for ScenePlugin {
     }
 }
 
-/// Where the camera looks, eased like its position.
+/// The chasing camera's state: where it looks, eased like its position;
+/// the kart's heading and speed a frame ago, to feel it turn and slow; how
+/// far the camera banks; what is left of a jolt; the time, for its shake.
 #[derive(Component)]
-struct Chase(Vec3);
+struct Chase {
+    /// Where the camera is, eased, before it shakes.
+    place: Vec3,
+    look: Vec3,
+    heading: f32,
+    speed: f32,
+    roll: f32,
+    jolt: f32,
+    time: f32,
+}
+
+/// A smooth wobble in -1..1: three sines whose periods never line up.
+fn wobble(t: f32, seed: f32) -> f32 {
+    ((t * 1.0 + seed).sin() * 0.5 + (t * 2.31 + seed * 1.7).sin() * 0.3 + (t * 5.17 + seed * 0.3).sin() * 0.2)
+        .clamp(-1.0, 1.0)
+}
 
 fn setup(mut commands: Commands) {
     if osage_content::root().is_some() {
@@ -188,7 +205,15 @@ fn setup(mut commands: Commands) {
         OsageCamera,
         Projection::Perspective(PerspectiveProjection { fov: 62f32.to_radians(), far: 6000.0, ..default() }),
         Transform::from_xyz(0.0, 120.0, -160.0).looking_at(Vec3::new(-60.0, 0.0, 0.0), Vec3::Y),
-        Chase(Vec3::new(-60.0, 0.0, 0.0)),
+        Chase {
+            place: Vec3::new(0.0, 120.0, -160.0),
+            look: Vec3::new(-60.0, 0.0, 0.0),
+            heading: 0.0,
+            speed: 0.0,
+            roll: 0.0,
+            jolt: 0.0,
+            time: 0.0,
+        },
     ));
     // A sun of mid-morning, behind the grid's right shoulder.
     commands.spawn((
@@ -202,6 +227,7 @@ fn setup(mut commands: Commands) {
 /// the kart and widens its view with speed, more when the kart boosts.
 fn follow(
     time: Res<Time>,
+    course: Option<Res<Course>>,
     viewpoint: Option<Res<Viewpoint>>,
     followed: Query<&Pose, With<Followed>>,
     mut camera: Query<(&mut Transform, &mut Chase, &mut Projection)>,
@@ -216,12 +242,49 @@ fn follow(
     };
     let (kart, seconds) = (&pose.kart, time.delta_secs());
     let forward = Vec3::new(kart.heading.sin(), 0.0, kart.heading.cos());
+    // The kart's left: it faces +Z with its left at +X.
+    let left = Vec3::new(kart.heading.cos(), 0.0, -kart.heading.sin());
     let at = Vec3::new(kart.x, 0.0, kart.z);
-    // A camera crew's car would follow a real kart this close.
+    let step = seconds.max(1e-4);
+    chase.time += step;
+    // How fast it turns (positive to the left) and how hard it slows: a
+    // stop harder than brakes give is a knock.
+    let turning = (osage_kart_physics::wrap(kart.heading - chase.heading) / step).clamp(-3.0, 3.0);
+    let slowing = (chase.speed - kart.speed) / step;
+    (chase.heading, chase.speed) = (kart.heading, kart.speed);
+    if slowing > 30.0 {
+        chase.jolt = (chase.jolt + slowing / 80.0).min(1.0);
+    }
+    chase.jolt *= (-step * 5.0).exp();
+    // What the wheels run on: kerbs shake, grass bumps, asphalt hums.
+    let surface = course.as_ref().map_or(0.1, |course| {
+        let track = &course.0.track;
+        let lateral = track.locate(kart.x, kart.z).lateral.abs();
+        if lateral > track.half_width + 0.9 {
+            1.0
+        } else if lateral > track.half_width - 0.25 {
+            0.6
+        } else {
+            0.1
+        }
+    });
+    let pace = (kart.speed.abs() / MAX_SPEED).clamp(0.0, 1.3);
+    let amplitude = 0.003 + 0.016 * surface * pace + 0.06 * chase.jolt;
+    let shake = Vec3::new(wobble(chase.time * 23.0, 1.0), wobble(chase.time * 31.0, 4.0), 0.0) * amplitude;
+    // A camera crew's car would follow a real kart this close, a little
+    // late, and looks into the bend the kart turns into.
     let behind = at - forward * 3.4 + Vec3::Y * 1.35;
-    camera.translation = camera.translation.lerp(behind, 1.0 - (-seconds * 7.0).exp());
-    chase.0 = chase.0.lerp(at + forward * 2.6 + Vec3::Y * 0.55, 1.0 - (-seconds * 10.0).exp());
-    camera.look_at(chase.0, Vec3::Y);
+    chase.place = chase.place.lerp(behind, 1.0 - (-seconds * 7.0).exp());
+    camera.translation = chase.place;
+    let ahead = at + forward * 2.6 + Vec3::Y * 0.55 + left * turning * 0.9;
+    chase.look = chase.look.lerp(ahead, 1.0 - (-seconds * 10.0).exp());
+    camera.look_at(chase.look, Vec3::Y);
+    let offset = camera.rotation * shake;
+    camera.translation += offset;
+    // It banks a little into the bend, as a following car leans.
+    let bank = (turning * 0.03 + kart.slide * 0.004).clamp(-0.045, 0.045);
+    chase.roll += (bank - chase.roll) * (1.0 - (-seconds * 4.0).exp());
+    camera.rotate_local_z(chase.roll);
     if let Projection::Perspective(lens) = &mut *projection {
         let pace = (kart.speed / MAX_SPEED).clamp(0.0, 1.4);
         let wanted = (56.0 + 8.0 * pace + if kart.boost > 0.0 { 4.0 } else { 0.0 }).to_radians();
