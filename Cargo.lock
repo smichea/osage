@@ -4789,6 +4789,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "osage-kart-crowd"
+version = "0.1.0"
+dependencies = [
+ "bevy",
+ "osage-procedural",
+]
+
+[[package]]
 name = "osage-kart-land"
 version = "0.1.0"
 dependencies = [
@@ -4813,6 +4821,7 @@ dependencies = [
  "bevy",
  "crossbeam-channel",
  "osage-content",
+ "osage-kart-crowd",
  "osage-kart-land",
  "osage-kart-model",
  "osage-kart-physics",

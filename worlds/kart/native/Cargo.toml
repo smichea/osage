@@ -20,6 +20,7 @@ osage-kart-physics.workspace = true
 osage-kart-land.workspace = true
 osage-kart-roadside.workspace = true
 osage-kart-model.workspace = true
+osage-kart-crowd.workspace = true
 osage-render.workspace = true
 osage-procedural.workspace = true
 osage-content.workspace = true

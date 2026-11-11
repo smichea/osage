@@ -16,6 +16,7 @@ use bevy::{light::NotShadowCaster, prelude::*};
 use osage_kart_physics::Track;
 use osage_world_kart::Circuit;
 
+use osage_kart_crowd::Wear;
 use osage_procedural::{Batch, Paint, Shape};
 
 use crate::{
@@ -218,9 +219,6 @@ fn grandstand(set: &mut Set, stand: Transform, shape: (f32, f32, f32, usize, f32
     let seat_colour = Paint::plain(0.12, 0.27, 0.55);
     let seat = Shape::block(Vec3::new(-0.2, 0.0, -0.21), Vec3::new(0.2, 0.06, 0.21));
     let backrest = Shape::block(Vec3::new(-0.04, 0.0, -0.21), Vec3::new(0.04, 0.38, 0.21));
-    let torso = Shape::new(Capsule3d::new(0.17, 0.32).mesh().rings(2).latitudes(6).longitudes(10).build());
-    let head = Shape::new(Sphere::new(0.105).mesh().ico(2).expect("a small icosphere"));
-    let thigh = Shape::block(Vec3::new(0.0, -0.08, -0.17), Vec3::new(0.45, 0.07, 0.17));
     let clothes = [
         (0.12, 0.15, 0.24),
         (0.85, 0.85, 0.83),
@@ -232,6 +230,8 @@ fn grandstand(set: &mut Set, stand: Transform, shape: (f32, f32, f32, usize, f32
         (0.4, 0.42, 0.3),
     ];
     let skins = [(0.86, 0.68, 0.56), (0.74, 0.55, 0.42), (0.52, 0.36, 0.25), (0.34, 0.23, 0.16)];
+    let hairs = [(0.08, 0.06, 0.05), (0.25, 0.16, 0.09), (0.55, 0.42, 0.24), (0.6, 0.6, 0.58), (0.12, 0.1, 0.09)];
+    let shoes = [(0.9, 0.9, 0.88), (0.1, 0.1, 0.11), (0.35, 0.25, 0.18)];
     for k in 0..tiers {
         let (x, y) = (front - k as f32 * depth, 0.3 + k as f32 * rise);
         let tier = Shape::block(
@@ -249,36 +249,22 @@ fn grandstand(set: &mut Set, stand: Transform, shape: (f32, f32, f32, usize, f32
             if set.dice.roll() > 0.45 {
                 continue;
             }
+            // A whole figure, in one of a few poses, dressed at random.
             let (shirt, skin) = (set.dice.pick(&clothes), set.dice.pick(&skins));
-            let trousers = set.dice.pick(&clothes);
-            let lean = Quat::from_rotation_z(set.dice.between(-0.12, 0.05));
-            let seated = at * Transform::from_xyz(-0.05, 0.06, 0.0).with_rotation(lean);
-            set.matte.add_within(
-                stand.translation,
-                &torso,
-                seated * Transform::from_xyz(0.0, 0.33, 0.0),
-                Paint::shaded(shirt.0, shirt.1, shirt.2, 0.25),
-            );
-            set.matte.add_within(
-                stand.translation,
-                &head,
-                seated * Transform::from_xyz(0.02, 0.78, 0.0),
-                Paint::plain(skin.0, skin.1, skin.2),
-            );
-            set.matte.add_within(
-                stand.translation,
-                &thigh,
-                seated,
-                Paint::plain(trousers.0 * 0.8, trousers.1 * 0.8, trousers.2 * 0.8),
-            );
-            // Shins down to the tier in front.
-            let shin = Shape::block(Vec3::new(0.38, -0.5, -0.15), Vec3::new(0.5, 0.0, 0.15));
-            set.matte.add_within(
-                stand.translation,
-                &shin,
-                seated,
-                Paint::plain(trousers.0 * 0.7, trousers.1 * 0.7, trousers.2 * 0.7),
-            );
+            let (trousers, hair, shoe) = (set.dice.pick(&clothes), set.dice.pick(&hairs), set.dice.pick(&shoes));
+            let pose = set.dice.pick(&osage_kart_crowd::Pose::ALL);
+            let turn = Quat::from_rotation_y(set.dice.between(-0.25, 0.25));
+            let seated = at * Transform::from_xyz(-0.05, 0.06, 0.0).with_rotation(turn);
+            for (wear, shape) in osage_kart_crowd::seated(pose) {
+                let paint = match wear {
+                    Wear::Shirt => Paint::shaded(shirt.0, shirt.1, shirt.2, 0.2),
+                    Wear::Trousers => Paint::plain(trousers.0 * 0.8, trousers.1 * 0.8, trousers.2 * 0.8),
+                    Wear::Skin => Paint::plain(skin.0, skin.1, skin.2),
+                    Wear::Hair => Paint::plain(hair.0, hair.1, hair.2),
+                    Wear::Shoes => Paint::plain(shoe.0, shoe.1, shoe.2),
+                };
+                set.crowd.add_within(stand.translation, shape, seated, paint);
+            }
         }
     }
     // A handrail along the front.

@@ -80,6 +80,9 @@ pub struct Set {
     pub satin: Batch,
     /// Small bright things that cast no shadow: flowers.
     pub bright: Batch,
+    /// People: cloth and skin, no grain, no shadow of their own (they sit
+    /// under a roof, and a crowd's shadows cost as much as the crowd).
+    pub crowd: Batch,
     pub dice: Dice,
     /// Places kept clear of trees.
     pub clearings: Vec<Site>,
@@ -170,10 +173,12 @@ pub fn build(
             materials.add(StandardMaterial { perceptual_roughness: 0.38, ..default() }),
         ),
     };
+    let cloth = materials.add(StandardMaterial { perceptual_roughness: 0.9, ..default() });
     let mut set = Set {
         matte: Batch::default(),
         satin: Batch::default(),
         bright: Batch::default(),
+        crowd: Batch::default(),
         dice: Dice(7),
         clearings: Vec::new(),
     };
@@ -206,7 +211,7 @@ pub fn build(
             Growth::Real
         };
         plant(&mut set, &land, track.half_width + track.verge, centre, look);
-        spawn(&mut commands, &mut meshes, set, matte, satin);
+        spawn(&mut commands, &mut meshes, set, matte, satin, cloth);
         return;
     }
     landmarks::bends(&mut set, &mut props, track, &frames);
@@ -242,7 +247,7 @@ pub fn build(
     let mountains = mountains(centre, &mut set.dice);
     commands.spawn((Part, Mesh3d(meshes.add(mountains)), MeshMaterial3d(ridge), NotShadowCaster));
 
-    spawn(&mut commands, &mut meshes, set, matte, satin);
+    spawn(&mut commands, &mut meshes, set, matte, satin, cloth);
 }
 
 /// The static scenery gathered, as a few meshes.
@@ -252,6 +257,7 @@ fn spawn(
     set: Set,
     matte: Handle<StandardMaterial>,
     satin: Handle<StandardMaterial>,
+    cloth: Handle<StandardMaterial>,
 ) {
     // Tangents, for the grain's relief where there is one.
     let tangents = |mesh: Mesh| {
@@ -263,6 +269,9 @@ fn spawn(
     }
     for mesh in set.satin.meshes() {
         commands.spawn((Part, Mesh3d(meshes.add(tangents(mesh))), MeshMaterial3d(satin.clone())));
+    }
+    for mesh in set.crowd.meshes() {
+        commands.spawn((Part, Mesh3d(meshes.add(mesh)), MeshMaterial3d(cloth.clone()), NotShadowCaster));
     }
     for mesh in set.bright.meshes() {
         commands.spawn((Part, Mesh3d(meshes.add(mesh)), MeshMaterial3d(matte.clone()), NotShadowCaster));
