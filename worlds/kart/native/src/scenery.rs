@@ -41,17 +41,25 @@ use crate::{
 pub struct Roadside {
     pub models: Models,
     pub detail: Detail,
+    /// Only the woods (tree cards) from the models; procedural trees and
+    /// bushes near the track.
+    pub woods_only: bool,
 }
 
-/// Loads the roadside's models from T3. Below, the integrated GPUs of the reference cannot afford them (T2 took
-/// 54 ms against its 16.7 with the large ones, 2026-11-11): the procedural
-/// scenery stands in.
+/// Loads the roadside's models from T3. Below, the integrated GPUs of the
+/// reference cannot afford them (T2 took 54 ms against its 16.7 with the
+/// large ones, 2026-11-11): the procedural scenery stands in near the
+/// track, and at T2 the woods, which are cards, are drawn from the trees.
 pub fn load_roadside(mut commands: Commands, tier: Res<Tier>, server: Res<AssetServer>) {
-    if osage_content::root().is_none() || *tier < Tier::T3 {
+    if osage_content::root().is_none() || *tier < Tier::T2 {
         return;
     }
-    let detail = Detail::Full;
-    commands.insert_resource(Roadside { models: Models::load(&server), detail });
+    let roadside = if *tier >= Tier::T3 {
+        Roadside { models: Models::load(&server), detail: Detail::Full, woods_only: false }
+    } else {
+        Roadside { models: Models::trees(&server), detail: Detail::Some, woods_only: true }
+    };
+    commands.insert_resource(roadside);
 }
 
 /// Something that floats: it bobs gently around its height.
@@ -198,7 +206,12 @@ pub fn build(
         landmarks::onlookers(&mut set, &course.0, &land, &frames);
         landmarks::marshals(&mut set, &course.0, &land, &frames);
         landmarks::hoardings(&mut set, &course.0, &frames);
-        let look = if let Some(roadside) = &roadside {
+        let look = if let Some(roadside) = roadside.as_deref().filter(|r| r.woods_only) {
+            for woods in osage_kart_roadside::woods(&land, &frames, track, &set.clearings, &roadside.models) {
+                commands.spawn((Part, woods));
+            }
+            Growth::Near
+        } else if let Some(roadside) = &roadside {
             let scatters =
                 osage_kart_roadside::scatters(&land, &frames, track, &set.clearings, &roadside.models, roadside.detail);
             for scatter in scatters {
@@ -301,6 +314,8 @@ enum Growth {
     Real,
     /// Only trees, only far from the track: the near roadside has models.
     Far,
+    /// As `Real`, but trees only nearer the track than the woods of cards.
+    Near,
     /// Nothing: modelled trees stand everywhere.
     None,
 }
@@ -349,7 +364,13 @@ fn plant(set: &mut Set, land: &Land, roadside: f32, centre: Vec2, growth: Growth
         let grove = track::noise(at / 55.0 + 3.0);
         let near = land.distance_to_track(at) < 90.0;
         let thick = (grove - 0.42).max(0.0) * if near { 1.5 } else { 0.5 };
-        if chance > thick || planted >= 760 || !free(set, at, 7.0) || (far && land.distance_to_track(at) < 150.0) {
+        let beyond_woods = growth == Growth::Near && land.distance_to_track(at) > osage_kart_roadside::WOODS_FROM - 5.0;
+        if chance > thick
+            || planted >= 760
+            || !free(set, at, 7.0)
+            || (far && land.distance_to_track(at) < 150.0)
+            || beyond_woods
+        {
             continue;
         }
         planted += 1;
@@ -404,7 +425,7 @@ fn plant(set: &mut Set, land: &Land, roadside: f32, centre: Vec2, growth: Growth
         }
     }
 
-    if growth == Growth::Real {
+    if matches!(growth, Growth::Real | Growth::Near) {
         return;
     }
     // Flowers: drifts of one colour each, in the meadows near the circuit.

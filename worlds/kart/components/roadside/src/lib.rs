@@ -34,6 +34,17 @@ pub struct Models {
 }
 
 impl Models {
+    /// Only the trees, for [`woods`]: the other handles load nothing.
+    pub fn trees(server: &AssetServer) -> Self {
+        let model = |id| poly_haven(server, id);
+        Self {
+            pine: model("pine_sapling_small"),
+            fir: model("fir_sapling_medium"),
+            broadleaf: model("island_tree_02"),
+            ..Self::default()
+        }
+    }
+
     pub fn load(server: &AssetServer) -> Self {
         let model = |id| poly_haven(server, id);
         Self {
