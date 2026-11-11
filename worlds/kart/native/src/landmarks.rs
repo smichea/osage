@@ -114,10 +114,25 @@ pub fn start(set: &mut Set, props: &mut Props, circuit: &Circuit, land: &Land, r
         emissive_exposure_weight: 0.0,
         ..default()
     });
-    let bulb = Shape::new(Sphere::new(0.26).mesh().ico(2).expect("a small icosphere"));
+    // The start lights: flat lamps in a black housing under the beam, each
+    // under its visor, facing the grid; on a photographed circuit, not bulbs.
     let mut lamps = Batch::default();
-    for i in -2..=2 {
-        lamps.add(&bulb, Transform::from_xyz(i as f32 * 1.1, 5.7, -0.3), Paint::plain(1.0, 1.0, 1.0));
+    if real {
+        let housing = Shape::block(Vec3::new(-3.0, 5.35, -0.42), Vec3::new(3.0, 6.0, -0.2));
+        set.satin.add_within(across_road.translation, &housing, across_road, Paint::plain(0.04, 0.04, 0.045));
+        let lens = Shape::new(Cylinder::new(0.2, 0.02).mesh().resolution(24));
+        let visor = Shape::gore(&[(0.24, 0.0), (0.24, 0.14)], 12, -FRAC_PI_2 - 1.2, 2.4);
+        for i in -2..=2 {
+            let at = Transform::from_xyz(i as f32 * 1.1, 5.68, -0.43).with_rotation(Quat::from_rotation_x(FRAC_PI_2));
+            lamps.add(&lens, at, Paint::plain(1.0, 1.0, 1.0));
+            let hood = across_road * at * Transform::from_xyz(0.0, -0.01, 0.0).with_rotation(Quat::from_rotation_x(PI));
+            set.satin.add_within(across_road.translation, &visor, hood, Paint::plain(0.04, 0.04, 0.045));
+        }
+    } else {
+        let bulb = Shape::new(Sphere::new(0.26).mesh().ico(2).expect("a small icosphere"));
+        for i in -2..=2 {
+            lamps.add(&bulb, Transform::from_xyz(i as f32 * 1.1, 5.7, -0.3), Paint::plain(1.0, 1.0, 1.0));
+        }
     }
     let lamps = props.meshes.add(lamps.merged());
     props.commands.spawn((crate::scene::Part, Mesh3d(lamps), MeshMaterial3d(glow), across_road, NotShadowCaster));
