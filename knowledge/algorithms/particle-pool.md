@@ -29,7 +29,7 @@ Create all particles once and reuse them; give each kind one material; express a
 4. **Kinds:** sparks and flames add their light to what is behind them and are brighter than white, so that they glow; smoke and dust are blended, half transparent. A round texture fading to nothing at its edge is shared by all.
 5. **Variety without randomness:** every varying value comes from a hash of a counter, so that a run is repeatable.
 
-Emitters: two sparks per rear tyre and per frame while drifting, in the colour of the charge reached; a puff of smoke every fourth frame; a flame per exhaust and per frame while boosting; dust every other frame off the road.
+Emitters: two sparks per rear tyre and per frame while drifting, in the colour of the charge reached; a puff of smoke every fourth frame; a flame per exhaust and per frame while boosting; dust every other frame off the road. On the photographed circuit, as on a real one, a drifting kart throws no sparks and a boosting one no flames; its tyres smoke every other frame instead.
 
 # Invariants
 

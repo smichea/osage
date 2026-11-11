@@ -96,6 +96,10 @@ pub struct Viewpoint {
     pub to: Vec3,
 }
 
+/// The circuit is photographed: the asset manifest's content is there.
+#[derive(Resource)]
+pub struct Photographed;
+
 /// The kart the camera follows.
 #[derive(Component)]
 pub struct Followed;
@@ -133,6 +137,9 @@ impl Plugin for ScenePlugin {
 struct Chase(Vec3);
 
 fn setup(mut commands: Commands) {
+    if osage_content::root().is_some() {
+        commands.insert_resource(Photographed);
+    }
     commands.spawn((
         Camera3d::default(),
         OsageCamera,

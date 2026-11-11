@@ -2,7 +2,9 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 //! Particles: sparks and smoke from a drifting kart's rear tyres, flames
-//! from its exhausts when it boosts, dust when it leaves the road.
+//! from its exhausts when it boosts, dust when it leaves the road. On the
+//! photographed circuit ([`Photographed`]), as on a real one: no sparks and
+//! no flames, more tyre smoke.
 //!
 //! A fixed pool of small squares that always face the camera. A particle
 //! fades by shrinking, so that all of a kind share one material and are
@@ -19,7 +21,7 @@ use osage_render::OsageCamera;
 
 use crate::{
     karts::{EXHAUSTS, REAR_CONTACTS},
-    scene::{Course, Pose},
+    scene::{Course, Photographed, Pose},
 };
 
 /// Particles alive at once, at most.
@@ -136,6 +138,7 @@ pub fn setup(
 pub fn emit(
     time: Res<Time>,
     course: Option<Res<Course>>,
+    photographed: Option<Res<Photographed>>,
     mut pool: ResMut<Pool>,
     mut frame: Local<u32>,
     karts: Query<(&Pose, &Transform)>,
@@ -174,19 +177,20 @@ pub fn emit(
                 c if c >= SHORT_TURBO_CHARGE => 1,
                 _ => 0,
             };
+            let real = photographed.is_some();
             for contact in REAR_CONTACTS {
                 let at = place.transform_point(contact);
-                for _ in 0..2 {
+                for _ in 0..if real { 0 } else { 2 } {
                     let fling = behind * 0.25 + Vec3::Y * (1.6 + pool.vary() * 2.2) + pool.spread(2.2);
                     launch(&mut pool, Kind::Spark(stage), at, fling);
                 }
-                if frame.is_multiple_of(4) {
+                if frame.is_multiple_of(if real { 2 } else { 4 }) {
                     let drift_up = Vec3::Y * 0.7 + pool.spread(0.5);
                     launch(&mut pool, Kind::Smoke, at + Vec3::Y * 0.1, behind * 0.12 + drift_up);
                 }
             }
         }
-        if kart.boost > 0.0 {
+        if kart.boost > 0.0 && photographed.is_none() {
             for exhaust in EXHAUSTS {
                 let at = place.transform_point(exhaust);
                 let jet = -forward * 5.0 + pool.spread(0.6);
