@@ -29,8 +29,9 @@ use crate::{Look, OsageCamera, Sun, Tier, sky_light};
 
 /// What the panorama's sun gives a surface facing it, lux.
 pub const SUN: f32 = lux::DIRECT_SUNLIGHT;
-/// Distance at which the land has faded halfway into the haze, metres.
-const VISIBILITY: f32 = 6000.0;
+/// Distance at which the land has faded halfway into the haze, metres: a
+/// summer day's, which blues the hills a kilometre off.
+const VISIBILITY: f32 = 3000.0;
 /// Around the sun's centre, what is the sun: degrees.
 const SUN_RADIUS: f32 = 2.5;
 /// The light from the sky is at most this many times the sky's median.

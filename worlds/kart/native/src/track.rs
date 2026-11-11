@@ -56,6 +56,10 @@ fn meadow(land: &Land, at: Vec2, height: f32) -> Vec3 {
     let dry = smooth((noise(at / 38.0 + 40.0) - 0.55) / 0.2) * 0.6;
     colour = colour.lerp(tone(0.45, 0.42, 0.24), dry);
     colour = colour.lerp(tone(0.4, 0.42, 0.2), (height / HILLS).clamp(0.0, 1.0) * 0.5);
+    // Shade of the clouds passing over, in wide soft patches, as in any
+    // photograph of hills on a day of fair-weather clouds.
+    let cloud = smooth((noise(at / 190.0 + 31.0) - 0.55) / 0.2);
+    colour *= 1.0 - 0.28 * cloud;
     // Further out, farmland: a patchwork of fields, each its own crop.
     let away = smooth((land.distance_to_track(at) - 150.0) / 80.0);
     if away > 0.0 {
