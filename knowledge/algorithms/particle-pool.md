@@ -10,7 +10,7 @@ sources:
   - id: own
     resource: "osage's own design and measurements, 2026-11-09 and 2026-11-10"
     title: osage design
-generated: { by: "claude-code/claude-fable-5-2", at: "2026-11-10T06:45:00Z" }
+generated: { by: "claude-code/claude-opus-5-5", at: "2026-11-11T13:30:00Z" }
 ---
 
 # Problem
@@ -29,7 +29,7 @@ Create all particles once and reuse them; give each kind one material; express a
 4. **Kinds:** sparks and flames add their light to what is behind them and are brighter than white, so that they glow; smoke and dust are blended, half transparent. A round texture fading to nothing at its edge is shared by all.
 5. **Variety without randomness:** every varying value comes from a hash of a counter, so that a run is repeatable.
 
-Emitters: two sparks per rear tyre and per frame while drifting, in the colour of the charge reached; a puff of smoke every fourth frame; a flame per exhaust and per frame while boosting; dust every other frame off the road. On the photographed circuit, as on a real one, a drifting kart throws no sparks and a boosting one no flames; its tyres smoke every other frame instead.
+Emitters: two sparks per rear tyre and per frame while drifting, in the colour of the charge reached; a puff of smoke every fourth frame; a flame per exhaust and per frame while boosting; dust every other frame off the road. On the photographed circuit, as on a real one, a drifting kart throws no sparks and a boosting one no flames; its tyres leave a faint grey veil instead (every third frame, 9 % opaque, growing to four times its size over about a second): white puffs read as snowballs.
 
 # Invariants
 

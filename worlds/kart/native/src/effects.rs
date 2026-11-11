@@ -4,7 +4,7 @@
 //! Particles: sparks and smoke from a drifting kart's rear tyres, flames
 //! from its exhausts when it boosts, dust when it leaves the road. On the
 //! photographed circuit ([`Photographed`]), as on a real one: no sparks and
-//! no flames, more tyre smoke.
+//! no flames, and tyre smoke a faint veil.
 //!
 //! A fixed pool of small squares that always face the camera. A particle
 //! fades by shrinking, so that all of a kind share one material and are
@@ -53,6 +53,8 @@ pub struct Pool {
     idle: Vec<Entity>,
     sparks: [Handle<StandardMaterial>; 3],
     smoke: Handle<StandardMaterial>,
+    /// Tyre smoke on the photographed circuit: a faint grey veil.
+    veil: Handle<StandardMaterial>,
     dust: Handle<StandardMaterial>,
     flame: Handle<StandardMaterial>,
     /// Counts what was emitted: the source of this module's variety.
@@ -114,6 +116,9 @@ pub fn setup(
         dust: material(LinearRgba::new(0.5, 0.42, 0.28, 0.55), AlphaMode::Blend),
         flame: material(light(1.0, 0.55, 0.15), AlphaMode::Add),
         smoke: smoke.clone(),
+        // A racing kart's tyres barely smoke: a thin grey veil that spreads
+        // and lingers, never a white puff.
+        veil: material(LinearRgba::new(0.55, 0.55, 0.57, 0.09), AlphaMode::Blend),
         emitted: 0,
         idle: {
             let square = meshes.add(Rectangle::new(1.0, 1.0));
@@ -151,11 +156,13 @@ pub fn emit(
     if time.delta_secs() <= 0.0 {
         return;
     }
+    let real = photographed.is_some();
     let mut launch = |pool: &mut Pool, kind: Kind, at: Vec3, velocity: Vec3| {
         let Some(entity) = pool.idle.pop() else { return };
         let Ok((mut particle, mut place, mut shown, mut material)) = particles.get_mut(entity) else { return };
         let (span, size, growth, gravity, look) = match kind {
             Kind::Spark(stage) => (0.22 + 0.2 * pool.vary(), 0.16, -0.6, 9.0, pool.sparks[stage].clone()),
+            Kind::Smoke if real => (0.9 + 0.5 * pool.vary(), 0.45, 3.2, -0.25, pool.veil.clone()),
             Kind::Smoke => (0.4 + 0.25 * pool.vary(), 0.3, 1.8, -0.6, pool.smoke.clone()),
             Kind::Dust => (0.5 + 0.3 * pool.vary(), 0.5, 2.0, -0.3, pool.dust.clone()),
             Kind::Flame => (0.12 + 0.1 * pool.vary(), 0.42, -0.7, 0.0, pool.flame.clone()),
@@ -177,14 +184,13 @@ pub fn emit(
                 c if c >= SHORT_TURBO_CHARGE => 1,
                 _ => 0,
             };
-            let real = photographed.is_some();
             for contact in REAR_CONTACTS {
                 let at = place.transform_point(contact);
                 for _ in 0..if real { 0 } else { 2 } {
                     let fling = behind * 0.25 + Vec3::Y * (1.6 + pool.vary() * 2.2) + pool.spread(2.2);
                     launch(&mut pool, Kind::Spark(stage), at, fling);
                 }
-                if frame.is_multiple_of(if real { 2 } else { 4 }) {
+                if frame.is_multiple_of(if real { 3 } else { 4 }) {
                     let drift_up = Vec3::Y * 0.7 + pool.spread(0.5);
                     launch(&mut pool, Kind::Smoke, at + Vec3::Y * 0.1, behind * 0.12 + drift_up);
                 }
