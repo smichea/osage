@@ -207,10 +207,12 @@ pub fn build(
         landmarks::marshals(&mut set, &course.0, &land, &frames);
         landmarks::hoardings(&mut set, &course.0, &frames);
         let look = if let Some(roadside) = roadside.as_deref().filter(|r| r.woods_only) {
-            for woods in osage_kart_roadside::woods(&land, &frames, track, &set.clearings, &roadside.models) {
+            // Cards come nearer: no toy tree is left to stand in for them.
+            let from = 35.0;
+            for woods in osage_kart_roadside::woods(&land, &frames, track, &set.clearings, &roadside.models, from) {
                 commands.spawn((Part, woods));
             }
-            Growth::Near
+            Growth::Bushes
         } else if let Some(roadside) = &roadside {
             let scatters =
                 osage_kart_roadside::scatters(&land, &frames, track, &set.clearings, &roadside.models, roadside.detail);
@@ -220,7 +222,8 @@ pub fn build(
             let carpet = osage_kart_roadside::carpet(&land, &frames, track, &roadside.models);
             commands.spawn((Part, carpet));
             // Woods off the circuit: thousands of trees, drawn as cards.
-            for woods in osage_kart_roadside::woods(&land, &frames, track, &set.clearings, &roadside.models) {
+            let from = osage_kart_roadside::WOODS_FROM;
+            for woods in osage_kart_roadside::woods(&land, &frames, track, &set.clearings, &roadside.models, from) {
                 commands.spawn((Part, woods));
             }
             // Modelled woods stand far too: nothing procedural is needed.
@@ -314,8 +317,8 @@ enum Growth {
     Real,
     /// Only trees, only far from the track: the near roadside has models.
     Far,
-    /// As `Real`, but trees only nearer the track than the woods of cards.
-    Near,
+    /// As `Real`, but no trees: the woods of cards stand in for them.
+    Bushes,
     /// Nothing: modelled trees stand everywhere.
     None,
 }
@@ -364,12 +367,11 @@ fn plant(set: &mut Set, land: &Land, roadside: f32, centre: Vec2, growth: Growth
         let grove = track::noise(at / 55.0 + 3.0);
         let near = land.distance_to_track(at) < 90.0;
         let thick = (grove - 0.42).max(0.0) * if near { 1.5 } else { 0.5 };
-        let beyond_woods = growth == Growth::Near && land.distance_to_track(at) > osage_kart_roadside::WOODS_FROM - 5.0;
         if chance > thick
             || planted >= 760
             || !free(set, at, 7.0)
             || (far && land.distance_to_track(at) < 150.0)
-            || beyond_woods
+            || growth == Growth::Bushes
         {
             continue;
         }
@@ -425,7 +427,7 @@ fn plant(set: &mut Set, land: &Land, roadside: f32, centre: Vec2, growth: Growth
         }
     }
 
-    if matches!(growth, Growth::Real | Growth::Near) {
+    if matches!(growth, Growth::Real | Growth::Bushes) {
         return;
     }
     // Flowers: drifts of one colour each, in the meadows near the circuit.

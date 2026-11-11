@@ -33,7 +33,7 @@ Draw a tree that is always far as a picture of itself. Crossed cards — flat qu
 5. **Atlas.** Views in columns, variants in rows. Fill transparent pixels with the mean colour, so that filtering never pulls black into the edges. Halve level by level; at each level scale alpha (by bisection) so that as many pixels pass the cut as at the top: a card does not thin out as it shrinks[^castano].
 6. **Cards.** For each place, for each view, a quad through the trunk, facing the view's direction, as wide and tall as the view's square, its texture the view's cell; both faces, counter-clockwise from the side each faces. Normals lean up and out from the trunk, so that the card is lit like a rounded crown rather than a sheet. Every place of a set of woods goes into one mesh, alpha-tested at 0.5, casting no shadow.
 
-In osage, the kart circuit's woods are groves of pines, firs and broadleaf trees from 110 m off the track to the edge of the modelled land: about one tree per 20 m², one per 3.6 m cell at most: some 18 000 trees (8 200 pines, 7 300 firs, 2 700 broadleaf trees), 440 000 triangles[^own].
+In osage, the kart circuit's woods are groves of pines, firs and broadleaf trees from 110 m off the track to the edge of the modelled land: about one tree per 20 m², one per 3.6 m cell at most (at T2, where no modelled tree stands nearer, from 35 m): some 18 000 trees (8 200 pines, 7 300 firs, 2 700 broadleaf trees), 440 000 triangles[^own].
 
 # Invariants
 

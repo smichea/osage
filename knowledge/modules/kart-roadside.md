@@ -24,12 +24,12 @@ One pure function, `scatters`, from the land ([osage-kart-land](/modules/kart-la
 
 # Interfaces
 
-`Models::load(server)`, `Models::trees(server)` (the trees alone, for the woods), `Detail`, `scatters(land, frames, track, clearings, models, detail)`, `woods(land, frames, track, clearings, models)` and `WOODS_FROM`, `carpet(land, frames, track, models)`: grass around the camera, mown short on the verges, tall beyond the wall, none on the road, kerbs, wall, gravel traps or in the lake. All the grass is lit as the ground it grows from, in the meadow's green.
+`Models::load(server)`, `Models::trees(server)` (the trees alone, for the woods), `Detail`, `scatters(land, frames, track, clearings, models, detail)`, `woods(land, frames, track, clearings, models, from)` and `WOODS_FROM` (110 m, where modelled trees stand nearer; a client with nothing nearer may bring the woods closer), `carpet(land, frames, track, models)`: grass around the camera, mown short on the verges, tall beyond the wall, none on the road, kerbs, wall, gravel traps or in the lake. All the grass is lit as the ground it grows from, in the meadow's green.
 
 # Invariants
 
 - Nothing grows on the road side, in the lake or in a clearing, and everything stands on the ground. Tested.
-- The woods are dense, at least `WOODS_FROM` from the track, on the land, one tree per cell. Tested.
+- The woods are dense, at least `from` metres from the track, on the land, one tree per cell. Tested.
 - Tyre walls line only the outside of bends, between the verge and the barrier, flat. Tested.
 - The same circuit gives the same roadside: a seeded generator, no clock. Tested.
 

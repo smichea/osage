@@ -259,14 +259,23 @@ const GRASS: Color = Color::srgb(0.36, 0.42, 0.17);
 /// verges, tall beyond the wall; none on the road, the kerbs, the wall, in a
 /// gravel trap or in the lake.
 /// Nearer than this to the track's centre line, no tree of the woods: they
-/// are cards, and must never be seen close.
+/// are cards, and must not be seen close. Where nothing else can stand in
+/// for them (T2), they may come nearer: `woods` takes the distance.
 pub const WOODS_FROM: f32 = 110.0;
 
 /// The woods off the circuit, out to the edge of the modelled land: groves
 /// of pines, firs and broadleaf trees, dense as woods grow (a tree every
 /// twenty square metres or so), drawn as cards ([`osage_props::Woods`]):
-/// thousands of trees, always at least [`WOODS_FROM`] from the camera.
-pub fn woods(land: &Land, frames: &[Frame], track: &Track, clearings: &[Site], models: &Models) -> Vec<Woods> {
+/// thousands of trees, always at least `from` metres from the camera
+/// ([`WOODS_FROM`] where modelled trees stand nearer).
+pub fn woods(
+    land: &Land,
+    frames: &[Frame],
+    track: &Track,
+    clearings: &[Site],
+    models: &Models,
+    from: f32,
+) -> Vec<Woods> {
     let roadside = track.half_width + track.verge + BARRIER;
     let verge = Verge { land, frames, roadside, clearings };
     let mut dice = Dice(23);
@@ -276,7 +285,7 @@ pub fn woods(land: &Land, frames: &[Frame], track: &Track, clearings: &[Site], m
     let mut taken = std::collections::HashSet::new();
     let (mut pines, mut firs, mut broadleaves) = (Vec::new(), Vec::new(), Vec::new());
     for _ in 0..600 {
-        let centre = verge.beside(&mut dice, 120.0, 430.0);
+        let centre = verge.beside(&mut dice, (from - roadside + 10.0).max(0.0), 430.0);
         let radius = dice.between(14.0, 45.0);
         if noise(centre / 90.0 + 5.0) < 0.42 {
             continue;
@@ -287,7 +296,7 @@ pub fn woods(land: &Land, frames: &[Frame], track: &Track, clearings: &[Site], m
             let (turn, kind) = (dice.between(0.0, std::f32::consts::TAU), dice.roll());
             let cell = (at / SPACING).floor().as_ivec2();
             if (at - land.centre()).abs().max_element() > edge
-                || land.distance_to_track(at) < WOODS_FROM
+                || land.distance_to_track(at) < from
                 || !verge.free(at, 12.0)
                 || !taken.insert(cell)
             {
@@ -424,7 +433,7 @@ mod tests {
         let frames = frames(&circuit.track);
         let land = Land::new(&frames, &circuit.track);
         let models = Models::default();
-        let woods = woods(&land, &frames, &circuit.track, &[], &models);
+        let woods = woods(&land, &frames, &circuit.track, &[], &models, WOODS_FROM);
         let trees: usize = woods.iter().map(|w| w.places.len()).sum();
         assert!(trees > 1500, "{trees} trees");
         assert!(woods.iter().all(|w| !w.places.is_empty()), "pines, firs and broadleaf trees");
