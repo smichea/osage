@@ -22,7 +22,9 @@ use bevy::{
     app::AppExit,
     prelude::*,
     render::{
-        renderer::RenderAdapterInfo,
+        Render, RenderApp, RenderSystems,
+        render_resource::PollType,
+        renderer::{RenderAdapterInfo, RenderDevice, RenderQueue},
         view::screenshot::{Screenshot, ScreenshotCaptured, save_to_disk},
     },
     time::TimeUpdateStrategy,
@@ -35,7 +37,7 @@ use osage_render::{
 use osage_world_kart::{Circuit, autopilot, proto::Autopilot};
 use serde_json::json;
 
-use crate::scene::{Course, Followed, Pose, Stage};
+use crate::scene::{Course, Followed, Part, Pose, Stage};
 
 /// Karts on the bench's grid.
 const KARTS: usize = 6;
@@ -56,6 +58,8 @@ pub struct BenchPlugin {
     pub without: Vec<String>,
     /// Whether the camera is held at a place (`--camera`) instead of following the race.
     pub held: bool,
+    /// No window: nothing paces the frames but the bench itself.
+    pub headless: bool,
 }
 
 impl Plugin for BenchPlugin {
@@ -78,10 +82,22 @@ impl Plugin for BenchPlugin {
                 warm_up_worst: 0.0,
                 skip: 0,
                 saved: Vec::new(),
+                settled: 0,
             })
             .add_systems(Startup, line_up)
-            .add_systems(Update, simulate.in_set(Stage::Simulate))
-            .add_systems(Last, measure);
+            .add_systems(Update, simulate.in_set(Stage::Simulate).run_if(started))
+            .add_systems(Last, (settle, measure.run_if(started)).chain());
+        // A window paces frames: drawing waits for the screen, and the screen
+        // for the GPU, with a frame in flight. Without one, the processor would
+        // queue frames far ahead of the GPU and then stall until all are drawn:
+        // frames of a few milliseconds, then one of seconds. The render thread
+        // keeps one frame in flight instead: once it has handed frame N to the
+        // GPU, it waits for frame N - 1 to be done.
+        if self.headless
+            && let Some(render) = app.get_sub_app_mut(RenderApp)
+        {
+            render.init_resource::<InFlight>().add_systems(Render, keep_one_in_flight.in_set(RenderSystems::Cleanup));
+        }
     }
 }
 
@@ -101,6 +117,43 @@ struct Bench {
     warm_up_worst: f32,
     skip: u32,
     saved: Vec<String>,
+    /// Frames in a row with the circuit built and nothing left to load.
+    settled: u32,
+}
+
+/// The race starts once the circuit is built and every model it places has
+/// loaded: loading takes its own time on each machine, the race must not.
+const SETTLED: u32 = 3;
+
+fn settle(mut bench: ResMut<Bench>, waiting: Res<osage_props::Waiting>, parts: Query<(), With<Part>>) {
+    if bench.settled < SETTLED {
+        bench.settled = if !parts.is_empty() && waiting.0 == 0 { bench.settled + 1 } else { 0 };
+    }
+}
+
+fn started(bench: Res<Bench>) -> bool {
+    bench.settled >= SETTLED
+}
+
+/// Whether the frame handed to the GPU last is done.
+#[derive(Resource, Default)]
+struct InFlight(Option<std::sync::Arc<std::sync::atomic::AtomicBool>>);
+
+fn keep_one_in_flight(device: Res<RenderDevice>, queue: Res<RenderQueue>, mut in_flight: ResMut<InFlight>) {
+    use std::sync::{
+        Arc,
+        atomic::{AtomicBool, Ordering},
+    };
+    let done = Arc::new(AtomicBool::new(false));
+    let signal = done.clone();
+    queue.on_submitted_work_done(move || signal.store(true, Ordering::Release));
+    if let Some(previous) = in_flight.0.replace(done) {
+        // Callbacks run when the device is polled.
+        while !previous.load(Ordering::Acquire) {
+            let _ = device.poll(PollType::Poll);
+            std::thread::sleep(Duration::from_micros(100));
+        }
+    }
 }
 
 /// A kart of the local race and how the autopilot drives it.
@@ -246,7 +299,7 @@ fn report(bench: &Bench, rendered: UVec2, adapter: &RenderAdapterInfo) -> anyhow
         "resolution": [bench.resolution.0, bench.resolution.1],
         "rendered": [rendered.x, rendered.y],
         // Whether the asset manifest's content was there: it changes the picture.
-        "assets": crate::content::root().is_some(),
+        "assets": osage_content::root().is_some(),
         "frames": { "total": bench.total, "timed": sorted.len(), "warm_up": WARM_UP },
         "frame_ms": {
             "mean": round(mean),

@@ -10,8 +10,9 @@
 //!   a scene from any cubemap costs 2 to 3 ms on the Iris Xe reference at
 //!   T2, even from a cubemap of 8 × 8 texels: the cost is in the shader that
 //!   reads it, not in the cubemap (bench, 2026-11-10).
-//! - T3+: the atmosphere lights the scene, recomputed every frame. Where the
-//!   world has no atmosphere (`--without sky`), a cubemap of a clear day
+//! - T3+: the atmosphere lights the scene, recomputed every frame — or the
+//!   world's photograph of the sky, the sun taken out ([`crate::panorama`]).
+//!   Where the world has neither (`--without sky`), a cubemap of a clear day
 //!   stands in, computed once on the processor from the sun's direction and
 //!   the world's ground colour ([`Look`]).
 //!
@@ -25,7 +26,7 @@ use bevy::{
     render::render_resource::{Extent3d, TextureDimension, TextureFormat, TextureViewDescriptor, TextureViewDimension},
 };
 
-use crate::{LeftOut, Look, OsageCamera, Sun, Technique, Tier};
+use crate::{LeftOut, Look, OsageCamera, Sun, Technique, Tier, panorama::Prepared};
 
 /// Luminance of a clear sky overhead, cd/m²: what one unit of the cubemap stands for.
 pub const CLEAR_SKY: f32 = 6000.0;
@@ -52,15 +53,31 @@ pub fn constant_ambient() -> GlobalAmbientLight {
 }
 
 /// Gives each new camera its sky light, and computes it again when the sun turns.
+#[allow(clippy::too_many_arguments)]
 fn light(
     mut commands: Commands,
     tier: Res<Tier>,
     look: Res<Look>,
     left_out: Res<LeftOut>,
     mut images: ResMut<Assets<Image>>,
+    panorama: Option<Res<Prepared>>,
     suns: Query<Ref<GlobalTransform>, With<Sun>>,
     cameras: Query<(Entity, Has<EnvironmentMapLight>, Has<AtmosphereEnvironmentMapLight>), With<OsageCamera>>,
 ) {
+    // The world's photograph of the sky, where it gave one.
+    if let Some(panorama) = panorama {
+        for (camera, lit, _) in &cameras {
+            if !lit {
+                commands.entity(camera).insert(EnvironmentMapLight {
+                    diffuse_map: panorama.light.0.clone(),
+                    specular_map: panorama.light.1.clone(),
+                    intensity: panorama.scale,
+                    ..default()
+                });
+            }
+        }
+        return;
+    }
     // The atmosphere does it, where there is one.
     if !left_out.0.contains(&Technique::Sky) {
         for (camera, _, lit) in &cameras {
@@ -113,7 +130,7 @@ pub fn clear_day(direction: Vec3, to_sun: Vec3, ground: Vec3) -> Vec3 {
 /// The direction of a point of a cube face, by the convention of cubemaps:
 /// faces +X, -X, +Y, -Y, +Z, -Z, with `u` to the right and `v` down, each
 /// in -1..1.
-fn face_direction(face: usize, u: f32, v: f32) -> Vec3 {
+pub(crate) fn face_direction(face: usize, u: f32, v: f32) -> Vec3 {
     let direction = match face {
         0 => Vec3::new(1.0, -v, -u),
         1 => Vec3::new(-1.0, -v, u),
@@ -141,8 +158,9 @@ fn lobe(axis: Vec3, power: f32) -> impl Iterator<Item = Vec3> {
 }
 
 /// One face of one level: `side` by `side` texels of a sky blurred by `power`
-/// (`None`: as it is), as half floats.
-fn face(sky: &impl Fn(Vec3) -> Vec3, face: usize, side: usize, power: Option<f32>, data: &mut Vec<u8>) {
+/// (`None`: as it is), as half floats; brighter than half floats go is kept
+/// at their largest.
+pub(crate) fn face(sky: &impl Fn(Vec3) -> Vec3, face: usize, side: usize, power: Option<f32>, data: &mut Vec<u8>) {
     for y in 0..side {
         for x in 0..side {
             let centre = |i: usize| 2.0 * (i as f32 + 0.5) / side as f32 - 1.0;
@@ -152,7 +170,7 @@ fn face(sky: &impl Fn(Vec3) -> Vec3, face: usize, side: usize, power: Option<f32
                 Some(power) => lobe(direction, power).map(sky).sum::<Vec3>() / SAMPLES as f32,
             };
             for channel in [colour.x, colour.y, colour.z, 1.0] {
-                data.extend_from_slice(&half::f16::from_f32(channel).to_le_bytes());
+                data.extend_from_slice(&half::f16::from_f32(channel.min(65_000.0)).to_le_bytes());
             }
         }
     }
@@ -168,22 +186,25 @@ fn blur(level: usize, levels: usize) -> Option<f32> {
     (power < 600.0).then_some(power.max(0.0))
 }
 
+/// A cubemap of half floats, `side` texels a face, from `data`: face after
+/// face, each with its `levels` levels.
+pub(crate) fn cube(side: usize, levels: usize, data: Vec<u8>) -> Image {
+    let size = Extent3d { width: side as u32, height: side as u32, depth_or_array_layers: 6 };
+    let usage = RenderAssetUsages::RENDER_WORLD;
+    // Made with its first level's size, then given all of its levels.
+    let first = vec![0; 6 * side * side * 8];
+    let mut image = Image::new(size, TextureDimension::D2, first, TextureFormat::Rgba16Float, usage);
+    image.data = Some(data);
+    image.texture_descriptor.mip_level_count = levels as u32;
+    image.texture_view_descriptor =
+        Some(TextureViewDescriptor { dimension: Some(TextureViewDimension::Cube), ..default() });
+    image
+}
+
 /// The two cubemaps Bevy lights a scene with: one for matte surfaces (each
 /// texel the light gathered by a surface facing that way), one for glossy
 /// ones (each level blurrier than the one before).
 pub fn cubemaps(sky: impl Fn(Vec3) -> Vec3) -> (Image, Image) {
-    let cube = |side: usize, levels: usize, data: Vec<u8>| {
-        let size = Extent3d { width: side as u32, height: side as u32, depth_or_array_layers: 6 };
-        let usage = RenderAssetUsages::RENDER_WORLD;
-        // Made with its first level's size, then given all of its levels.
-        let first = vec![0; 6 * side * side * 8];
-        let mut image = Image::new(size, TextureDimension::D2, first, TextureFormat::Rgba16Float, usage);
-        image.data = Some(data);
-        image.texture_descriptor.mip_level_count = levels as u32;
-        image.texture_view_descriptor =
-            Some(TextureViewDescriptor { dimension: Some(TextureViewDimension::Cube), ..default() });
-        image
-    };
     // A matte surface gathers light as the cosine of its angle: power 1.
     let mut soft = Vec::new();
     for f in 0..6 {

@@ -52,11 +52,15 @@ Latest results of the reference machines, one line per machine and tier.
 | 2026-11-10 | same | ThinkPad E14 Gen 5 (Iris Xe), lighter load | T2 | 1920×1080 (1632×918) | 14.0 ms (72 fps) | 16.9 ms | 19.3 ms | 6 % |
 | 2026-11-10 | same, commit 195c7e3 | Google Cloud g2-standard-4 (NVIDIA L4, driver 580), headless | T3 | 2560×1440 | 5.7 ms (174 fps) | 6.9 ms | 7.5 ms | 0 % |
 | 2026-11-10 | same, commit 195c7e3 | Google Cloud g2-standard-4 (NVIDIA L4, driver 580), headless | T4 | 2560×1440 | 6.7 ms (149 fps) | 8.2 ms | 12.8 ms | 0 % |
+| 2026-11-11 | photographed circuit (D-044): sky panorama, 2k surfaces, racing karts; no roadside models below T3 | ThinkPad E14 Gen 5 (Iris Xe), headless, load average 10 to 13 | T1 | 1280×720 | 14.1 ms (71 fps) | 19.5 ms | 23.7 ms | 0.1 % |
+| 2026-11-11 | same | ThinkPad E14 Gen 5 (Iris Xe), headless, load average 13 | T2 | 1920×1080 (1632×918) | 17.5 ms (57 fps) | 24.7 ms | 31.1 ms | — |
 
 - "Under load": other programs were using the machine during these runs (load average 8 to 9 on 10 cores); a quiet run is expected to do better and will replace them.
 - T2 holds its budget on average on the integrated GPU, not for every frame. Without drawing under the output size it took 23.2 ms in the same conditions against 18.0 ms with: the scene is bound by the number of pixels there.
 - Bench version 2 (`kart-lap/2`) lets the karts overtake one another; in version 1 the followed kart ran into the karts ahead. Its frames differ, so compare runs of the same version only.
 - The landmarks scene against the previous one, same binary bench (version 1), alternated under the same load (load average 9 to 11): T2 15.5 ms against 17.4 ms, 28 % of frames over budget against 53 %; T1 16.2 ms against 16.3 ms. Merging the static scenery ([sculpted scenery](../knowledge/algorithms/sculpted-scenery.md)) more than paid for three times the content.
+- The photographed circuit costs nothing measurable at T2: the same run without the content (`OSAGE_ASSETS=none`) took 18.1 ms. Its roadside models (tyre walls, plants, rocks, pines) took T2 to 54 ms on the Iris Xe: they start at T3.
+- Without a window, the bench keeps one frame in flight, as a window does (2026-11-11). Before, nothing paced it: a scene the GPU could not keep up with gave frames of a few milliseconds and then one of seconds, and only the mean was right. Waiting for the GPU after every frame instead left it idle while the next one was prepared (T2: 26 ms against 18).
 - T3 and T4 on the L4 use about a third of their budget (16.7 and 33.3 ms): the high tiers have room for techniques that cost more. Shader compilation stalls the first frame for about 4.5 s on that machine (warm-up, not timed).
 
 ### What each technique costs

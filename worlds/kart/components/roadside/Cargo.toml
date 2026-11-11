@@ -1,0 +1,22 @@
+# SPDX-FileCopyrightText: The osage contributors
+# SPDX-License-Identifier: MIT OR Apache-2.0
+
+[package]
+name = "osage-kart-roadside"
+description = "What stands along the kart circuit when the asset manifest's models are there: tyre walls, grass, plants, rocks and pines"
+license = "MIT OR Apache-2.0"
+publish = false
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+
+[dependencies]
+osage-kart-land.workspace = true
+osage-kart-physics.workspace = true
+osage-procedural.workspace = true
+osage-props.workspace = true
+bevy = { workspace = true, features = ["3d"] }
+
+[dev-dependencies]
+osage-world-kart.workspace = true

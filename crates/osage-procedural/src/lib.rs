@@ -275,6 +275,26 @@ impl Batch {
     }
 }
 
+/// A small repeatable generator: what it scatters is the same on
+/// every machine and at every run.
+#[derive(Clone, Debug)]
+pub struct Dice(pub u64);
+
+impl Dice {
+    pub fn roll(&mut self) -> f32 {
+        self.0 = self.0.wrapping_mul(6_364_136_223_846_793_005).wrapping_add(1_442_695_040_888_963_407);
+        ((self.0 >> 40) & 0xff_ffff) as f32 / 16_777_216.0
+    }
+
+    pub fn between(&mut self, low: f32, high: f32) -> f32 {
+        low + (high - low) * self.roll()
+    }
+
+    pub fn pick<T: Clone>(&mut self, choices: &[T]) -> T {
+        choices[(self.roll() * choices.len() as f32) as usize % choices.len()].clone()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

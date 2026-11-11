@@ -431,3 +431,12 @@ Date: 2026-11-10 · Amends [D-041](#d-041--performance-is-guarded-by-the-referen
 - **How:** the workflow `cloud-bench` first asks whether anything is to be benched: the newest artefact of receipts says which commit was benched last, and when. Only then is the bench built and a GPU machine made.
 - **Why:** every run costs money (the GPU machine) or shared resources (CI minutes and quota), and the developer's machine is at hand. A slowdown is still caught, at most an hour or a night after the change that caused it, among the changes pushed together.
 - **Consequence for D-041:** "every change to `main`" becomes every batch of changes, for the cloud bench as for the laptop's runner once it exists.
+
+## D-044 — The kart world looks photographed when its content is there
+
+Date: 2026-11-11 · With the maintainer, who set the goal of a photorealistic kart, in the class of GTA V.
+
+- **Decision:** the kart world's look changes from a toy circuit to a photographed one. With the asset manifest's content (a CC0 batch from Poly Haven, approved and fetched on 2026-11-11: a sky panorama, 2k surfaces, roadside models), the sky is a photograph that also places and calibrates the sun, the road, verges, gravel traps, kerbs and walls have real surfaces, and the roadside is dressed with models from T2. Without the content, the world stays procedural, as the manifest promises. The toys (round clouds, balloons, the fair, inflatable arches, the windmill) give way; the karts become racing karts to scale at every tier.
+- **How, by the rules of D-035:** the work is done as components, each a crate with its card and its tests: `osage-content` (textures and sky panoramas), `osage-procedural` (sculpted geometry and the seeded generator), `osage-props` (models placed many times), and for the kart game `osage-kart-land`, `osage-kart-roadside` and `osage-kart-model`; the technique `panorama` joins `osage-render`.
+- **Why:** the maintainer's goal for the testbed is photorealism; a photographed world measures the rendering programme against the bar it aims at (design/03), where a toy world hides what is missing.
+- **Measured:** high tiers on the cloud L4 (D-042, at most once an hour, D-043); low tiers on the developer's laptop.

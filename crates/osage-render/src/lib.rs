@@ -8,7 +8,8 @@
 //!
 //! | Module | Workstream | Tiers |
 //! |---|---|---|
-//! | [`sky`] | R1 sky and sun | T1 flat sky and fog; T2+ physical atmosphere |
+//! | [`sky`] | R1 sky and sun | T1 flat sky and fog; T2+ physical atmosphere; or the world's photograph of the sky ([`panorama`]) |
+//! | [`panorama`] | R1 a photographed sky | all: the sky seen and the haze, the sun found in it; T3+ it lights the scene |
 //! | [`sky_light`] | R1 light from the sky | T1–T2 a constant ambient light; T3+ the atmosphere, every frame (a clear day computed once, without an atmosphere) |
 //! | [`shadows`] | R2 shadows | all: cascades per tier; contact shadows T3+ |
 //! | [`ambient_occlusion`] | R3 ambient occlusion | T3+ |
@@ -20,6 +21,7 @@
 //! measured.
 
 pub mod ambient_occlusion;
+pub mod panorama;
 pub mod post;
 pub mod resolution;
 pub mod shadows;

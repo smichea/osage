@@ -2,7 +2,7 @@
 type: Algorithm
 title: Land around a track
 description: Hills generated from noise that stay flat along a circuit and fade out at the edge of the modelled land, with a knoll and a lake placed in the room the circuit leaves inside its loop.
-resource: https://github.com/smichea/osage/blob/main/worlds/kart/native/src/track.rs
+resource: https://github.com/smichea/osage/blob/main/worlds/kart/components/land/src/lib.rs
 licence: MIT OR Apache-2.0
 status: draft
 tags: [terrain, procedural]

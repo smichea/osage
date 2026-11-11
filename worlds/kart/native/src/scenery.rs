@@ -6,6 +6,12 @@
 //! and what is in the sky: clouds, hot-air balloons, mountains on the
 //! horizon. All procedural, and placed the same way on every machine.
 //!
+//! With the asset manifest's models ([`Roadside`]), the circuit is dressed
+//! as a real one instead (`osage-kart-roadside`): tyre walls, grass, wild
+//! plants, rocks and pines near the track; the toys — clouds, balloons,
+//! arches, the fair, the windmill — give way to the photographed sky, and
+//! procedural trees only stand far away, in the colours of real ones.
+//!
 //! Nearly all of it is static: it is sculpted into a few meshes per patch of
 //! land ([`crate::sculpt`]) instead of thousands of objects. Only what moves
 //! (balloons, sails, the big wheel, a boat) and what has a texture of its
@@ -18,12 +24,34 @@ use bevy::{
     render::render_resource::PrimitiveTopology,
 };
 
+use osage_kart_roadside::{Detail, Models};
+use osage_procedural::{Batch, Paint, Shape};
+use osage_render::Tier;
+
 use crate::{
     landmarks,
     scene::{Course, PALETTE, Part},
-    sculpt::{Batch, Paint, Shape},
     track::{self, Land, Site},
 };
+
+/// The models of the roadside, when the asset manifest's content is there
+/// and the tier can afford them.
+#[derive(Resource)]
+pub struct Roadside {
+    pub models: Models,
+    pub detail: Detail,
+}
+
+/// Loads the roadside's models from T3. Below, the integrated GPUs of the reference cannot afford them (T2 took
+/// 54 ms against its 16.7 with the large ones, 2026-11-11): the procedural
+/// scenery stands in.
+pub fn load_roadside(mut commands: Commands, tier: Res<Tier>, server: Res<AssetServer>) {
+    if osage_content::root().is_none() || *tier < Tier::T3 {
+        return;
+    }
+    let detail = Detail::Full;
+    commands.insert_resource(Roadside { models: Models::load(&server), detail });
+}
 
 /// Something that floats: it bobs gently around its height.
 #[derive(Component)]
@@ -41,23 +69,7 @@ pub struct Turning {
     pub rate: f32,
 }
 
-/// A small repeatable generator: the scenery is the same everywhere.
-pub struct Dice(pub u64);
-
-impl Dice {
-    pub fn roll(&mut self) -> f32 {
-        self.0 = self.0.wrapping_mul(6_364_136_223_846_793_005).wrapping_add(1_442_695_040_888_963_407);
-        ((self.0 >> 40) & 0xff_ffff) as f32 / 16_777_216.0
-    }
-
-    pub fn between(&mut self, low: f32, high: f32) -> f32 {
-        low + (high - low) * self.roll()
-    }
-
-    pub fn pick<T: Clone>(&mut self, choices: &[T]) -> T {
-        choices[(self.roll() * choices.len() as f32) as usize % choices.len()].clone()
-    }
-}
+pub use osage_procedural::Dice;
 
 /// The static scenery being gathered, and where nothing may grow.
 pub struct Set {
@@ -117,10 +129,12 @@ pub fn on_land(land: &Land, at: Vec2) -> Vec3 {
     Vec3::new(at.x, land.height(at), at.y)
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn build(
     mut commands: Commands,
     course: Res<Course>,
     land: Res<Land>,
+    roadside: Option<Res<Roadside>>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
     mut images: ResMut<Assets<Image>>,
@@ -146,12 +160,29 @@ pub fn build(
     };
 
     landmarks::start(&mut set, &mut props, &course.0, &land);
+    landmarks::lake(&mut set, &mut props, &land);
+    // With the manifest's content, the circuit is photographed: no toys.
+    if osage_content::root().is_some() {
+        let look = if let Some(roadside) = &roadside {
+            let scatters =
+                osage_kart_roadside::scatters(&land, &frames, track, &set.clearings, &roadside.models, roadside.detail);
+            for scatter in scatters {
+                commands.spawn((Part, scatter));
+            }
+            // Real trees are few: procedural ones stand where nobody looks closely.
+            Growth::Far
+        } else {
+            Growth::Real
+        };
+        plant(&mut set, &land, track.half_width + track.verge, centre, look);
+        spawn(&mut commands, &mut meshes, set, matte, satin);
+        return;
+    }
     landmarks::bends(&mut set, &mut props, track, &frames);
     landmarks::arches(&mut set, &course.0, &frames);
     landmarks::knoll(&mut set, &mut props, &course.0, &land);
-    landmarks::lake(&mut set, &mut props, &land);
     landmarks::fair(&mut set, &mut props, &course.0, &land);
-    plant(&mut set, &land, track.half_width + track.verge, centre);
+    plant(&mut set, &land, track.half_width + track.verge, centre, Growth::Toy);
     balloons(&mut set, &mut props, centre);
 
     // Clouds glow a little by themselves, as real ones do from the light
@@ -180,6 +211,17 @@ pub fn build(
     let mountains = mountains(centre, &mut set.dice);
     commands.spawn((Part, Mesh3d(meshes.add(mountains)), MeshMaterial3d(ridge), NotShadowCaster));
 
+    spawn(&mut commands, &mut meshes, set, matte, satin);
+}
+
+/// The static scenery gathered, as a few meshes.
+fn spawn(
+    commands: &mut Commands,
+    meshes: &mut Assets<Mesh>,
+    set: Set,
+    matte: Handle<StandardMaterial>,
+    satin: Handle<StandardMaterial>,
+) {
     for mesh in set.matte.meshes() {
         commands.spawn((Part, Mesh3d(meshes.add(mesh)), MeshMaterial3d(matte.clone())));
     }
@@ -191,8 +233,20 @@ pub fn build(
     }
 }
 
+/// What grows, and how it looks.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Growth {
+    /// Everything, in a toy's bright colours.
+    Toy,
+    /// Trees and bushes in the muted greens of real ones, no flowers or rocks.
+    Real,
+    /// Only trees, only far from the track: the near roadside has models.
+    Far,
+}
+
 /// Trees in groves, bushes, flowers in the meadows, a few rocks.
-fn plant(set: &mut Set, land: &Land, roadside: f32, centre: Vec2) {
+fn plant(set: &mut Set, land: &Land, roadside: f32, centre: Vec2, growth: Growth) {
+    let far = growth == Growth::Far;
     let trunk = Shape::lathe(&[(0.34, 0.0), (0.25, 0.55), (0.2, 1.0)], 6);
     let cone = Shape::lathe(&[(0.0, 0.0), (1.0, 0.0), (0.0, 1.0)], 9);
     let ball = Shape::new(Sphere::new(1.0).mesh().ico(1).expect("a small icosphere"));
@@ -201,8 +255,18 @@ fn plant(set: &mut Set, land: &Land, roadside: f32, centre: Vec2) {
     let petals = Shape::lathe(&[(0.0, 0.05), (1.0, 0.0), (0.0, -0.02)], 6);
 
     let bark = Paint::shaded(0.42, 0.27, 0.15, 0.35);
-    let pines = [(0.1, 0.42, 0.2), (0.13, 0.48, 0.22), (0.08, 0.36, 0.22)];
-    let leaves = [(0.36, 0.68, 0.18), (0.48, 0.76, 0.2), (0.25, 0.6, 0.22)];
+    let (pines, leaves) = if growth != Growth::Toy {
+        // Foliage seen from afar: dark, olive, a little blue.
+        (
+            [(0.07, 0.16, 0.09), (0.09, 0.19, 0.1), (0.06, 0.14, 0.1)],
+            [(0.16, 0.24, 0.09), (0.2, 0.27, 0.1), (0.13, 0.21, 0.09)],
+        )
+    } else {
+        (
+            [(0.1, 0.42, 0.2), (0.13, 0.48, 0.22), (0.08, 0.36, 0.22)],
+            [(0.36, 0.68, 0.18), (0.48, 0.76, 0.2), (0.25, 0.6, 0.22)],
+        )
+    };
     // Now and then a tree in blossom, or one that has turned.
     let rare = [(0.98, 0.7, 0.8), (1.0, 0.86, 0.9), (0.96, 0.62, 0.2), (0.97, 0.8, 0.28)];
 
@@ -221,7 +285,7 @@ fn plant(set: &mut Set, land: &Land, roadside: f32, centre: Vec2) {
         let grove = track::noise(at / 55.0 + 3.0);
         let near = land.distance_to_track(at) < 90.0;
         let thick = (grove - 0.42).max(0.0) * if near { 1.5 } else { 0.5 };
-        if chance > thick || planted >= 760 || !free(set, at, 7.0) {
+        if chance > thick || planted >= 760 || !free(set, at, 7.0) || (far && land.distance_to_track(at) < 150.0) {
             continue;
         }
         planted += 1;
@@ -239,7 +303,8 @@ fn plant(set: &mut Set, land: &Land, roadside: f32, centre: Vec2) {
                 piece(&cone, Vec3::Y * y, Vec3::new(radius, height, radius), crown(green));
             }
         } else if kind < 0.86 {
-            let green = if tint < 0.09 { set.dice.pick(&rare) } else { set.dice.pick(&leaves) };
+            let green =
+                if tint < 0.09 && growth == Growth::Toy { set.dice.pick(&rare) } else { set.dice.pick(&leaves) };
             piece(&trunk, Vec3::ZERO, Vec3::new(1.25, 2.3, 1.25), bark);
             for (radius, at) in
                 [(1.75, Vec3::new(0.0, 3.4, 0.0)), (1.3, Vec3::new(1.05, 2.9, 0.3)), (1.2, Vec3::new(-0.85, 3.1, -0.6))]
@@ -253,6 +318,9 @@ fn plant(set: &mut Set, land: &Land, roadside: f32, centre: Vec2) {
         }
     }
 
+    if far {
+        return;
+    }
     // Bushes, mostly along the outside of the barriers.
     for _ in 0..1500 {
         let at = centre + Vec2::new(set.dice.between(-260.0, 260.0), set.dice.between(-260.0, 260.0));
@@ -272,6 +340,9 @@ fn plant(set: &mut Set, land: &Land, roadside: f32, centre: Vec2) {
         }
     }
 
+    if growth == Growth::Real {
+        return;
+    }
     // Flowers: drifts of one colour each, in the meadows near the circuit.
     let colours = [(1.0, 1.0, 1.0), (1.0, 0.86, 0.2), (1.0, 0.5, 0.7), (0.95, 0.25, 0.2), (0.62, 0.45, 0.95)];
     for _ in 0..420 {

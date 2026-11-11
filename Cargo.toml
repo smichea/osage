@@ -3,7 +3,7 @@
 
 [workspace]
 resolver = "3"
-members = ["crates/*", "worlds/kart/physics", "worlds/kart/world", "worlds/kart/server", "worlds/kart/native"]
+members = ["crates/*", "worlds/kart/physics", "worlds/kart/world", "worlds/kart/server", "worlds/kart/native", "worlds/kart/components/*"]
 
 [workspace.package]
 version = "0.1.0"
@@ -18,9 +18,15 @@ osage-credentials = { path = "crates/osage-credentials" }
 osage-server = { path = "crates/osage-server" }
 osage-kart-physics = { path = "worlds/kart/physics" }
 osage-world-kart = { path = "worlds/kart/world" }
+osage-kart-land = { path = "worlds/kart/components/land" }
+osage-kart-roadside = { path = "worlds/kart/components/roadside" }
+osage-kart-model = { path = "worlds/kart/components/kart-model" }
 osage-render = { path = "crates/osage-render" }
 osage-world-module-api = { path = "crates/osage-world-module-api" }
 osage-region-link = { path = "crates/osage-region-link" }
+osage-procedural = { path = "crates/osage-procedural" }
+osage-content = { path = "crates/osage-content" }
+osage-props = { path = "crates/osage-props" }
 anyhow = "1.0.104"
 base64ct = { version = "1.8.3", features = ["alloc"] }
 bevy = { version = "0.20.1", default-features = false }

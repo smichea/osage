@@ -9,6 +9,8 @@
 //! and anisotropic filtering: a road is seen at a grazing angle, where a
 //! texture without them shimmers.
 
+pub mod panorama;
+
 use std::path::{Path, PathBuf};
 
 use bevy::{
@@ -22,14 +24,15 @@ use zune_jpeg::JpegDecoder;
 
 /// Where the manifest's files are: `OSAGE_ASSETS` if it is set (`none` to
 /// do without), else `assets/` in the current directory, else next to the
-/// build (`target/<profile>/../../assets`).
+/// build (`target/<profile>/../../assets`); as an absolute path.
 pub fn root() -> Option<PathBuf> {
     let beside_build = || Some(std::env::current_exe().ok()?.parent()?.parent()?.parent()?.join("assets"));
     let places = match std::env::var_os("OSAGE_ASSETS") {
         Some(chosen) => vec![PathBuf::from(chosen)],
         None => [PathBuf::from("assets")].into_iter().chain(beside_build()).collect(),
     };
-    places.into_iter().find(|path| path.join("manifest.toml").exists())
+    // Absolute: an asset server resolves a relative root from the program's folder.
+    places.into_iter().find(|path| path.join("manifest.toml").exists()).and_then(|path| path.canonicalize().ok())
 }
 
 /// The three maps of a surface: colour, normal, and occlusion-roughness-metal.
@@ -39,11 +42,22 @@ pub struct Surface {
     arm: Handle<Image>,
 }
 
+/// Resolutions a Poly Haven texture set is looked for in, best first.
+const RESOLUTIONS: [&str; 2] = ["2k", "1k"];
+
+/// The file of map `map` of Poly Haven texture set `id`, at the best
+/// resolution there is.
+fn map_file(root: &Path, id: &str, map: &str) -> PathBuf {
+    let at = |resolution: &str| root.join("polyhaven").join(id).join(format!("{id}_{map}_{resolution}.jpg"));
+    RESOLUTIONS.iter().map(|r| at(r)).find(|path| path.exists()).unwrap_or_else(|| at(RESOLUTIONS[0]))
+}
+
 impl Surface {
-    /// Loads Poly Haven texture set `id` at 1k; `grade` adjusts each colour
-    /// pixel (sRGB bytes) as it is loaded. `None` if the set is not there.
+    /// Loads Poly Haven texture set `id` at the best resolution there is;
+    /// `grade` adjusts each colour pixel (sRGB bytes) as it is loaded.
+    /// `None` if the set is not there.
     pub fn load(root: &Path, id: &str, images: &mut Assets<Image>, grade: impl Fn([u8; 3]) -> [u8; 3]) -> Option<Self> {
-        let file = |map: &str| root.join("polyhaven").join(id).join(format!("{id}_{map}_1k.jpg"));
+        let file = |map: &str| map_file(root, id, map);
         Some(Self {
             colour: images.add(texture(&file("diff"), Kind::Colour, grade)?),
             normal: images.add(texture(&file("nor_gl"), Kind::Normal, |p| p)?),
@@ -51,12 +65,12 @@ impl Surface {
         })
     }
 
-    /// Loads Poly Haven texture set `id` at 1k as a grain: its light and
-    /// dark without its colour, so that whatever is painted under it (a
+    /// Loads Poly Haven texture set `id` as a grain: its light and dark
+    /// without its colour, so that whatever is painted under it (a
     /// material's colour, a mesh's vertex colours) shows through with the
     /// surface's texture.
     pub fn load_grain(root: &Path, id: &str, images: &mut Assets<Image>) -> Option<Self> {
-        let file = |map: &str| root.join("polyhaven").join(id).join(format!("{id}_{map}_1k.jpg"));
+        let file = |map: &str| map_file(root, id, map);
         Some(Self {
             colour: images.add(texture(&file("diff"), Kind::Grain, |p| p)?),
             normal: images.add(texture(&file("nor_gl"), Kind::Normal, |p| p)?),
@@ -185,4 +199,69 @@ fn to_linear(c: u8) -> f32 {
 fn to_srgb(c: f32) -> u8 {
     let c = if c <= 0.003_130_8 { c * 12.92 } else { 1.055 * c.powf(1.0 / 2.4) - 0.055 };
     (c.clamp(0.0, 1.0) * 255.0 + 0.5) as u8
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn levels(image: &Image) -> Vec<&[u8]> {
+        let size = image.texture_descriptor.size;
+        let (mut w, mut h, mut at) = (size.width as usize, size.height as usize, 0);
+        let data = image.data.as_ref().unwrap();
+        let mut levels = Vec::new();
+        for _ in 0..image.texture_descriptor.mip_level_count {
+            levels.push(&data[at..at + w * h * 4]);
+            at += w * h * 4;
+            (w, h) = ((w / 2).max(1), (h / 2).max(1));
+        }
+        assert_eq!(at, data.len(), "the levels fill the data exactly");
+        levels
+    }
+
+    #[test]
+    fn a_texture_has_every_level_down_to_one_pixel() {
+        let image = tiled(vec![[0.5; 3]; 8 * 2], 8, 2, Kind::Data);
+        assert_eq!(image.texture_descriptor.mip_level_count, 4, "8×2, 4×1, 2×1, 1×1");
+        assert_eq!(levels(&image).last().unwrap().len(), 4);
+    }
+
+    #[test]
+    fn colours_are_averaged_in_linear_light() {
+        // Black and white: their mean is half the light, which sRGB stores near 188, not 128.
+        let image = tiled(vec![[0.0; 3], [1.0; 3], [1.0; 3], [0.0; 3]], 2, 2, Kind::Colour);
+        let mean = levels(&image)[1][0];
+        assert!((186..=189).contains(&mean), "{mean}");
+        assert_eq!(image.texture_descriptor.format, TextureFormat::Rgba8UnormSrgb);
+    }
+
+    #[test]
+    fn normals_stay_unit_vectors_down_the_levels() {
+        // Two normals leaning opposite ways average to straight up, not to a short vector.
+        let lean = |x: f32| [x * 0.5 + 0.5, 0.5, (1.0 - x * x).sqrt() * 0.5 + 0.5];
+        let image = tiled(vec![lean(0.8), lean(-0.8), lean(0.8), lean(-0.8)], 2, 2, Kind::Normal);
+        let n = levels(&image)[1];
+        let v = Vec3::new(n[0] as f32, n[1] as f32, n[2] as f32) / 255.0 * 2.0 - 1.0;
+        assert!((v.length() - 1.0).abs() < 0.02, "length {}", v.length());
+        assert!(v.z > 0.99, "straight up: {v}");
+    }
+
+    #[test]
+    fn srgb_bytes_survive_the_trip_through_linear_light() {
+        for byte in 0..=255u8 {
+            assert_eq!(to_srgb(to_linear(byte)), byte);
+        }
+    }
+
+    #[test]
+    fn the_best_resolution_there_is_is_chosen() {
+        let root = std::env::temp_dir().join(format!("osage-content-test-{}", std::process::id()));
+        let set = root.join("polyhaven").join("road");
+        std::fs::create_dir_all(&set).unwrap();
+        std::fs::write(set.join("road_diff_1k.jpg"), b"").unwrap();
+        assert!(map_file(&root, "road", "diff").ends_with("road_diff_1k.jpg"));
+        std::fs::write(set.join("road_diff_2k.jpg"), b"").unwrap();
+        assert!(map_file(&root, "road", "diff").ends_with("road_diff_2k.jpg"));
+        std::fs::remove_dir_all(&root).unwrap();
+    }
 }

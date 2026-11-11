@@ -16,10 +16,11 @@ use bevy::{light::NotShadowCaster, prelude::*};
 use osage_kart_physics::Track;
 use osage_world_kart::Circuit;
 
+use osage_procedural::{Batch, Paint, Shape};
+
 use crate::{
     scene::PALETTE,
     scenery::{Floating, Props, Set, Turning, on_land},
-    sculpt::{Batch, Paint, Shape},
     track::{self, BARRIER, Frame, Land, WATER},
 };
 

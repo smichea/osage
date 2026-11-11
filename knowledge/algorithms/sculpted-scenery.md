@@ -2,7 +2,7 @@
 type: Algorithm
 title: Sculpted scenery
 description: Static scenery built from simple shapes, painted through vertex colours and merged into one mesh per material and patch of land, so that thousands of objects cost a few dozen draws.
-resource: https://github.com/smichea/osage/blob/main/worlds/kart/native/src/sculpt.rs
+resource: https://github.com/smichea/osage/blob/main/crates/osage-procedural/src/lib.rs
 licence: MIT OR Apache-2.0
 status: draft
 tags: [rendering, batching, procedural, performance]
@@ -55,7 +55,7 @@ GPU instancing of one mesh many times (still one draw per kind, and each instanc
 
 # Oracle
 
-The unit tests of `sculpt.rs` (orientation of every kind of shape, patches, paint by height), and [the render bench](/oracles/render-bench.md) before and after.
+The unit tests of [osage-procedural](/modules/osage-procedural.md) (orientation of every kind of shape, patches, paint by height), and [the render bench](/oracles/render-bench.md) before and after.
 
 # Reuse
 

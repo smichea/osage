@@ -1,0 +1,19 @@
+# SPDX-FileCopyrightText: The osage contributors
+# SPDX-License-Identifier: MIT OR Apache-2.0
+
+[package]
+name = "osage-kart-land"
+description = "The land around the kart circuit: flat where karts drive, hills beyond, a knoll and a lake inside the loop"
+license = "MIT OR Apache-2.0"
+publish = false
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+
+[dependencies]
+osage-kart-physics.workspace = true
+bevy.workspace = true
+
+[dev-dependencies]
+osage-world-kart.workspace = true

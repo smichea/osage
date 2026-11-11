@@ -9,6 +9,9 @@
 //!   and aerial perspective.
 //! - T3+: the full atmosphere.
 //!
+//! A world that gives a photograph of the sky ([`crate::panorama::Panorama`])
+//! gets it instead, at every tier.
+//!
 //! Measured on the Iris Xe reference at 1080p (bench/README): the atmosphere
 //! costs about 4 ms with default tables — too much for T2's 16.7 ms, hence
 //! the small ones.
@@ -19,7 +22,7 @@ use bevy::{
     prelude::*,
 };
 
-use crate::{OsageCamera, Sun, Tier};
+use crate::{OsageCamera, Sun, Tier, panorama};
 
 const SKY_BLUE: Color = Color::srgb(0.53, 0.71, 0.88);
 
@@ -27,6 +30,10 @@ pub struct SkyPlugin;
 
 impl Plugin for SkyPlugin {
     fn build(&self, app: &mut App) {
+        if app.world().contains_resource::<panorama::Panorama>() {
+            app.add_plugins(panorama::PanoramaPlugin);
+            return;
+        }
         app.add_systems(Startup, spawn_atmosphere).add_systems(Update, (camera, sun));
     }
 }

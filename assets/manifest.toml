@@ -70,3 +70,770 @@ licence = "CC0-1.0"
 author = "Amal Kumar (Poly Haven)"
 source = "https://polyhaven.com/a/sparse_grass"
 used_by = "worlds/kart/native: grass, occlusion-roughness-metal (R6)"
+
+# Photoreal batch, approved by the maintainer on 2026-11-11 (about 137 MB).
+
+[[asset]]
+path = "assets/polyhaven/kloofendal_48d_partly_cloudy_puresky/kloofendal_48d_partly_cloudy_puresky_4k.hdr"
+url = "https://dl.polyhaven.org/file/ph-assets/HDRIs/hdr/4k/kloofendal_48d_partly_cloudy_puresky_4k.hdr"
+sha256 = "3061c00a16ecae748e84fd6c44c04804f539c118bb66325db858bad87b11bf88"
+licence = "CC0-1.0"
+author = "Greg Zaal, Jarod Guest (Poly Haven)"
+source = "https://polyhaven.com/a/kloofendal_48d_partly_cloudy_puresky"
+used_by = "worlds/kart/native: sky and image-based light, photoreal look (R1, R4); HDR image, 4k"
+
+[[asset]]
+path = "assets/polyhaven/asphalt_02/asphalt_02_diff_2k.jpg"
+url = "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/2k/asphalt_02/asphalt_02_diff_2k.jpg"
+sha256 = "28f5ba8690553f192c0e5e1a5ff40f34765b4b93f4cc7059b1a3e9c795b6c28c"
+licence = "CC0-1.0"
+author = "Rob Tuytel (Poly Haven)"
+source = "https://polyhaven.com/a/asphalt_02"
+used_by = "worlds/kart/native: road surface, photoreal look (R6); colour, 2k"
+
+[[asset]]
+path = "assets/polyhaven/asphalt_02/asphalt_02_nor_gl_2k.jpg"
+url = "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/2k/asphalt_02/asphalt_02_nor_gl_2k.jpg"
+sha256 = "ffe49db71a0fd34c1e259625df66a302a237597d6ef655307987ec4e45bc6f21"
+licence = "CC0-1.0"
+author = "Rob Tuytel (Poly Haven)"
+source = "https://polyhaven.com/a/asphalt_02"
+used_by = "worlds/kart/native: road surface, photoreal look (R6); normal map, 2k"
+
+[[asset]]
+path = "assets/polyhaven/asphalt_02/asphalt_02_arm_2k.jpg"
+url = "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/2k/asphalt_02/asphalt_02_arm_2k.jpg"
+sha256 = "ed70e88640e4ed51cf1c3e57cb20db26983599b20b867c2526439e3a2c849fea"
+licence = "CC0-1.0"
+author = "Rob Tuytel (Poly Haven)"
+source = "https://polyhaven.com/a/asphalt_02"
+used_by = "worlds/kart/native: road surface, photoreal look (R6); occlusion-roughness-metal, 2k"
+
+[[asset]]
+path = "assets/polyhaven/leafy_grass/leafy_grass_diff_2k.jpg"
+url = "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/2k/leafy_grass/leafy_grass_diff_2k.jpg"
+sha256 = "8e1c6d21365d4b89bc5a35ab664da98a78dbc3ab9ba6100474881c8619a5b113"
+licence = "CC0-1.0"
+author = "Charlotte Baglioni (Poly Haven)"
+source = "https://polyhaven.com/a/leafy_grass"
+used_by = "worlds/kart/native: grass ground, photoreal look (R6, R7); colour, 2k"
+
+[[asset]]
+path = "assets/polyhaven/leafy_grass/leafy_grass_nor_gl_2k.jpg"
+url = "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/2k/leafy_grass/leafy_grass_nor_gl_2k.jpg"
+sha256 = "df0cf0ce96e653f033e5b934d5b12995464bda027aa53bd12e329be889aa9f45"
+licence = "CC0-1.0"
+author = "Charlotte Baglioni (Poly Haven)"
+source = "https://polyhaven.com/a/leafy_grass"
+used_by = "worlds/kart/native: grass ground, photoreal look (R6, R7); normal map, 2k"
+
+[[asset]]
+path = "assets/polyhaven/leafy_grass/leafy_grass_arm_2k.jpg"
+url = "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/2k/leafy_grass/leafy_grass_arm_2k.jpg"
+sha256 = "70d61c669fe9d186a84f5bb50e8a337083014d7e46534306a89d47d48fd5eb0e"
+licence = "CC0-1.0"
+author = "Charlotte Baglioni (Poly Haven)"
+source = "https://polyhaven.com/a/leafy_grass"
+used_by = "worlds/kart/native: grass ground, photoreal look (R6, R7); occlusion-roughness-metal, 2k"
+
+[[asset]]
+path = "assets/polyhaven/gravel_floor_02/gravel_floor_02_diff_2k.jpg"
+url = "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/2k/gravel_floor_02/gravel_floor_02_diff_2k.jpg"
+sha256 = "27c8953655dd2f289106106bb2c2c4845f77152bf1621b3d7091bd43b5083ffc"
+licence = "CC0-1.0"
+author = "Jenelle van Heerden, Dimitrios Savva (Poly Haven)"
+source = "https://polyhaven.com/a/gravel_floor_02"
+used_by = "worlds/kart/native: gravel traps beside the road (R6); colour, 2k"
+
+[[asset]]
+path = "assets/polyhaven/gravel_floor_02/gravel_floor_02_nor_gl_2k.jpg"
+url = "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/2k/gravel_floor_02/gravel_floor_02_nor_gl_2k.jpg"
+sha256 = "90f2f22016142f5ad725f8fc5540d8c9ad347db233b7540e2ab33f25ba9298e4"
+licence = "CC0-1.0"
+author = "Jenelle van Heerden, Dimitrios Savva (Poly Haven)"
+source = "https://polyhaven.com/a/gravel_floor_02"
+used_by = "worlds/kart/native: gravel traps beside the road (R6); normal map, 2k"
+
+[[asset]]
+path = "assets/polyhaven/gravel_floor_02/gravel_floor_02_arm_2k.jpg"
+url = "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/2k/gravel_floor_02/gravel_floor_02_arm_2k.jpg"
+sha256 = "8c02781ee25054fc83303e45a4bc8e1b1fdf024a4a980dc93e071f27fc3bbe22"
+licence = "CC0-1.0"
+author = "Jenelle van Heerden, Dimitrios Savva (Poly Haven)"
+source = "https://polyhaven.com/a/gravel_floor_02"
+used_by = "worlds/kart/native: gravel traps beside the road (R6); occlusion-roughness-metal, 2k"
+
+[[asset]]
+path = "assets/polyhaven/concrete_floor_02/concrete_floor_02_diff_2k.jpg"
+url = "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/2k/concrete_floor_02/concrete_floor_02_diff_2k.jpg"
+sha256 = "b08a20dcb306d08ee7f4a05ec216b19b7fd37e95745998ec5f81ecedaac1f0e9"
+licence = "CC0-1.0"
+author = "Rob Tuytel (Poly Haven)"
+source = "https://polyhaven.com/a/concrete_floor_02"
+used_by = "worlds/kart/native: concrete: start area, walls, grandstand (R6); colour, 2k"
+
+[[asset]]
+path = "assets/polyhaven/concrete_floor_02/concrete_floor_02_nor_gl_2k.jpg"
+url = "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/2k/concrete_floor_02/concrete_floor_02_nor_gl_2k.jpg"
+sha256 = "ce12d18f283f884f4be6f6c110f81582376049caada1e226958659d3d5fbaae1"
+licence = "CC0-1.0"
+author = "Rob Tuytel (Poly Haven)"
+source = "https://polyhaven.com/a/concrete_floor_02"
+used_by = "worlds/kart/native: concrete: start area, walls, grandstand (R6); normal map, 2k"
+
+[[asset]]
+path = "assets/polyhaven/concrete_floor_02/concrete_floor_02_arm_2k.jpg"
+url = "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/2k/concrete_floor_02/concrete_floor_02_arm_2k.jpg"
+sha256 = "bea1da529cfaf1dba9d127b8ae89793530d261f199409cdebb23abf750306c74"
+licence = "CC0-1.0"
+author = "Rob Tuytel (Poly Haven)"
+source = "https://polyhaven.com/a/concrete_floor_02"
+used_by = "worlds/kart/native: concrete: start area, walls, grandstand (R6); occlusion-roughness-metal, 2k"
+
+[[asset]]
+path = "assets/polyhaven/painted_concrete/painted_concrete_diff_2k.jpg"
+url = "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/2k/painted_concrete/painted_concrete_diff_2k.jpg"
+sha256 = "558ae59b4b9d159f24686e4ee0a768ea89cbc02f08ede82b91445d57850748b8"
+licence = "CC0-1.0"
+author = "Dario Barresi, Dimitrios Savva (Poly Haven)"
+source = "https://polyhaven.com/a/painted_concrete"
+used_by = "worlds/kart/native: painted kerbs (R6); colour, 2k"
+
+[[asset]]
+path = "assets/polyhaven/painted_concrete/painted_concrete_nor_gl_2k.jpg"
+url = "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/2k/painted_concrete/painted_concrete_nor_gl_2k.jpg"
+sha256 = "8da7fbbb29311fc53b052167c9fcfa73027c0a06808120a200295d866587a813"
+licence = "CC0-1.0"
+author = "Dario Barresi, Dimitrios Savva (Poly Haven)"
+source = "https://polyhaven.com/a/painted_concrete"
+used_by = "worlds/kart/native: painted kerbs (R6); normal map, 2k"
+
+[[asset]]
+path = "assets/polyhaven/painted_concrete/painted_concrete_arm_2k.jpg"
+url = "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/2k/painted_concrete/painted_concrete_arm_2k.jpg"
+sha256 = "a96d3a07dfed7bfb812adcdc9867b5b8a22a9d262ad3c67889577b80ed304adc"
+licence = "CC0-1.0"
+author = "Dario Barresi, Dimitrios Savva (Poly Haven)"
+source = "https://polyhaven.com/a/painted_concrete"
+used_by = "worlds/kart/native: painted kerbs (R6); occlusion-roughness-metal, 2k"
+
+[[asset]]
+path = "assets/polyhaven/dirt_floor/dirt_floor_diff_2k.jpg"
+url = "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/2k/dirt_floor/dirt_floor_diff_2k.jpg"
+sha256 = "1afaf974bc016e5019f48f6590a53e3e3730f48ae2eb5a1717519ad89038f661"
+licence = "CC0-1.0"
+author = "eye-candy.xyz (Poly Haven)"
+source = "https://polyhaven.com/a/dirt_floor"
+used_by = "worlds/kart/native: worn ground beside the verges (R6, R7); colour, 2k"
+
+[[asset]]
+path = "assets/polyhaven/dirt_floor/dirt_floor_nor_gl_2k.jpg"
+url = "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/2k/dirt_floor/dirt_floor_nor_gl_2k.jpg"
+sha256 = "da70ddc5c7d53d905d842ec189afbf7e2a7da84f281e94041346829b65f29786"
+licence = "CC0-1.0"
+author = "eye-candy.xyz (Poly Haven)"
+source = "https://polyhaven.com/a/dirt_floor"
+used_by = "worlds/kart/native: worn ground beside the verges (R6, R7); normal map, 2k"
+
+[[asset]]
+path = "assets/polyhaven/dirt_floor/dirt_floor_arm_2k.jpg"
+url = "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/2k/dirt_floor/dirt_floor_arm_2k.jpg"
+sha256 = "e21fa527b3dc8d4ec3492b0f0b37b38bedd3ec4149aa91e406a93c545bfa0164"
+licence = "CC0-1.0"
+author = "eye-candy.xyz (Poly Haven)"
+source = "https://polyhaven.com/a/dirt_floor"
+used_by = "worlds/kart/native: worn ground beside the verges (R6, R7); occlusion-roughness-metal, 2k"
+
+[[asset]]
+path = "assets/polyhaven/old_tyre/old_tyre_1k.gltf"
+url = "https://dl.polyhaven.org/file/ph-assets/Models/gltf/1k/old_tyre/old_tyre_1k.gltf"
+sha256 = "ba7b417eb3dc747c356ac3cd1f125754755684eb664737a9f1fc9e490c0b766e"
+licence = "CC0-1.0"
+author = "MP (Poly Haven)"
+source = "https://polyhaven.com/a/old_tyre"
+used_by = "worlds/kart/native: tyre walls (R9); glTF model"
+
+[[asset]]
+path = "assets/polyhaven/old_tyre/textures/old_tyre_diff_1k.jpg"
+url = "https://dl.polyhaven.org/file/ph-assets/Models/jpg/1k/old_tyre/old_tyre_diff_1k.jpg"
+sha256 = "0e34ce658c0844c0c94022233226d495930d514c917a5fa15ffee4760567439e"
+licence = "CC0-1.0"
+author = "MP (Poly Haven)"
+source = "https://polyhaven.com/a/old_tyre"
+used_by = "worlds/kart/native: tyre walls (R9); model texture, 1k"
+
+[[asset]]
+path = "assets/polyhaven/old_tyre/textures/old_tyre_arm_1k.jpg"
+url = "https://dl.polyhaven.org/file/ph-assets/Models/jpg/1k/old_tyre/old_tyre_arm_1k.jpg"
+sha256 = "3bcf192f5b99a7a574f9e21e75927043e6726c601a5da15e3210a31db05e12d4"
+licence = "CC0-1.0"
+author = "MP (Poly Haven)"
+source = "https://polyhaven.com/a/old_tyre"
+used_by = "worlds/kart/native: tyre walls (R9); model texture, 1k"
+
+[[asset]]
+path = "assets/polyhaven/old_tyre/old_tyre.bin"
+url = "https://dl.polyhaven.org/file/ph-assets/Models/gltf/4k/old_tyre/old_tyre.bin"
+sha256 = "659e7982c2de92ca1d13194c97bf112b6dec22d91daecc88e3912d37ce1b7252"
+licence = "CC0-1.0"
+author = "MP (Poly Haven)"
+source = "https://polyhaven.com/a/old_tyre"
+used_by = "worlds/kart/native: tyre walls (R9); model data"
+
+[[asset]]
+path = "assets/polyhaven/old_tyre/textures/old_tyre_nor_gl_1k.jpg"
+url = "https://dl.polyhaven.org/file/ph-assets/Models/jpg/1k/old_tyre/old_tyre_nor_gl_1k.jpg"
+sha256 = "34b716e140408985ddbab7d4bf1d8d430edf834cd2fd4639d82b14cb393fa73e"
+licence = "CC0-1.0"
+author = "MP (Poly Haven)"
+source = "https://polyhaven.com/a/old_tyre"
+used_by = "worlds/kart/native: tyre walls (R9); model texture, 1k"
+
+[[asset]]
+path = "assets/polyhaven/concrete_road_barrier_02/concrete_road_barrier_02_1k.gltf"
+url = "https://dl.polyhaven.org/file/ph-assets/Models/gltf/1k/concrete_road_barrier_02/concrete_road_barrier_02_1k.gltf"
+sha256 = "52d13b5105ce861db5dd1413a1a924ad5594dee5a8eb37dbe1a9df441fcd7caf"
+licence = "CC0-1.0"
+author = "Amal Kumar (Poly Haven)"
+source = "https://polyhaven.com/a/concrete_road_barrier_02"
+used_by = "worlds/kart/native: barriers along the circuit (R8); glTF model"
+
+[[asset]]
+path = "assets/polyhaven/concrete_road_barrier_02/concrete_road_barrier_02.bin"
+url = "https://dl.polyhaven.org/file/ph-assets/Models/gltf/8k/concrete_road_barrier_02/concrete_road_barrier_02.bin"
+sha256 = "254ee05467733e224e127dc76e019e5b5211c0da4248fa3fc75117ec005d7c90"
+licence = "CC0-1.0"
+author = "Amal Kumar (Poly Haven)"
+source = "https://polyhaven.com/a/concrete_road_barrier_02"
+used_by = "worlds/kart/native: barriers along the circuit (R8); model data"
+
+[[asset]]
+path = "assets/polyhaven/concrete_road_barrier_02/textures/concrete_road_barrier_02_arm_1k.jpg"
+url = "https://dl.polyhaven.org/file/ph-assets/Models/jpg/1k/concrete_road_barrier_02/concrete_road_barrier_02_arm_1k.jpg"
+sha256 = "6fb282f242ce86a3e44663678c2e0366c37de8244b08acc003d99771cb780e53"
+licence = "CC0-1.0"
+author = "Amal Kumar (Poly Haven)"
+source = "https://polyhaven.com/a/concrete_road_barrier_02"
+used_by = "worlds/kart/native: barriers along the circuit (R8); model texture, 1k"
+
+[[asset]]
+path = "assets/polyhaven/concrete_road_barrier_02/textures/concrete_road_barrier_02_nor_gl_1k.jpg"
+url = "https://dl.polyhaven.org/file/ph-assets/Models/jpg/1k/concrete_road_barrier_02/concrete_road_barrier_02_nor_gl_1k.jpg"
+sha256 = "42ec702843df209f0aef1d247c76dfb91385f0bf3b226b752d22a4c0e3780a31"
+licence = "CC0-1.0"
+author = "Amal Kumar (Poly Haven)"
+source = "https://polyhaven.com/a/concrete_road_barrier_02"
+used_by = "worlds/kart/native: barriers along the circuit (R8); model texture, 1k"
+
+[[asset]]
+path = "assets/polyhaven/concrete_road_barrier_02/textures/concrete_road_barrier_02_diff_1k.jpg"
+url = "https://dl.polyhaven.org/file/ph-assets/Models/jpg/1k/concrete_road_barrier_02/concrete_road_barrier_02_diff_1k.jpg"
+sha256 = "9329260ebfc8632a5d47d9b344ab6f916e26604e73ebd2c495fee544df4bdefa"
+licence = "CC0-1.0"
+author = "Amal Kumar (Poly Haven)"
+source = "https://polyhaven.com/a/concrete_road_barrier_02"
+used_by = "worlds/kart/native: barriers along the circuit (R8); model texture, 1k"
+
+[[asset]]
+path = "assets/polyhaven/modular_chainlink_fence/modular_chainlink_fence_1k.gltf"
+url = "https://dl.polyhaven.org/file/ph-assets/Models/gltf/1k/modular_chainlink_fence/modular_chainlink_fence_1k.gltf"
+sha256 = "4204f151f809b4abd41ea0b18b1b6a5d9c23e6bcc0b6a81e44d03690f26604e9"
+licence = "CC0-1.0"
+author = "James Ray Cock, Amal Kumar (Poly Haven)"
+source = "https://polyhaven.com/a/modular_chainlink_fence"
+used_by = "worlds/kart/native: spectator fences (R8); glTF model"
+
+[[asset]]
+path = "assets/polyhaven/modular_chainlink_fence/modular_chainlink_fence.bin"
+url = "https://dl.polyhaven.org/file/ph-assets/Models/gltf/8k/modular_chainlink_fence/modular_chainlink_fence.bin"
+sha256 = "be9ea1817089fd35b0927a8271358f6abd2ec80b306a085de435613d936fcb9a"
+licence = "CC0-1.0"
+author = "James Ray Cock, Amal Kumar (Poly Haven)"
+source = "https://polyhaven.com/a/modular_chainlink_fence"
+used_by = "worlds/kart/native: spectator fences (R8); model data"
+
+[[asset]]
+path = "assets/polyhaven/modular_chainlink_fence/textures/modular_chainlink_fence_posts_nor_gl_1k.jpg"
+url = "https://dl.polyhaven.org/file/ph-assets/Models/jpg/1k/modular_chainlink_fence/modular_chainlink_fence_posts_nor_gl_1k.jpg"
+sha256 = "b43b8214c90a55bb84222d2a27430b31080d68dc14879632b86dbd316cb5f060"
+licence = "CC0-1.0"
+author = "James Ray Cock, Amal Kumar (Poly Haven)"
+source = "https://polyhaven.com/a/modular_chainlink_fence"
+used_by = "worlds/kart/native: spectator fences (R8); model texture, 1k"
+
+[[asset]]
+path = "assets/polyhaven/modular_chainlink_fence/textures/modular_chainlink_fence_wire_arm_1k.jpg"
+url = "https://dl.polyhaven.org/file/ph-assets/Models/jpg/1k/modular_chainlink_fence/modular_chainlink_fence_wire_arm_1k.jpg"
+sha256 = "88af8364890b0645cd730eca11b30e6cd1c7578ad3aa1f012bb84915b9be5a03"
+licence = "CC0-1.0"
+author = "James Ray Cock, Amal Kumar (Poly Haven)"
+source = "https://polyhaven.com/a/modular_chainlink_fence"
+used_by = "worlds/kart/native: spectator fences (R8); model texture, 1k"
+
+[[asset]]
+path = "assets/polyhaven/modular_chainlink_fence/textures/modular_chainlink_fence_wire_nor_gl_1k.jpg"
+url = "https://dl.polyhaven.org/file/ph-assets/Models/jpg/1k/modular_chainlink_fence/modular_chainlink_fence_wire_nor_gl_1k.jpg"
+sha256 = "5cbf280f80e948de2422f0bb2fe2223a3b6f8e6fc75f54b00cd8d3e070938230"
+licence = "CC0-1.0"
+author = "James Ray Cock, Amal Kumar (Poly Haven)"
+source = "https://polyhaven.com/a/modular_chainlink_fence"
+used_by = "worlds/kart/native: spectator fences (R8); model texture, 1k"
+
+[[asset]]
+path = "assets/polyhaven/modular_chainlink_fence/textures/modular_chainlink_fence_wire_diff_1k.jpg"
+url = "https://dl.polyhaven.org/file/ph-assets/Models/jpg/1k/modular_chainlink_fence/modular_chainlink_fence_wire_diff_1k.jpg"
+sha256 = "79253847a00b67a616148d753df8f4e44ba4615f848b82310426618b5a8dd79b"
+licence = "CC0-1.0"
+author = "James Ray Cock, Amal Kumar (Poly Haven)"
+source = "https://polyhaven.com/a/modular_chainlink_fence"
+used_by = "worlds/kart/native: spectator fences (R8); model texture, 1k"
+
+[[asset]]
+path = "assets/polyhaven/modular_chainlink_fence/textures/modular_chainlink_fence_posts_arm_1k.jpg"
+url = "https://dl.polyhaven.org/file/ph-assets/Models/jpg/1k/modular_chainlink_fence/modular_chainlink_fence_posts_arm_1k.jpg"
+sha256 = "1694ecc2746ddaa93951ea5d2f2b830f544adf929f7ac9fae855f8b8fdfbad50"
+licence = "CC0-1.0"
+author = "James Ray Cock, Amal Kumar (Poly Haven)"
+source = "https://polyhaven.com/a/modular_chainlink_fence"
+used_by = "worlds/kart/native: spectator fences (R8); model texture, 1k"
+
+[[asset]]
+path = "assets/polyhaven/modular_chainlink_fence/textures/modular_chainlink_fence_posts_diff_1k.jpg"
+url = "https://dl.polyhaven.org/file/ph-assets/Models/jpg/1k/modular_chainlink_fence/modular_chainlink_fence_posts_diff_1k.jpg"
+sha256 = "ec273fedef04fbcac26460b996beeeceeff3f91c1bea73ed2c6db1d0fdb30b73"
+licence = "CC0-1.0"
+author = "James Ray Cock, Amal Kumar (Poly Haven)"
+source = "https://polyhaven.com/a/modular_chainlink_fence"
+used_by = "worlds/kart/native: spectator fences (R8); model texture, 1k"
+
+[[asset]]
+path = "assets/polyhaven/shrub_02/shrub_02_1k.gltf"
+url = "https://dl.polyhaven.org/file/ph-assets/Models/gltf/1k/shrub_02/shrub_02_1k.gltf"
+sha256 = "99de0a70fe88ad414615cc8d8e020617c8512e2abfe08b911b153a6fcc40d93e"
+licence = "CC0-1.0"
+author = "Rico Cilliers (Poly Haven)"
+source = "https://polyhaven.com/a/shrub_02"
+used_by = "worlds/kart/native: shrubs (R7); glTF model"
+
+[[asset]]
+path = "assets/polyhaven/shrub_02/textures/shrub_02_arm_1k.jpg"
+url = "https://dl.polyhaven.org/file/ph-assets/Models/jpg/1k/shrub_02/shrub_02_arm_1k.jpg"
+sha256 = "7186bf604d5c02f873aef6de2346cc06b6fa48f47d054edbef36d2c3772c0890"
+licence = "CC0-1.0"
+author = "Rico Cilliers (Poly Haven)"
+source = "https://polyhaven.com/a/shrub_02"
+used_by = "worlds/kart/native: shrubs (R7); model texture, 1k"
+
+[[asset]]
+path = "assets/polyhaven/shrub_02/textures/shrub_02_nor_gl_1k.jpg"
+url = "https://dl.polyhaven.org/file/ph-assets/Models/jpg/1k/shrub_02/shrub_02_nor_gl_1k.jpg"
+sha256 = "54c24e433365d5410223b7ebd2b33042b80831f80976e10768114db5ef6911d7"
+licence = "CC0-1.0"
+author = "Rico Cilliers (Poly Haven)"
+source = "https://polyhaven.com/a/shrub_02"
+used_by = "worlds/kart/native: shrubs (R7); model texture, 1k"
+
+[[asset]]
+path = "assets/polyhaven/shrub_02/shrub_02.bin"
+url = "https://dl.polyhaven.org/file/ph-assets/Models/gltf/4k/shrub_02/shrub_02.bin"
+sha256 = "5c1b79da1cfdbac90599542ccd1f75ba433a3a4d356b1ea03655adb39b0e2c96"
+licence = "CC0-1.0"
+author = "Rico Cilliers (Poly Haven)"
+source = "https://polyhaven.com/a/shrub_02"
+used_by = "worlds/kart/native: shrubs (R7); model data"
+
+[[asset]]
+path = "assets/polyhaven/shrub_02/textures/shrub_02_diff_1k.jpg"
+url = "https://dl.polyhaven.org/file/ph-assets/Models/jpg/1k/shrub_02/shrub_02_diff_1k.jpg"
+sha256 = "9956eff294034d70516d867e9668428a23d782feb3d4c34061dce5e44bacd5a8"
+licence = "CC0-1.0"
+author = "Rico Cilliers (Poly Haven)"
+source = "https://polyhaven.com/a/shrub_02"
+used_by = "worlds/kart/native: shrubs (R7); model texture, 1k"
+
+[[asset]]
+path = "assets/polyhaven/shrub_03/shrub_03_1k.gltf"
+url = "https://dl.polyhaven.org/file/ph-assets/Models/gltf/1k/shrub_03/shrub_03_1k.gltf"
+sha256 = "b76d7c14bc027e834e82d3f984c32b5d060e62908aa90ff9420a637ca253a8ea"
+licence = "CC0-1.0"
+author = "Rico Cilliers (Poly Haven)"
+source = "https://polyhaven.com/a/shrub_03"
+used_by = "worlds/kart/native: shrubs (R7); glTF model"
+
+[[asset]]
+path = "assets/polyhaven/shrub_03/shrub_03.bin"
+url = "https://dl.polyhaven.org/file/ph-assets/Models/gltf/4k/shrub_03/shrub_03.bin"
+sha256 = "bf4df21e6d2a2bc5f00b4c9142f776171fe7da00cf960001825748067af542b6"
+licence = "CC0-1.0"
+author = "Rico Cilliers (Poly Haven)"
+source = "https://polyhaven.com/a/shrub_03"
+used_by = "worlds/kart/native: shrubs (R7); model data"
+
+[[asset]]
+path = "assets/polyhaven/shrub_03/textures/shrub_03_arm_1k.jpg"
+url = "https://dl.polyhaven.org/file/ph-assets/Models/jpg/1k/shrub_03/shrub_03_arm_1k.jpg"
+sha256 = "3e2b16812a623037138eedace958210c5f3443a827bbe69663045bba5612f815"
+licence = "CC0-1.0"
+author = "Rico Cilliers (Poly Haven)"
+source = "https://polyhaven.com/a/shrub_03"
+used_by = "worlds/kart/native: shrubs (R7); model texture, 1k"
+
+[[asset]]
+path = "assets/polyhaven/shrub_03/textures/shrub_03_diff_1k.jpg"
+url = "https://dl.polyhaven.org/file/ph-assets/Models/jpg/1k/shrub_03/shrub_03_diff_1k.jpg"
+sha256 = "3cadc7aba46d3aabbd7d6d2b1d04aa32e2a7da0bc87c2d38ef3cb1ee42cb03ec"
+licence = "CC0-1.0"
+author = "Rico Cilliers (Poly Haven)"
+source = "https://polyhaven.com/a/shrub_03"
+used_by = "worlds/kart/native: shrubs (R7); model texture, 1k"
+
+[[asset]]
+path = "assets/polyhaven/shrub_03/textures/shrub_03_nor_gl_1k.jpg"
+url = "https://dl.polyhaven.org/file/ph-assets/Models/jpg/1k/shrub_03/shrub_03_nor_gl_1k.jpg"
+sha256 = "ff856bacfce859b8a7555dd9a3b92fbd36b2e775d486be71df485afb4235d6c9"
+licence = "CC0-1.0"
+author = "Rico Cilliers (Poly Haven)"
+source = "https://polyhaven.com/a/shrub_03"
+used_by = "worlds/kart/native: shrubs (R7); model texture, 1k"
+
+[[asset]]
+path = "assets/polyhaven/shrub_04/shrub_04_1k.gltf"
+url = "https://dl.polyhaven.org/file/ph-assets/Models/gltf/1k/shrub_04/shrub_04_1k.gltf"
+sha256 = "782832cbc57e96686b78c6ef9df6234c25f564f78421c8ed4bd42c3631f5aeae"
+licence = "CC0-1.0"
+author = "Rico Cilliers (Poly Haven)"
+source = "https://polyhaven.com/a/shrub_04"
+used_by = "worlds/kart/native: shrubs (R7); glTF model"
+
+[[asset]]
+path = "assets/polyhaven/shrub_04/textures/shrub_04_nor_gl_1k.jpg"
+url = "https://dl.polyhaven.org/file/ph-assets/Models/jpg/1k/shrub_04/shrub_04_nor_gl_1k.jpg"
+sha256 = "200d791e0474495bfc876ba1c289dade669c6a5b124647c55bc840a875f6b51c"
+licence = "CC0-1.0"
+author = "Rico Cilliers (Poly Haven)"
+source = "https://polyhaven.com/a/shrub_04"
+used_by = "worlds/kart/native: shrubs (R7); model texture, 1k"
+
+[[asset]]
+path = "assets/polyhaven/shrub_04/textures/shrub_04_diff_1k.jpg"
+url = "https://dl.polyhaven.org/file/ph-assets/Models/jpg/1k/shrub_04/shrub_04_diff_1k.jpg"
+sha256 = "0b0fa0a474753d13f3093858cea79d0de05da1e6a0c5d6e181cd351080980b6c"
+licence = "CC0-1.0"
+author = "Rico Cilliers (Poly Haven)"
+source = "https://polyhaven.com/a/shrub_04"
+used_by = "worlds/kart/native: shrubs (R7); model texture, 1k"
+
+[[asset]]
+path = "assets/polyhaven/shrub_04/textures/shrub_04_arm_1k.jpg"
+url = "https://dl.polyhaven.org/file/ph-assets/Models/jpg/1k/shrub_04/shrub_04_arm_1k.jpg"
+sha256 = "d1085df021928b29b0f38dde7e58e9a2e304c4e8d838e390b37cf57f8aa492e8"
+licence = "CC0-1.0"
+author = "Rico Cilliers (Poly Haven)"
+source = "https://polyhaven.com/a/shrub_04"
+used_by = "worlds/kart/native: shrubs (R7); model texture, 1k"
+
+[[asset]]
+path = "assets/polyhaven/shrub_04/shrub_04.bin"
+url = "https://dl.polyhaven.org/file/ph-assets/Models/gltf/4k/shrub_04/shrub_04.bin"
+sha256 = "cb442c39682e54cc63f912aa78ab17a03566f947a61adbbbaaa6473166744f01"
+licence = "CC0-1.0"
+author = "Rico Cilliers (Poly Haven)"
+source = "https://polyhaven.com/a/shrub_04"
+used_by = "worlds/kart/native: shrubs (R7); model data"
+
+[[asset]]
+path = "assets/polyhaven/fern_02/fern_02_1k.gltf"
+url = "https://dl.polyhaven.org/file/ph-assets/Models/gltf/1k/fern_02/fern_02_1k.gltf"
+sha256 = "33974295ee19670af4877705fc7d91f33f42d6302f0d44a625e072271223031f"
+licence = "CC0-1.0"
+author = "Rob Tuytel, Rico Cilliers (Poly Haven)"
+source = "https://polyhaven.com/a/fern_02"
+used_by = "worlds/kart/native: ground plants (R7); glTF model"
+
+[[asset]]
+path = "assets/polyhaven/fern_02/textures/fern_02_arm_1k.jpg"
+url = "https://dl.polyhaven.org/file/ph-assets/Models/jpg/1k/fern_02/fern_02_arm_1k.jpg"
+sha256 = "ebfb5d76ce9cbdaec20bcd22dce9b755f0b1b8650ef29ca13555e3e6961025d7"
+licence = "CC0-1.0"
+author = "Rob Tuytel, Rico Cilliers (Poly Haven)"
+source = "https://polyhaven.com/a/fern_02"
+used_by = "worlds/kart/native: ground plants (R7); model texture, 1k"
+
+[[asset]]
+path = "assets/polyhaven/fern_02/textures/fern_02_diff_1k.jpg"
+url = "https://dl.polyhaven.org/file/ph-assets/Models/jpg/1k/fern_02/fern_02_diff_1k.jpg"
+sha256 = "a828a6e7b4c01c826911e2eac4b3afc7457dab7b3b392a31c681ed88b7d50029"
+licence = "CC0-1.0"
+author = "Rob Tuytel, Rico Cilliers (Poly Haven)"
+source = "https://polyhaven.com/a/fern_02"
+used_by = "worlds/kart/native: ground plants (R7); model texture, 1k"
+
+[[asset]]
+path = "assets/polyhaven/fern_02/textures/fern_02_nor_gl_1k.jpg"
+url = "https://dl.polyhaven.org/file/ph-assets/Models/jpg/1k/fern_02/fern_02_nor_gl_1k.jpg"
+sha256 = "45bce132c6e96a0864bc89ab5da51361ab3f4afa83a6669ae499ab5ca811f621"
+licence = "CC0-1.0"
+author = "Rob Tuytel, Rico Cilliers (Poly Haven)"
+source = "https://polyhaven.com/a/fern_02"
+used_by = "worlds/kart/native: ground plants (R7); model texture, 1k"
+
+[[asset]]
+path = "assets/polyhaven/fern_02/fern_02.bin"
+url = "https://dl.polyhaven.org/file/ph-assets/Models/gltf/8k/fern_02/fern_02.bin"
+sha256 = "fe1abb762bcbbc7ad9e86925c8080437a62add257d9280e9142fdc85c226e64c"
+licence = "CC0-1.0"
+author = "Rob Tuytel, Rico Cilliers (Poly Haven)"
+source = "https://polyhaven.com/a/fern_02"
+used_by = "worlds/kart/native: ground plants (R7); model data"
+
+[[asset]]
+path = "assets/polyhaven/rock_07/rock_07_1k.gltf"
+url = "https://dl.polyhaven.org/file/ph-assets/Models/gltf/1k/rock_07/rock_07_1k.gltf"
+sha256 = "efcc2dcaa133ff8ad5c865dc2135772e8f5dbc83fa38db2ee2cf25382436b6e6"
+licence = "CC0-1.0"
+author = "Jenelle van Heerden (Poly Haven)"
+source = "https://polyhaven.com/a/rock_07"
+used_by = "worlds/kart/native: rocks (R7); glTF model"
+
+[[asset]]
+path = "assets/polyhaven/rock_07/rock_07.bin"
+url = "https://dl.polyhaven.org/file/ph-assets/Models/gltf/8k/rock_07/rock_07.bin"
+sha256 = "e4a532a6d6cf4a08c288f501b790f32cba0528136a29959ce774c3cd39369e7e"
+licence = "CC0-1.0"
+author = "Jenelle van Heerden (Poly Haven)"
+source = "https://polyhaven.com/a/rock_07"
+used_by = "worlds/kart/native: rocks (R7); model data"
+
+[[asset]]
+path = "assets/polyhaven/rock_07/textures/rock_07_arm_1k.jpg"
+url = "https://dl.polyhaven.org/file/ph-assets/Models/jpg/1k/rock_07/rock_07_arm_1k.jpg"
+sha256 = "1ed76e9a8542c76bdc6b7b018720ae1f52cd75d9f5ae719f613de3f5032cf4da"
+licence = "CC0-1.0"
+author = "Jenelle van Heerden (Poly Haven)"
+source = "https://polyhaven.com/a/rock_07"
+used_by = "worlds/kart/native: rocks (R7); model texture, 1k"
+
+[[asset]]
+path = "assets/polyhaven/rock_07/textures/rock_07_diff_1k.jpg"
+url = "https://dl.polyhaven.org/file/ph-assets/Models/jpg/1k/rock_07/rock_07_diff_1k.jpg"
+sha256 = "8ff1965aa1664cc4abcc0131c44ee2b97ab14d6e131d7a51429ff261eeb101c8"
+licence = "CC0-1.0"
+author = "Jenelle van Heerden (Poly Haven)"
+source = "https://polyhaven.com/a/rock_07"
+used_by = "worlds/kart/native: rocks (R7); model texture, 1k"
+
+[[asset]]
+path = "assets/polyhaven/rock_07/textures/rock_07_nor_gl_1k.jpg"
+url = "https://dl.polyhaven.org/file/ph-assets/Models/jpg/1k/rock_07/rock_07_nor_gl_1k.jpg"
+sha256 = "57cb2210951aeb376164fce5f7c65f03e5599def04873b56cad0f173c275d78d"
+licence = "CC0-1.0"
+author = "Jenelle van Heerden (Poly Haven)"
+source = "https://polyhaven.com/a/rock_07"
+used_by = "worlds/kart/native: rocks (R7); model texture, 1k"
+
+[[asset]]
+path = "assets/polyhaven/rock_09/rock_09_1k.gltf"
+url = "https://dl.polyhaven.org/file/ph-assets/Models/gltf/1k/rock_09/rock_09_1k.gltf"
+sha256 = "636e57eb0090889627da18edaec202ff9f65f83101b94f91b7da4d21dc080ab9"
+licence = "CC0-1.0"
+author = "Jenelle van Heerden (Poly Haven)"
+source = "https://polyhaven.com/a/rock_09"
+used_by = "worlds/kart/native: rocks (R7); glTF model"
+
+[[asset]]
+path = "assets/polyhaven/rock_09/textures/rock_09_arm_1k.jpg"
+url = "https://dl.polyhaven.org/file/ph-assets/Models/jpg/1k/rock_09/rock_09_arm_1k.jpg"
+sha256 = "594e2cec49e6bb40bd9bab2649e37dcc261079456cf4d6f680f56770c19db5ea"
+licence = "CC0-1.0"
+author = "Jenelle van Heerden (Poly Haven)"
+source = "https://polyhaven.com/a/rock_09"
+used_by = "worlds/kart/native: rocks (R7); model texture, 1k"
+
+[[asset]]
+path = "assets/polyhaven/rock_09/textures/rock_09_nor_gl_1k.jpg"
+url = "https://dl.polyhaven.org/file/ph-assets/Models/jpg/1k/rock_09/rock_09_nor_gl_1k.jpg"
+sha256 = "2195b5c7da3a23af2a5f93dbb20f38bc069028509b106397bc8d2aee0bc55729"
+licence = "CC0-1.0"
+author = "Jenelle van Heerden (Poly Haven)"
+source = "https://polyhaven.com/a/rock_09"
+used_by = "worlds/kart/native: rocks (R7); model texture, 1k"
+
+[[asset]]
+path = "assets/polyhaven/rock_09/textures/rock_09_diff_1k.jpg"
+url = "https://dl.polyhaven.org/file/ph-assets/Models/jpg/1k/rock_09/rock_09_diff_1k.jpg"
+sha256 = "afb7ae5ae82238d304aba589391ac6bc87f7cf1dbfe50980c21f762cfdd87efd"
+licence = "CC0-1.0"
+author = "Jenelle van Heerden (Poly Haven)"
+source = "https://polyhaven.com/a/rock_09"
+used_by = "worlds/kart/native: rocks (R7); model texture, 1k"
+
+[[asset]]
+path = "assets/polyhaven/rock_09/rock_09.bin"
+url = "https://dl.polyhaven.org/file/ph-assets/Models/gltf/8k/rock_09/rock_09.bin"
+sha256 = "780c37d6fc11ca3a01c3763535ef883908b6007271a46bd446d2289ded820751"
+licence = "CC0-1.0"
+author = "Jenelle van Heerden (Poly Haven)"
+source = "https://polyhaven.com/a/rock_09"
+used_by = "worlds/kart/native: rocks (R7); model data"
+
+[[asset]]
+path = "assets/polyhaven/pine_sapling_small/pine_sapling_small_1k.gltf"
+url = "https://dl.polyhaven.org/file/ph-assets/Models/gltf/1k/pine_sapling_small/pine_sapling_small_1k.gltf"
+sha256 = "f358c01926861dd082f32dba60f7c9fba232b585a985cf38c0d2229eecf4bc48"
+licence = "CC0-1.0"
+author = "Rob Tuytel, Rico Cilliers (Poly Haven)"
+source = "https://polyhaven.com/a/pine_sapling_small"
+used_by = "worlds/kart/native: trees (R7); glTF model"
+
+[[asset]]
+path = "assets/polyhaven/pine_sapling_small/textures/pine_sapling_small_twig_arm_1k.jpg"
+url = "https://dl.polyhaven.org/file/ph-assets/Models/jpg/1k/pine_sapling_small/pine_sapling_small_twig_arm_1k.jpg"
+sha256 = "2eb0aa44124b5a4ae9401e00b23b3c916f4c3f421616ce1bb932f248fc061288"
+licence = "CC0-1.0"
+author = "Rob Tuytel, Rico Cilliers (Poly Haven)"
+source = "https://polyhaven.com/a/pine_sapling_small"
+used_by = "worlds/kart/native: trees (R7); model texture, 1k"
+
+[[asset]]
+path = "assets/polyhaven/pine_sapling_small/textures/pine_sapling_small_twig_diff_1k.jpg"
+url = "https://dl.polyhaven.org/file/ph-assets/Models/jpg/1k/pine_sapling_small/pine_sapling_small_twig_diff_1k.jpg"
+sha256 = "54af7d6fb664b5a38bcb118b557bc50e01e86ec54d6f1a573c3e32c649a53362"
+licence = "CC0-1.0"
+author = "Rob Tuytel, Rico Cilliers (Poly Haven)"
+source = "https://polyhaven.com/a/pine_sapling_small"
+used_by = "worlds/kart/native: trees (R7); model texture, 1k"
+
+[[asset]]
+path = "assets/polyhaven/pine_sapling_small/textures/pine_sapling_small_bark_nor_gl_1k.jpg"
+url = "https://dl.polyhaven.org/file/ph-assets/Models/jpg/1k/pine_sapling_small/pine_sapling_small_bark_nor_gl_1k.jpg"
+sha256 = "05c46455531781b6cf18cae0648cf627f60ee942adaa8bcbfd1592fc2506a9e0"
+licence = "CC0-1.0"
+author = "Rob Tuytel, Rico Cilliers (Poly Haven)"
+source = "https://polyhaven.com/a/pine_sapling_small"
+used_by = "worlds/kart/native: trees (R7); model texture, 1k"
+
+[[asset]]
+path = "assets/polyhaven/pine_sapling_small/pine_sapling_small.bin"
+url = "https://dl.polyhaven.org/file/ph-assets/Models/gltf/8k/pine_sapling_small/pine_sapling_small.bin"
+sha256 = "b4d2fc73d53f1d8717eb5ef9a2c66957d2a53152787e543aace88fcd6fca94ef"
+licence = "CC0-1.0"
+author = "Rob Tuytel, Rico Cilliers (Poly Haven)"
+source = "https://polyhaven.com/a/pine_sapling_small"
+used_by = "worlds/kart/native: trees (R7); model data"
+
+[[asset]]
+path = "assets/polyhaven/pine_sapling_small/textures/pine_sapling_small_bark_diff_1k.jpg"
+url = "https://dl.polyhaven.org/file/ph-assets/Models/jpg/1k/pine_sapling_small/pine_sapling_small_bark_diff_1k.jpg"
+sha256 = "5c76836b01c3536fa0e24207b67bf4f3315b53ebe2b4ecc6f08dfcf3f8d74929"
+licence = "CC0-1.0"
+author = "Rob Tuytel, Rico Cilliers (Poly Haven)"
+source = "https://polyhaven.com/a/pine_sapling_small"
+used_by = "worlds/kart/native: trees (R7); model texture, 1k"
+
+[[asset]]
+path = "assets/polyhaven/pine_sapling_small/textures/pine_sapling_small_bark_arm_1k.jpg"
+url = "https://dl.polyhaven.org/file/ph-assets/Models/jpg/1k/pine_sapling_small/pine_sapling_small_bark_arm_1k.jpg"
+sha256 = "336a4680cd571b6076b67afee2310b290b8900d9d126eb39ec1ae92e95be2ea9"
+licence = "CC0-1.0"
+author = "Rob Tuytel, Rico Cilliers (Poly Haven)"
+source = "https://polyhaven.com/a/pine_sapling_small"
+used_by = "worlds/kart/native: trees (R7); model texture, 1k"
+
+[[asset]]
+path = "assets/polyhaven/pine_sapling_small/textures/pine_sapling_small_twig_nor_gl_1k.jpg"
+url = "https://dl.polyhaven.org/file/ph-assets/Models/jpg/1k/pine_sapling_small/pine_sapling_small_twig_nor_gl_1k.jpg"
+sha256 = "76af87821d7ff00e25768d5d97a449394fe64a21ae55d099da7f5ed46d9098c8"
+licence = "CC0-1.0"
+author = "Rob Tuytel, Rico Cilliers (Poly Haven)"
+source = "https://polyhaven.com/a/pine_sapling_small"
+used_by = "worlds/kart/native: trees (R7); model texture, 1k"
+
+[[asset]]
+path = "assets/polyhaven/grass_bermuda_01/grass_bermuda_01_1k.gltf"
+url = "https://dl.polyhaven.org/file/ph-assets/Models/gltf/1k/grass_bermuda_01/grass_bermuda_01_1k.gltf"
+sha256 = "a1e5bb7fcf33721dc4844d7acacab80759fccec659f1ea643f8701afc542e207"
+licence = "CC0-1.0"
+author = "Rico Cilliers (Poly Haven)"
+source = "https://polyhaven.com/a/grass_bermuda_01"
+used_by = "worlds/kart/native: grass clumps near the camera (R7); glTF model"
+
+[[asset]]
+path = "assets/polyhaven/grass_bermuda_01/textures/grass_bermuda_01_nor_gl_1k.jpg"
+url = "https://dl.polyhaven.org/file/ph-assets/Models/jpg/1k/grass_bermuda_01/grass_bermuda_01_nor_gl_1k.jpg"
+sha256 = "4475b37d6e4d217ce03547216f62d1ef6e65cafda2355fd0cb2aeb6d919b9338"
+licence = "CC0-1.0"
+author = "Rico Cilliers (Poly Haven)"
+source = "https://polyhaven.com/a/grass_bermuda_01"
+used_by = "worlds/kart/native: grass clumps near the camera (R7); model texture, 1k"
+
+[[asset]]
+path = "assets/polyhaven/grass_bermuda_01/textures/grass_bermuda_01_diff_1k.jpg"
+url = "https://dl.polyhaven.org/file/ph-assets/Models/jpg/1k/grass_bermuda_01/grass_bermuda_01_diff_1k.jpg"
+sha256 = "ef202eeb8f8fb3312446009acecc87e5679a7d612e4dee859d8a849e00af5fcb"
+licence = "CC0-1.0"
+author = "Rico Cilliers (Poly Haven)"
+source = "https://polyhaven.com/a/grass_bermuda_01"
+used_by = "worlds/kart/native: grass clumps near the camera (R7); model texture, 1k"
+
+[[asset]]
+path = "assets/polyhaven/grass_bermuda_01/textures/grass_bermuda_01_arm_1k.jpg"
+url = "https://dl.polyhaven.org/file/ph-assets/Models/jpg/1k/grass_bermuda_01/grass_bermuda_01_arm_1k.jpg"
+sha256 = "38190d342fe951c33ff8c37dd2e3de37aca4cc7633e91be8b0d1c1f71057a641"
+licence = "CC0-1.0"
+author = "Rico Cilliers (Poly Haven)"
+source = "https://polyhaven.com/a/grass_bermuda_01"
+used_by = "worlds/kart/native: grass clumps near the camera (R7); model texture, 1k"
+
+[[asset]]
+path = "assets/polyhaven/grass_bermuda_01/grass_bermuda_01.bin"
+url = "https://dl.polyhaven.org/file/ph-assets/Models/gltf/8k/grass_bermuda_01/grass_bermuda_01.bin"
+sha256 = "b98be48b43afb9d57f6c722d918a49996635064b829b16dc14ef4a48c0f04dae"
+licence = "CC0-1.0"
+author = "Rico Cilliers (Poly Haven)"
+source = "https://polyhaven.com/a/grass_bermuda_01"
+used_by = "worlds/kart/native: grass clumps near the camera (R7); model data"
+
+[[asset]]
+path = "assets/polyhaven/dandelion_01/dandelion_01_1k.gltf"
+url = "https://dl.polyhaven.org/file/ph-assets/Models/gltf/1k/dandelion_01/dandelion_01_1k.gltf"
+sha256 = "68f804fe29f641f37b03c470cf9065d34aacd1b4f580ed6f35385626c2bb42b7"
+licence = "CC0-1.0"
+author = "Rob Tuytel, Rico Cilliers (Poly Haven)"
+source = "https://polyhaven.com/a/dandelion_01"
+used_by = "worlds/kart/native: flowers in the grass (R7); glTF model"
+
+[[asset]]
+path = "assets/polyhaven/dandelion_01/dandelion_01.bin"
+url = "https://dl.polyhaven.org/file/ph-assets/Models/gltf/8k/dandelion_01/dandelion_01.bin"
+sha256 = "ccff5a564f56a69374c09c25ae86c3684c46329309b4eef4569255b1ad54bdd0"
+licence = "CC0-1.0"
+author = "Rob Tuytel, Rico Cilliers (Poly Haven)"
+source = "https://polyhaven.com/a/dandelion_01"
+used_by = "worlds/kart/native: flowers in the grass (R7); model data"
+
+[[asset]]
+path = "assets/polyhaven/dandelion_01/textures/dandelion_01_nor_gl_1k.jpg"
+url = "https://dl.polyhaven.org/file/ph-assets/Models/jpg/1k/dandelion_01/dandelion_01_nor_gl_1k.jpg"
+sha256 = "fd69513a4803145f634b5ace49fed8709e454b3026d060687071757a72c33250"
+licence = "CC0-1.0"
+author = "Rob Tuytel, Rico Cilliers (Poly Haven)"
+source = "https://polyhaven.com/a/dandelion_01"
+used_by = "worlds/kart/native: flowers in the grass (R7); model texture, 1k"
+
+[[asset]]
+path = "assets/polyhaven/dandelion_01/textures/dandelion_01_diff_1k.jpg"
+url = "https://dl.polyhaven.org/file/ph-assets/Models/jpg/1k/dandelion_01/dandelion_01_diff_1k.jpg"
+sha256 = "17e49d535dfce890e539038a80eaa77d90dab5f1781350266dd8f736ee7370d6"
+licence = "CC0-1.0"
+author = "Rob Tuytel, Rico Cilliers (Poly Haven)"
+source = "https://polyhaven.com/a/dandelion_01"
+used_by = "worlds/kart/native: flowers in the grass (R7); model texture, 1k"
+
+[[asset]]
+path = "assets/polyhaven/dandelion_01/textures/dandelion_01_arm_1k.jpg"
+url = "https://dl.polyhaven.org/file/ph-assets/Models/jpg/1k/dandelion_01/dandelion_01_arm_1k.jpg"
+sha256 = "dad70c20756581fd795548f52a23580d94a2af538664dbbfe64e66a76e4eebb6"
+licence = "CC0-1.0"
+author = "Rob Tuytel, Rico Cilliers (Poly Haven)"
+source = "https://polyhaven.com/a/dandelion_01"
+used_by = "worlds/kart/native: flowers in the grass (R7); model texture, 1k"

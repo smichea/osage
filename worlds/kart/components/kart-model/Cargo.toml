@@ -1,0 +1,16 @@
+# SPDX-FileCopyrightText: The osage contributors
+# SPDX-License-Identifier: MIT OR Apache-2.0
+
+[package]
+name = "osage-kart-model"
+description = "A racing kart and its driver, modelled to scale from simple shapes, in their colours, each finish its own material"
+license = "MIT OR Apache-2.0"
+publish = false
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+
+[dependencies]
+osage-procedural.workspace = true
+bevy = { workspace = true, features = ["3d"] }

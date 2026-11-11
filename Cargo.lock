@@ -3563,6 +3563,8 @@ dependencies = [
  "moxcms",
  "num-traits",
  "png",
+ "zune-core 0.5.3",
+ "zune-jpeg 0.5.15",
 ]
 
 [[package]]
@@ -4766,6 +4768,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "osage-content"
+version = "0.1.0"
+dependencies = [
+ "bevy",
+ "zune-jpeg 0.4.21",
+]
+
+[[package]]
 name = "osage-credentials"
 version = "0.1.0"
 dependencies = [
@@ -4779,19 +4789,41 @@ dependencies = [
 ]
 
 [[package]]
+name = "osage-kart-land"
+version = "0.1.0"
+dependencies = [
+ "bevy",
+ "osage-kart-physics",
+ "osage-world-kart",
+]
+
+[[package]]
+name = "osage-kart-model"
+version = "0.1.0"
+dependencies = [
+ "bevy",
+ "osage-procedural",
+]
+
+[[package]]
 name = "osage-kart-native"
 version = "0.1.0"
 dependencies = [
  "anyhow",
  "bevy",
  "crossbeam-channel",
+ "osage-content",
+ "osage-kart-land",
+ "osage-kart-model",
  "osage-kart-physics",
+ "osage-kart-roadside",
+ "osage-procedural",
+ "osage-props",
  "osage-render",
  "osage-sdk",
  "osage-world-kart",
  "serde_json",
  "tokio",
- "zune-jpeg",
 ]
 
 [[package]]
@@ -4802,12 +4834,38 @@ dependencies = [
 ]
 
 [[package]]
+name = "osage-kart-roadside"
+version = "0.1.0"
+dependencies = [
+ "bevy",
+ "osage-kart-land",
+ "osage-kart-physics",
+ "osage-procedural",
+ "osage-props",
+ "osage-world-kart",
+]
+
+[[package]]
 name = "osage-kart-server"
 version = "0.1.0"
 dependencies = [
  "anyhow",
  "osage-server",
  "osage-world-kart",
+]
+
+[[package]]
+name = "osage-procedural"
+version = "0.1.0"
+dependencies = [
+ "bevy",
+]
+
+[[package]]
+name = "osage-props"
+version = "0.1.0"
+dependencies = [
+ "bevy",
 ]
 
 [[package]]
@@ -7822,10 +7880,25 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3f423a2c17029964870cfaabb1f13dfab7d092a62a29a89264f4d36990ca414a"
 
 [[package]]
+name = "zune-core"
+version = "0.5.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d56377fd46368984a170bc5aac5567e52ca5da874caa60bea39fcbca78fb658b"
+
+[[package]]
 name = "zune-jpeg"
 version = "0.4.21"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "29ce2c8a9384ad323cf564b67da86e21d3cfdff87908bc1223ed5c99bc792713"
 dependencies = [
- "zune-core",
+ "zune-core 0.4.12",
+]
+
+[[package]]
+name = "zune-jpeg"
+version = "0.5.15"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "27bc9d5b815bc103f142aa054f561d9187d191692ec7c2d1e2b4737f8dbd7296"
+dependencies = [
+ "zune-core 0.5.3",
 ]

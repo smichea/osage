@@ -22,7 +22,6 @@
 //!   it is not the sanctioned bench, and its report says so.
 
 mod bench;
-mod content;
 mod effects;
 mod hud;
 mod karts;
@@ -31,7 +30,6 @@ mod play;
 mod predict;
 mod scene;
 mod scenery;
-mod sculpt;
 mod track;
 
 use std::{
@@ -44,6 +42,7 @@ use anyhow::{Context, Result, bail};
 use bevy::{
     DefaultPlugins,
     app::{App, PluginGroup, ScheduleRunnerPlugin},
+    asset::AssetPlugin,
     render::RenderPlugin,
     window::{ExitCondition, PresentMode, Window, WindowPlugin, WindowResolution},
     winit::WinitPlugin,
@@ -101,20 +100,34 @@ fn main() -> Result<()> {
     // The bench compiles its shaders before drawing, so that every frame is
     // complete and the same everywhere; playing, they compile in the background.
     let render = RenderPlugin { synchronous_pipeline_compilation: bench, ..Default::default() };
+    // Models are loaded from the asset manifest's content, wherever it is.
+    let assets = AssetPlugin {
+        file_path: osage_content::root()
+            .map_or_else(|| "assets".to_owned(), |root| root.to_string_lossy().into_owned()),
+        ..Default::default()
+    };
     if headless {
         // No window and no windowing system: frames are drawn into the
         // off-screen picture only, as fast as the machine can.
         let windowless =
             WindowPlugin { primary_window: None, exit_condition: ExitCondition::DontExit, ..Default::default() };
-        app.add_plugins(DefaultPlugins.set(windowless).set(render).disable::<WinitPlugin>())
+        app.add_plugins(DefaultPlugins.set(windowless).set(render).set(assets).disable::<WinitPlugin>())
             .add_plugins(ScheduleRunnerPlugin::run_loop(Duration::ZERO));
     } else {
         app.add_plugins(
-            DefaultPlugins.set(WindowPlugin { primary_window: Some(window), ..Default::default() }).set(render),
+            DefaultPlugins
+                .set(WindowPlugin { primary_window: Some(window), ..Default::default() })
+                .set(render)
+                .set(assets),
         );
     }
-    app.insert_resource(scene::look())
-        .add_plugins(OsageRenderPlugin { tier, without: without.clone() })
+    app.insert_resource(scene::look());
+    // Before the rendering plugin, which draws the sky from it when it is there.
+    if let Some(panorama) = scene::panorama() {
+        app.insert_resource(panorama);
+    }
+    app.add_plugins(OsageRenderPlugin { tier, without: without.clone() })
+        .add_plugins(osage_props::PropsPlugin)
         .add_plugins(scene::ScenePlugin);
     if let Some(viewpoint) = viewpoint {
         app.insert_resource(viewpoint);
@@ -125,7 +138,7 @@ fn main() -> Result<()> {
         std::fs::create_dir_all(&out).with_context(|| format!("creating {}", out.display()))?;
         let without = without.iter().map(|t| t.name().to_owned()).collect();
         let held = viewpoint.is_some();
-        app.add_plugins(bench::BenchPlugin { tier, frames, out, resolution: (width, height), without, held });
+        app.add_plugins(bench::BenchPlugin { tier, frames, out, resolution: (width, height), without, held, headless });
     } else {
         let tier = match tier {
             Tier::T1 => v0::Tier::T1Minimal,
