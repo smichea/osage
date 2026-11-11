@@ -309,6 +309,105 @@ fn grandstand(set: &mut Set, stand: Transform, shape: (f32, f32, f32, usize, f32
     }
 }
 
+/// Chain-link fences along the straights near the start, between the wall
+/// and the spectators: galvanised posts every 2.5 m, a top rail, and wire
+/// woven in diamonds, drawn as a texture with see-through holes.
+pub fn fences(set: &mut Set, props: &mut Props, circuit: &Circuit, frames: &[Frame]) {
+    let track = &circuit.track;
+    let (length, offset, top) = (track.length(), track.half_width + track.verge + BARRIER + 1.9, 2.3);
+    let near_start = |frame: &Frame| {
+        let from = (frame.along - circuit.start + length / 2.0).rem_euclid(length) - length / 2.0;
+        from.abs() < 110.0 && frame.bend.abs() < 0.006
+    };
+    let wire = props.materials.add(StandardMaterial {
+        base_color_texture: Some(props.images.add(chain_link())),
+        alpha_mode: AlphaMode::Mask(0.5),
+        double_sided: true,
+        cull_mode: None,
+        metallic: 0.6,
+        perceptual_roughness: 0.45,
+        uv_transform: bevy::math::Affine2::from_scale(Vec2::splat(1.0 / 0.12)),
+        ..default()
+    });
+    let steel = Paint::shaded(0.62, 0.64, 0.66, 0.15);
+    for side in [-1.0f32, 1.0] {
+        let (mut positions, mut uvs) = (Vec::new(), Vec::new());
+        let mut since_post = f32::MAX;
+        for (i, frame) in frames.iter().enumerate() {
+            let next = &frames[(i + 1) % frames.len()];
+            if !near_start(frame) || !near_start(next) {
+                since_post = f32::MAX;
+                continue;
+            }
+            let (a, b) = (frame.at + frame.right * side * offset, next.at + next.right * side * offset);
+            let (u0, u1) = (frame.along, frame.along + a.distance(b));
+            for (p, u, y) in [(a, u0, 0.05), (b, u1, 0.05), (b, u1, top), (a, u0, 0.05), (b, u1, top), (a, u0, top)] {
+                positions.push([p.x, y, p.y]);
+                uvs.push([u, y]);
+            }
+            let rail = osage_procedural::Shape::sweep(
+                &[Vec3::new(a.x, top, a.y), Vec3::new(b.x, top, b.y)],
+                0.022,
+                8,
+                Vec3::Y,
+            );
+            set.satin.add(&rail, Transform::IDENTITY, steel);
+            since_post += a.distance(b);
+            if since_post >= 2.5 {
+                since_post = 0.0;
+                set.satin.add(
+                    &rod(Vec3::new(a.x, 0.0, a.y), Vec3::new(a.x, top + 0.05, a.y), 0.03),
+                    Transform::IDENTITY,
+                    steel,
+                );
+            }
+        }
+        if positions.is_empty() {
+            continue;
+        }
+        let count = positions.len();
+        let mesh = Mesh::new(bevy::mesh::PrimitiveTopology::TriangleList, bevy::asset::RenderAssetUsages::default())
+            .with_inserted_attribute(Mesh::ATTRIBUTE_POSITION, positions)
+            .with_inserted_attribute(Mesh::ATTRIBUTE_UV_0, uvs)
+            .with_inserted_attribute(Mesh::ATTRIBUTE_NORMAL, vec![[0.0, 1.0, 0.0]; count])
+            .with_computed_flat_normals();
+        props.commands.spawn((
+            crate::scene::Part,
+            Mesh3d(props.meshes.add(mesh)),
+            MeshMaterial3d(wire.clone()),
+            NotShadowCaster,
+        ));
+    }
+}
+
+/// Chain-link wire: diamonds of galvanised wire, the holes see-through.
+fn chain_link() -> Image {
+    let side = 64u32;
+    let mut pixels = Vec::with_capacity((side * side * 4) as usize);
+    for y in 0..side {
+        for x in 0..side {
+            let on = (x + y) % 32 < 3 || (x + side - y) % 32 < 3;
+            pixels.extend_from_slice(&if on { [170, 172, 176, 255] } else { [0, 0, 0, 0] });
+        }
+    }
+    let size = bevy::render::render_resource::Extent3d { width: side, height: side, depth_or_array_layers: 1 };
+    let mut image = Image::new(
+        size,
+        bevy::render::render_resource::TextureDimension::D2,
+        pixels,
+        bevy::render::render_resource::TextureFormat::Rgba8UnormSrgb,
+        bevy::asset::RenderAssetUsages::default(),
+    );
+    image.sampler = bevy::image::ImageSampler::Descriptor(bevy::image::ImageSamplerDescriptor {
+        address_mode_u: bevy::image::ImageAddressMode::Repeat,
+        address_mode_v: bevy::image::ImageAddressMode::Repeat,
+        mag_filter: bevy::image::ImageFilterMode::Linear,
+        min_filter: bevy::image::ImageFilterMode::Linear,
+        ..default()
+    });
+    image
+}
+
 /// At the bends: tyre stacks along the outer barrier, chevron boards behind it.
 pub fn bends(set: &mut Set, props: &mut Props, track: &Track, frames: &[Frame]) {
     let _ = props;

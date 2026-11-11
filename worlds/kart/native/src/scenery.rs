@@ -164,6 +164,7 @@ pub fn build(
     landmarks::lake(&mut set, &mut props, &land);
     // With the manifest's content, the circuit is photographed: no toys.
     if photographed {
+        landmarks::fences(&mut set, &mut props, &course.0, &frames);
         let look = if let Some(roadside) = &roadside {
             let scatters =
                 osage_kart_roadside::scatters(&land, &frames, track, &set.clearings, &roadside.models, roadside.detail);
