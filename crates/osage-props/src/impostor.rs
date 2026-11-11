@@ -349,7 +349,6 @@ pub(crate) fn plant(
             continue;
         };
         let mut colourings = Vec::new();
-        let mut cutoff: f32 = 0.5;
         let views: Vec<Vec<View>> = variants
             .iter()
             .map(|variant| {
@@ -367,11 +366,12 @@ pub(crate) fn plant(
                         let data = image.data.as_ref().filter(|d| readable && d.len() >= w * h * 4)?;
                         Some((data[..w * h * 4].to_vec(), w, h))
                     });
+                    // An opaque material ignores its texture's alpha.
                     let cut = match standard.alpha_mode {
                         AlphaMode::Mask(cut) => cut,
+                        AlphaMode::Opaque => 0.0,
                         _ => 0.5,
                     };
-                    cutoff = cutoff.min(cut);
                     colourings.push(Colouring {
                         factor: Vec4::from(standard.base_color.to_linear().to_f32_array()),
                         texture,
