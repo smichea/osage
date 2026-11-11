@@ -15,6 +15,8 @@
 
 use std::collections::HashMap;
 
+pub mod lod;
+
 use bevy::{
     camera::visibility::VisibilityRange,
     gltf::{Gltf, GltfMaterial, GltfMesh, GltfNode},
@@ -58,6 +60,10 @@ pub struct Scatter {
     /// `None`: at any distance.
     pub within: Option<f32>,
     pub shadows: bool,
+    /// Coarser meshes further off ([`lod`]): the whole mesh up to an eighth
+    /// of `within`, a simplified one to a third, a coarse one beyond. For
+    /// dense models seen far away: trees, bushes, rocks.
+    pub lods: bool,
 }
 
 /// Scatters whose model is still loading. A benchmark waits for none before
@@ -69,9 +75,18 @@ pub struct Waiting(pub usize);
 #[derive(Component)]
 struct Scattered;
 
-/// The standard material made of each glTF material, made once.
+/// The standard material made of each glTF material, made once; the
+/// coarser meshes made of each mesh, made once.
 #[derive(Resource, Default)]
-struct Converted(HashMap<AssetId<GltfMaterial>, Handle<StandardMaterial>>);
+struct Converted(
+    HashMap<AssetId<GltfMaterial>, Handle<StandardMaterial>>,
+    HashMap<AssetId<Mesh>, [Option<Handle<Mesh>>; 2]>,
+);
+
+/// How much of the mesh's size each coarser level merges.
+const COARSER: [f32; 2] = [0.025, 0.06];
+/// Where each level ends, as a share of the distance a scatter is seen at.
+const LEVEL_ENDS: [f32; 2] = [0.15, 0.45];
 
 /// A mesh with its material, where the model puts it.
 type Look = (Handle<Mesh>, Handle<StandardMaterial>, Transform);
@@ -165,6 +180,7 @@ fn scatter(
     gltfs: Res<Assets<Gltf>>,
     nodes: Res<Assets<GltfNode>>,
     meshes: Res<Assets<GltfMesh>>,
+    mut models: ResMut<Assets<Mesh>>,
     gltf_materials: Res<Assets<GltfMaterial>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
     mut converted: ResMut<Converted>,
@@ -187,11 +203,22 @@ fn scatter(
         else {
             continue;
         };
-        let range = scatter.within.map(|far| VisibilityRange {
-            start_margin: 0.0..0.0,
-            end_margin: far * 0.9..far,
+        let far = scatter.within;
+        // Each level, from near to far: its mesh index and the range it is seen in.
+        let fade = |from: f32, to: f32| VisibilityRange {
+            start_margin: from * 0.9..from,
+            end_margin: to * 0.9..to,
             use_aabb: false,
-        });
+        };
+        let levels: Vec<(usize, Option<VisibilityRange>)> = match far {
+            Some(far) if scatter.lods => vec![
+                (0, Some(VisibilityRange { start_margin: 0.0..0.0, ..fade(0.0, far * LEVEL_ENDS[0]) })),
+                (1, Some(fade(far * LEVEL_ENDS[0], far * LEVEL_ENDS[1]))),
+                (2, Some(fade(far * LEVEL_ENDS[1], far))),
+            ],
+            Some(far) => vec![(0, Some(VisibilityRange { start_margin: 0.0..0.0, ..fade(0.0, far) }))],
+            None => vec![(0, None)],
+        };
         let mut material = |piece: &Piece| -> Handle<StandardMaterial> {
             let Some(handle) = &piece.material else { return Handle::default() };
             converted
@@ -207,6 +234,35 @@ fn scatter(
             .iter()
             .map(|pieces| pieces.iter().map(|p| (p.mesh.clone(), material(p), p.place)).collect())
             .collect();
+        // Each mesh at each level; the coarser ones made once per mesh, a
+        // level that leaves nothing keeping the finer one.
+        let mut level_meshes: HashMap<(AssetId<Mesh>, usize), Handle<Mesh>> = HashMap::new();
+        for (mesh, ..) in looks.iter().flatten() {
+            for level in 0..3 {
+                level_meshes.insert((mesh.id(), level), mesh.clone());
+            }
+            if !scatter.lods {
+                continue;
+            }
+            let [first, second] = converted
+                .1
+                .entry(mesh.id())
+                .or_insert_with(|| {
+                    let made = models.get(mesh).map(|source| {
+                        let size = lod::extent(source);
+                        COARSER.map(|share| lod::simplify(source, size * share))
+                    });
+                    match made {
+                        Some([first, second]) => [first.map(|m| models.add(m)), second.map(|m| models.add(m))],
+                        None => [None, None],
+                    }
+                })
+                .clone();
+            let first = first.unwrap_or_else(|| mesh.clone());
+            let second = second.unwrap_or_else(|| first.clone());
+            level_meshes.insert((mesh.id(), 1), first);
+            level_meshes.insert((mesh.id(), 2), second);
+        }
         let mut scattered = commands.entity(entity);
         scattered.insert((Scattered, Transform::IDENTITY, Visibility::Inherited));
         if looks.is_empty() {
@@ -215,13 +271,16 @@ fn scatter(
         scattered.with_children(|parent| {
             for (i, place) in scatter.places.iter().enumerate() {
                 for (mesh, material, inside) in &looks[i % looks.len()] {
-                    let mut child =
-                        parent.spawn((Mesh3d(mesh.clone()), MeshMaterial3d(material.clone()), *place * *inside));
-                    if let Some(range) = &range {
-                        child.insert(range.clone());
-                    }
-                    if !scatter.shadows {
-                        child.insert(NotShadowCaster);
+                    for (level, range) in &levels {
+                        let mesh = level_meshes[&(mesh.id(), *level)].clone();
+                        let mut child =
+                            parent.spawn((Mesh3d(mesh), MeshMaterial3d(material.clone()), *place * *inside));
+                        if let Some(range) = range {
+                            child.insert(range.clone());
+                        }
+                        if !scatter.shadows {
+                            child.insert(NotShadowCaster);
+                        }
                     }
                 }
             }

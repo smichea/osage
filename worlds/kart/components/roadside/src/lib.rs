@@ -96,12 +96,14 @@ pub fn scatters(
             .with_rotation(Quat::from_rotation_y(turn))
             .with_scale(Vec3::splat(size))
     };
+    // Dense models seen far (trees, bushes, rocks) get coarser meshes with distance.
     let scatter = |model: &Handle<Gltf>, places: Vec<Transform>, using: Use, within: f32, shadows: bool| Scatter {
         model: model.clone(),
         places,
         using,
         within: Some(within),
         shadows,
+        lods: within >= 60.0,
     };
 
     let mut all = vec![scatter(&models.tyre, tyre_walls(frames, track), Use::Whole, 160.0, true)];
@@ -110,29 +112,29 @@ pub fn scatters(
     let mut pines = Vec::new();
     for _ in 0..4000 {
         let at = beside(&mut dice, 8.0, 140.0);
-        let (turn, size, chance) = (dice.between(0.0, std::f32::consts::TAU), dice.between(3.5, 6.5), dice.roll());
-        if chance < (noise(at / 45.0 + 3.0) - 0.45) * 1.4 && free(at, 8.0) && pines.len() < 110 {
+        let (turn, size, chance) = (dice.between(0.0, std::f32::consts::TAU), dice.between(4.0, 7.5), dice.roll());
+        if chance < (noise(at / 45.0 + 3.0) - 0.4) * 1.8 && free(at, 8.0) && pines.len() < 260 {
             pines.push(stand(at, 0.1, turn, size));
         }
     }
-    all.push(scatter(&models.pine, pines, Use::Variants, 350.0, true));
+    all.push(scatter(&models.pine, pines, Use::Variants, 450.0, true));
 
     // Bushes and boulders.
     let mut bushes = Vec::new();
     let mut boulders = Vec::new();
-    for _ in 0..900 {
+    for _ in 0..1600 {
         let at = beside(&mut dice, 3.0, 60.0);
         let (turn, roll) = (dice.between(0.0, std::f32::consts::TAU), dice.roll());
         if !free(at, 3.0) {
             continue;
         }
-        if roll < 0.2 && bushes.len() < 160 {
+        if roll < 0.3 && bushes.len() < 300 {
             bushes.push(stand(at, 0.15, turn, dice.between(0.7, 1.3)));
-        } else if roll < 0.28 && boulders.len() < 70 {
+        } else if roll < 0.38 && boulders.len() < 90 {
             boulders.push(stand(at, 0.05, turn, dice.between(4.0, 11.0)));
         }
     }
-    all.push(scatter(&models.bush, bushes, Use::Variants, 200.0, true));
+    all.push(scatter(&models.bush, bushes, Use::Variants, 260.0, true));
     all.push(scatter(&models.boulder, boulders, Use::Whole, 250.0, true));
 
     if detail == Detail::Full {
