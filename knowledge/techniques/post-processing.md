@@ -14,7 +14,7 @@ sources:
   - id: bevy
     resource: https://docs.rs/bevy/0.20.1/bevy/
     title: Bevy 0.20 documentation
-generated: { by: "claude-code/claude-fable-5-2", at: "2026-11-10T06:45:00Z" }
+generated: { by: "claude-code/claude-opus-5-5", at: "2026-11-11T22:00:00Z" }
 ---
 
 # What it does
@@ -27,7 +27,7 @@ Every tier renders in high dynamic range with the exposure of a camera in full s
 
 - **The look is the world's.** A world provides a `Look`: its tonemapper, a saturation factor and an exposure offset in stops. The technique applies it; it does not choose it.
 - **Anti-aliasing by tier.** T1 and T2 use FXAA[^fxaa], a single pass over the final image that needs nothing else. From T3, temporal anti-aliasing blends each frame with the previous ones; it needs a depth and motion prepass.
-- **Bloom** from T2; **motion blur** from T3.
+- **Bloom** from T2; **motion blur** from T3, with the exposure of a camera at speed (1/120 s) whatever the frame rate: the shutter angle is that exposure over the frame's time, at most half a frame. A fixed half-frame shutter blurred eight times as much at 8 frames a second as at 60.
 
 The passes themselves are Bevy's[^bevy]; this technique chooses which run at each tier, and with what settings.
 

@@ -33,7 +33,24 @@ pub struct PostPlugin;
 
 impl Plugin for PostPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(Update, camera);
+        app.add_systems(Update, (camera, steady_blur));
+    }
+}
+
+/// How long the shutter is open, seconds: a camera's at speed, a 180°
+/// shutter at 60 frames a second.
+const EXPOSURE: f32 = 1.0 / 120.0;
+
+/// Motion blur as a camera's: an exposure of the same length whatever the
+/// frame rate. A fixed shutter angle (half a frame) blurred eight times as
+/// much at 8 frames a second as at 60 (T3 on an integrated GPU, 2026-11-11).
+fn steady_blur(time: Res<Time>, mut blurs: Query<&mut MotionBlur>) {
+    let frame = time.delta_secs();
+    if frame <= 0.0 {
+        return;
+    }
+    for mut blur in &mut blurs {
+        blur.shutter_angle = (EXPOSURE / frame).clamp(0.0, 0.5);
     }
 }
 
