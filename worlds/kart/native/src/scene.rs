@@ -35,16 +35,56 @@ pub const PALETTE: [(f32, f32, f32); 8] = [
 /// of mown grass, about a fifth of the light.
 pub const GRASS: Color = Color::srgb(0.30, 0.40, 0.17);
 
-/// The Poly Haven panorama of the sky: midday, a few clouds, unclipped sun.
-pub const SKY: &str = "kloofendal_48d_partly_cloudy_puresky";
-/// How far the panorama is turned, radians: the sun comes from the side of
-/// the start straight, ahead and to the right, and shapes the karts with
+/// A time of day: a Poly Haven panorama of the sky, with an unclipped sun,
+/// and how far it is turned, radians. At noon the sun comes from the side
+/// of the start straight, ahead and to the right, and shapes the karts with
 /// light and shade (behind the camera, it flattened them; straight ahead,
-/// it washed out the sky).
-const SKY_TURN: f32 = 5.6;
+/// it washed out the sky). In the evening, 7° up, it comes from behind:
+/// ahead, the ground would only be lit by the sky.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Sky {
+    /// Midday, a few clouds: the bench's.
+    Noon,
+    /// Late afternoon, the sun low and warm, scattered clouds.
+    Evening,
+}
 
-/// The kart world's look: a sunny day as a camera sees it, through a lens.
-pub fn look() -> Look {
+impl Sky {
+    /// The exposure offset, stops: a camera opens up as the sun sinks.
+    /// Midday is a third of a stop over the sunny-day exposure (ACES's
+    /// deeper shadows); with the sun at 7°, the ground gets a sixth of the
+    /// sun it gets at noon.
+    fn exposure(self) -> f32 {
+        match self {
+            Sky::Noon => 0.33,
+            Sky::Evening => 2.0,
+        }
+    }
+
+    fn panorama(self) -> (&'static str, f32) {
+        match self {
+            Sky::Noon => ("kloofendal_48d_partly_cloudy_puresky", 5.6),
+            // Its sun behind the start straight's camera: everything in view
+            // catches the warm light, shadows stretch ahead.
+            Sky::Evening => ("table_mountain_2_puresky", 2.73),
+        }
+    }
+}
+
+impl std::str::FromStr for Sky {
+    type Err = String;
+    fn from_str(s: &str) -> Result<Self, String> {
+        match s {
+            "noon" => Ok(Sky::Noon),
+            "evening" => Ok(Sky::Evening),
+            other => Err(format!("unknown sky {other}: noon or evening")),
+        }
+    }
+}
+
+/// The kart world's look under `sky`: a sunny day as a camera sees it,
+/// through a lens, exposed for the light there is.
+pub fn look(sky: Sky) -> Look {
     // ACES has the contrast of a photograph printed for a game, where AgX
     // greyed the asphalt and the sky; a third of a stop brighter makes up for
     // its deeper shadows. A lens darkens the corners a little and splits
@@ -52,7 +92,7 @@ pub fn look() -> Look {
     Look {
         tonemapping: Tonemapping::AcesFitted,
         saturation: 1.0,
-        exposure: 0.33,
+        exposure: sky.exposure(),
         ground: GROUND,
         vignette: 0.3,
         fringe: 0.004,
@@ -64,9 +104,10 @@ pub fn look() -> Look {
 const GROUND: Color = Color::srgb(0.3, 0.32, 0.25);
 
 /// The photograph of the sky, when the asset manifest's content is there.
-pub fn panorama() -> Option<Panorama> {
-    let sky = osage_content::panorama::load(&osage_content::root()?, SKY)?;
-    Some(Panorama { width: sky.width, height: sky.height, pixels: sky.pixels, turn: SKY_TURN })
+pub fn panorama(sky: Sky) -> Option<Panorama> {
+    let (id, turn) = sky.panorama();
+    let photo = osage_content::panorama::load(&osage_content::root()?, id)?;
+    Some(Panorama { width: photo.width, height: photo.height, pixels: photo.pixels, turn })
 }
 
 pub struct ScenePlugin;

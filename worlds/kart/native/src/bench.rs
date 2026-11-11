@@ -58,6 +58,8 @@ pub struct BenchPlugin {
     pub without: Vec<String>,
     /// Whether the camera is held at a place (`--camera`) instead of following the race.
     pub held: bool,
+    /// The time of day (`--sky`): it changes the picture.
+    pub sky: String,
     /// No window: nothing paces the frames but the bench itself.
     pub headless: bool,
 }
@@ -75,6 +77,7 @@ impl Plugin for BenchPlugin {
                 resolution: self.resolution,
                 without: self.without.clone(),
                 held: self.held,
+                sky: self.sky.clone(),
                 shots,
                 frame: 0,
                 last: None,
@@ -110,6 +113,7 @@ struct Bench {
     resolution: (u32, u32),
     without: Vec<String>,
     held: bool,
+    sky: String,
     shots: Vec<u32>,
     frame: u32,
     last: Option<Instant>,
@@ -294,6 +298,7 @@ fn report(bench: &Bench, rendered: UVec2, adapter: &RenderAdapterInfo) -> anyhow
         "tier": bench.tier.to_string(),
         "without": bench.without,
         "camera": if bench.held { "held" } else { "race" },
+        "sky": bench.sky,
         "commit": commit(),
         "unix_time": SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).map_or(0, |d| d.as_secs()),
         "machine": {

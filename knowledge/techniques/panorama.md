@@ -20,7 +20,7 @@ sources:
   - id: own
     resource: "osage's own design and measurements, 2026-11-11"
     title: osage design
-generated: { by: "claude-code/claude-opus-5-5", at: "2026-11-11T02:00:00Z" }
+generated: { by: "claude-code/claude-opus-5-5", at: "2026-11-11T18:00:00Z" }
 ---
 
 # What it does
@@ -36,7 +36,7 @@ A world that gives a photograph of the sky (an equirectangular HDR image) gets a
 5. **The light**: the same photograph with the sun's disc replaced by the sky around it — the sun is a directional light of its own, counting it twice would double it — its brightness capped at six times the sky's median (the glow around the sun, outside its disc, lit glossy things like a second sun), and the lower half replaced by the land: the ground's colour lit by the sun and the sky (`albedo × (E_sun sin elevation + E_sky) / π`), joined to the horizon over a few degrees. From it, the two cubemaps of image-based lighting, matte and glossy ([light from the sky](/techniques/sky-light.md)).
 6. **The haze**: the mean colour of the horizon, exposed as the camera exposes, is the colour distant land fades into (visibility 3 km: a summer day's, which blues the hills a kilometre off).
 
-The sun of the world is turned to the photograph's sun; a world turns the photograph about the vertical to put the sun where it wants it[^own].
+The sun of the world is turned to the photograph's sun; a world turns the photograph about the vertical to put the sun where it wants it, and the sun's elevation, azimuth and colour are logged at load to choose that turn. A world may have several photographs, one per time of day, each with its turn and its exposure: calibrated by its sun, a low sun lights the ground by `sin elevation` of what a high one does, and a camera opens up as it sinks (the kart world: noon, the sun 48° up, +0.33 stop; late afternoon, 7° up and warm, +2 stops, turned to come from behind the start straight's camera)[^own].
 
 # Settings per tier
 
@@ -51,7 +51,7 @@ The work is done once, at start-up, on the processor: decoding a 4k photograph a
 
 # Limits
 
-An HDRI clipped at the sun (a sun no brighter than the clouds) cannot calibrate itself: its sky comes out too bright. The sky does not move — clouds stand still, the time of day is the photograph's. The land below the horizon is the world's ground colour, not the photograph's. A panorama of 4k is soft when looked at closely; 8k is sharper and four times the memory.
+An HDRI clipped at the sun (a sun no brighter than the clouds) cannot calibrate itself: its sky comes out too bright. The sky does not move — clouds stand still, the time of day is the photograph's; a world chooses among its photographs, it cannot blend them. The land below the horizon is the world's ground colour, not the photograph's. A panorama of 4k is soft when looked at closely; 8k is sharper and four times the memory.
 
 # Oracle
 

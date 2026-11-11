@@ -1,6 +1,7 @@
 # Knowledge Update Log
 
 ## 2026-11-11
+* **Update**: [A photographed sky](/techniques/panorama.md): a world may have one photograph per time of day; the kart world gains a late afternoon ([osage-kart-native](/modules/kart-native.md), `--sky evening`).
 * **Update**: [osage-kart-model](/modules/kart-model.md) covers its karts in sponsors' stickers, abstract marks drawn by the program.
 * **Update**: [osage-kart-crowd](/modules/kart-crowd.md) stands people up: onlookers along the fences and marshals at the bends of [osage-kart-native](/modules/kart-native.md).
 * **Update**: [osage-props](/modules/osage-props.md) can light grass as the ground; [osage-kart-roadside](/modules/kart-roadside.md)'s grass no longer reads as dark leaves on the meadow.

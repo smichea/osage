@@ -66,6 +66,8 @@ Latest results of the reference machines, one line per machine and tier.
 | 2026-11-11 | tree cards, commit 997aaca | ThinkPad E14 Gen 5 (Iris Xe), headless | T2 | 1920×1080 (1632×918) | 12.3 ms (81 fps) | 14.8 ms | 16.3 ms | — |
 | 2026-11-11 | onlookers, marshals, pit lane, worn markings, mixed-age woods, woods at T2, commit 253dbb9 | Google Cloud g2-standard-4 (NVIDIA L4, driver 580), headless | T3 | 2560×1440 | 12.4 ms (81 fps) | 13.9 ms | 14.9 ms | 0.13 % |
 | 2026-11-11 | same | Google Cloud g2-standard-4 (NVIDIA L4, driver 580), headless | T4 | 2560×1440 | 13.1 ms (76 fps) | 15.3 ms | 16.8 ms | 0.04 % |
+| 2026-11-11 | every level of detail drawn once at the start (no stall), stickers, commit 625290f | Google Cloud g2-standard-4 (NVIDIA L4, driver 580), headless | T3 | 2560×1440 | 11.3 ms (88 fps) | 13.3 ms | 14.1 ms | 0 % (worst 16.0 ms) |
+| 2026-11-11 | same | Google Cloud g2-standard-4 (NVIDIA L4, driver 580), headless | T4 | 2560×1440 | 12.1 ms (83 fps) | 15.1 ms | 17.8 ms | 0 % (worst 23.2 ms) |
 
 - "Under load": other programs were using the machine during these runs (load average 8 to 9 on 10 cores); a quiet run is expected to do better and will replace them.
 - T2 holds its budget on average on the integrated GPU, not for every frame. Without drawing under the output size it took 23.2 ms in the same conditions against 18.0 ms with: the scene is bound by the number of pixels there.

@@ -54,6 +54,7 @@ fn main() -> Result<()> {
     let (mut url, mut tier, mut bench) = ("ws://127.0.0.1:7878".to_owned(), Tier::T2, false);
     let (mut frames, mut resolution, mut out, mut without) = (2400u32, None, None, Vec::new());
     let (mut autodrive, mut screenshot_after, mut viewpoint, mut headless) = (false, None, None, false);
+    let mut sky = scene::Sky::Noon;
     let mut args = std::env::args().skip(1);
     while let Some(arg) = args.next() {
         let mut value = || args.next().with_context(|| format!("{arg} needs a value"));
@@ -63,6 +64,7 @@ fn main() -> Result<()> {
             "--headless" => headless = true,
             "--screenshot-after" => screenshot_after = Some(value()?.parse().context("--screenshot-after")?),
             "--tier" => tier = value()?.parse().map_err(anyhow::Error::msg)?,
+            "--sky" => sky = value()?.parse().map_err(anyhow::Error::msg)?,
             "--frames" => frames = value()?.parse().context("--frames")?,
             "--out" => out = Some(PathBuf::from(value()?)),
             "--without" => without.push(value()?.parse().map_err(anyhow::Error::msg)?),
@@ -121,9 +123,9 @@ fn main() -> Result<()> {
                 .set(assets),
         );
     }
-    app.insert_resource(scene::look());
+    app.insert_resource(scene::look(sky));
     // Before the rendering plugin, which draws the sky from it when it is there.
-    if let Some(panorama) = scene::panorama() {
+    if let Some(panorama) = scene::panorama(sky) {
         app.insert_resource(panorama);
     }
     app.add_plugins(OsageRenderPlugin { tier, without: without.clone() })
@@ -138,7 +140,17 @@ fn main() -> Result<()> {
         std::fs::create_dir_all(&out).with_context(|| format!("creating {}", out.display()))?;
         let without = without.iter().map(|t| t.name().to_owned()).collect();
         let held = viewpoint.is_some();
-        app.add_plugins(bench::BenchPlugin { tier, frames, out, resolution: (width, height), without, held, headless });
+        let sky = format!("{sky:?}").to_lowercase();
+        app.add_plugins(bench::BenchPlugin {
+            tier,
+            frames,
+            out,
+            resolution: (width, height),
+            without,
+            held,
+            sky,
+            headless,
+        });
     } else {
         let tier = match tier {
             Tier::T1 => v0::Tier::T1Minimal,

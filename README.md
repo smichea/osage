@@ -80,7 +80,7 @@ python3 tools/fetch-assets.py     # optional: CC0 road and grass textures (6 MB,
 ```
 
 ```sh
-cargo run --release -p osage-kart-native -- --tier T2             # play: same controls, same world (F12: screenshot; --autodrive: demo)
+cargo run --release -p osage-kart-native -- --tier T2             # play: same controls, same world (F12: screenshot; --autodrive: demo; --sky evening: late afternoon)
 cargo run --release -p osage-kart-native -- --bench --tier T2     # the bench: same frames on every machine, timed
 ```
 

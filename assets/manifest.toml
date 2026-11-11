@@ -82,6 +82,17 @@ author = "Greg Zaal, Jarod Guest (Poly Haven)"
 source = "https://polyhaven.com/a/kloofendal_48d_partly_cloudy_puresky"
 used_by = "worlds/kart/native: sky and image-based light, photoreal look (R1, R4); HDR image, 4k"
 
+# Evening sky, approved by the maintainer on 2026-11-11 (19.1 MB).
+
+[[asset]]
+path = "assets/polyhaven/table_mountain_2_puresky/table_mountain_2_puresky_4k.hdr"
+url = "https://dl.polyhaven.org/file/ph-assets/HDRIs/hdr/4k/table_mountain_2_puresky_4k.hdr"
+sha256 = "9235687cc48cc7e466189e118d27e138e0c54427e2cf72e36a3c91af97644f35"
+licence = "CC0-1.0"
+author = "Greg Zaal, Jarod Guest (Poly Haven)"
+source = "https://polyhaven.com/a/table_mountain_2_puresky"
+used_by = "worlds/kart/native: the evening sky (--sky evening), a low warm sun (R1); HDR image, 4k"
+
 [[asset]]
 path = "assets/polyhaven/asphalt_02/asphalt_02_diff_2k.jpg"
 url = "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/2k/asphalt_02/asphalt_02_diff_2k.jpg"

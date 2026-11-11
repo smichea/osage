@@ -88,6 +88,9 @@ fn prepare_once(
     let scale = analysis.scale;
     info!(
         sun_elevation = analysis.to_sun.y.asin().to_degrees(),
+        // From +Z towards +X, in the world: where a world turns the photograph to.
+        sun_azimuth = analysis.to_sun.x.atan2(analysis.to_sun.z).to_degrees(),
+        sun_colour = ?analysis.sun_colour.to_array(),
         sky_overhead = analysis.radiance(Vec3::Y) * scale,
         "panorama: sun found, sky in cd/m²"
     );
