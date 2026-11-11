@@ -6,7 +6,7 @@ resource: https://github.com/smichea/osage/tree/main/crates/osage-props
 licence: MIT OR Apache-2.0
 status: draft
 tags: [content, gltf, instancing, scenery]
-generated: { by: "claude-code/claude-opus-5-5", at: "2026-11-11T13:00:00Z" }
+generated: { by: "claude-code/claude-opus-5-5", at: "2026-11-11T14:30:00Z" }
 ---
 
 # Purpose
@@ -21,6 +21,7 @@ Put a model of the asset manifest (a glTF file) at hundreds or thousands of plac
 - **Carpet:** a model laid around the camera in a grid of cells and moved with it, where the world says it grows: grass as seen up close.
 - **Woods:** a model at many places always far from the camera, drawn as crossed cards showing pictures of it ([tree cards](/algorithms/tree-cards.md)); the number of trees is logged at `debug`.
 - **Tint:** a plain colour instead of a model's colour texture, for tiny things whose texture is an atlas on black.
+- **Lit as the ground:** grass whose normals all point up, both faces drawn and neither turned over, so that it is lit as the ground it grows from: upright blades lit by their own normals came out darker than the meadow and read as dark leaves scattered on it.
 - **Opaque:** a model's blended materials drawn opaque, for leaves modelled as geometry whose texture has no transparency: blending sorts and costs, and leaves showed the sky through them.
 - **Levels of detail:** for dense models seen far, two coarser meshes made from each mesh — by [thinning](/algorithms/aggregate-thinning.md) for foliage, by vertex clustering for solid things — the scatter's places drawing the whole mesh near, then the coarser ones, fading from one to the next.
 
@@ -30,7 +31,7 @@ A Bevy plugin. Each frame it looks at scatters not yet placed whose model has lo
 
 # Interfaces
 
-`PropsPlugin`, `Scatter { model, places, using, within, shadows, lods, tint, opaque }`, `Use::{Whole, Variants}`, `Waiting`, `poly_haven(server, id)` (the path of a Poly Haven model in the manifest's content), `lod::{simplify, thin, extent}`, `Carpet { model, using, spacing, radius, ground, tint }`, `Woods { model, using, places }`, `impostor::{VIEWS, View, axes}`.
+`PropsPlugin`, `Scatter { model, places, using, within, shadows, lods, tint, opaque, lit_as_ground }`, `Use::{Whole, Variants}`, `Waiting`, `poly_haven(server, id)` (the path of a Poly Haven model in the manifest's content), `lod::{simplify, thin, extent}`, `Carpet { model, using, spacing, radius, ground, tint, lit_as_ground }`, `Woods { model, using, places }`, `impostor::{VIEWS, View, axes}`.
 
 # Invariants
 

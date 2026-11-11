@@ -38,6 +38,11 @@ pub struct Carpet {
     pub ground: Ground,
     /// A plain colour instead of the model's colour texture ([`crate::Scatter::tint`]).
     pub tint: Option<Color>,
+    /// Lit as the ground it grows from: every normal turned straight up.
+    /// Upright blades lit by their own normals come out darker than the
+    /// ground under them and read as dark leaves scattered on a field; lit
+    /// as the ground, grass reads as part of the meadow, as it is.
+    pub lit_as_ground: bool,
 }
 
 impl Carpet {
@@ -98,6 +103,7 @@ pub(crate) fn lay(
     meshes: Res<Assets<GltfMesh>>,
     gltf_materials: Res<Assets<GltfMaterial>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
+    mut models: ResMut<Assets<Mesh>>,
     mut waiting: ResMut<crate::Waiting>,
 ) {
     for (entity, carpet) in &carpets {
@@ -121,7 +127,20 @@ pub(crate) fn lay(
                     .map(|p| {
                         let source =
                             p.material.as_ref().and_then(|m| gltf_materials.get(m)).cloned().unwrap_or_default();
-                        (p.mesh.clone(), materials.add(crate::finish(&source, carpet.tint, false)), p.place)
+                        let upright =
+                            models.get(&p.mesh).filter(|_| carpet.lit_as_ground).map(|m| facing_up(m, p.place));
+                        let mesh = match upright {
+                            Some(upright) => models.add(upright),
+                            None => p.mesh.clone(),
+                        };
+                        let mut material = crate::finish(&source, carpet.tint, false);
+                        if carpet.lit_as_ground {
+                            // Both faces drawn, neither normal turned over: a
+                            // blade seen from behind is lit as the ground too.
+                            material.double_sided = false;
+                            material.cull_mode = None;
+                        }
+                        (mesh, materials.add(material), p.place)
                     })
                     .collect()
             })
@@ -159,6 +178,15 @@ pub(crate) fn lay(
             }
         });
     }
+}
+
+/// `mesh` with every normal pointing up once placed by `place`.
+pub(crate) fn facing_up(mesh: &Mesh, place: Transform) -> Mesh {
+    let up = (place.rotation.inverse() * Vec3::Y).to_array();
+    let mut mesh = mesh.clone();
+    let count = mesh.count_vertices();
+    mesh.insert_attribute(Mesh::ATTRIBUTE_NORMAL, vec![up; count]);
+    mesh
 }
 
 /// Moves the instances whose cell left the window to the cells that entered it.
@@ -225,6 +253,7 @@ mod tests {
             radius: 4.0,
             ground: Arc::new(|at: Vec2| (at.x > 0.0).then_some((0.25, 2.0))),
             tint: None,
+            lit_as_ground: false,
         };
         let cell = IVec2::new(3, -2);
         let (a, b) = (place(&carpet, cell).unwrap(), place(&carpet, cell).unwrap());

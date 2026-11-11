@@ -84,6 +84,8 @@ pub struct Scatter {
     /// real geometry as blended, with textures that have no alpha; blended,
     /// they would be drawn without depth and overlap out of order.
     pub opaque: bool,
+    /// Lit as the ground it grows from ([`Carpet::lit_as_ground`]): grass.
+    pub lit_as_ground: bool,
 }
 
 /// The model's material as a standard material, its colour texture
@@ -268,10 +270,16 @@ fn scatter(
         };
         let mut material = |piece: &Piece| -> Handle<StandardMaterial> {
             let Some(handle) = &piece.material else { return Handle::default() };
-            // A tinted or forced-opaque material is this scatter's own: the shared one keeps the model's.
-            if scatter.tint.is_some() || scatter.opaque {
+            // A tinted, forced-opaque or ground-lit material is this
+            // scatter's own: the shared one keeps the model's.
+            if scatter.tint.is_some() || scatter.opaque || scatter.lit_as_ground {
                 let source = gltf_materials.get(handle).cloned().unwrap_or_default();
-                return materials.add(finish(&source, scatter.tint, scatter.opaque));
+                let mut material = finish(&source, scatter.tint, scatter.opaque);
+                if scatter.lit_as_ground {
+                    material.double_sided = false;
+                    material.cull_mode = None;
+                }
+                return materials.add(material);
             }
             converted
                 .0
@@ -284,7 +292,19 @@ fn scatter(
         };
         let looks: Vec<Vec<Look>> = variants
             .iter()
-            .map(|pieces| pieces.iter().map(|p| (p.mesh.clone(), material(p), p.place)).collect())
+            .map(|pieces| {
+                pieces
+                    .iter()
+                    .map(|p| {
+                        let upright = models
+                            .get(&p.mesh)
+                            .filter(|_| scatter.lit_as_ground)
+                            .map(|m| carpet::facing_up(m, p.place));
+                        let mesh = upright.map_or_else(|| p.mesh.clone(), |m| models.add(m));
+                        (mesh, material(p), p.place)
+                    })
+                    .collect()
+            })
             .collect();
         // Each mesh at each level, and where its levels end; the coarser
         // ones made once per mesh, a level that leaves nothing keeping the

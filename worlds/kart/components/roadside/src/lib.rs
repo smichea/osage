@@ -129,6 +129,7 @@ pub fn scatters(
         lods: within >= 60.0,
         tint: None,
         opaque: false,
+        lit_as_ground: false,
     };
 
     let mut all = vec![scatter(&models.tyre, tyre_walls(frames, track), Use::Whole, 160.0, true)];
@@ -201,7 +202,8 @@ pub fn scatters(
                 grass.push(stand(at, 0.02, turn, size));
             }
         }
-        all.push(Scatter { tint: Some(GRASS), ..scatter(&models.grass, grass, Use::Variants, 45.0, false) });
+        let tufts = scatter(&models.grass, grass, Use::Variants, 45.0, false);
+        all.push(Scatter { tint: Some(GRASS), lit_as_ground: true, ..tufts });
 
         // Wild flowers, ferns, low plants and stones.
         let mut flowers = Vec::new();
@@ -239,7 +241,8 @@ pub fn scatters(
 
 /// The colour of the grass tufts: their texture is an atlas of blades on
 /// black, which darkens them as they shrink.
-const GRASS: Color = Color::srgb(0.29, 0.38, 0.15);
+/// Grass lit as the ground: the meadow's green, a little yellower at the tips' height.
+const GRASS: Color = Color::srgb(0.36, 0.42, 0.17);
 
 /// Grass around the camera (`osage_props::Carpet`): mown short on the
 /// verges, tall beyond the wall; none on the road, the kerbs, the wall, in a
@@ -323,6 +326,7 @@ pub fn carpet(land: &Land, frames: &[Frame], track: &Track, models: &Models) -> 
         radius: 12.0,
         ground: std::sync::Arc::new(ground),
         tint: Some(GRASS),
+        lit_as_ground: true,
     }
 }
 

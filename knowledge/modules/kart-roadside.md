@@ -6,7 +6,7 @@ resource: https://github.com/smichea/osage/tree/main/worlds/kart/components/road
 licence: MIT OR Apache-2.0
 status: draft
 tags: [kart, scenery, vegetation, component]
-generated: { by: "claude-code/claude-opus-5-5", at: "2026-11-11T13:00:00Z" }
+generated: { by: "claude-code/claude-opus-5-5", at: "2026-11-11T14:30:00Z" }
 ---
 
 # Purpose
@@ -24,7 +24,7 @@ One pure function, `scatters`, from the land ([osage-kart-land](/modules/kart-la
 
 # Interfaces
 
-`Models::load(server)`, `Detail`, `scatters(land, frames, track, clearings, models, detail)`, `woods(land, frames, track, clearings, models)` and `WOODS_FROM`, `carpet(land, frames, track, models)`: grass around the camera, mown short on the verges, tall beyond the wall, none on the road, kerbs, wall, gravel traps or in the lake.
+`Models::load(server)`, `Detail`, `scatters(land, frames, track, clearings, models, detail)`, `woods(land, frames, track, clearings, models)` and `WOODS_FROM`, `carpet(land, frames, track, models)`: grass around the camera, mown short on the verges, tall beyond the wall, none on the road, kerbs, wall, gravel traps or in the lake. All the grass is lit as the ground it grows from, in the meadow's green.
 
 # Invariants
 
