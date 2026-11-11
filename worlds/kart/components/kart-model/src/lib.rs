@@ -102,6 +102,60 @@ pub struct Livery {
     pub main: Vec3,
     pub second: Vec3,
     pub frame: Vec3,
+    /// The racing number, on the front panel and on the side pods.
+    pub number: u32,
+}
+
+/// The seven segments of a digit, as (centre x, centre y, horizontal), in
+/// a cell one wide and two high: top, upper left, upper right, middle,
+/// lower left, lower right, bottom.
+const SEGMENTS: [(f32, f32, bool); 7] = [
+    (0.5, 2.0, true),
+    (0.0, 1.5, false),
+    (1.0, 1.5, false),
+    (0.5, 1.0, true),
+    (0.0, 0.5, false),
+    (1.0, 0.5, false),
+    (0.5, 0.0, true),
+];
+/// Which segments each digit lights.
+const DIGITS: [[bool; 7]; 10] = [
+    [true, true, true, false, true, true, true],
+    [false, false, true, false, false, true, false],
+    [true, false, true, true, true, false, true],
+    [true, false, true, true, false, true, true],
+    [false, true, true, true, false, true, false],
+    [true, true, false, true, false, true, true],
+    [true, true, false, true, true, true, true],
+    [true, false, true, false, false, true, false],
+    [true, true, true, true, true, true, true],
+    [true, true, true, true, false, true, true],
+];
+
+/// `number` in segments, `height` high, centred on the origin of the XY
+/// plane, standing `proud` in front of it (+Z).
+fn numerals(number: u32, height: f32, proud: f32) -> Vec<Shape> {
+    let digits: Vec<usize> = number.to_string().bytes().map(|b| usize::from(b - b'0')).collect();
+    let cell = height / 2.0;
+    let (stroke, gap) = (height * 0.14, height * 0.35);
+    let width = digits.len() as f32 * cell + (digits.len() as f32 - 1.0) * gap;
+    let mut shapes = Vec::new();
+    for (k, &digit) in digits.iter().enumerate() {
+        let left = -width / 2.0 + k as f32 * (cell + gap);
+        for (lit, &(x, y, across)) in DIGITS[digit].iter().zip(SEGMENTS.iter()) {
+            if !lit {
+                continue;
+            }
+            let centre = Vec2::new(left + x * cell, -height / 2.0 + y * cell);
+            let half = if across {
+                Vec2::new(cell / 2.0 + stroke / 2.0, stroke / 2.0)
+            } else {
+                Vec2::new(stroke / 2.0, cell / 2.0 + stroke / 2.0)
+            };
+            shapes.push(Shape::block((centre - half).extend(0.0), (centre + half).extend(proud)));
+        }
+    }
+    shapes
 }
 
 /// One part of a kart: a mesh per finish.
@@ -255,8 +309,11 @@ fn bodywork(kart: &mut Sorted, livery: Livery) {
         livery.main,
     );
     let disc = Shape::new(Cylinder::new(0.085, 0.004).mesh().resolution(24));
-    let number = panel * at(0.0, 0.02, 0.014) * Transform::from_rotation(Quat::from_rotation_x(FRAC_PI_2));
-    kart.add(Finish::Varnish, &disc, number, WHITE);
+    let plate = panel * at(0.0, 0.02, 0.014) * Transform::from_rotation(Quat::from_rotation_x(FRAC_PI_2));
+    kart.add(Finish::Varnish, &disc, plate, WHITE);
+    for digit in numerals(livery.number, 0.08, 0.003) {
+        kart.add(Finish::Varnish, &digit, panel * at(0.0, 0.02, 0.016), BLACK);
+    }
     // Side pods between the wheels: a moulded section along the kart, with
     // sponsors' stickers on the outside.
     for side in [-1.0f32, 1.0] {
@@ -279,6 +336,17 @@ fn bodywork(kart: &mut Sorted, livery: Livery) {
             Transform::IDENTITY,
             Vec3::new(0.95, 0.78, 0.1),
         );
+        // A number plate at the back of the pod, facing out.
+        let plate_at = at(side * 0.628, 0.135, -0.19).with_rotation(Quat::from_rotation_y(side * FRAC_PI_2));
+        kart.add(
+            Finish::Varnish,
+            &Shape::block(Vec3::new(-0.09, -0.055, 0.0), Vec3::new(0.09, 0.055, 0.003)),
+            plate_at,
+            WHITE,
+        );
+        for digit in numerals(livery.number, 0.07, 0.003) {
+            kart.add(Finish::Varnish, &digit, plate_at * at(0.0, 0.0, 0.003), BLACK);
+        }
         // A stripe along the top.
         let top: Vec<Vec2> = [(0.44, 0.2), (0.58, 0.2), (0.575, 0.208), (0.445, 0.208)]
             .iter()
@@ -450,7 +518,7 @@ mod tests {
     use super::*;
 
     fn livery() -> Livery {
-        Livery { main: Vec3::new(0.9, 0.2, 0.15), second: WHITE, frame: Vec3::new(0.8, 0.8, 0.82) }
+        Livery { main: Vec3::new(0.9, 0.2, 0.15), second: WHITE, frame: Vec3::new(0.8, 0.8, 0.82), number: 47 }
     }
 
     fn bounds(part: &Part) -> (Vec3, Vec3) {
@@ -493,6 +561,24 @@ mod tests {
         for axle in AXLES {
             assert!((axle.y - WHEELS[if axle.z > 0.0 { 0 } else { 1 }]).abs() < 1e-6, "a wheel touches the road");
         }
+    }
+
+    #[test]
+    fn numbers_light_the_segments_of_their_digits() {
+        // 8 lights all seven, 1 two; 18 is both, side by side.
+        assert_eq!(numerals(8, 0.1, 0.01).len(), 7);
+        assert_eq!(numerals(1, 0.1, 0.01).len(), 2);
+        assert_eq!(numerals(18, 0.1, 0.01).len(), 9);
+        // The digits' cells are centred: 88 reaches as far left as right.
+        let mesh = |shapes: Vec<Shape>| {
+            let mut batch = Batch::default();
+            for shape in &shapes {
+                batch.add(shape, Transform::IDENTITY, Paint::plain(0.0, 0.0, 0.0));
+            }
+            batch.merged()
+        };
+        let (low, high) = bounds(&vec![(Finish::Varnish, mesh(numerals(88, 0.1, 0.01)))]);
+        assert!((low.x + high.x).abs() < 1e-4 && (low.y + high.y).abs() < 0.02, "{low} {high}");
     }
 
     #[test]

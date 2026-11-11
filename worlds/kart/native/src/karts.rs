@@ -74,11 +74,16 @@ pub fn setup(mut commands: Commands, mut materials: ResMut<Assets<StandardMateri
 /// against it, a frame in silver or in the paint's darker shade.
 fn livery(colour: usize) -> Livery {
     let (r, g, b) = PALETTE[colour];
-    let main = Vec3::new(r, g, b);
+    // Racing paint is deeper than the browser client's palette: more saturated, a little darker.
+    let base = Vec3::new(r, g, b);
+    let grey = base.dot(Vec3::new(0.2126, 0.7152, 0.0722));
+    let main = (Vec3::splat(grey).lerp(base, 1.35) * 0.88).clamp(Vec3::ZERO, Vec3::ONE);
     let light = 0.2126 * r + 0.7152 * g + 0.0722 * b > 0.6;
     let second = if light { Vec3::splat(0.12) } else { Vec3::splat(0.92) };
     let frame = if colour.is_multiple_of(2) { Vec3::new(0.8, 0.81, 0.83) } else { main * 0.7 };
-    Livery { main, second, frame }
+    // Each colour has its number, as a team keeps it season after season.
+    let number = [7, 12, 23, 31, 44, 58, 66, 89][colour % 8];
+    Livery { main, second, frame, number }
 }
 
 /// Children with the meshes of `part`, each in its finish's material.
