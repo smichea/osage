@@ -13,6 +13,10 @@ on:
     branches: [main]
     paths:
       - "crates/osage-render/**"
+      - "crates/osage-content/**"
+      - "crates/osage-procedural/**"
+      - "crates/osage-props/**"
+      - "worlds/kart/components/**"
       - "worlds/kart/native/**"
       - "worlds/kart/physics/**"
       - "worlds/kart/world/**"
@@ -47,7 +51,8 @@ env:
   TIERS: ${{ inputs.tiers || 'T3 T4' }}
   # The paths above, for the comparison with the last benched commit.
   DRAWN: >-
-    crates/osage-render worlds/kart/native worlds/kart/physics worlds/kart/world
+    crates/osage-render crates/osage-content crates/osage-procedural crates/osage-props
+    worlds/kart/components worlds/kart/native worlds/kart/physics worlds/kart/world
     assets/manifest.toml Cargo.toml Cargo.lock tools/attest-bench.py tools/cloud-bench
     .github/workflows/cloud-bench.yml
 
