@@ -21,7 +21,7 @@ describe("kart physics in WebAssembly", () => {
   it("matches the native build bit for bit", async () => {
     const physics = await Physics.load(readFileSync(new URL("../public/physics.wasm", import.meta.url)));
     physics.setTrack([0, 0, 0, 200, -100, 200, -100, 0], 6, 3);
-    let kart = { x: 0, z: 10, heading: 0, speed: 0, slide: 0, drift: 0, charge: 0, boost: 0 };
+    let kart = { x: 0, z: 10, heading: 0, speed: 0, slide: 0, drift: 0, charge: 0, boost: 0, spin: 0 };
     const lines: string[] = [];
     for (let i = 0; i < 1200; i++) {
       const drive = {
@@ -31,7 +31,7 @@ describe("kart physics in WebAssembly", () => {
       };
       kart = physics.step(kart, drive);
       if (i % 60 === 59) {
-        const fields = [kart.x, kart.z, kart.heading, kart.speed, kart.slide, kart.drift, kart.charge, kart.boost];
+        const fields = [kart.x, kart.z, kart.heading, kart.speed, kart.slide, kart.drift, kart.charge, kart.boost, kart.spin];
         lines.push(`${i + 1} ${fields.map(bits).join(" ")}`);
       }
     }

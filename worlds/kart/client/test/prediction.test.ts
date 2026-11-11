@@ -7,7 +7,7 @@ import { Predictor } from "../src/prediction.js";
 
 /** A one-dimensional stand-in for the physics: x moves by the throttle. */
 const line = { step: (k: KartValues, d: Drive): KartValues => ({ ...k, x: k.x + d.throttle }) };
-const still: KartValues = { x: 0, z: 0, heading: 0, speed: 0, slide: 0, drift: 0, charge: 0, boost: 0 };
+const still: KartValues = { x: 0, z: 0, heading: 0, speed: 0, slide: 0, drift: 0, charge: 0, boost: 0, spin: 0 };
 const go = { throttle: 1, steer: 0, drift: false };
 
 describe("Predictor", () => {

@@ -13,7 +13,7 @@
 //! replaces it piece by piece with richer content.
 
 use bevy::{core_pipeline::tonemapping::Tonemapping, prelude::*};
-use osage_kart_physics::{Kart, MAX_SPEED};
+use osage_kart_physics::{Ground, Kart, MAX_SPEED};
 use osage_render::{Look, OsageCamera, Sun, panorama::Panorama};
 use osage_world_kart::Circuit;
 
@@ -252,13 +252,10 @@ struct Chase {
 pub fn roughness(course: Option<&Course>, x: f32, z: f32) -> f32 {
     course.map_or(0.1, |course| {
         let track = &course.0.track;
-        let lateral = track.locate(x, z).lateral.abs();
-        if lateral > track.half_width + 0.9 {
-            1.0
-        } else if lateral > track.half_width - 0.25 {
-            0.6
-        } else {
-            0.1
+        match track.ground(track.locate(x, z).lateral) {
+            Ground::Road => 0.1,
+            Ground::Kerb => 0.6,
+            Ground::Grass => 1.0,
         }
     })
 }

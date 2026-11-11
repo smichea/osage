@@ -14,6 +14,8 @@ export interface KartValues {
   drift: number;
   charge: number;
   boost: number;
+  /** Rate of turn a knock gave, rad/s (D-045). */
+  spin: number;
 }
 
 /** One step of driving, as in `kart.v1.Step`. */
@@ -27,6 +29,9 @@ export const STEP_SECONDS = 1 / 60;
 export const MAX_SPEED = 22;
 export const SHORT_TURBO_CHARGE = 0.7;
 export const LONG_TURBO_CHARGE = 1.5;
+/** Kerbs, beyond the road's edge, and the barriers' face, beyond the verge, metres. */
+export const KERB = 1.0;
+export const BARRIER = 0.9;
 
 interface Exports {
   track_clear(): void;
@@ -53,7 +58,7 @@ export class Physics {
 
   step(k: KartValues, d: Drive): KartValues {
     const w = this.wasm;
-    w.kart_step(k.x, k.z, k.heading, k.speed, k.slide, k.drift, k.charge, k.boost, d.throttle, d.steer, d.drift ? 1 : 0);
+    w.kart_step(k.x, k.z, k.heading, k.speed, k.slide, k.drift, k.charge, k.boost, k.spin, d.throttle, d.steer, d.drift ? 1 : 0);
     return {
       x: w.kart_get(0),
       z: w.kart_get(1),
@@ -63,6 +68,7 @@ export class Physics {
       drift: w.kart_get(5),
       charge: w.kart_get(6),
       boost: w.kart_get(7),
+      spin: w.kart_get(8),
     };
   }
 }

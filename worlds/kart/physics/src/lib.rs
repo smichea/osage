@@ -9,6 +9,10 @@
 //! Conventions: Y up, the track lies in the X–Z plane; a kart with heading
 //! `h` faces `(sin h, cos h)`, its right is `(-cos h, sin h)`, and steering
 //! right makes `h` decrease.
+//!
+//! The driving is arcade (a speed along the kart, a slide across it); the
+//! contacts are physical (D-045): a kart has an outline, a mass and a moment
+//! of inertia, and a knock is an impulse at the point where it lands.
 
 #[cfg(target_arch = "wasm32")]
 mod wasm;
@@ -39,8 +43,43 @@ pub const SHORT_TURBO_CHARGE: f32 = 0.7;
 pub const LONG_TURBO_CHARGE: f32 = 1.5;
 const BOOST_SPEED: f32 = 28.0;
 const BOOST_ACCELERATION: f32 = 40.0;
-/// Speed kept after hitting a wall head-on; a glancing blow keeps more.
-const WALL_BOUNCE: f32 = 0.2;
+
+/// A kart's outline, for contacts: a capsule along the kart, its spine
+/// reaching this far ahead of and behind the centre, this thick: 1.9 m long,
+/// 1.3 m wide.
+pub const KART_REACH: f32 = 0.3;
+pub const KART_RADIUS: f32 = 0.65;
+/// The moment of inertia about the vertical per kilogram, m²: less than a
+/// uniform box of the kart's size (0.44), the driver's and the engine's
+/// weight being near the middle. Every kart weighs the same.
+const YAW_INERTIA: f32 = 0.3;
+/// Karts touching: the share of the closing speed given back, and the
+/// friction of bodywork and tyres rubbing.
+const KART_RESTITUTION: f32 = 0.3;
+const KART_FRICTION: f32 = 0.4;
+/// Barriers of tyres give a little back; along them, a kart scrapes.
+const WALL_RESTITUTION: f32 = 0.2;
+const WALL_FRICTION: f32 = 0.3;
+/// How fast the tyres stop a spin, per second.
+const SPIN_GRIP: f32 = 4.0;
+/// An impulse that ends a drift, m/s.
+const KNOCK: f32 = 2.5;
+
+/// Kerbs: this wide beyond the road's edge. A wheel on them keeps the road's
+/// speed and loses some grip.
+pub const KERB: f32 = 1.0;
+/// The barriers' face stands this far beyond the verge: a kart's outline
+/// stops there, so its centre comes no nearer than [`KART_RADIUS`].
+pub const BARRIER: f32 = 0.9;
+/// The wheels' contact patches from the kart's centre: across and along.
+const WHEEL_ACROSS: f32 = 0.55;
+const WHEEL_ALONG: f32 = 0.52;
+/// Grip kept with all four wheels on kerbs, and on grass.
+const KERB_GRIP: f32 = 0.65;
+const GRASS_GRIP: f32 = 0.5;
+/// Grass drags the wheels in it: with a side's two wheels in it, the kart
+/// turns towards it by this many rad/s per m/s.
+const GRASS_PULL: f32 = 0.02;
 
 /// A kart's physical state.
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
@@ -58,6 +97,17 @@ pub struct Kart {
     pub charge: f32,
     /// Seconds of boost left.
     pub boost: f32,
+    /// Rate of turn a knock gave, rad/s, positive to the left (as the
+    /// heading grows); the tyres stop it.
+    pub spin: f32,
+}
+
+/// What a wheel runs on.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Ground {
+    Road,
+    Kerb,
+    Grass,
 }
 
 /// What the driver does during one step.
@@ -142,6 +192,18 @@ impl Track {
         best.1
     }
 
+    /// What the ground is at `lateral` metres from the centre line.
+    pub fn ground(&self, lateral: f32) -> Ground {
+        let off = fabsf(lateral);
+        if off <= self.half_width {
+            Ground::Road
+        } else if off <= self.half_width + KERB {
+            Ground::Kerb
+        } else {
+            Ground::Grass
+        }
+    }
+
     /// The centre line point at `along` metres from the start, and the
     /// heading of the road there.
     pub fn at(&self, along: f32) -> ([f32; 2], f32) {
@@ -158,17 +220,88 @@ fn distance(a: [f32; 2], b: [f32; 2]) -> f32 {
     sqrtf((b[0] - a[0]) * (b[0] - a[0]) + (b[1] - a[1]) * (b[1] - a[1]))
 }
 
+fn dot(a: (f32, f32), b: (f32, f32)) -> f32 {
+    a.0 * b.0 + a.1 * b.1
+}
+
+/// The kart's forward and right.
+fn axes(heading: f32) -> ((f32, f32), (f32, f32)) {
+    let (sin, cos) = (sinf(heading), cosf(heading));
+    ((sin, cos), (-cos, sin))
+}
+
+/// The road's right where the centre line passes `spot`.
+fn road_right(track: &Track, spot: Spot) -> (f32, f32) {
+    let (_, road) = track.at(spot.along);
+    (-cosf(road), sinf(road))
+}
+
+/// How a point at `r` from the centre moves when the kart turns at one
+/// radian a second (to the left).
+fn swept(r: (f32, f32)) -> (f32, f32) {
+    (r.1, -r.0)
+}
+
+impl Kart {
+    /// Its velocity on the ground.
+    pub fn velocity(&self) -> (f32, f32) {
+        let (forward, right) = axes(self.heading);
+        (forward.0 * self.speed + right.0 * self.slide, forward.1 * self.speed + right.1 * self.slide)
+    }
+
+    fn set_velocity(&mut self, v: (f32, f32)) {
+        let (forward, right) = axes(self.heading);
+        (self.speed, self.slide) = (dot(v, forward), dot(v, right));
+    }
+
+    /// Takes an impulse `j` (per kilogram) at `r` from its centre.
+    fn take(&mut self, j: (f32, f32), r: (f32, f32)) {
+        let v = self.velocity();
+        self.set_velocity((v.0 + j.0, v.1 + j.1));
+        self.spin += dot(swept(r), j) / YAW_INERTIA;
+        if sqrtf(dot(j, j)) > KNOCK {
+            self.drift = 0.0;
+            self.charge = 0.0;
+        }
+    }
+
+    /// The velocity of its point at `r` from its centre.
+    fn velocity_at(&self, r: (f32, f32)) -> (f32, f32) {
+        let (v, w) = (self.velocity(), swept(r));
+        (v.0 + self.spin * w.0, v.1 + self.spin * w.1)
+    }
+}
+
+/// The ground under each wheel: front left, front right, rear left, rear right.
+pub fn wheels(kart: &Kart, track: &Track) -> [Ground; 4] {
+    wheels_at(kart, track, track.locate(kart.x, kart.z))
+}
+
+fn wheels_at(kart: &Kart, track: &Track, spot: Spot) -> [Ground; 4] {
+    let (forward, right) = axes(kart.heading);
+    let across_road = road_right(track, spot);
+    [(1.0, -1.0), (1.0, 1.0), (-1.0, -1.0), (-1.0, 1.0)].map(|(along, across)| {
+        let offset = (
+            forward.0 * along * WHEEL_ALONG + right.0 * across * WHEEL_ACROSS,
+            forward.1 * along * WHEEL_ALONG + right.1 * across * WHEEL_ACROSS,
+        );
+        track.ground(spot.lateral + dot(offset, across_road))
+    })
+}
+
 /// Advances `kart` by one step of [`DT`] seconds.
 pub fn step(kart: &mut Kart, controls: Controls, track: &Track) {
     let Controls { throttle, steer, drift } = controls.sanitized();
-    let on_road = fabsf(track.locate(kart.x, kart.z).lateral) <= track.half_width;
-    let top = if kart.boost > 0.0 {
-        BOOST_SPEED
-    } else if on_road {
-        MAX_SPEED
-    } else {
-        OFF_ROAD_SPEED
-    };
+    // Each wheel feels its ground: grass slows the kart in proportion and
+    // drags it towards the side it is on; kerbs and grass grip less.
+    let ground = wheels_at(kart, track, track.locate(kart.x, kart.z));
+    let count = |on: Ground, wheels: &[usize]| wheels.iter().filter(|&&i| ground[i] == on).count() as f32;
+    let (grass_left, grass_right) = (count(Ground::Grass, &[0, 2]), count(Ground::Grass, &[1, 3]));
+    let grass = (grass_left + grass_right) / 4.0;
+    let kerb = count(Ground::Kerb, &[0, 1, 2, 3]) / 4.0;
+    let fastest = if kart.boost > 0.0 { BOOST_SPEED } else { MAX_SPEED };
+    let top = fastest - (fastest - OFF_ROAD_SPEED) * grass;
+    let footing = 1.0 - (1.0 - KERB_GRIP) * kerb - (1.0 - GRASS_GRIP) * grass;
 
     // Along the kart.
     if throttle > 0.0 {
@@ -224,51 +357,109 @@ pub fn step(kart: &mut Kart, controls: Controls, track: &Track) {
         kart.heading -= steer * TURN_RATE * steering * DT;
         (0.0, GRIP)
     };
-    kart.slide += (target_slide - kart.slide) * (grip * DT).min(1.0);
+    kart.slide += (target_slide - kart.slide) * (grip * footing * DT).min(1.0);
+    kart.heading += (grass_left - grass_right) / 2.0 * GRASS_PULL * kart.speed * DT;
+    // A knock's spin turns the kart, which keeps going the way it went: the
+    // speed it had becomes a slide that the tyres scrub off.
+    if kart.spin != 0.0 {
+        let v = kart.velocity();
+        kart.heading += kart.spin * DT;
+        kart.set_velocity(v);
+        kart.spin -= kart.spin * (SPIN_GRIP * footing * DT).min(1.0);
+        if fabsf(kart.spin) < 1e-3 {
+            kart.spin = 0.0;
+        }
+    }
     kart.heading = wrap(kart.heading);
 
-    let (forward, right) = ((sinf(kart.heading), cosf(kart.heading)), (-cosf(kart.heading), sinf(kart.heading)));
-    kart.x += (forward.0 * kart.speed + right.0 * kart.slide) * DT;
-    kart.z += (forward.1 * kart.speed + right.1 * kart.slide) * DT;
-
-    // Walls: back onto the wall line, turned along it; the more head-on
-    // the hit, the more speed is lost.
-    let spot = track.locate(kart.x, kart.z);
-    let limit = track.half_width + track.verge;
-    if fabsf(spot.lateral) > limit {
-        let (centre, road) = track.at(spot.along);
-        let side = spot.lateral.signum() * limit;
-        kart.x = centre[0] - cosf(road) * side;
-        kart.z = centre[1] + sinf(road) * side;
-        let mut off = wrap(kart.heading - road);
-        if fabsf(off) > core::f32::consts::FRAC_PI_2 {
-            off = wrap(off - core::f32::consts::PI); // driving the wrong way: along the wall all the same
-        }
-        kart.speed *= fabsf(cosf(off)).clamp(WALL_BOUNCE, 0.95);
-        kart.heading = wrap(kart.heading - 0.3 * off);
-        kart.slide = 0.0;
-        kart.drift = 0.0;
-        kart.charge = 0.0;
-    }
+    let v = kart.velocity();
+    kart.x += v.0 * DT;
+    kart.z += v.1 * DT;
+    walls(kart, track);
 }
 
-/// Half the distance at which two karts touch, metres.
-pub const KART_RADIUS: f32 = 0.9;
+/// The barriers: a kart's outline pushed back to their face, and an impulse
+/// where it touches — it bounces a little off them, scrapes along them, and
+/// spins if it hits them with a corner.
+fn walls(kart: &mut Kart, track: &Track) {
+    let spot = track.locate(kart.x, kart.z);
+    let face = track.half_width + track.verge + BARRIER;
+    let across_road = road_right(track, spot);
+    let side = if spot.lateral >= 0.0 { 1.0 } else { -1.0 };
+    let (forward, _) = axes(kart.heading);
+    // The end of the kart's spine nearer the barrier.
+    let towards = dot(forward, across_road) * side;
+    let end = if towards >= 0.0 { KART_REACH } else { -KART_REACH };
+    let depth = side * spot.lateral + end * towards + KART_RADIUS - face;
+    if depth <= 0.0 {
+        return;
+    }
+    // Back to the road, along the barrier's normal.
+    let normal = (-side * across_road.0, -side * across_road.1);
+    kart.x += normal.0 * depth;
+    kart.z += normal.1 * depth;
+    let r = (forward.0 * end - normal.0 * KART_RADIUS, forward.1 * end - normal.1 * KART_RADIUS);
+    let v = kart.velocity_at(r);
+    let closing = dot(v, normal);
+    if closing >= 0.0 {
+        return;
+    }
+    let along = (-normal.1, normal.0);
+    let (bend, slew) = (dot(swept(r), normal), dot(swept(r), along));
+    let push = -(1.0 + WALL_RESTITUTION) * closing / (1.0 + bend * bend / YAW_INERTIA);
+    let scrape =
+        (-dot(v, along) / (1.0 + slew * slew / YAW_INERTIA)).clamp(-WALL_FRICTION * push, WALL_FRICTION * push);
+    kart.take((normal.0 * push + along.0 * scrape, normal.1 * push + along.1 * scrape), r);
+}
 
-/// Karts bump: two overlapping karts are pushed apart and lose a little speed.
+/// The parameters along two spines, `a + s·u` and `b + t·v` with `s` and `t`
+/// in `−KART_REACH…KART_REACH`, of their closest points.
+fn closest(a: (f32, f32), u: (f32, f32), b: (f32, f32), v: (f32, f32)) -> (f32, f32) {
+    let w = (a.0 - b.0, a.1 - b.1);
+    let (cos, d, e) = (dot(u, v), dot(u, w), dot(v, w));
+    let parallel = 1.0 - cos * cos;
+    let s = if parallel > 1e-6 { ((cos * e - d) / parallel).clamp(-KART_REACH, KART_REACH) } else { 0.0 };
+    let t = (cos * s + e).clamp(-KART_REACH, KART_REACH);
+    ((cos * t - d).clamp(-KART_REACH, KART_REACH), t)
+}
+
+/// Karts collide: two overlapping outlines are pushed apart, and the karts
+/// exchange an impulse where they touch — momentum kept, a little of the
+/// closing speed given back, bodywork and tyres rubbing — so that a knock
+/// pushes, slows and spins each kart by where it lands.
 pub fn bump(a: &mut Kart, b: &mut Kart) {
-    let (dx, dz) = (b.x - a.x, b.z - a.z);
-    let distance = sqrtf(dx * dx + dz * dz);
+    let ((fa, _), (fb, _)) = (axes(a.heading), axes(b.heading));
+    let (s, t) = closest((a.x, a.z), fa, (b.x, b.z), fb);
+    let (pa, pb) = ((a.x + fa.0 * s, a.z + fa.1 * s), (b.x + fb.0 * t, b.z + fb.1 * t));
+    let gap = (pb.0 - pa.0, pb.1 - pa.1);
+    let distance = sqrtf(dot(gap, gap));
     let overlap = 2.0 * KART_RADIUS - distance;
     if overlap <= 0.0 {
         return;
     }
-    let (nx, nz) = if distance > 1e-4 { (dx / distance, dz / distance) } else { (1.0, 0.0) };
+    let normal = if distance > 1e-4 { (gap.0 / distance, gap.1 / distance) } else { (fa.1, -fa.0) };
     let push = overlap / 2.0;
-    (a.x, a.z) = (a.x - nx * push, a.z - nz * push);
-    (b.x, b.z) = (b.x + nx * push, b.z + nz * push);
-    a.speed *= 0.97;
-    b.speed *= 0.97;
+    (a.x, a.z) = (a.x - normal.0 * push, a.z - normal.1 * push);
+    (b.x, b.z) = (b.x + normal.0 * push, b.z + normal.1 * push);
+    // Where they touch, from each centre.
+    let contact = ((pa.0 + pb.0) / 2.0, (pa.1 + pb.1) / 2.0);
+    let (ra, rb) = ((contact.0 - a.x, contact.1 - a.z), (contact.0 - b.x, contact.1 - b.z));
+    let (va, vb) = (a.velocity_at(ra), b.velocity_at(rb));
+    let relative = (vb.0 - va.0, vb.1 - va.1);
+    let closing = dot(relative, normal);
+    if closing >= 0.0 {
+        return;
+    }
+    let along = (-normal.1, normal.0);
+    let resistance = |n: (f32, f32)| {
+        let (ka, kb) = (dot(swept(ra), n), dot(swept(rb), n));
+        2.0 + (ka * ka + kb * kb) / YAW_INERTIA
+    };
+    let push = -(1.0 + KART_RESTITUTION) * closing / resistance(normal);
+    let rub = (-dot(relative, along) / resistance(along)).clamp(-KART_FRICTION * push, KART_FRICTION * push);
+    let j = (normal.0 * push + along.0 * rub, normal.1 * push + along.1 * rub);
+    a.take((-j.0, -j.1), ra);
+    b.take(j, rb);
 }
 
 /// An angle in `(-π, π]`.
@@ -328,14 +519,98 @@ mod tests {
     #[test]
     fn grass_slows_and_walls_stop() {
         let track = track();
-        let mut kart = Kart { x: -7.5, z: 50.0, speed: MAX_SPEED, ..Kart::default() };
+        let mut kart = Kart { x: -8.5, z: 50.0, speed: MAX_SPEED, ..Kart::default() };
         drive(&mut kart, FULL, 2.0, &track);
         assert!(kart.speed < OFF_ROAD_SPEED + 1.0, "off the road: {kart:?}");
 
+        // Head on into the barrier on the right: stopped at its face, bounced a little.
         let mut kart = Kart { z: 50.0, heading: -std::f32::consts::FRAC_PI_2, speed: 15.0, ..Kart::default() };
         drive(&mut kart, FULL, 1.0, &track);
+        let face = track.half_width + track.verge + BARRIER;
         let spot = track.locate(kart.x, kart.z);
-        assert!((spot.lateral - (track.half_width + track.verge)).abs() < 0.01, "held at the wall: {spot:?}");
+        assert!(spot.lateral + KART_RADIUS <= face + 1e-3, "the outline stops at the face: {spot:?}");
+        assert!(spot.lateral + KART_RADIUS + KART_REACH > face - 0.05, "held against it: {spot:?}");
+        assert!(kart.speed < 15.0 * 0.6, "head on, most of the speed is lost: {kart:?}");
+    }
+
+    #[test]
+    fn a_glancing_blow_keeps_the_speed_and_turns_the_kart_along_the_barrier() {
+        // Kerbs up to the barrier, no grass to slow the kart before it.
+        let track = Track { half_width: 8.9, verge: 0.1, ..track() };
+        // Heading +Z, turned 0.25 rad to the right, half a metre from the barrier's face.
+        let face = track.half_width + track.verge + BARRIER;
+        let mut kart = Kart { x: -(face - KART_RADIUS - 0.5), z: 50.0, heading: -0.25, speed: 20.0, ..Kart::default() };
+        drive(&mut kart, Controls { throttle: 1.0, ..Controls::default() }, 0.6, &track);
+        let spot = track.locate(kart.x, kart.z);
+        assert!(spot.lateral + KART_RADIUS <= face + 1e-3, "{spot:?}");
+        assert!(kart.speed > 14.0, "a glancing blow keeps most of the speed: {kart:?}");
+        assert!(kart.heading > -0.1, "turned back along it: {kart:?}");
+    }
+
+    #[test]
+    fn a_whole_side_in_the_grass_drags_the_kart_into_it() {
+        let track = track();
+        // The right wheels just past the kerb, the left ones on it: the kart
+        // turns right, towards the grass, and is slower than on the road.
+        let edge = track.half_width + KERB;
+        let mut kart = Kart { x: -(edge + 0.1), z: 20.0, speed: MAX_SPEED, ..Kart::default() };
+        let ground = wheels(&kart, &track);
+        assert_eq!(ground, [Ground::Kerb, Ground::Grass, Ground::Kerb, Ground::Grass], "{kart:?}");
+        drive(&mut kart, FULL, 0.25, &track);
+        assert!(kart.heading < -0.05, "pulled to the right: {kart:?}");
+        assert!(kart.speed < MAX_SPEED - 1.0 && kart.speed > OFF_ROAD_SPEED + 3.0, "half on the grass: {kart:?}");
+        // On the kerbs alone the kart keeps its speed.
+        let mut kart = Kart { x: -(track.half_width + 0.4), z: 20.0, speed: MAX_SPEED, ..Kart::default() };
+        assert!(wheels(&kart, &track).iter().all(|g| *g != Ground::Grass));
+        drive(&mut kart, FULL, 0.25, &track);
+        assert!((kart.speed - MAX_SPEED).abs() < 0.01 && kart.heading == 0.0, "{kart:?}");
+    }
+
+    #[test]
+    fn a_rear_end_knock_passes_the_speed_on_and_keeps_the_momentum() {
+        let mut behind = Kart { z: 0.0, speed: 20.0, ..Kart::default() };
+        let mut ahead = Kart { z: 2.0 * (KART_REACH + KART_RADIUS) - 0.05, speed: 12.0, ..Kart::default() };
+        bump(&mut behind, &mut ahead);
+        assert!(behind.speed < 20.0 && ahead.speed > 12.0, "{behind:?} {ahead:?}");
+        assert!((behind.speed + ahead.speed - 32.0).abs() < 1e-4, "momentum kept");
+        assert!(ahead.speed - behind.speed < 0.3 * 8.0 + 1e-4, "only a little given back");
+        assert!(behind.spin.abs() < 1e-5 && ahead.spin.abs() < 1e-5, "straight on: no spin");
+        assert!(ahead.z - behind.z >= 2.0 * (KART_REACH + KART_RADIUS) - 1e-4, "apart");
+    }
+
+    #[test]
+    fn a_knock_on_the_rear_spins_the_kart_and_the_tyres_stop_it() {
+        // Struck on its rear from the left (+X) by a kart crossing its path:
+        // the rear goes right, the nose left.
+        let mut striker =
+            Kart { x: 1.25, z: -0.3, heading: -std::f32::consts::FRAC_PI_2, speed: 10.0, ..Kart::default() };
+        let mut struck = Kart { speed: 10.0, ..Kart::default() };
+        let energy = |k: &Kart| {
+            let v = k.velocity();
+            v.0 * v.0 + v.1 * v.1 + YAW_INERTIA * k.spin * k.spin
+        };
+        let before = energy(&striker) + energy(&struck);
+        bump(&mut striker, &mut struck);
+        assert!(struck.spin > 2.0, "{struck:?}");
+        assert!(struck.velocity().0 < -2.0, "pushed to the right: {struck:?}");
+        assert!(energy(&striker) + energy(&struck) < before, "no energy made");
+        // It turns; then the tyres stop the spin and scrub the slide off.
+        let wide = Track { half_width: 60.0, ..track() };
+        drive(&mut struck, Controls::default(), 0.3, &wide);
+        assert!(struck.heading > 0.4, "{struck:?}");
+        drive(&mut struck, Controls::default(), 2.5, &wide);
+        assert!(struck.spin == 0.0 && struck.slide.abs() < 0.05, "{struck:?}");
+    }
+
+    #[test]
+    fn karts_side_by_side_rub_and_part() {
+        // Two karts converging side by side at the same speed.
+        let mut left = Kart { x: 1.25, speed: 20.0, slide: 1.0, ..Kart::default() };
+        let mut right = Kart { x: 0.0, speed: 20.0, slide: -1.0, ..Kart::default() };
+        bump(&mut left, &mut right);
+        assert!(left.x - right.x >= 2.0 * KART_RADIUS - 1e-4, "apart");
+        assert!(left.slide < 0.0 && right.slide > 0.0, "they part: {left:?} {right:?}");
+        assert!((left.speed - 20.0).abs() < 0.5 && (right.speed - 20.0).abs() < 0.5, "and race on");
     }
 
     #[test]

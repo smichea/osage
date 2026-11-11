@@ -182,6 +182,7 @@ fn kart_of(state: &proto::KartState) -> Kart {
         drift: state.drift,
         charge: state.charge,
         boost: state.boost,
+        spin: state.spin,
     }
 }
 

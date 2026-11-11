@@ -51,6 +51,9 @@ message KartState {
   // The last Step.sequence the server applied to this kart: a predicting
   // client replays its later steps from this state.
   uint64 applied = 9;
+  // Rate of turn a knock gave, rad/s, positive to the left (D-045). Added
+  // to kart.state/1: a reader that ignores it predicts without it.
+  float spin = 10;
 }
 
 // kart.racer/1 — who drives a kart and how their race goes.

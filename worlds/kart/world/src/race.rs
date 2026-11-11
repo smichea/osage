@@ -300,6 +300,7 @@ fn state(kart: &Kart, applied: u64) -> proto::KartState {
         charge: kart.charge,
         boost: kart.boost,
         applied,
+        spin: kart.spin,
     }
 }
 

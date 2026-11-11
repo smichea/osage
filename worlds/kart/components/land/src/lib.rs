@@ -19,8 +19,9 @@ pub const KNOLL: f32 = 7.0;
 /// Depth of the lake's bed, and the level of its water, metres.
 pub const LAKE_BED: f32 = 2.4;
 pub const WATER: f32 = -0.45;
-/// How far beyond the verge the barriers stand, metres.
-pub const BARRIER: f32 = 0.9;
+/// How far beyond the verge the barriers stand, metres: where the physics
+/// stops a kart's outline.
+pub use osage_kart_physics::BARRIER;
 
 /// A point of the centre line with the unit vectors ahead and to the right.
 pub struct Frame {

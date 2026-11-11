@@ -5,7 +5,7 @@
 // (road, kerbs, walls, start line, trees) and the karts — all procedural.
 
 import * as THREE from "three";
-import { SHORT_TURBO_CHARGE, LONG_TURBO_CHARGE } from "./physics.js";
+import { BARRIER, KERB, LONG_TURBO_CHARGE, SHORT_TURBO_CHARGE } from "./physics.js";
 
 export const PALETTE = ["#e5534b", "#539bf5", "#57ab5a", "#c69026", "#b083f0", "#39c5cf", "#e0823d", "#f778ba"];
 
@@ -76,10 +76,12 @@ export function buildCircuit(points: ArrayLike<number>, halfWidth: number, verge
   group.add(strip(f, -halfWidth, halfWidth, 0.02, (i) => (i % 2 ? asphalt : asphaltLight)));
   const [red, white] = [new THREE.Color("#d73a3a"), new THREE.Color("#f0f0f0")];
   const kerb = (i: number) => (Math.floor(i / 2) % 2 ? red : white);
-  group.add(strip(f, halfWidth, halfWidth + 0.9, 0.03, kerb), strip(f, -halfWidth - 0.9, -halfWidth, 0.03, kerb));
+  group.add(strip(f, halfWidth, halfWidth + KERB, 0.03, kerb), strip(f, -halfWidth - KERB, -halfWidth, 0.03, kerb));
   const [blue, light] = [new THREE.Color("#2f6fd6"), new THREE.Color("#e8eef7")];
   const wall = (i: number) => (i % 2 ? blue : light);
-  group.add(strip(f, halfWidth + verge, 0, 0, wall, 0.9), strip(f, -halfWidth - verge, 0, 0, wall, 0.9));
+  // The barriers' face, where a kart's outline stops (D-045).
+  const face = halfWidth + verge + BARRIER;
+  group.add(strip(f, face, 0, 0, wall, 0.9), strip(f, -face, 0, 0, wall, 0.9));
 
   // Distances along the centre line, to place things by distance.
   const distances = [0];
