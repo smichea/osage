@@ -297,9 +297,10 @@ fn grandstand(set: &mut Set, stand: Transform, shape: (f32, f32, f32, usize, f32
 }
 
 /// The pit building on the other side of the start straight, behind the
-/// fence: a single storey of light concrete with six roller doors facing
-/// the track, a sign band over them, a flat roof with its parapet, and
-/// downpipes at the corners.
+/// fence: a storey of light concrete with six numbered roller doors facing
+/// the track under a canopy, a sign band over them, a flat roof with its
+/// parapet, race control above the middle behind a band of dark glass,
+/// windows at the ends, and downpipes at the corners.
 fn pits(set: &mut Set, circuit: &Circuit) {
     let track = &circuit.track;
     let (at, heading) = track.at(circuit.start + 14.0);
@@ -361,6 +362,65 @@ fn pits(set: &mut Set, circuit: &Circuit) {
             rod(Vec3::new(front - 0.12, 0.0, z), Vec3::new(front - 0.12, height + 0.3, z), 0.05),
             Paint::plain(0.4, 0.42, 0.44),
         );
+    }
+    // Each door's number on the sign band, facing the track.
+    let facing_track = Quat::from_rotation_y(-FRAC_PI_2);
+    for k in 0..6 {
+        let z = -length / 2.0 + gap + k as f32 * (door + gap) + door / 2.0;
+        let at = frame * Transform::from_xyz(front - 0.09, 3.22, z).with_rotation(facing_track);
+        for digit in osage_kart_model::numerals(k + 1, 0.32, 0.02) {
+            set.satin.add_within(frame.translation, &digit, at, Paint::plain(0.08, 0.08, 0.09));
+        }
+    }
+    // Race control above the middle: a second storey set back from the
+    // front, a band of dark glass along it between slim mullions, a roof
+    // slab that overhangs it.
+    let (control, upper) = (9.0, 2.8);
+    let storey =
+        Shape::block(Vec3::new(front + 1.0, height, -control), Vec3::new(front + depth - 0.4, height + upper, control));
+    set.satin.add_within(frame.translation, &storey, frame, concrete);
+    let slab = Shape::block(
+        Vec3::new(front + 0.6, height + upper, -control - 0.4),
+        Vec3::new(front + depth - 0.2, height + upper + 0.22, control + 0.4),
+    );
+    set.satin.add_within(frame.translation, &slab, frame, Paint::plain(0.7, 0.69, 0.66));
+    let pane = Shape::block(
+        Vec3::new(front + 0.96, height + 0.5, -control + 0.3),
+        Vec3::new(front + 1.0, height + upper - 0.35, control - 0.3),
+    );
+    set.glass.add_within(frame.translation, &pane, frame, Paint::plain(0.06, 0.07, 0.08));
+    let mut z = -control + 0.3;
+    while z <= control - 0.25 {
+        let mullion = Shape::block(
+            Vec3::new(front + 0.93, height + 0.45, z - 0.04),
+            Vec3::new(front + 0.97, height + upper - 0.3, z + 0.04),
+        );
+        set.satin.add_within(frame.translation, &mullion, frame, Paint::plain(0.22, 0.23, 0.25));
+        z += 1.5;
+    }
+    // A canopy over the pit apron, on slim posts.
+    let reach = 2.4;
+    set.satin.add_within(
+        frame.translation,
+        &Shape::block(Vec3::new(front - reach, 3.5, -length / 2.0 + 0.4), Vec3::new(front, 3.62, length / 2.0 - 0.4)),
+        frame,
+        Paint::shaded(0.82, 0.82, 0.8, 0.3),
+    );
+    let mut z = -length / 2.0 + 0.8;
+    while z <= length / 2.0 - 0.7 {
+        let post = rod(Vec3::new(front - reach + 0.2, 0.0, z), Vec3::new(front - reach + 0.2, 3.5, z), 0.06);
+        set.satin.add_within(frame.translation, &post, frame, Paint::plain(0.5, 0.52, 0.55));
+        z += (length - 1.5) / 6.0;
+    }
+    // Windows at both ends of the ground floor.
+    for end in [-1.0f32, 1.0] {
+        for x in [front + 2.0, front + 5.0] {
+            let window = Shape::block(
+                Vec3::new(x - 0.6, 1.1, end * (length / 2.0) - 0.02),
+                Vec3::new(x + 0.6, 2.3, end * (length / 2.0) + 0.02),
+            );
+            set.glass.add_within(frame.translation, &window, frame, Paint::plain(0.06, 0.07, 0.08));
+        }
     }
 }
 

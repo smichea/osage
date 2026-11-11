@@ -133,8 +133,8 @@ const DIGITS: [[bool; 7]; 10] = [
 ];
 
 /// `number` in segments, `height` high, centred on the origin of the XY
-/// plane, standing `proud` in front of it (+Z).
-fn numerals(number: u32, height: f32, proud: f32) -> Vec<Shape> {
+/// plane, standing `proud` in front of it (+Z). Also for a world's signs.
+pub fn numerals(number: u32, height: f32, proud: f32) -> Vec<Shape> {
     let digits: Vec<usize> = number.to_string().bytes().map(|b| usize::from(b - b'0')).collect();
     let cell = height / 2.0;
     let (stroke, gap) = (height * 0.14, height * 0.35);
