@@ -442,7 +442,24 @@ fn driver(kart: &mut Sorted, livery: Livery) {
     // A band of the second colour across the chest.
     let band = at(0.0, 0.5, -0.27).with_rotation(Quat::from_rotation_x(-0.38)).with_scale(Vec3::new(1.12, 0.25, 0.75));
     kart.add(Finish::Cloth, &capsule(0.152, 0.0), band, panels);
-    kart.add(Finish::Cloth, &capsule(0.08, 0.0), at(0.0, 0.69, -0.28).with_scale(Vec3::new(1.0, 0.6, 1.0)), suit * 0.7);
+    // The collar, in the second colour, as race suits have it.
+    kart.add(Finish::Cloth, &capsule(0.08, 0.0), at(0.0, 0.69, -0.28).with_scale(Vec3::new(1.0, 0.6, 1.0)), panels);
+    let leaning = Quat::from_rotation_x(-0.38);
+    // Side panels down the torso.
+    for side in [-1.0f32, 1.0] {
+        let panel = at(side * 0.155, 0.42, -0.31).with_rotation(leaning).with_scale(Vec3::new(0.18, 1.0, 0.6));
+        kart.add(Finish::Cloth, &capsule(0.1, 0.24), panel, panels);
+    }
+    // A patch on the back, where the chasing camera sees it: white, with a
+    // dark mark standing for a sponsor.
+    let back = at(0.0, 0.49, -0.42).with_rotation(leaning);
+    kart.add(Finish::Cloth, &Shape::block(Vec3::new(-0.09, -0.06, -0.01), Vec3::new(0.09, 0.06, 0.0)), back, WHITE);
+    kart.add(
+        Finish::Cloth,
+        &Shape::block(Vec3::new(-0.06, -0.015, -0.014), Vec3::new(0.06, 0.015, -0.01)),
+        back,
+        BLACK,
+    );
     // Hips.
     kart.add(
         Finish::Cloth,
@@ -465,6 +482,8 @@ fn driver(kart: &mut Sorted, livery: Livery) {
         let thigh = [Vec3::new(side * 0.1, 0.15, -0.16), Vec3::new(side * 0.13, 0.27, 0.12)];
         let shin = [Vec3::new(side * 0.13, 0.27, 0.12), Vec3::new(side * 0.11, 0.13, 0.5)];
         kart.add(Finish::Cloth, &tube(&thigh, 0.07), Transform::IDENTITY, suit);
+        // A knee panel in the second colour.
+        kart.add(Finish::Cloth, &Shape::new(Sphere::new(0.062).mesh().uv(12, 8)), at(side * 0.13, 0.28, 0.12), panels);
         kart.add(Finish::Cloth, &tube(&shin, 0.052), Transform::IDENTITY, suit);
         let boot = at(side * 0.11, 0.12, 0.56).with_rotation(Quat::from_rotation_x(FRAC_PI_2 - 0.4));
         kart.add(Finish::Rubber, &capsule(0.045, 0.1), boot, BLACK);
