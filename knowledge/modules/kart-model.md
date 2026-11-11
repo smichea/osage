@@ -1,12 +1,12 @@
 ---
 type: Module
 title: osage-kart-model
-description: A racing kart and its driver modelled to scale from simple shapes, in a team's colours, each finish — varnish, satin, rubber, steel, alloy, chrome, cloth, visor — its own material.
+description: A racing kart and its driver modelled to scale from simple shapes, in a team's colours, covered in sponsors' stickers, each finish — varnish, satin, rubber, steel, alloy, chrome, cloth, visor, decal — its own material.
 resource: https://github.com/smichea/osage/tree/main/worlds/kart/components/kart-model
 licence: MIT OR Apache-2.0
 status: draft
 tags: [kart, vehicle, model, component]
-generated: { by: "claude-code/claude-opus-5-5", at: "2026-11-11T11:00:00Z" }
+generated: { by: "claude-code/claude-opus-5-5", at: "2026-11-11T16:00:00Z" }
 ---
 
 # Purpose
@@ -15,7 +15,8 @@ The karts of the kart game as a real racing kart looks: the replacement of the t
 
 # Concepts
 
-- **Finish:** how a surface reflects light; one material each, shared by every kart: glossy paint, satin plastic, rubber, painted steel, machined alloy, chrome, race-suit cloth, a tinted visor.
+- **Finish:** how a surface reflects light; one material each, shared by every kart: glossy paint, satin plastic, rubber, painted steel, machined alloy, chrome, race-suit cloth, a tinted visor, and stickers (glossy, alpha-tested, their marks from an atlas the client gives the material).
+- **Stickers:** an atlas of 32 abstract sponsors' marks drawn by the program — a panel, a disc or a ring, a stripe or a chevron, bars standing for a name, in sponsors' colour pairs, no real brand — laid as quads on the pods' sloping faces, the nose, beside the front panel's number and along the rear bumper, a set for each racing number.
 - **Livery:** a team's colours in sRGB: the main colour, a second for stripes and the helmet's lower half, the frame's paint, the suit's own colour (rarely the kart's: a driver in the kart's colour from head to foot reads as a toy; the team's colour goes on the suit's panels), and its racing number, drawn in seven segments on the front panel, on plates on the side pods and on the rear bumper's plate.
 - **Parts:** the body (frame, bodywork, engine, seat, steering, the driver below the neck), the helmet, and a front and a rear wheel; each part is a mesh per finish.
 
@@ -25,7 +26,7 @@ Built from simple shapes ([osage-procedural](/modules/osage-procedural.md)): pri
 
 # Interfaces
 
-`build(Livery) -> Kart { body, helmet, wheels }`, `Finish::{ALL, material}`, `numerals(number, height, proud)` (seven-segment digits, for a world's signs too), and the places the client animates around: `WHEELS`, `AXLES`, `NECK`, `EXHAUSTS`, `REAR_CONTACTS`.
+`build(Livery) -> Kart { body, helmet, wheels }`, `Finish::{ALL, material}`, `decals::atlas()`, `numerals(number, height, proud)` (seven-segment digits, for a world's signs too), and the places the client animates around: `WHEELS`, `AXLES`, `NECK`, `EXHAUSTS`, `REAR_CONTACTS`.
 
 # Invariants
 
@@ -45,4 +46,4 @@ The proportions and the finishes are what makes a kart read as real; the shapes 
 
 # Limits
 
-Bodywork rounded only along its profile, its ends square; stickers and numbers are blocks, not printed decals; the driver's body is generic, its face never seen. Paint has no clear coat: Bevy's paled every dome facing the sky to near white. A modelled kart and driver (workstream R9) are the next step.
+Bodywork rounded only along its profile, its ends square; numbers are blocks; stickers are flat quads, a little off the curved faces at their edges; the driver's body is generic, its face never seen. Paint has no clear coat: Bevy's paled every dome facing the sky to near white. A modelled kart and driver (workstream R9) are the next step.

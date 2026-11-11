@@ -65,8 +65,22 @@ pub struct Rig {
     drifting: bool,
 }
 
-pub fn setup(mut commands: Commands, mut materials: ResMut<Assets<StandardMaterial>>) {
-    let finishes = Finish::ALL.into_iter().map(|finish| (finish, materials.add(finish.material()))).collect();
+pub fn setup(
+    mut commands: Commands,
+    mut materials: ResMut<Assets<StandardMaterial>>,
+    mut images: ResMut<Assets<Image>>,
+) {
+    let stickers = images.add(osage_kart_model::decals::atlas());
+    let finishes = Finish::ALL
+        .into_iter()
+        .map(|finish| {
+            let mut material = finish.material();
+            if finish == Finish::Decal {
+                material.base_color_texture = Some(stickers.clone());
+            }
+            (finish, materials.add(material))
+        })
+        .collect();
     commands.insert_resource(Kit { finishes, models: HashMap::new() });
 }
 

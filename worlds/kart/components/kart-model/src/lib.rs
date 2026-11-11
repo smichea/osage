@@ -20,6 +20,8 @@
 
 use std::f32::consts::{FRAC_PI_2, PI, TAU};
 
+pub mod decals;
+
 use bevy::prelude::*;
 use osage_procedural::{Batch, Paint, Sculpture, Shape};
 
@@ -60,10 +62,13 @@ pub enum Finish {
     Cloth,
     /// The helmet's tinted visor.
     Visor,
+    /// Sponsors' stickers: glossy, their marks from [`decals::atlas`],
+    /// which the client gives this finish's material.
+    Decal,
 }
 
 impl Finish {
-    pub const ALL: [Finish; 8] = [
+    pub const ALL: [Finish; 9] = [
         Finish::Varnish,
         Finish::Satin,
         Finish::Rubber,
@@ -72,6 +77,7 @@ impl Finish {
         Finish::Chrome,
         Finish::Cloth,
         Finish::Visor,
+        Finish::Decal,
     ];
 
     /// The material of this finish; colours come from the vertices.
@@ -89,6 +95,12 @@ impl Finish {
             Finish::Chrome => StandardMaterial { perceptual_roughness: 0.08, metallic: 1.0, ..base },
             Finish::Cloth => StandardMaterial { perceptual_roughness: 0.88, reflectance: 0.3, ..base },
             Finish::Visor => StandardMaterial { perceptual_roughness: 0.04, reflectance: 0.9, ..base },
+            Finish::Decal => StandardMaterial {
+                perceptual_roughness: 0.25,
+                reflectance: 0.6,
+                alpha_mode: AlphaMode::Mask(0.5),
+                ..base
+            },
         }
     }
 }
@@ -222,7 +234,44 @@ fn body(livery: Livery) -> Part {
     bodywork(&mut kart, livery);
     engine(&mut kart);
     driver(&mut kart, livery);
-    kart.part()
+    let mut part = kart.part();
+    part.push((Finish::Decal, stickers(livery).mesh()));
+    part
+}
+
+/// Sponsors' stickers on the bodywork, a set of marks for each racing
+/// number: along both side pods, on the nose, beside the front panel's
+/// number, along the rear bumper.
+fn stickers(livery: Livery) -> decals::Decals {
+    let mut decals = decals::Decals::default();
+    let mut k = livery.number as usize * 5;
+    let mut next = || {
+        k += 7;
+        k
+    };
+    for side in [-1.0f32, 1.0] {
+        // The pod's upper outer face, which slopes in, a hair proud of it,
+        // read from outside; ahead of the number plate.
+        let along = Vec3::Z * -side;
+        let (up, out) = (Vec3::new(-0.406 * side, 0.914, 0.0), Vec3::new(0.914 * side, 0.406, 0.0));
+        let on_face = |z: f32| Vec3::new(side * 0.62, 0.155, z) + out * 0.004;
+        decals.add(next(), on_face(0.02), along, up, 0.16);
+        decals.add(next(), on_face(0.21), along, up, 0.12);
+        // The nose's top, sloping down to the front.
+        let slope = Vec3::new(0.0, -0.06, 0.25).normalize();
+        let normal = Vec3::new(0.0, 0.25, 0.06).normalize();
+        decals.add(next(), Vec3::new(side * 0.27, 0.19, 0.83) + normal * 0.033, Vec3::X, -slope, 0.2);
+    }
+    // Beside the front panel's number, facing ahead.
+    let panel = at(0.0, 0.25, 0.43).with_rotation(Quat::from_rotation_x(-0.42));
+    for side in [-1.0f32, 1.0] {
+        let centre = panel.transform_point(Vec3::new(side * 0.145, -0.08, 0.0135));
+        decals.add(next(), centre, panel.rotation * Vec3::X, panel.rotation * Vec3::Y, 0.1);
+    }
+    // Along the rear bumper, facing back.
+    decals.add(next(), Vec3::new(-0.36, 0.165, -0.985), -Vec3::X, Vec3::Y, 0.22);
+    decals.add(next(), Vec3::new(0.36, 0.165, -0.985), -Vec3::X, Vec3::Y, 0.22);
+    decals
 }
 
 /// The frame: two rails five centimetres off the road, cross members, the
@@ -341,20 +390,6 @@ fn bodywork(kart: &mut Sorted, livery: Livery) {
             &Shape::extrude_rounded(&section, -0.3, 0.3, 0.035, 3),
             Transform::IDENTITY,
             livery.main,
-        );
-        let face = side * 0.625;
-        let sticker = |low: Vec3, high: Vec3| Shape::block(low, high);
-        kart.add(
-            Finish::Varnish,
-            &sticker(Vec3::new(face - 0.004, 0.1, -0.2), Vec3::new(face + 0.004, 0.16, 0.04)),
-            Transform::IDENTITY,
-            livery.second,
-        );
-        kart.add(
-            Finish::Varnish,
-            &sticker(Vec3::new(face - 0.004, 0.11, 0.08), Vec3::new(face + 0.004, 0.15, 0.2)),
-            Transform::IDENTITY,
-            Vec3::new(0.95, 0.78, 0.1),
         );
         // A number plate at the back of the pod, facing out.
         let plate_at = at(side * 0.628, 0.135, -0.19).with_rotation(Quat::from_rotation_y(side * FRAC_PI_2));
