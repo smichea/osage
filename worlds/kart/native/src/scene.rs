@@ -122,6 +122,7 @@ impl Plugin for ScenePlugin {
                     karts::animate,
                     effects::emit,
                     effects::update,
+                    effects::prewarm,
                     scenery::bob,
                     scenery::turn,
                     track::flow,

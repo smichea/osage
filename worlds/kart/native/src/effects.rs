@@ -216,6 +216,42 @@ pub fn emit(
 }
 
 /// Moves the particles, turns them to the camera, and retires the dead ones.
+/// Frames from the start during which every particle material is drawn.
+const PREWARM: u32 = 120;
+
+/// Every particle material drawn once, in front of the camera and far too
+/// small to see, for the first frames: their pipelines are made at the
+/// start, not at the first puff of smoke. A bench, which compiles a
+/// pipeline the frame it first needs it, would stall there (as it did, by
+/// 0.75 s on the L4, when a level of detail first came into range:
+/// `osage_props` warms those); a game would draw no smoke until it was
+/// ready.
+pub fn prewarm(
+    pool: Res<Pool>,
+    mut frame: Local<u32>,
+    camera: Query<&Transform, (With<OsageCamera>, Without<Particle>)>,
+    mut particles: Query<(&mut Transform, &mut Visibility, &mut MeshMaterial3d<StandardMaterial>), With<Particle>>,
+) {
+    if *frame > PREWARM {
+        return;
+    }
+    *frame += 1;
+    let Some(camera) = camera.iter().next() else { return };
+    let looks = pool.sparks.iter().chain([&pool.smoke, &pool.veil, &pool.dust, &pool.flame]);
+    // The first idle particles are the last a launch takes.
+    for (look, &entity) in looks.zip(&pool.idle) {
+        let Ok((mut place, mut shown, mut material)) = particles.get_mut(entity) else { continue };
+        if *frame > PREWARM {
+            *shown = Visibility::Hidden;
+            continue;
+        }
+        place.translation = camera.translation + camera.forward() * 1.0;
+        place.scale = Vec3::splat(1e-4);
+        *shown = Visibility::Inherited;
+        material.0 = look.clone();
+    }
+}
+
 pub fn update(
     time: Res<Time>,
     mut pool: ResMut<Pool>,

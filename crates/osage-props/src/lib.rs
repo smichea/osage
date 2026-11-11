@@ -40,7 +40,7 @@ impl Plugin for PropsPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<Converted>()
             .init_resource::<Waiting>()
-            .add_systems(Update, (scatter, carpet::lay, impostor::plant).chain())
+            .add_systems(Update, (scatter, carpet::lay, impostor::plant, prewarm).chain())
             .add_systems(PostUpdate, carpet::follow.before(bevy::transform::TransformSystems::Propagate));
     }
 }
@@ -111,6 +111,36 @@ pub struct Waiting(pub usize);
 /// A scatter whose places have been given the model.
 #[derive(Component)]
 struct Scattered;
+
+/// Frames a prewarming copy is drawn for.
+const PREWARM: u32 = 90;
+
+/// A copy of one mesh of a scatter, with its material and its kind of
+/// visibility range, drawn just in front of the camera and far too small to
+/// see for the first frames: the pipeline it needs is made at the start,
+/// not when the first of its kind comes into range. Pipelines differ by
+/// mesh layout, material and whether a range fades; a benchmark, which
+/// makes each the frame it first needs it, stalled 0.75 s at the first
+/// level of detail that came into range mid-lap (2026-11-11).
+#[derive(Component)]
+struct Prewarm(u32);
+
+fn prewarm(
+    mut commands: Commands,
+    cameras: Query<&GlobalTransform, With<Camera3d>>,
+    mut warming: Query<(Entity, &mut Prewarm, &mut Transform)>,
+) {
+    let Some(eye) = cameras.iter().next() else { return };
+    let ahead = eye.translation() + eye.forward() * 2.0;
+    for (entity, mut left, mut place) in &mut warming {
+        if left.0 == 0 {
+            commands.entity(entity).despawn();
+            continue;
+        }
+        left.0 -= 1;
+        place.translation = ahead;
+    }
+}
 
 /// The standard material made of each glTF material, made once; the
 /// coarser meshes made of each mesh, made once.
@@ -352,6 +382,30 @@ fn scatter(
             level_meshes.insert((mesh.id(), 1), first);
             level_meshes.insert((mesh.id(), 2), second);
             level_ends.insert(mesh.id(), ends);
+        }
+        // One prewarming copy of each mesh at each level, with its material.
+        let mut warmed = std::collections::HashSet::new();
+        for (mesh, material, _) in looks.iter().flatten() {
+            for (level, range) in &levels(level_ends[&mesh.id()]) {
+                let mesh = level_meshes[&(mesh.id(), *level)].clone();
+                if !warmed.insert((mesh.id(), material.id(), range.is_some())) {
+                    continue;
+                }
+                let mut copy = commands.spawn((
+                    Prewarm(PREWARM),
+                    Mesh3d(mesh),
+                    MeshMaterial3d(material.clone()),
+                    Transform::from_scale(Vec3::splat(1e-4)),
+                    Visibility::Inherited,
+                ));
+                if range.is_some() {
+                    // A range that fades, as the copy's model's does, that the camera is within.
+                    copy.insert(VisibilityRange { start_margin: 0.0..0.0, end_margin: 1.0e5..1.0e6, use_aabb: false });
+                }
+                if !scatter.shadows {
+                    copy.insert(NotShadowCaster);
+                }
+            }
         }
         let mut scattered = commands.entity(entity);
         scattered.insert((Scattered, Transform::IDENTITY, Visibility::Inherited));

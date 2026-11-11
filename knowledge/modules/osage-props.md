@@ -6,7 +6,7 @@ resource: https://github.com/smichea/osage/tree/main/crates/osage-props
 licence: MIT OR Apache-2.0
 status: draft
 tags: [content, gltf, instancing, scenery]
-generated: { by: "claude-code/claude-opus-5-5", at: "2026-11-11T14:30:00Z" }
+generated: { by: "claude-code/claude-opus-5-5", at: "2026-11-11T17:00:00Z" }
 ---
 
 # Purpose
@@ -35,6 +35,7 @@ A Bevy plugin. Each frame it looks at scatters not yet placed whose model has lo
 
 # Invariants
 
+- Every mesh of every level of a scatter, with its material and its kind of visibility range, is drawn once at the start, in front of the camera and too small to see, so that its pipeline is made then: a pipeline first needed mid-race stalled a bench lap by 0.75 s on the L4 (2026-11-11).
 - A scatter is placed only once its model and textures have loaded: nothing appears white first, and a benchmark can wait for `Waiting` to reach zero to draw the same frames at every run.
 - A model that fails to load is skipped with a warning, never waited for forever.
 - A malformed model (a cycle of nodes, an index out of range) places what it can and never loops.

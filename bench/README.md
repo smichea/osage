@@ -64,6 +64,8 @@ Latest results of the reference machines, one line per machine and tier.
 | 2026-11-11 | same | Google Cloud g2-standard-4 (NVIDIA L4, driver 580), headless | T4 | 2560×1440 | 13.2 ms (76 fps) | 15.1 ms | 16.7 ms | 0.04 % |
 | 2026-11-11 | sculpted crowd, commit 1159de1 | ThinkPad E14 Gen 5 (Iris Xe), headless | T1 | 1280×720 | 10.6 ms (95 fps) | 13.0 ms | 14.9 ms | — |
 | 2026-11-11 | tree cards, commit 997aaca | ThinkPad E14 Gen 5 (Iris Xe), headless | T2 | 1920×1080 (1632×918) | 12.3 ms (81 fps) | 14.8 ms | 16.3 ms | — |
+| 2026-11-11 | onlookers, marshals, pit lane, worn markings, mixed-age woods, woods at T2, commit 253dbb9 | Google Cloud g2-standard-4 (NVIDIA L4, driver 580), headless | T3 | 2560×1440 | 12.4 ms (81 fps) | 13.9 ms | 14.9 ms | 0.13 % |
+| 2026-11-11 | same | Google Cloud g2-standard-4 (NVIDIA L4, driver 580), headless | T4 | 2560×1440 | 13.1 ms (76 fps) | 15.3 ms | 16.8 ms | 0.04 % |
 
 - "Under load": other programs were using the machine during these runs (load average 8 to 9 on 10 cores); a quiet run is expected to do better and will replace them.
 - T2 holds its budget on average on the integrated GPU, not for every frame. Without drawing under the output size it took 23.2 ms in the same conditions against 18.0 ms with: the scene is bound by the number of pixels there.
@@ -72,7 +74,7 @@ Latest results of the reference machines, one line per machine and tier.
 - The photographed circuit costs nothing measurable at T2: the same run without the content (`OSAGE_ASSETS=none`) took 18.1 ms. Its roadside models (tyre walls, plants, rocks, pines) took T2 to 54 ms on the Iris Xe: they start at T3.
 - Without a window, the bench keeps one frame in flight, as a window does (2026-11-11). Before, nothing paced it: a scene the GPU could not keep up with gave frames of a few milliseconds and then one of seconds, and only the mean was right. Waiting for the GPU after every frame instead left it idle while the next one was prepared (T2: 26 ms against 18).
 - T3 and T4 on the L4 use about a third of their budget (16.7 and 33.3 ms): the high tiers have room for techniques that cost more. Shader compilation stalls the first frame for about 4.5 s on that machine (warm-up, not timed).
-- Commit b7b0c78 on the L4: the slowest timed frame took 0.77 s at both tiers, one or two frames in a lap — a stall to find (a pipeline compiled the first time something is seen is the likely cause). The warm-up now takes about 13 s on that machine: tree cards and sculptures are made on the processor at load.
+- Commit b7b0c78 on the L4: the slowest timed frame took 0.77 s at both tiers. Commit 253dbb9, whose report names the slowest frames, put it at frame 262 at both tiers; the shaders compiled there were a level of detail's, with its fading visibility range, the first time one came into range (the bench makes pipelines as it first needs them, to draw the same frames every run). osage-props now draws every level once at the start; on the Iris Xe no shader of the scene is compiled after timing starts. The warm-up now takes about 13 s on that machine: tree cards and sculptures are made on the processor at load.
 
 ### What each technique costs
 
