@@ -56,11 +56,39 @@ fn meadow(land: &Land, at: Vec2, height: f32) -> Vec3 {
     let dry = smooth((noise(at / 38.0 + 40.0) - 0.55) / 0.2) * 0.6;
     colour = colour.lerp(tone(0.45, 0.42, 0.24), dry);
     colour = colour.lerp(tone(0.4, 0.42, 0.2), (height / HILLS).clamp(0.0, 1.0) * 0.5);
+    // Further out, farmland: a patchwork of fields, each its own crop.
+    let away = smooth((land.distance_to_track(at) - 150.0) / 80.0);
+    if away > 0.0 {
+        colour = colour.lerp(field(at), away * 0.85);
+    }
     if let Some(shore) = land.shore(at) {
         colour = colour.lerp(tone(0.66, 0.58, 0.42), smooth((1.24 - shore) / 0.12));
         colour = colour.lerp(tone(0.2, 0.26, 0.24), smooth((0.9 - shore) / 0.4));
     }
     colour / GRAIN
+}
+
+/// The colour of the field a point lies in, linear: fields of 60 to 120 m
+/// on a grid turned a little, each a crop — pasture, hay, ripe wheat,
+/// ploughed earth, young barley — with its own shade.
+fn field(at: Vec2) -> Vec3 {
+    let tone = |r: f32, g: f32, b: f32| Color::srgb(r, g, b).to_linear().to_vec3();
+    let crops = [
+        tone(0.24, 0.33, 0.13),
+        tone(0.3, 0.37, 0.14),
+        tone(0.55, 0.48, 0.25),
+        tone(0.66, 0.57, 0.32),
+        tone(0.4, 0.31, 0.22),
+        tone(0.34, 0.42, 0.18),
+    ];
+    // A grid turned by 0.3 radians, its cells stretched along one side.
+    let turned = Vec2::from_angle(0.3).rotate(at) / Vec2::new(115.0, 70.0);
+    let cell = turned.floor();
+    let pick = noise(cell * 13.7 + 0.5);
+    let crop = crops[(pick * crops.len() as f32) as usize % crops.len()];
+    // Rows show as faint stripes along the field.
+    let rows = 0.94 + 0.06 * (turned.y * 70.0 * 1.4).sin();
+    crop * rows * (0.92 + 0.16 * noise(cell * 5.1 + 2.0))
 }
 
 fn linear(r: f32, g: f32, b: f32) -> [f32; 4] {

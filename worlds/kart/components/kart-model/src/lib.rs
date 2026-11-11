@@ -270,6 +270,21 @@ fn frame(kart: &mut Sorted, livery: Livery) {
         Transform::IDENTITY,
         ALLOY,
     );
+    // On the rear axle: the sprocket on the left, the brake disc in the middle.
+    let across_axle = Quat::from_rotation_z(FRAC_PI_2);
+    let sprocket = Shape::new(Cylinder::new(0.075, 0.008).mesh().resolution(28));
+    kart.add(Finish::Alloy, &sprocket, at(0.24, WHEELS[1], -0.52).with_rotation(across_axle), ALLOY * 0.8);
+    let disc = Shape::new(Cylinder::new(0.09, 0.01).mesh().resolution(28));
+    kart.add(Finish::Steel, &disc, at(-0.12, WHEELS[1], -0.52).with_rotation(across_axle), Vec3::new(0.55, 0.55, 0.57));
+    let caliper = Shape::block(Vec3::new(-0.15, 0.17, -0.58), Vec3::new(-0.09, 0.23, -0.5));
+    kart.add(Finish::Satin, &caliper, Transform::IDENTITY, Vec3::new(0.7, 0.12, 0.1));
+    // The chain guard, black plastic from the engine to the sprocket.
+    let guard = Shape::extrude(
+        &[Vec2::new(-0.3, 0.1), Vec2::new(-0.6, 0.08), Vec2::new(-0.62, 0.22), Vec2::new(-0.3, 0.27)],
+        0.2,
+        0.26,
+    );
+    kart.add(Finish::Satin, &guard, Transform::from_rotation(Quat::from_rotation_y(-FRAC_PI_2)), BLACK);
     // The floor tray under the driver's legs.
     kart.add(
         Finish::Satin,
@@ -413,6 +428,14 @@ fn driver(kart: &mut Sorted, livery: Livery) {
     // The torso, leaning back into the seat.
     let torso = at(0.0, 0.42, -0.31).with_rotation(Quat::from_rotation_x(-0.38)).with_scale(Vec3::new(1.1, 1.0, 0.72));
     kart.add(Finish::Cloth, &capsule(0.15, 0.26), torso, suit);
+    // Shoulders, broader than the waist.
+    for side in [-1.0f32, 1.0] {
+        let shoulder = at(side * 0.19, 0.6, -0.27).with_scale(Vec3::new(1.0, 0.85, 1.0));
+        kart.add(Finish::Cloth, &Shape::new(Sphere::new(0.075).mesh().uv(14, 8)), shoulder, suit);
+    }
+    // A rib protector over the suit, black, at the waist.
+    let ribs = at(0.0, 0.33, -0.31).with_rotation(Quat::from_rotation_x(-0.38)).with_scale(Vec3::new(1.14, 0.42, 0.76));
+    kart.add(Finish::Satin, &capsule(0.152, 0.2), ribs, BLACK);
     // A band of the second colour across the chest.
     let band = at(0.0, 0.5, -0.27).with_rotation(Quat::from_rotation_x(-0.38)).with_scale(Vec3::new(1.12, 0.25, 0.75));
     kart.add(Finish::Cloth, &capsule(0.152, 0.0), band, panels);
