@@ -236,15 +236,15 @@ fn frame(kart: &mut Sorted, livery: Livery) {
 /// The plastic bodywork: nose, a dome before the front panel, the front panel
 /// with its number disc, side pods, the rear bumper; and the bucket seat.
 fn bodywork(kart: &mut Sorted, livery: Livery) {
-    let along_x = Quat::from_rotation_z(FRAC_PI_2);
-    let along_z = Quat::from_rotation_x(FRAC_PI_2);
-    // The nose: a wide rounded fairing ahead of the front wheels.
-    let nose = at(0.0, 0.13, 0.84).with_rotation(along_x).with_scale(Vec3::new(1.0, 1.0, 1.55));
-    kart.add(Finish::Varnish, &capsule(0.085, 0.72), nose, livery.main);
-    let lip = at(0.0, 0.07, 0.86).with_rotation(along_x).with_scale(Vec3::new(1.0, 1.0, 1.8));
-    kart.add(Finish::Satin, &capsule(0.04, 0.8), lip, BLACK);
+    // Side profiles (ahead, up) are drawn across the kart: the outline's X
+    // becomes the kart's Z, and the extrusion its width.
+    let across = Transform::from_rotation(Quat::from_rotation_y(-FRAC_PI_2));
+    let profile = |points: &[(f32, f32)]| points.iter().map(|&(z, y)| Vec2::new(z, y)).collect::<Vec<_>>();
+    // The nose: a moulded wedge ahead of the front wheels.
+    let nose = profile(&[(0.64, 0.05), (0.97, 0.05), (1.0, 0.1), (0.95, 0.15), (0.7, 0.21), (0.62, 0.17)]);
+    kart.add(Finish::Varnish, &Shape::extrude(&nose, -0.49, 0.49), across, livery.main);
     // A low dome between the nose and the front panel, over the pedals.
-    let dome = at(0.0, 0.16, 0.62).with_scale(Vec3::new(0.3, 0.075, 0.2));
+    let dome = at(0.0, 0.16, 0.6).with_scale(Vec3::new(0.26, 0.07, 0.17));
     kart.add(Finish::Varnish, &Shape::new(Sphere::new(1.0).mesh().uv(24, 12)), dome, livery.main);
     // The front panel, before the driver's shins, leaning back.
     let panel = at(0.0, 0.25, 0.43).with_rotation(Quat::from_rotation_x(-0.42));
@@ -257,16 +257,38 @@ fn bodywork(kart: &mut Sorted, livery: Livery) {
     let disc = Shape::new(Cylinder::new(0.085, 0.004).mesh().resolution(24));
     let number = panel * at(0.0, 0.02, 0.014) * Transform::from_rotation(Quat::from_rotation_x(FRAC_PI_2));
     kart.add(Finish::Varnish, &disc, number, WHITE);
-    // Side pods between the wheels, on the side bars.
-    for side in [-1.0, 1.0] {
-        let pod = at(side * 0.47, 0.12, -0.01).with_rotation(along_z).with_scale(Vec3::new(1.55, 1.0, 0.95));
-        kart.add(Finish::Varnish, &capsule(0.07, 0.42), pod, livery.main);
-        let stripe = at(side * 0.47, 0.18, -0.01).with_rotation(along_z).with_scale(Vec3::new(1.2, 1.0, 0.4));
-        kart.add(Finish::Varnish, &capsule(0.06, 0.4), stripe, livery.second);
+    // Side pods between the wheels: a moulded section along the kart, with
+    // sponsors' stickers on the outside.
+    for side in [-1.0f32, 1.0] {
+        let section: Vec<Vec2> = [(0.36, 0.06), (0.58, 0.05), (0.64, 0.11), (0.6, 0.2), (0.42, 0.2), (0.36, 0.14)]
+            .iter()
+            .map(|&(x, y)| Vec2::new(side * x, y))
+            .collect();
+        kart.add(Finish::Varnish, &Shape::extrude(&section, -0.3, 0.3), Transform::IDENTITY, livery.main);
+        let face = side * 0.625;
+        let sticker = |low: Vec3, high: Vec3| Shape::block(low, high);
+        kart.add(
+            Finish::Varnish,
+            &sticker(Vec3::new(face - 0.004, 0.1, -0.2), Vec3::new(face + 0.004, 0.16, 0.04)),
+            Transform::IDENTITY,
+            livery.second,
+        );
+        kart.add(
+            Finish::Varnish,
+            &sticker(Vec3::new(face - 0.004, 0.11, 0.08), Vec3::new(face + 0.004, 0.15, 0.2)),
+            Transform::IDENTITY,
+            Vec3::new(0.95, 0.78, 0.1),
+        );
+        // A stripe along the top.
+        let top: Vec<Vec2> = [(0.44, 0.2), (0.58, 0.2), (0.575, 0.208), (0.445, 0.208)]
+            .iter()
+            .map(|&(x, y)| Vec2::new(side * x, y))
+            .collect();
+        kart.add(Finish::Varnish, &Shape::extrude(&top, -0.28, 0.28), Transform::IDENTITY, livery.second);
     }
-    // The rear bumper, wide, behind the rear wheels.
-    let bumper = at(0.0, 0.17, -0.82).with_rotation(along_x).with_scale(Vec3::new(1.0, 1.0, 1.35));
-    kart.add(Finish::Varnish, &capsule(0.075, 1.12), bumper, livery.main);
+    // The rear bumper, wide and moulded, behind the rear wheels.
+    let bumper = profile(&[(-0.74, 0.1), (-0.93, 0.1), (-0.98, 0.17), (-0.94, 0.27), (-0.78, 0.28), (-0.72, 0.2)]);
+    kart.add(Finish::Varnish, &Shape::extrude(&bumper, -0.68, 0.68), across, livery.main);
     // The bucket seat: a shell around the driver's back, a base under him.
     let shell = Shape::gore(&[(0.17, 0.0), (0.19, 0.12), (0.2, 0.3), (0.18, 0.42)], 16, PI + 0.35, PI - 0.7);
     let seat = at(0.0, 0.08, -0.25).with_rotation(Quat::from_rotation_x(-0.42)).with_scale(Vec3::new(1.15, 1.0, 1.0));
@@ -450,9 +472,9 @@ mod tests {
         let kart = build(livery());
         let (low, high) = bounds(&kart.body);
         let size = high - low;
-        // About 1.8 m long and 1.3 m wide with its wheels; the frame a few centimetres off the road.
+        // About 1.9 m long and at most 1.4 m wide, as the rules have it; the frame a few centimetres off the road.
         assert!((1.7..2.0).contains(&size.z), "length {}", size.z);
-        assert!((1.0..1.3).contains(&size.x), "width without the wheels {}", size.x);
+        assert!((1.0..1.42).contains(&size.x), "width without the wheels {}", size.x);
         assert!(low.y > 0.0 && low.y < 0.04, "the lowest point is {} m off the road", low.y);
         // With the helmet, the driver's head about a metre high.
         let (_, top) = bounds(&kart.helmet);

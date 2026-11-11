@@ -21,7 +21,7 @@ The karts of the kart game as a real racing kart looks: the replacement of the t
 
 # Architecture
 
-Built from simple shapes ([osage-procedural](/modules/osage-procedural.md)): tubes swept along paths for the frame, the exhaust and the driver's limbs; capsules and spheres scaled for the bodywork; solids of revolution for the tyres, rims and helmet; slices of revolution for the seat's shell, the helmet's stripe and the visor. Proportions are a real kart's: a 1.04 m wheelbase, 10 and 11 inch slicks, a frame five centimetres off the road, the engine on the driver's right, a driver whose helmet tops out about a metre high. Colours are in the vertices, so a kart is a few meshes with a handful of shared materials.
+Built from simple shapes ([osage-procedural](/modules/osage-procedural.md)): moulded prisms for the nose, side pods and rear bumper; tubes swept along paths for the frame, the exhaust and the driver's limbs; capsules and spheres scaled for the bodywork; solids of revolution for the tyres, rims and helmet; slices of revolution for the seat's shell, the helmet's stripe and the visor. Proportions are a real kart's: a 1.04 m wheelbase, 10 and 11 inch slicks, a frame five centimetres off the road, the engine on the driver's right, a driver whose helmet tops out about a metre high. Colours are in the vertices, so a kart is a few meshes with a handful of shared materials.
 
 # Interfaces
 
@@ -29,7 +29,7 @@ Built from simple shapes ([osage-procedural](/modules/osage-procedural.md)): tub
 
 # Invariants
 
-- A real kart's size: about 1.9 m long, under 1.3 m wide without its wheels, its lowest point a few centimetres off the road, the helmet's top about a metre high. Tested.
+- A real kart's size: about 1.9 m long, at most 1.4 m wide, its lowest point a few centimetres off the road, the helmet's top about a metre high. Tested.
 - Each wheel touches the road and has its tyre's width; tyres are rubber, rims alloy. Tested.
 - Each finish is its own material; chrome is metal and nearly a mirror, cloth is rough, paint has a clear coat. Tested.
 

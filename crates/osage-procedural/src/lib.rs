@@ -134,6 +134,30 @@ impl Shape {
         Self::from_parts(positions, normals, indices)
     }
 
+    /// A prism: the convex `outline` in the XY plane, drawn from `near` to
+    /// `far` along Z, with flat faces and crisp edges, as moulded plastic
+    /// or sheet metal. The outline may turn either way.
+    pub fn extrude(outline: &[Vec2], near: f32, far: f32) -> Self {
+        let mut outline = outline.to_vec();
+        // Counter-clockwise, seen from +Z.
+        let area: f32 = (0..outline.len()).map(|i| outline[i].perp_dot(outline[(i + 1) % outline.len()])).sum();
+        if area < 0.0 {
+            outline.reverse();
+        }
+        let at = |p: Vec2, z: f32| Vec3::new(p.x, p.y, z);
+        let front: Vec<Vec3> = outline.iter().map(|&p| at(p, far)).collect();
+        let back: Vec<Vec3> = outline.iter().rev().map(|&p| at(p, near)).collect();
+        let sides: Vec<[Vec3; 4]> = (0..outline.len())
+            .map(|i| {
+                let (a, b) = (outline[i], outline[(i + 1) % outline.len()]);
+                [at(a, near), at(b, near), at(b, far), at(a, far)]
+            })
+            .collect();
+        let mut faces: Vec<&[Vec3]> = vec![&front, &back];
+        faces.extend(sides.iter().map(|side| side.as_slice()));
+        Self::faces(&faces, false)
+    }
+
     /// A box between two corners.
     pub fn block(low: Vec3, high: Vec3) -> Self {
         let size = high - low;
@@ -298,6 +322,24 @@ impl Dice {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn an_extruded_outline_faces_outwards_whichever_way_it_turns() {
+        let outline =
+            [Vec2::new(0.0, 0.0), Vec2::new(1.0, 0.0), Vec2::new(1.2, 0.5), Vec2::new(0.5, 0.9), Vec2::new(-0.1, 0.4)];
+        let reversed: Vec<Vec2> = outline.iter().rev().copied().collect();
+        for outline in [outline.to_vec(), reversed] {
+            let shape = Shape::extrude(&outline, -0.3, 0.3);
+            let centre = shape.positions.iter().sum::<Vec3>() / shape.positions.len() as f32;
+            for t in shape.indices.as_chunks::<3>().0 {
+                let [a, b, c] = t.map(|i| shape.positions[i as usize]);
+                let normal = (b - a).cross(c - a);
+                assert!(normal.dot((a + b + c) / 3.0 - centre) > 0.0, "a face looks inwards");
+                assert!(normal.dot(shape.normals[t[0] as usize]) > 0.0, "a normal disagrees with its winding");
+            }
+            assert_eq!(shape.indices.len() / 3, 2 * 3 + 5 * 2, "two caps of three triangles, five sides of two");
+        }
+    }
 
     /// Every triangle of a closed shape around the origin's axis must face
     /// away from it, and agree with its vertices' normals.
