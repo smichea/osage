@@ -6,7 +6,7 @@ resource: https://github.com/smichea/osage/tree/main/crates/osage-procedural
 licence: MIT OR Apache-2.0
 status: draft
 tags: [procedural, geometry, batching]
-generated: { by: "claude-code/claude-opus-5-5", at: "2026-11-11T02:00:00Z" }
+generated: { by: "claude-code/claude-opus-5-5", at: "2026-11-11T11:00:00Z" }
 ---
 
 # Purpose
@@ -19,6 +19,7 @@ Build static scenery from code at little cost, and scatter things the same way a
 - **Paint:** vertex colours, plain or from foot to top.
 - **Batch:** placed, painted shapes gathered into one mesh per patch of land.
 - **Dice:** a small seeded generator: the same numbers on every machine.
+- **Sculpture:** round cones, ellipsoids and boxes blended into one smooth surface, folded like cloth where asked, painted by groups: a figure without seams ([blended solids](/algorithms/blended-solids.md)).
 
 # Architecture
 
@@ -26,15 +27,15 @@ The algorithm is [sculpted scenery](/algorithms/sculpted-scenery.md).
 
 # Interfaces
 
-`Shape::{new, lathe, gore, sweep, faces, block, extrude, extrude_rounded}`, `Paint::{plain, blend, shaded}`, `Batch::{add, add_within, append, merged, meshes}`, `Dice::{roll, between, pick}`.
+`Shape::{new, lathe, gore, sweep, faces, block, extrude, extrude_rounded}`, `Paint::{plain, blend, shaded}`, `Batch::{add, add_within, append, merged, meshes}`, `Dice::{roll, between, pick}`, `Sculpture::{new, cone, ellipsoid, cuboid, paint_cone, paint_box, folded, distance, group_at, shapes}`.
 
 # Invariants
 
-Every kind of shape faces outwards, mirrored placements and outlines turning either way included; a batch splits by patch of land; paint by height runs from foot to top. Tested.
+Every kind of shape faces outwards, mirrored placements and outlines turning either way included; a batch splits by patch of land; paint by height runs from foot to top; a sculpture's mesh lies on its surface, faces out, and is painted by its pieces. Tested.
 
 # Knowledge
 
-- Algorithm: [sculpted scenery](/algorithms/sculpted-scenery.md).
+- Algorithms: [sculpted scenery](/algorithms/sculpted-scenery.md), [blended solids](/algorithms/blended-solids.md).
 - Used by [osage-kart-native](/modules/kart-native.md) and [osage-kart-roadside](/modules/kart-roadside.md).
 
 # Reuse

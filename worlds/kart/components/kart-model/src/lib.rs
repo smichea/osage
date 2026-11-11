@@ -21,7 +21,7 @@
 use std::f32::consts::{FRAC_PI_2, PI, TAU};
 
 use bevy::prelude::*;
-use osage_procedural::{Batch, Paint, Shape};
+use osage_procedural::{Batch, Paint, Sculpture, Shape};
 
 /// Radius of the front and of the rear tyres, metres: 10 and 11 inch slicks.
 pub const WHEELS: [f32; 2] = [0.135, 0.14];
@@ -435,75 +435,90 @@ fn engine(kart: &mut Sorted) {
     kart.add(Finish::Chrome, &capsule(0.045, 0.22), silencer, CHROME);
 }
 
-/// The driver, sitting low with legs ahead, hands on the wheel.
+/// The groups of the driver's sculpture: what each part of the surface is.
+mod worn {
+    pub const SUIT: usize = 0;
+    pub const PANELS: usize = 1;
+    pub const BAND: usize = 2;
+    pub const GLOVES: usize = 3;
+    pub const BOOTS: usize = 4;
+    pub const RIBS: usize = 5;
+    pub const PATCH: usize = 6;
+    pub const MARK: usize = 7;
+}
+
+/// The driver's body, sitting low with legs ahead, hands on the wheel:
+/// limbs and trunk blended into one surface ([`Sculpture`]), cloth folded
+/// at the elbows and knees, and the suit's panels painted on. The same for
+/// every driver, so sculpted once; each livery only paints it.
+fn sculpted_driver() -> &'static [(usize, Shape)] {
+    static DRIVER: std::sync::OnceLock<Vec<(usize, Shape)>> = std::sync::OnceLock::new();
+    DRIVER.get_or_init(|| {
+        use worn::*;
+        let lean = Quat::from_rotation_x(-0.38);
+        let mut body = Sculpture::new(0.045);
+        // The trunk, leaning back into the seat: pelvis, belly, chest.
+        body.ellipsoid(SUIT, Vec3::new(0.0, 0.17, -0.2), Vec3::new(0.15, 0.1, 0.13), Quat::IDENTITY)
+            .ellipsoid(SUIT, Vec3::new(0.0, 0.33, -0.28), Vec3::new(0.145, 0.13, 0.1), lean)
+            .ellipsoid(SUIT, Vec3::new(0.0, 0.5, -0.33), Vec3::new(0.17, 0.15, 0.11), lean)
+            // The rib protector, hard and black over the suit at the waist.
+            .ellipsoid(RIBS, Vec3::new(0.0, 0.33, -0.29), Vec3::new(0.162, 0.085, 0.115), lean)
+            // The neck.
+            .cone(SUIT, Vec3::new(0.0, 0.6, -0.32), Vec3::new(0.0, 0.74, -0.27), 0.055, 0.05);
+        for side in [-1.0f32, 1.0] {
+            let shoulder = Vec3::new(side * 0.19, 0.6, -0.27);
+            let elbow = Vec3::new(side * 0.25, 0.47, -0.08);
+            let wrist = Vec3::new(side * 0.135, 0.5, 0.1);
+            let knee = Vec3::new(side * 0.13, 0.27, 0.12);
+            let ankle = Vec3::new(side * 0.11, 0.14, 0.48);
+            body.cone(SUIT, Vec3::new(0.0, 0.63, -0.31), shoulder, 0.06, 0.068)
+                .cone(SUIT, shoulder, elbow, 0.056, 0.046)
+                .folded(0.0025)
+                .cone(SUIT, elbow, wrist, 0.045, 0.034)
+                .folded(0.0025)
+                .cone(GLOVES, wrist + Vec3::new(0.0, 0.0, -0.01), Vec3::new(side * 0.122, 0.51, 0.135), 0.037, 0.035)
+                .ellipsoid(GLOVES, Vec3::new(side * 0.12, 0.51, 0.15), Vec3::new(0.034, 0.042, 0.05), Quat::IDENTITY)
+                .cone(SUIT, Vec3::new(side * 0.1, 0.15, -0.16), knee, 0.082, 0.058)
+                .folded(0.003)
+                .cone(SUIT, knee, ankle, 0.056, 0.04)
+                .folded(0.0025)
+                .cone(BOOTS, ankle + Vec3::new(0.0, -0.01, 0.0), Vec3::new(side * 0.11, 0.12, 0.6), 0.045, 0.038);
+            // Painted on: panels down the sides and along the upper arms,
+            // over the knees, in the team's colour.
+            body.paint_box(PANELS, Vec3::new(side * 0.17, 0.42, -0.3), Vec3::new(0.045, 0.22, 0.16), lean)
+                .paint_cone(PANELS, shoulder, elbow, 0.075, 0.062)
+                .paint_cone(PANELS, knee, knee, 0.07, 0.07);
+        }
+        // A band of the second colour across the chest and shoulders, the
+        // collar in the team's colour, and a white patch on the back with a
+        // dark mark standing for a sponsor, where the chasing camera sees it.
+        body.paint_box(BAND, Vec3::new(0.0, 0.53, -0.31), Vec3::new(0.3, 0.035, 0.2), lean)
+            .paint_cone(PANELS, Vec3::new(0.0, 0.66, -0.3), Vec3::new(0.0, 0.7, -0.29), 0.075, 0.07)
+            .paint_box(PATCH, Vec3::new(0.0, 0.46, -0.44), Vec3::new(0.09, 0.06, 0.08), lean)
+            .paint_box(MARK, Vec3::new(0.0, 0.46, -0.45), Vec3::new(0.06, 0.016, 0.08), lean);
+        body.shapes(0.012)
+    })
+}
+
+/// The driver, sculpted, in the livery's colours.
 fn driver(kart: &mut Sorted, livery: Livery) {
-    // The suit in its own colour, the team's on its panels.
-    let (suit, panels) = (livery.suit, livery.main);
-    // The torso, leaning back into the seat.
-    let torso = at(0.0, 0.42, -0.31).with_rotation(Quat::from_rotation_x(-0.38)).with_scale(Vec3::new(1.1, 1.0, 0.72));
-    kart.add(Finish::Cloth, &capsule(0.15, 0.26), torso, suit);
-    // Shoulders, broader than the waist.
-    for side in [-1.0f32, 1.0] {
-        let shoulder = at(side * 0.19, 0.6, -0.27).with_scale(Vec3::new(1.0, 0.85, 1.0));
-        kart.add(Finish::Cloth, &Shape::new(Sphere::new(0.075).mesh().uv(14, 8)), shoulder, suit);
+    for (group, shape) in sculpted_driver() {
+        let (finish, colour) = match *group {
+            worn::SUIT => (Finish::Cloth, livery.suit),
+            worn::PANELS => (Finish::Cloth, livery.main),
+            worn::BAND => (Finish::Cloth, livery.second),
+            worn::GLOVES | worn::BOOTS => (Finish::Rubber, BLACK),
+            worn::RIBS => (Finish::Satin, BLACK),
+            worn::PATCH => (Finish::Cloth, WHITE),
+            _ => (Finish::Cloth, BLACK),
+        };
+        kart.add(finish, shape, Transform::IDENTITY, colour);
     }
-    // A rib protector over the suit, black, at the waist.
-    let ribs = at(0.0, 0.33, -0.31).with_rotation(Quat::from_rotation_x(-0.38)).with_scale(Vec3::new(1.14, 0.42, 0.76));
-    kart.add(Finish::Satin, &capsule(0.152, 0.2), ribs, BLACK);
-    // A band of the second colour across the chest.
-    let band = at(0.0, 0.5, -0.27).with_rotation(Quat::from_rotation_x(-0.38)).with_scale(Vec3::new(1.12, 0.25, 0.75));
-    kart.add(Finish::Cloth, &capsule(0.152, 0.0), band, livery.second);
-    // The collar, in the team's colour, and over it the black foam neck
-    // brace karting drivers wear, on which the helmet rests.
-    kart.add(Finish::Cloth, &capsule(0.08, 0.0), at(0.0, 0.69, -0.28).with_scale(Vec3::new(1.0, 0.6, 1.0)), panels);
+    // The foam neck brace karting drivers wear, on which the helmet rests.
     let brace = Shape::new(
         Torus { minor_radius: 0.035, major_radius: 0.105 }.mesh().minor_resolution(10).major_resolution(24).build(),
     );
     kart.add(Finish::Satin, &brace, at(0.0, 0.725, -0.275).with_scale(Vec3::new(1.15, 1.0, 1.05)), BLACK);
-    let leaning = Quat::from_rotation_x(-0.38);
-    // Side panels down the torso.
-    for side in [-1.0f32, 1.0] {
-        let panel = at(side * 0.155, 0.42, -0.31).with_rotation(leaning).with_scale(Vec3::new(0.18, 1.0, 0.6));
-        kart.add(Finish::Cloth, &capsule(0.1, 0.24), panel, panels);
-    }
-    // A patch on the back, where the chasing camera sees it: white, with a
-    // dark mark standing for a sponsor.
-    let back = at(0.0, 0.49, -0.42).with_rotation(leaning);
-    kart.add(Finish::Cloth, &Shape::block(Vec3::new(-0.09, -0.06, -0.01), Vec3::new(0.09, 0.06, 0.0)), back, WHITE);
-    kart.add(
-        Finish::Cloth,
-        &Shape::block(Vec3::new(-0.06, -0.015, -0.014), Vec3::new(0.06, 0.015, -0.01)),
-        back,
-        BLACK,
-    );
-    // Hips.
-    kart.add(
-        Finish::Cloth,
-        &capsule(0.13, 0.14),
-        at(0.0, 0.17, -0.2).with_rotation(Quat::from_rotation_z(FRAC_PI_2)),
-        suit * 0.85,
-    );
-    for side in [-1.0f32, 1.0] {
-        // Arms: shoulder, elbow out and down, hands at ten to two.
-        let arm = [
-            Vec3::new(side * 0.19, 0.6, -0.26),
-            Vec3::new(side * 0.25, 0.47, -0.08),
-            Vec3::new(side * 0.13, 0.5, 0.12),
-        ];
-        kart.add(Finish::Cloth, &tube(&arm, 0.042), Transform::IDENTITY, suit);
-        kart.add(Finish::Cloth, &tube(&arm[..2], 0.044), at(0.0, 0.0, 0.0).with_scale(Vec3::ONE), panels);
-        let glove = at(side * 0.12, 0.51, 0.14).with_scale(Vec3::new(0.85, 1.0, 1.15));
-        kart.add(Finish::Rubber, &Shape::new(Sphere::new(0.04).mesh().uv(12, 8)), glove, BLACK);
-        // Legs: thigh up to the knee, shin down to the pedals.
-        let thigh = [Vec3::new(side * 0.1, 0.15, -0.16), Vec3::new(side * 0.13, 0.27, 0.12)];
-        let shin = [Vec3::new(side * 0.13, 0.27, 0.12), Vec3::new(side * 0.11, 0.13, 0.5)];
-        kart.add(Finish::Cloth, &tube(&thigh, 0.07), Transform::IDENTITY, suit);
-        // A knee panel in the second colour.
-        kart.add(Finish::Cloth, &Shape::new(Sphere::new(0.062).mesh().uv(12, 8)), at(side * 0.13, 0.28, 0.12), panels);
-        kart.add(Finish::Cloth, &tube(&shin, 0.052), Transform::IDENTITY, suit);
-        let boot = at(side * 0.11, 0.12, 0.56).with_rotation(Quat::from_rotation_x(FRAC_PI_2 - 0.4));
-        kart.add(Finish::Rubber, &capsule(0.045, 0.1), boot, BLACK);
-    }
 }
 
 /// The helmet, around the neck: a varnished shell in the team's colour with

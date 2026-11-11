@@ -12,8 +12,12 @@
 //! revolution ([`Shape::lathe`]), a tube along a path ([`Shape::sweep`]) or
 //! flat faces ([`Shape::faces`]). A [`Paint`] colours it, plainly or from its
 //! foot to its top. A [`Batch`] gathers placed shapes that share a material.
+//! A [`Sculpture`] blends pieces into one organic surface: a figure, cloth.
 
 use std::collections::BTreeMap;
+
+pub mod sculpt;
+pub use sculpt::Sculpture;
 
 use bevy::{
     asset::RenderAssetUsages,
