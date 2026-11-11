@@ -15,12 +15,12 @@ Dress the kart circuit as a real one: the photorealistic counterpart of the proc
 
 # Concepts
 
-- **Detail:** `Some` (tyre walls, bushes, boulders, pines: few and large, for T2) or `Full` (also grass, wild flowers, ferns, low plants and stones, from T3).
+- **Detail:** `Some` (tyre walls, bushes, boulders, pines: few and large) or `Full` (also grass, wild flowers, ferns, low plants and stones). The kart client uses `Full` from T3; below, the integrated GPUs of the reference cannot afford the models.
 - **Roadside:** the barrier line, `half width + verge + barrier` from the centre line: plants grow beyond it, tyres stand just inside it.
 
 # Architecture
 
-One pure function, `scatters`, from the land ([osage-kart-land](/modules/kart-land.md)), the track's frames, the clearings other builders keep free, the models and the detail, to a list of `osage_props::Scatter`. Plants are placed near the track, where they are seen: a random frame, a side, a distance beyond the barrier, rejected if not free (on the road side, in the lake or on its beach, in a clearing). Pines grow in groves where a low-frequency noise is high. Tyres lie flat in stacks of three, two rows deep, along the outside of every bend. Each set has a distance it is seen up to, by its size: a tuft of grass 45 m, a pine 350 m.
+One pure function, `scatters`, from the land ([osage-kart-land](/modules/kart-land.md)), the track's frames, the clearings other builders keep free, the models and the detail, to a list of `osage_props::Scatter`. Plants are placed near the track, where they are seen: a random point along the track, a side, a distance beyond the barrier, rejected if not free (on the road side, in the lake or on its beach, in a clearing). Pines grow in groves where a low-frequency noise is high, near the track, and in woods from 140 to 400 m out to the edge of the modelled land, seen to 900 m as coarse meshes: from T3, no procedural tree is needed. Tyres lie flat in stacks of three, two rows deep, along the outside of every bend. Each set has a distance it is seen up to, by its size: a tuft of grass 45 m, a pine by the track 450 m, the woods 900 m; trees, bushes and rocks get coarser meshes with distance ([osage-props](/modules/osage-props.md)).
 
 # Interfaces
 

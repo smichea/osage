@@ -119,6 +119,19 @@ pub fn scatters(
     }
     all.push(scatter(&models.pine, pines, Use::Variants, 450.0, true));
 
+    // Woods further off, to the edge of the modelled land: groves on the
+    // hills, tall, seen far as coarse meshes.
+    let mut woods = Vec::new();
+    for _ in 0..9000 {
+        let at = beside(&mut dice, 140.0, 400.0);
+        let (turn, size, chance) = (dice.between(0.0, std::f32::consts::TAU), dice.between(5.0, 9.0), dice.roll());
+        let inside = (at - land.centre()).abs().max_element() < osage_kart_land::LAND / 2.0 - 30.0;
+        if inside && chance < (noise(at / 70.0 + 9.0) - 0.42) * 2.2 && free(at, 8.0) && woods.len() < 700 {
+            woods.push(stand(at, 0.2, turn, size));
+        }
+    }
+    all.push(scatter(&models.pine, woods, Use::Variants, 900.0, true));
+
     // Bushes and boulders.
     let mut bushes = Vec::new();
     let mut boulders = Vec::new();

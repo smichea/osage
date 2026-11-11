@@ -170,8 +170,8 @@ pub fn build(
             for scatter in scatters {
                 commands.spawn((Part, scatter));
             }
-            // Real trees are few: procedural ones stand where nobody looks closely.
-            Growth::Far
+            // Modelled woods stand far too: nothing procedural is needed.
+            Growth::None
         } else {
             Growth::Real
         };
@@ -243,10 +243,15 @@ enum Growth {
     Real,
     /// Only trees, only far from the track: the near roadside has models.
     Far,
+    /// Nothing: modelled trees stand everywhere.
+    None,
 }
 
 /// Trees in groves, bushes, flowers in the meadows, a few rocks.
 fn plant(set: &mut Set, land: &Land, roadside: f32, centre: Vec2, growth: Growth) {
+    if growth == Growth::None {
+        return;
+    }
     let far = growth == Growth::Far;
     let trunk = Shape::lathe(&[(0.34, 0.0), (0.25, 0.55), (0.2, 1.0)], 6);
     let cone = Shape::lathe(&[(0.0, 0.0), (1.0, 0.0), (0.0, 1.0)], 9);
