@@ -99,11 +99,23 @@ pub struct Look {
     /// The colour of the land, which tints the light that comes back from
     /// below ([`sky_light`]).
     pub ground: Color,
+    /// How much a camera's lens darkens the corners: 0 not at all, 1 to black.
+    pub vignette: f32,
+    /// How much a camera's lens splits colours towards the edges (chromatic
+    /// aberration): 0 not at all; a few thousandths for a real lens.
+    pub fringe: f32,
 }
 
 impl Default for Look {
     fn default() -> Self {
-        Self { tonemapping: Tonemapping::AgX, saturation: 1.0, exposure: 0.0, ground: Color::srgb(0.42, 0.44, 0.36) }
+        Self {
+            tonemapping: Tonemapping::AgX,
+            saturation: 1.0,
+            exposure: 0.0,
+            ground: Color::srgb(0.42, 0.44, 0.36),
+            vignette: 0.0,
+            fringe: 0.0,
+        }
     }
 }
 

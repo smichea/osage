@@ -43,9 +43,20 @@ pub const SKY: &str = "kloofendal_48d_partly_cloudy_puresky";
 /// it washed out the sky).
 const SKY_TURN: f32 = 5.6;
 
-/// The kart world's look: a sunny day as a camera sees it.
+/// The kart world's look: a sunny day as a camera sees it, through a lens.
 pub fn look() -> Look {
-    Look { tonemapping: Tonemapping::AgX, saturation: 1.05, exposure: 0.0, ground: GROUND }
+    // ACES has the contrast of a photograph printed for a game, where AgX
+    // greyed the asphalt and the sky; a third of a stop brighter makes up for
+    // its deeper shadows. A lens darkens the corners a little and splits
+    // colours a little at the edges.
+    Look {
+        tonemapping: Tonemapping::AcesFitted,
+        saturation: 1.0,
+        exposure: 0.33,
+        ground: GROUND,
+        vignette: 0.3,
+        fringe: 0.004,
+    }
 }
 
 /// What lies under the karts, on average, for the light that comes back from

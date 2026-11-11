@@ -33,11 +33,13 @@ The passes themselves are Bevy's[^bevy]; this technique chooses which run at eac
 
 # Settings per tier
 
-| Tier | Anti-aliasing | Bloom | Motion blur |
-|---|---|---|---|
-| T1 | FXAA | no | no |
-| T2 | FXAA | yes | no |
-| T3, T4 | temporal | yes | yes |
+| Tier | Anti-aliasing | Bloom | Motion blur | Lens (the world's choice) |
+|---|---|---|---|---|
+| T1 | FXAA | no | no | no |
+| T2 | FXAA | yes | no | no |
+| T3, T4 | temporal | yes | yes | vignette and colour fringes, if the world's look asks |
+
+A world's look also names a lens: how much it darkens the corners (`vignette`) and splits colours towards the edges (`fringe`, chromatic aberration). Both are off unless asked; the kart world asks for a little of each, and for ACES tonemapping a third of a stop brighter, which gave its photographed circuit the contrast AgX greyed out (2026-11-11).
 
 # Cost
 

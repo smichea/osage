@@ -7,7 +7,8 @@
 //! saturation, its exposure offset.
 //!
 //! - T1, T2: FXAA, which needs no depth prepass; T2 adds bloom.
-//! - T3+: temporal anti-aliasing, bloom and motion blur.
+//! - T3+: temporal anti-aliasing, bloom and motion blur; and the lens the
+//!   world asks for in its look (vignette, colour fringes).
 //!
 //! Temporal anti-aliasing and ambient occlusion both need a depth prepass.
 //! On the Intel Iris Xe reference (Mesa), the prepass and the main pass do
@@ -17,7 +18,11 @@
 use bevy::{
     anti_alias::{fxaa::Fxaa, taa::TemporalAntiAliasing},
     camera::{Exposure, Hdr},
-    post_process::{bloom::Bloom, motion_blur::MotionBlur},
+    post_process::{
+        bloom::Bloom,
+        effect_stack::{ChromaticAberration, Vignette},
+        motion_blur::MotionBlur,
+    },
     prelude::*,
     render::view::{ColorGrading, ColorGradingGlobal},
 };
@@ -40,11 +45,21 @@ fn camera(mut commands: Commands, tier: Res<Tier>, look: Res<Look>, cameras: Que
         camera.insert((Hdr, look.tonemapping, Exposure::SUNLIGHT, Msaa::Off));
         camera.insert(ColorGrading { global: grading, ..default() });
         match *tier {
-            Tier::T1 => camera.insert(Fxaa::default()),
-            Tier::T2 => camera.insert((Fxaa::default(), Bloom::NATURAL)),
-            Tier::T3 | Tier::T4 => {
-                camera.insert((TemporalAntiAliasing::default(), Bloom::NATURAL, MotionBlur::default()))
+            Tier::T1 => {
+                camera.insert(Fxaa::default());
             }
-        };
+            Tier::T2 => {
+                camera.insert((Fxaa::default(), Bloom::NATURAL));
+            }
+            Tier::T3 | Tier::T4 => {
+                camera.insert((TemporalAntiAliasing::default(), Bloom::NATURAL, MotionBlur::default()));
+                if look.vignette > 0.0 {
+                    camera.insert(Vignette { intensity: look.vignette, radius: 0.85, smoothness: 2.5, ..default() });
+                }
+                if look.fringe > 0.0 {
+                    camera.insert(ChromaticAberration { intensity: look.fringe, ..default() });
+                }
+            }
+        }
     }
 }
