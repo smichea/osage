@@ -247,8 +247,24 @@ struct Chase {
     glance: f32,
 }
 
+/// What the wheels run on at `x`, `z`, as how much it shakes a kart: kerbs
+/// shake (0.6), grass bumps (1), asphalt hums (0.1).
+pub fn roughness(course: Option<&Course>, x: f32, z: f32) -> f32 {
+    course.map_or(0.1, |course| {
+        let track = &course.0.track;
+        let lateral = track.locate(x, z).lateral.abs();
+        if lateral > track.half_width + 0.9 {
+            1.0
+        } else if lateral > track.half_width - 0.25 {
+            0.6
+        } else {
+            0.1
+        }
+    })
+}
+
 /// A smooth wobble in -1..1: three sines whose periods never line up.
-fn wobble(t: f32, seed: f32) -> f32 {
+pub fn wobble(t: f32, seed: f32) -> f32 {
     ((t * 1.0 + seed).sin() * 0.5 + (t * 2.31 + seed * 1.7).sin() * 0.3 + (t * 5.17 + seed * 0.3).sin() * 0.2)
         .clamp(-1.0, 1.0)
 }
@@ -317,18 +333,7 @@ fn follow(
         chase.jolt = (chase.jolt + slowing / 80.0).min(1.0);
     }
     chase.jolt *= (-step * 5.0).exp();
-    // What the wheels run on: kerbs shake, grass bumps, asphalt hums.
-    let surface = course.as_ref().map_or(0.1, |course| {
-        let track = &course.0.track;
-        let lateral = track.locate(kart.x, kart.z).lateral.abs();
-        if lateral > track.half_width + 0.9 {
-            1.0
-        } else if lateral > track.half_width - 0.25 {
-            0.6
-        } else {
-            0.1
-        }
-    });
+    let surface = roughness(course.as_deref(), kart.x, kart.z);
     let pace = (kart.speed.abs() / MAX_SPEED).clamp(0.0, 1.3);
     let view = view.map_or(View::Chase, |view| *view);
     let wanted_glance = glance.map_or(0.0, |glance| glance.0);

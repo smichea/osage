@@ -23,11 +23,13 @@ use bevy::{
     mesh::skinning::{SkinnedMesh, SkinnedMeshInverseBindposes},
     prelude::*,
 };
-use osage_kart_model::{AXLES, DRIVER_BONES, Finish, Livery, NECK, WHEELS, driver_pose, driver_rest, steering_column};
+use osage_kart_model::{
+    AXLES, DRIVER_BONES, Finish, Livery, NECK, WHEELS, driver_pose, driver_rest, neck, steering_column,
+};
 pub use osage_kart_model::{EXHAUSTS, REAR_CONTACTS};
 use osage_kart_physics::{MAX_SPEED, wrap};
 
-use crate::scene::{PALETTE, Pose};
+use crate::scene::{Course, PALETTE, Pose, roughness, wobble};
 
 /// A hop into a drift lasts this long, seconds.
 const HOP: f32 = 0.28;
@@ -80,6 +82,14 @@ pub struct Rig {
     /// Seconds left of the hop into a drift.
     hop: f32,
     drifting: bool,
+    /// The driver's trunk, bent about the waist: thrown out of a bend (roll,
+    /// about Z) and forward under braking (pitch, about X); and how fast it
+    /// moves. A mass on a spring: it lags, swings a little past, settles.
+    torso: Vec2,
+    sway: Vec2,
+    /// Seconds driven, and this kart's own offset, for its rumble.
+    time: f32,
+    seed: f32,
 }
 
 pub fn setup(
@@ -244,13 +254,22 @@ pub fn dress(
                 pitch: 0.0,
                 hop: 0.0,
                 drifting: false,
+                torso: Vec2::ZERO,
+                sway: Vec2::ZERO,
+                time: 0.0,
+                seed: (kart.index_u32() % 97) as f32 * 0.61,
             },
         ));
     }
 }
 
 /// Places every kart and moves its parts from how its state changes.
-pub fn animate(time: Res<Time>, mut karts: Query<(Entity, &Pose, &mut Rig)>, mut transforms: Query<&mut Transform>) {
+pub fn animate(
+    time: Res<Time>,
+    course: Option<Res<Course>>,
+    mut karts: Query<(Entity, &Pose, &mut Rig)>,
+    mut transforms: Query<&mut Transform>,
+) {
     let seconds = time.delta_secs().max(1e-4);
     let ease = |rate: f32| (seconds * rate).min(1.0);
     for (entity, pose, mut rig) in &mut karts {
@@ -273,18 +292,40 @@ pub fn animate(time: Res<Time>, mut karts: Query<(Entity, &Pose, &mut Rig)>, mut
         rig.drifting = kart.drift != 0.0;
         rig.hop = (rig.hop - seconds).max(0.0);
         let hop = 0.06 * (PI * rig.hop / HOP).sin();
+        // Kerbs and grass rattle a kart that has no suspension, the faster
+        // the harder; the driver's trunk takes the knocks.
+        rig.time += seconds;
+        let shaking = roughness(course.as_deref(), kart.x, kart.z) * (kart.speed.abs() / MAX_SPEED).min(1.0);
+        let rattle = Vec2::new(wobble(rig.time * 41.0, rig.seed), wobble(rig.time * 29.0, rig.seed + 2.0)) * shaking;
+
+        // The trunk: thrown out of the bend by the turn (speed × rate of
+        // turn: up to 2 g in a kart), forward when braking, back when
+        // accelerating; its spring a second and a bit, under-damped.
+        let wanted = Vec2::new((kart.speed * turning * 0.009).clamp(-0.22, 0.22), (-pushing * 0.01).clamp(-0.1, 0.16));
+        let (stiff, damped, step) = (55.0, 2.0 * 0.55 * 55f32.sqrt(), seconds.min(0.05));
+        let pull = stiff * (wanted - rig.torso) - damped * rig.sway + rattle * 18.0;
+        rig.sway += pull * step;
+        let sway = rig.sway;
+        rig.torso += sway * step;
+        let lean = Quat::from_rotation_x(rig.torso.y) * Quat::from_rotation_z(rig.torso.x);
 
         if let Ok(mut place) = transforms.get_mut(entity) {
             *place = Transform::from_xyz(kart.x, hop, kart.z).with_rotation(Quat::from_rotation_y(kart.heading));
         }
         if let Ok(mut body) = transforms.get_mut(rig.body) {
-            body.rotation =
-                Quat::from_rotation_y(rig.slip) * Quat::from_rotation_z(rig.lean) * Quat::from_rotation_x(rig.pitch);
+            body.translation.y = rattle.y * 0.006;
+            body.rotation = Quat::from_rotation_y(rig.slip)
+                * Quat::from_rotation_z(rig.lean + rattle.x * 0.01)
+                * Quat::from_rotation_x(rig.pitch);
         }
-        // The driver looks into the turn and leans against the bend.
+        // The head goes where the trunk takes it; the neck keeps the eyes
+        // nearer level than the shoulders. The driver looks into the turn
+        // and leans against the bend.
         if let Ok(mut head) = transforms.get_mut(rig.head) {
-            head.rotation =
-                Quat::from_rotation_y(rig.steer * 0.45 - rig.slip * 0.6) * Quat::from_rotation_z(-rig.lean * 1.5);
+            head.translation = neck(lean);
+            head.rotation = Quat::IDENTITY.slerp(lean, 0.45)
+                * Quat::from_rotation_y(rig.steer * 0.45 - rig.slip * 0.6)
+                * Quat::from_rotation_z(-rig.lean * 1.5);
         }
         // The steering wheel turns twice as far as the front wheels, the
         // hands on it, the arms following.
@@ -292,7 +333,7 @@ pub fn animate(time: Res<Time>, mut karts: Query<(Entity, &Pose, &mut Rig)>, mut
         if let Ok(mut wheel) = transforms.get_mut(rig.bones.steering) {
             *wheel = steering_column() * Transform::from_rotation(Quat::from_rotation_y(turn));
         }
-        for (joint, bone) in rig.bones.joints.iter().zip(driver_pose(turn)) {
+        for (joint, bone) in rig.bones.joints.iter().zip(driver_pose(turn, lean)) {
             if let Ok(mut place) = transforms.get_mut(*joint) {
                 *place = bone;
             }

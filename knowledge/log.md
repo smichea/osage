@@ -1,5 +1,8 @@
 # Knowledge Update Log
 
+## 2026-11-12
+* **Update**: [osage-kart-model](/modules/kart-model.md)'s drivers bend at the waist: a spine bone carries the trunk, the shoulders and the head; [osage-kart-native](/modules/kart-native.md) throws the trunk out of bends and forward under braking, on a spring.
+
 ## 2026-11-11
 * **Update**: [Blended solids](/algorithms/blended-solids.md) can be skinned; [osage-kart-model](/modules/kart-model.md)'s drivers steer, their arms following the wheel; its bodywork is moulded.
 * **Update**: [A photographed sky](/techniques/panorama.md): a world may have one photograph per time of day; the kart world gains a late afternoon ([osage-kart-native](/modules/kart-native.md), `--sky evening`).

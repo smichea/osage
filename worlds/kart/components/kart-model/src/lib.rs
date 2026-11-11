@@ -259,12 +259,16 @@ fn steering_wheel() -> Part {
     wheel.part()
 }
 
-/// The driver's bones: the trunk, then for each arm, left (+X) and right,
-/// the upper arm, the forearm and the hand, each at its joint.
-pub const DRIVER_BONES: usize = 7;
+/// The driver's bones: the hips and legs, then for each arm, left (+X) and
+/// right, the upper arm, the forearm and the hand, each at its joint; last
+/// the spine, from the waist up: belly, chest, ribs, neck, shoulders.
+pub const DRIVER_BONES: usize = 8;
 
-/// The joints the driver is sculpted at: the trunk at the kart's origin,
-/// then each arm's shoulder, elbow and wrist.
+/// The spine's bone: the trunk above the waist bends about it.
+pub const SPINE: usize = 7;
+
+/// The joints the driver is sculpted at: the hips at the kart's origin,
+/// each arm's shoulder, elbow and wrist, and the waist.
 const JOINTS: [Vec3; DRIVER_BONES] = [
     Vec3::ZERO,
     Vec3::new(0.19, 0.6, -0.27),
@@ -273,6 +277,7 @@ const JOINTS: [Vec3; DRIVER_BONES] = [
     Vec3::new(-0.19, 0.6, -0.27),
     Vec3::new(-0.25, 0.47, -0.08),
     Vec3::new(-0.135, 0.5, 0.1),
+    Vec3::new(0.0, 0.22, -0.24),
 ];
 
 /// The first bone of an arm: the left's (+X) is 1, the right's 4.
@@ -286,29 +291,43 @@ pub fn driver_rest() -> [Transform; DRIVER_BONES] {
     JOINTS.map(Transform::from_translation)
 }
 
+/// Where the neck is when the spine bends by `lean`: the helmet sits there.
+pub fn neck(lean: Quat) -> Vec3 {
+    let waist = JOINTS[SPINE];
+    waist + lean * (NECK - waist)
+}
+
 /// The bones with the steering wheel turned by `turn` radians (positive to
-/// the left): the hands stay on the rim at ten to two and turn with it, the
-/// arms follow, elbows out and down as sculpted (two-bone inverse
-/// kinematics, the arms' lengths kept).
-pub fn driver_pose(turn: f32) -> [Transform; DRIVER_BONES] {
+/// the left) and the trunk above the waist bent by `lean`: the hands stay
+/// on the rim at ten to two and turn with it; the shoulders go with the
+/// spine; the arms join them, elbows out and down as sculpted (two-bone
+/// inverse kinematics, the arms' lengths kept).
+pub fn driver_pose(turn: f32, lean: Quat) -> [Transform; DRIVER_BONES] {
     let column = steering_column();
     let spin = column.rotation * Quat::from_rotation_y(turn) * column.rotation.inverse();
+    let waist = JOINTS[SPINE];
+    let bent = |p: Vec3| waist + lean * (p - waist);
     let mut pose = driver_rest();
+    pose[SPINE].rotation = lean;
     for side in [1.0f32, -1.0] {
         let first = arm(side) as usize;
-        let (s, e, w) = (JOINTS[first], JOINTS[first + 1], JOINTS[first + 2]);
-        let (upper, fore) = (e.distance(s), w.distance(e));
+        let (rest_shoulder, e, w) = (JOINTS[first], JOINTS[first + 1], JOINTS[first + 2]);
+        // The shoulder where the spine carries it; the elbow's rest, for the
+        // way it bends, carried the same way.
+        let (s, rest_elbow) = (bent(rest_shoulder), bent(e));
+        let (upper, fore) = (e.distance(rest_shoulder), w.distance(e));
         // The wrist, carried round the column with the rim.
         let target = column.translation + spin * (w - column.translation);
         let towards = target - s;
         let reach = towards.length().clamp((upper - fore).abs() + 1e-3, upper + fore - 1e-3);
         let along = towards.normalize_or(Vec3::Y);
         // The elbow bends the way it does at rest.
-        let pole = ((e - s) - along * (e - s).dot(along)).normalize_or(Vec3::NEG_Y);
+        let pole = ((rest_elbow - s) - along * (rest_elbow - s).dot(along)).normalize_or(Vec3::NEG_Y);
         let cos = ((upper * upper + reach * reach - fore * fore) / (2.0 * upper * reach)).clamp(-1.0, 1.0);
         let elbow = s + upper * (along * cos + pole * (1.0 - cos * cos).sqrt());
         let wrist = elbow + fore * (target - elbow).normalize_or(w - e);
-        pose[first].rotation = Quat::from_rotation_arc((e - s).normalize(), (elbow - s).normalize());
+        pose[first] = Transform::from_translation(s)
+            .with_rotation(Quat::from_rotation_arc((e - rest_shoulder).normalize(), (elbow - s).normalize()));
         pose[first + 1] = Transform::from_translation(elbow)
             .with_rotation(Quat::from_rotation_arc((w - e).normalize(), (wrist - elbow).normalize()));
         pose[first + 2] = Transform::from_translation(wrist).with_rotation(spin);
@@ -321,7 +340,6 @@ fn body(livery: Livery) -> Part {
     frame(&mut kart, livery);
     bodywork(&mut kart, livery);
     engine(&mut kart);
-    neck_brace(&mut kart);
     let mut part = kart.part();
     part.push((Finish::Decal, stickers(livery).mesh()));
     part
@@ -596,13 +614,18 @@ fn sculpted_driver() -> &'static [(usize, Mesh)] {
         let lean = Quat::from_rotation_x(-0.38);
         let mut body = Sculpture::new(0.045);
         // The trunk, leaning back into the seat: pelvis, belly, chest.
+        let spine = SPINE as u16;
         body.ellipsoid(SUIT, Vec3::new(0.0, 0.17, -0.2), Vec3::new(0.15, 0.1, 0.13), Quat::IDENTITY)
             .ellipsoid(SUIT, Vec3::new(0.0, 0.33, -0.28), Vec3::new(0.145, 0.13, 0.1), lean)
+            .bone(spine)
             .ellipsoid(SUIT, Vec3::new(0.0, 0.5, -0.33), Vec3::new(0.17, 0.15, 0.11), lean)
+            .bone(spine)
             // The rib protector, hard and black over the suit at the waist.
             .ellipsoid(RIBS, Vec3::new(0.0, 0.33, -0.29), Vec3::new(0.162, 0.085, 0.115), lean)
+            .bone(spine)
             // The neck.
-            .cone(SUIT, Vec3::new(0.0, 0.6, -0.32), NECK, 0.055, 0.05);
+            .cone(SUIT, Vec3::new(0.0, 0.6, -0.32), NECK, 0.055, 0.05)
+            .bone(spine);
         for side in [-1.0f32, 1.0] {
             let shoulder = Vec3::new(side * 0.19, 0.6, -0.27);
             let elbow = Vec3::new(side * 0.25, 0.47, -0.08);
@@ -611,6 +634,7 @@ fn sculpted_driver() -> &'static [(usize, Mesh)] {
             let ankle = Vec3::new(side * 0.11, 0.14, 0.48);
             let bone = arm(side);
             body.cone(SUIT, Vec3::new(0.0, 0.63, -0.31), shoulder, 0.06, 0.068)
+                .bone(spine)
                 .cone(SUIT, shoulder, elbow, 0.056, 0.046)
                 .folded(0.0025)
                 .bone(bone)
@@ -666,19 +690,14 @@ fn driver(livery: Livery) -> Part {
         .collect()
 }
 
-/// The foam neck brace karting drivers wear, on the trunk.
-fn neck_brace(kart: &mut Sorted) {
-    // The foam neck brace karting drivers wear, tucked under the helmet's
-    // rim: seen from behind, a thin dark band, not a ring.
+/// The foam neck brace karting drivers wear, tucked under the helmet's
+/// rim: seen from behind, a thin dark band, not a ring. Around the neck,
+/// with the helmet, so that it goes where the spine takes the head.
+fn neck_brace(head: &mut Sorted) {
     let brace = Shape::new(
         Torus { minor_radius: 0.026, major_radius: 0.088 }.mesh().minor_resolution(10).major_resolution(24).build(),
     );
-    kart.add(
-        Finish::Satin,
-        &brace,
-        at(0.0, NECK.y - 0.032, -0.275).with_scale(Vec3::new(1.12, 0.75, 1.05)),
-        Vec3::splat(0.16),
-    );
+    head.add(Finish::Satin, &brace, at(0.0, -0.032, -0.005).with_scale(Vec3::new(1.12, 0.75, 1.05)), Vec3::splat(0.16));
 }
 
 /// The helmet, around the neck: a varnished shell in the team's colour with
@@ -715,6 +734,7 @@ fn helmet(livery: Livery) -> Part {
     let lip = [Vec2::new(-0.13, 0.215), Vec2::new(-0.175, 0.232), Vec2::new(-0.168, 0.25), Vec2::new(-0.12, 0.248)];
     let across = Transform::from_rotation(Quat::from_rotation_y(-FRAC_PI_2));
     part.add(Finish::Varnish, &Shape::extrude_rounded(&lip, -0.07, 0.07, 0.007, 2), shell * across, livery.second);
+    neck_brace(&mut part);
     let mut parts = part.part();
     // A sponsor's sticker on the back, under the spoiler, where the chasing camera sees it.
     let mut sticker = decals::Decals::default();
@@ -774,7 +794,7 @@ mod tests {
 
     #[test]
     fn at_rest_the_driver_is_as_sculpted_and_turning_keeps_the_arms_whole() {
-        let rest = driver_pose(0.0);
+        let rest = driver_pose(0.0, Quat::IDENTITY);
         for (bone, joint) in rest.iter().zip(driver_rest()) {
             assert!(bone.translation.distance(joint.translation) < 1e-4, "{bone:?}");
             assert!(bone.rotation.angle_between(Quat::IDENTITY) < 1e-3, "{bone:?}");
@@ -787,7 +807,7 @@ mod tests {
             (d - axis * d.dot(axis)).length()
         };
         for turn in [-0.9f32, -0.4, 0.5, 1.0] {
-            let pose = driver_pose(turn);
+            let pose = driver_pose(turn, Quat::IDENTITY);
             for first in [1usize, 4] {
                 let (s, e, w) = (JOINTS[first], JOINTS[first + 1], JOINTS[first + 2]);
                 let (shoulder, elbow, wrist) =
@@ -799,9 +819,32 @@ mod tests {
             }
         }
         // Turning left, the left hand rises and the right one falls: the rim turns.
-        let left = driver_pose(0.6);
+        let left = driver_pose(0.6, Quat::IDENTITY);
         assert!(left[3].translation.y < JOINTS[3].y, "{}", left[3].translation);
         assert!(left[6].translation.y > JOINTS[6].y, "{}", left[6].translation);
+    }
+
+    #[test]
+    fn the_spine_carries_the_shoulders_and_the_head_and_the_hands_stay_on_the_wheel() {
+        // Braking, the trunk bends forward (+Z); turning left, it is thrown
+        // out to the right (-X).
+        let lean = Quat::from_rotation_x(0.15) * Quat::from_rotation_z(0.2);
+        let pose = driver_pose(0.3, lean);
+        let still = driver_pose(0.3, Quat::IDENTITY);
+        assert!(neck(lean).z > NECK.z + 0.03 && neck(lean).x < NECK.x - 0.05, "{}", neck(lean));
+        assert!((neck(lean).distance(JOINTS[SPINE]) - NECK.distance(JOINTS[SPINE])).abs() < 1e-5);
+        assert_eq!(pose[SPINE].rotation, lean);
+        for first in [1usize, 4] {
+            let (s, e, w) = (JOINTS[first], JOINTS[first + 1], JOINTS[first + 2]);
+            let (shoulder, elbow, wrist) =
+                (pose[first].translation, pose[first + 1].translation, pose[first + 2].translation);
+            assert!(shoulder.x < s.x - 0.05 && shoulder.z > s.z, "the shoulder goes with the trunk: {shoulder}");
+            assert!((elbow.distance(shoulder) - e.distance(s)).abs() < 1e-3, "the upper arm keeps its length");
+            assert!((wrist.distance(elbow) - w.distance(e)).abs() < 1e-3, "the forearm keeps its length");
+            assert!(wrist.distance(still[first + 2].translation) < 0.01, "the hand stays where the rim holds it");
+        }
+        // The legs stay in the seat.
+        assert_eq!(pose[0], Transform::IDENTITY);
     }
 
     #[test]
