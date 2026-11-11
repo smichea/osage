@@ -114,8 +114,17 @@ pub fn scatters(
     for _ in 0..4000 {
         let at = beside(&mut dice, 8.0, 140.0);
         let (turn, size, chance) = (dice.between(0.0, std::f32::consts::TAU), dice.between(4.0, 7.5), dice.roll());
-        if chance < (noise(at / 45.0 + 3.0) - 0.4) * 1.8 && free(at, 8.0) && pines.len() < 260 {
+        if chance < (noise(at / 45.0 + 3.0) - 0.4) * 1.8 && free(at, 8.0) && pines.len() < 420 {
+            // A clump: one tall sapling and a few smaller ones close by, as
+            // young pines grow, which reads as one full crown from afar.
             pines.push(stand(at, 0.1, turn, size));
+            for _ in 0..(2 + (dice.roll() * 3.0) as usize) {
+                let near = at + Vec2::from_angle(dice.between(0.0, std::f32::consts::TAU)) * dice.between(0.6, 1.6);
+                if free(near, 7.0) {
+                    let turn = dice.between(0.0, std::f32::consts::TAU);
+                    pines.push(stand(near, 0.1, turn, size * dice.between(0.55, 0.85)));
+                }
+            }
         }
     }
     all.push(scatter(&models.pine, pines, Use::Variants, 450.0, true));
