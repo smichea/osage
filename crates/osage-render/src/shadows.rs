@@ -2,13 +2,15 @@
 // SPDX-License-Identifier: LicenseRef-osage-AGPL-3.0-or-later-with-exceptions
 
 //! R2 — shadows: the sun's cascaded shadow maps, more cascades, reach and
-//! resolution as the tier rises; contact shadows for small details at T3+.
+//! resolution as the tier rises; contact shadows for small details and soft
+//! shadows whose edges widen with distance (PCSS, filtered over time with
+//! TAA) at T3+.
 //!
 //! Measured on the Iris Xe reference at 1080p (T2): two cascades of 1024
 //! over 80 m cost 2.6 ms, three of 2048 over 120 m 4.7 ms.
 
 use bevy::{
-    light::{CascadeShadowConfigBuilder, DirectionalLightShadowMap},
+    light::{CascadeShadowConfigBuilder, DirectionalLightShadowMap, ShadowFilteringMethod},
     pbr::ContactShadows,
     prelude::*,
 };
@@ -22,6 +24,9 @@ impl Plugin for ShadowsPlugin {
         app.add_systems(Startup, shadow_map).add_systems(Update, (sun, camera));
     }
 }
+
+/// The sun's size for soft shadows, from T3.
+const SUN_SIZE: f32 = 1.0;
 
 /// (cascades, reach in metres, cascade resolution)
 fn settings(tier: Tier) -> (usize, f32, usize) {
@@ -41,6 +46,13 @@ fn sun(mut commands: Commands, tier: Res<Tier>, mut suns: Query<(Entity, &mut Di
     let (cascades, reach, _) = settings(*tier);
     for (entity, mut light) in &mut suns {
         light.shadow_maps_enabled = true;
+        if *tier >= Tier::T3 {
+            // Soft shadows (PCSS): the sun is half a degree wide, so a
+            // shadow's edge softens the further it falls from what casts it.
+            // 1.0 matched a real sun's penumbra on the kart circuit's fence
+            // posts at evening; 4.0 blurred them away.
+            light.soft_shadow_size = Some(SUN_SIZE);
+        }
         let config = CascadeShadowConfigBuilder {
             num_cascades: cascades,
             first_cascade_far_bound: 12.0,
@@ -54,7 +66,7 @@ fn sun(mut commands: Commands, tier: Res<Tier>, mut suns: Query<(Entity, &mut Di
 fn camera(mut commands: Commands, tier: Res<Tier>, cameras: Query<Entity, Added<OsageCamera>>) {
     if *tier >= Tier::T3 {
         for camera in &cameras {
-            commands.entity(camera).insert(ContactShadows::default());
+            commands.entity(camera).insert((ContactShadows::default(), ShadowFilteringMethod::Temporal));
         }
     }
 }

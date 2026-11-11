@@ -13,5 +13,5 @@ repository.workspace = true
 
 [dependencies]
 # "ui": the picture is shown as an interface element (resolution).
-bevy = { workspace = true, features = ["3d", "ui"] }
+bevy = { workspace = true, features = ["3d", "ui", "experimental_pbr_pcss"] }
 half.workspace = true
