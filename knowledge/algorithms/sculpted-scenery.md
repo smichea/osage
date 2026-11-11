@@ -47,7 +47,7 @@ Building the kart circuit's scenery (about 760 trees, bushes, flower drifts, roc
 
 - A patch too large is drawn whole when a corner of it is in view; too small, and the draws come back. 90 m suits a circuit seen from a kart.
 - Merged meshes cannot be culled object by object, nor given levels of detail one by one.
-- Vertex colours cannot carry a texture of their own; a batch's material can lay one grain over everything in it (concrete, at the same size on every object), and projection from the box's sides streaks it where a face is turned 45°. A surface that needs its own texture keeps its own material.
+- Vertex colours cannot carry a texture of their own; a batch's material can lay one grain over everything in it (the kart circuit gives its concrete a batch of its own, grained at the same size on every building, tier and post; steel and paint stay smooth), and projection from the box's sides streaks it where a face is turned 45°. A surface that needs its own texture keeps its own material.
 
 # Alternatives
 

@@ -87,6 +87,9 @@ pub struct Set {
     pub glass: Batch,
     /// People standing in the open: cloth, casting shadows.
     pub standing: Batch,
+    /// Concrete: buildings, tiers, posts. On a photographed circuit it has
+    /// the grain of real concrete; steel and paint stay smooth.
+    pub concrete: Batch,
     pub dice: Dice,
     /// Places kept clear of trees.
     pub clearings: Vec<Site>,
@@ -151,31 +154,19 @@ pub fn build(
     let track = &course.0.track;
     let frames = track::frames(track);
     let centre = frames.iter().map(|f| f.at).sum::<Vec2>() / frames.len() as f32;
-    // On a photographed circuit, what is built has a grain: concrete, two
-    // metres and a half a repeat (the worn paint of the kerbs blotched
-    // whole buildings). Its own roughness is left out: paint on steel
-    // stays smooth.
-    let (matte, satin) = match grains.as_deref() {
-        Some(grains) => {
-            let brighter = Color::linear_rgb(1.0 / GRAIN, 1.0 / GRAIN, 1.0 / GRAIN);
-            let matte = StandardMaterial {
-                base_color: brighter,
-                perceptual_roughness: 0.85,
-                metallic_roughness_texture: None,
-                ..grains.concrete.material(2.5)
-            };
-            let satin = StandardMaterial {
-                base_color: brighter,
-                perceptual_roughness: 0.38,
-                metallic_roughness_texture: None,
-                ..grains.concrete.material(2.5)
-            };
-            (materials.add(matte), materials.add(satin))
-        }
-        None => (
-            materials.add(StandardMaterial { perceptual_roughness: 0.85, ..default() }),
-            materials.add(StandardMaterial { perceptual_roughness: 0.38, ..default() }),
-        ),
+    let matte = materials.add(StandardMaterial { perceptual_roughness: 0.85, ..default() });
+    let satin = materials.add(StandardMaterial { perceptual_roughness: 0.38, ..default() });
+    // On a photographed circuit, concrete has a grain: two metres and a half
+    // a repeat (the worn paint of the kerbs blotched whole buildings), its
+    // relief from the grain's normal map, its own roughness left out.
+    let concrete = match grains.as_deref() {
+        Some(grains) => materials.add(StandardMaterial {
+            base_color: Color::linear_rgb(1.0 / GRAIN, 1.0 / GRAIN, 1.0 / GRAIN),
+            perceptual_roughness: 0.8,
+            metallic_roughness_texture: None,
+            ..grains.concrete.material(2.5)
+        }),
+        None => matte.clone(),
     };
     let cloth = materials.add(StandardMaterial { perceptual_roughness: 0.9, ..default() });
     let glass = materials.add(StandardMaterial { perceptual_roughness: 0.05, reflectance: 0.5, ..default() });
@@ -186,6 +177,7 @@ pub fn build(
         crowd: Batch::default(),
         glass: Batch::default(),
         standing: Batch::default(),
+        concrete: Batch::default(),
         dice: Dice(7),
         clearings: Vec::new(),
     };
@@ -224,7 +216,7 @@ pub fn build(
             Growth::Real
         };
         plant(&mut set, &land, track.half_width + track.verge, centre, look);
-        spawn(&mut commands, &mut meshes, set, matte, satin, cloth, glass);
+        spawn(&mut commands, &mut meshes, set, [matte, satin, concrete], cloth, glass);
         return;
     }
     landmarks::bends(&mut set, &mut props, track, &frames);
@@ -260,7 +252,7 @@ pub fn build(
     let mountains = mountains(centre, &mut set.dice);
     commands.spawn((Part, Mesh3d(meshes.add(mountains)), MeshMaterial3d(ridge), NotShadowCaster));
 
-    spawn(&mut commands, &mut meshes, set, matte, satin, cloth, glass);
+    spawn(&mut commands, &mut meshes, set, [matte, satin, concrete], cloth, glass);
 }
 
 /// The static scenery gathered, as a few meshes.
@@ -268,8 +260,7 @@ fn spawn(
     commands: &mut Commands,
     meshes: &mut Assets<Mesh>,
     set: Set,
-    matte: Handle<StandardMaterial>,
-    satin: Handle<StandardMaterial>,
+    [matte, satin, concrete]: [Handle<StandardMaterial>; 3],
     cloth: Handle<StandardMaterial>,
     glass: Handle<StandardMaterial>,
 ) {
@@ -279,10 +270,13 @@ fn spawn(
         mesh.with_generated_tangents().unwrap_or(plain)
     };
     for mesh in set.matte.meshes() {
-        commands.spawn((Part, Mesh3d(meshes.add(tangents(mesh))), MeshMaterial3d(matte.clone())));
+        commands.spawn((Part, Mesh3d(meshes.add(mesh)), MeshMaterial3d(matte.clone())));
     }
     for mesh in set.satin.meshes() {
-        commands.spawn((Part, Mesh3d(meshes.add(tangents(mesh))), MeshMaterial3d(satin.clone())));
+        commands.spawn((Part, Mesh3d(meshes.add(mesh)), MeshMaterial3d(satin.clone())));
+    }
+    for mesh in set.concrete.meshes() {
+        commands.spawn((Part, Mesh3d(meshes.add(tangents(mesh))), MeshMaterial3d(concrete.clone())));
     }
     for mesh in set.standing.meshes() {
         commands.spawn((Part, Mesh3d(meshes.add(mesh)), MeshMaterial3d(cloth.clone())));

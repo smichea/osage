@@ -225,7 +225,7 @@ fn grandstand(set: &mut Set, stand: Transform, shape: (f32, f32, f32, usize, f32
             Vec3::new(x - depth / 2.0, 0.0, -length / 2.0),
             Vec3::new(x + depth / 2.0, y + rise / 2.0, length / 2.0),
         );
-        set.satin.add_within(stand.translation, &tier, stand, concrete);
+        set.concrete.add_within(stand.translation, &tier, stand, concrete);
         let step = y + rise / 2.0;
         for place in 0..42 {
             let z = -length / 2.0 + 0.7 + place as f32 * 1.02;
@@ -295,8 +295,9 @@ fn pits(set: &mut Set, props: &mut Props, circuit: &Circuit) {
     let frame = Transform::from_xyz(at[0], 0.0, at[1]).with_rotation(upright(heading));
     let (front, depth, length, height) = (track.half_width + track.verge + BARRIER + 4.6, 8.0, 38.0, 3.6);
     let concrete = Paint::shaded(0.74, 0.73, 0.7, 0.2);
+    let building = Shape::block(Vec3::new(front, 0.0, -length / 2.0), Vec3::new(front + depth, height, length / 2.0));
+    set.concrete.add_within(frame.translation, &building, frame, concrete);
     let mut add = |shape: Shape, paint: Paint| set.satin.add_within(frame.translation, &shape, frame, paint);
-    add(Shape::block(Vec3::new(front, 0.0, -length / 2.0), Vec3::new(front + depth, height, length / 2.0)), concrete);
     // The parapet around the flat roof.
     for (low, high) in [
         (
@@ -310,7 +311,7 @@ fn pits(set: &mut Set, props: &mut Props, circuit: &Circuit) {
         (Vec3::new(front, height, -length / 2.0 - 0.05), Vec3::new(front + depth, height + 0.45, -length / 2.0 + 0.2)),
         (Vec3::new(front, height, length / 2.0 - 0.2), Vec3::new(front + depth, height + 0.45, length / 2.0 + 0.05)),
     ] {
-        add(Shape::block(low, high), Paint::plain(0.66, 0.65, 0.62));
+        set.concrete.add_within(frame.translation, &Shape::block(low, high), frame, Paint::plain(0.66, 0.65, 0.62));
     }
     // A sign band over the doors: white, a red stripe along its foot.
     add(
@@ -378,12 +379,12 @@ fn pits(set: &mut Set, props: &mut Props, circuit: &Circuit) {
     let (control, upper) = (9.0, 2.8);
     let storey =
         Shape::block(Vec3::new(front + 1.0, height, -control), Vec3::new(front + depth - 0.4, height + upper, control));
-    set.satin.add_within(frame.translation, &storey, frame, concrete);
+    set.concrete.add_within(frame.translation, &storey, frame, concrete);
     let slab = Shape::block(
         Vec3::new(front + 0.6, height + upper, -control - 0.4),
         Vec3::new(front + depth - 0.2, height + upper + 0.22, control + 0.4),
     );
-    set.satin.add_within(frame.translation, &slab, frame, Paint::plain(0.7, 0.69, 0.66));
+    set.concrete.add_within(frame.translation, &slab, frame, Paint::plain(0.7, 0.69, 0.66));
     let pane = Shape::block(
         Vec3::new(front + 0.96, height + 0.5, -control + 0.3),
         Vec3::new(front + 1.0, height + upper - 0.35, control - 0.3),
@@ -662,12 +663,8 @@ pub fn marshals(set: &mut Set, circuit: &Circuit, land: &Land, frames: &[Frame])
         let post = Transform::from_xyz(at.x, ground, at.y).with_rotation(facing(towards));
         set.clear(at, 4.0);
         let white = Paint::shaded(0.9, 0.9, 0.88, 0.2);
-        set.satin.add_within(
-            post.translation,
-            &Shape::block(Vec3::new(-0.45, 0.0, -0.45), Vec3::new(0.45, 1.15, 0.45)),
-            post,
-            white,
-        );
+        let block = Shape::block(Vec3::new(-0.45, 0.0, -0.45), Vec3::new(0.45, 1.15, 0.45));
+        set.concrete.add_within(post.translation, &block, post, white);
         set.satin.add_within(
             post.translation,
             &Shape::block(Vec3::new(-0.46, 0.9, -0.46), Vec3::new(0.46, 1.1, 0.46)),
