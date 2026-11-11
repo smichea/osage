@@ -136,6 +136,7 @@ pub fn start(set: &mut Set, props: &mut Props, circuit: &Circuit, land: &Land, r
         PALETTE.iter().copied().chain([(0.95, 0.95, 0.95), (0.95, 0.85, 0.2), (0.2, 0.25, 0.4)]).collect();
     if real {
         grandstand(set, stand, (front, back, length, tiers, depth, rise));
+        pits(set, circuit);
         let _ = land;
         return;
     }
@@ -306,6 +307,74 @@ fn grandstand(set: &mut Set, stand: Transform, shape: (f32, f32, f32, usize, f32
         let rib = rod(Vec3::new(back - 0.6, top + 0.53, z), Vec3::new(front + 1.6, top + 0.13, z), 0.025);
         set.satin.add_within(stand.translation, &rib, stand, Paint::plain(0.6, 0.62, 0.64));
         z += 1.0;
+    }
+}
+
+/// The pit building on the other side of the start straight, behind the
+/// fence: a single storey of light concrete with six roller doors facing
+/// the track, a sign band over them, a flat roof with its parapet, and
+/// downpipes at the corners.
+fn pits(set: &mut Set, circuit: &Circuit) {
+    let track = &circuit.track;
+    let (at, heading) = track.at(circuit.start + 14.0);
+    // Local +X is the left of the track, where the grandstand is not.
+    let frame = Transform::from_xyz(at[0], 0.0, at[1]).with_rotation(upright(heading));
+    let (front, depth, length, height) = (track.half_width + track.verge + BARRIER + 4.6, 8.0, 38.0, 3.6);
+    let concrete = Paint::shaded(0.74, 0.73, 0.7, 0.2);
+    let mut add = |shape: Shape, paint: Paint| set.satin.add_within(frame.translation, &shape, frame, paint);
+    add(Shape::block(Vec3::new(front, 0.0, -length / 2.0), Vec3::new(front + depth, height, length / 2.0)), concrete);
+    // The parapet around the flat roof.
+    for (low, high) in [
+        (
+            Vec3::new(front - 0.05, height, -length / 2.0 - 0.05),
+            Vec3::new(front + 0.2, height + 0.45, length / 2.0 + 0.05),
+        ),
+        (
+            Vec3::new(front + depth - 0.2, height, -length / 2.0 - 0.05),
+            Vec3::new(front + depth + 0.05, height + 0.45, length / 2.0 + 0.05),
+        ),
+        (Vec3::new(front, height, -length / 2.0 - 0.05), Vec3::new(front + depth, height + 0.45, -length / 2.0 + 0.2)),
+        (Vec3::new(front, height, length / 2.0 - 0.2), Vec3::new(front + depth, height + 0.45, length / 2.0 + 0.05)),
+    ] {
+        add(Shape::block(low, high), Paint::plain(0.66, 0.65, 0.62));
+    }
+    // A sign band over the doors: white, a red stripe along its foot.
+    add(
+        Shape::block(Vec3::new(front - 0.08, 2.95, -length / 2.0 + 0.4), Vec3::new(front, 3.45, length / 2.0 - 0.4)),
+        Paint::plain(0.92, 0.92, 0.9),
+    );
+    add(
+        Shape::block(
+            Vec3::new(front - 0.09, 2.95, -length / 2.0 + 0.4),
+            Vec3::new(front - 0.01, 3.05, length / 2.0 - 0.4),
+        ),
+        Paint::plain(0.75, 0.1, 0.08),
+    );
+    // Six roller doors, ribbed sheet steel, facing the track (-X).
+    let (door, gap) = (4.4, (length - 6.0 * 4.4) / 7.0);
+    for k in 0..6 {
+        let z0 = -length / 2.0 + gap + k as f32 * (door + gap);
+        add(
+            Shape::block(Vec3::new(front - 0.04, 0.0, z0), Vec3::new(front, 2.75, z0 + door)),
+            Paint::shaded(0.5, 0.52, 0.55, 0.15),
+        );
+        for rib in 0..14 {
+            let y = 0.12 + rib as f32 * 0.19;
+            add(
+                Shape::block(
+                    Vec3::new(front - 0.06, y, z0 + 0.05),
+                    Vec3::new(front - 0.04, y + 0.03, z0 + door - 0.05),
+                ),
+                Paint::plain(0.58, 0.6, 0.63),
+            );
+        }
+    }
+    // Downpipes at the front corners.
+    for z in [-length / 2.0 + 0.15, length / 2.0 - 0.15] {
+        add(
+            rod(Vec3::new(front - 0.12, 0.0, z), Vec3::new(front - 0.12, height + 0.3, z), 0.05),
+            Paint::plain(0.4, 0.42, 0.44),
+        );
     }
 }
 
