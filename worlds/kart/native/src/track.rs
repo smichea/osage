@@ -689,16 +689,19 @@ fn photographed(
             .push((with_tangents(ribbon(frames, (behind, 0.012), (apron, 0.012), (0.0, 1.0), stripes)), &mown_grass));
     }
 
-    // Road markings, worn into the asphalt.
+    // Road markings, worn into the asphalt: the worn paint's grain, as the
+    // kerbs have it, so that no line looks freshly painted.
+    let white = Color::srgb(0.8, 0.8, 0.77).to_linear();
     let marking = materials.add(StandardMaterial {
-        base_color: Color::srgb(0.8, 0.8, 0.77),
+        base_color: Color::linear_rgb(white.red / GRAIN, white.green / GRAIN, white.blue / GRAIN),
         perceptual_roughness: 0.62,
+        metallic_roughness_texture: None,
         depth_bias: 40.0,
-        ..default()
+        ..set.paint.material(1.5)
     });
     for side in [-1.0, 1.0] {
         let (inner, outer) = (side * (half - 0.75), side * (half - 0.45));
-        flat(ribbon(frames, (inner, 0.03), (outer, 0.03), (0.0, 1.0), |_| Some(WHITE)), &marking);
+        flat(with_tangents(ribbon(frames, (inner, 0.03), (outer, 0.03), (0.0, 1.0), |_| Some(WHITE))), &marking);
     }
     let mut boxes = Batch::default();
     let stroke = |low: Vec3, high: Vec3| {
@@ -718,7 +721,7 @@ fn photographed(
         }
     }
     for mesh in boxes.meshes() {
-        flat(mesh, &marking);
+        flat(with_tangents(mesh), &marking);
     }
 
     // Kerbs of painted concrete, red and white; colours brighter under a grain.
