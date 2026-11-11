@@ -137,7 +137,7 @@ pub fn start(set: &mut Set, props: &mut Props, circuit: &Circuit, land: &Land, r
         PALETTE.iter().copied().chain([(0.95, 0.95, 0.95), (0.95, 0.85, 0.2), (0.2, 0.25, 0.4)]).collect();
     if real {
         grandstand(set, stand, (front, back, length, tiers, depth, rise));
-        pits(set, circuit);
+        pits(set, props, circuit);
         let _ = land;
         return;
     }
@@ -288,7 +288,7 @@ fn grandstand(set: &mut Set, stand: Transform, shape: (f32, f32, f32, usize, f32
 /// the track under a canopy, a sign band over them, a flat roof with its
 /// parapet, race control above the middle behind a band of dark glass,
 /// windows at the ends, and downpipes at the corners.
-fn pits(set: &mut Set, circuit: &Circuit) {
+fn pits(set: &mut Set, props: &mut Props, circuit: &Circuit) {
     let track = &circuit.track;
     let (at, heading) = track.at(circuit.start + 14.0);
     // Local +X is the left of the track, where the grandstand is not.
@@ -326,8 +326,21 @@ fn pits(set: &mut Set, circuit: &Circuit) {
     );
     // Six roller doors, ribbed sheet steel, facing the track (-X).
     let (door, gap) = (4.4, (length - 6.0 * 4.4) / 7.0);
+    // Two garages open, dark inside, their shutters rolled up into a drum.
+    let open = [1, 4];
     for k in 0..6 {
         let z0 = -length / 2.0 + gap + k as f32 * (door + gap);
+        if open.contains(&k) {
+            add(
+                Shape::block(Vec3::new(front - 0.02, 0.0, z0), Vec3::new(front, 2.75, z0 + door)),
+                Paint::blend((0.05, 0.05, 0.05), (0.02, 0.02, 0.02)),
+            );
+            add(
+                Shape::block(Vec3::new(front - 0.25, 2.5, z0 - 0.05), Vec3::new(front, 2.8, z0 + door + 0.05)),
+                Paint::plain(0.45, 0.47, 0.5),
+            );
+            continue;
+        }
         add(
             Shape::block(Vec3::new(front - 0.04, 0.0, z0), Vec3::new(front, 2.75, z0 + door)),
             Paint::shaded(0.5, 0.52, 0.55, 0.15),
@@ -398,6 +411,17 @@ fn pits(set: &mut Set, circuit: &Circuit) {
         let post = rod(Vec3::new(front - reach + 0.2, 0.0, z), Vec3::new(front - reach + 0.2, 3.5, z), 0.06);
         set.satin.add_within(frame.translation, &post, frame, Paint::plain(0.5, 0.52, 0.55));
         z += (length - 1.5) / 6.0;
+    }
+    // Before each open garage, a kart parked along the building, its driver
+    // waiting in it, and a mechanic in the team's colour beside it.
+    for (k, colour) in open.iter().zip([3usize, 6]) {
+        let z = -length / 2.0 + gap + *k as f32 * (door + gap) + door / 2.0;
+        let along = frame * Transform::from_xyz(front - 1.25, 0.0, z).with_rotation(Quat::from_rotation_y(PI));
+        props.commands.spawn((crate::scene::Part, crate::karts::Parked { colour }, along));
+        let (r, g, b) = PALETTE[colour];
+        let mechanic =
+            frame * Transform::from_xyz(front - 0.6, 0.0, z + 1.4).with_rotation(Quat::from_rotation_y(PI * 0.85));
+        person(set, Stance::ArmsFolded, mechanic, (r, g, b), (0.12, 0.12, 0.14));
     }
     // Windows at both ends of the ground floor.
     for end in [-1.0f32, 1.0] {

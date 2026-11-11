@@ -104,6 +104,63 @@ fn spawn_part(commands: &mut Commands, kit: &Kit, part: &Meshes, parent: Entity)
     }
 }
 
+/// A kart standing still where the scenery puts it, out of the race: in the
+/// pit lane, its driver waiting in it.
+#[derive(Component)]
+pub struct Parked {
+    pub colour: usize,
+}
+
+/// The model of a colour of kart, made the first time it is needed.
+fn model_of(kit: &mut Kit, meshes: &mut Assets<Mesh>, colour: usize) {
+    kit.models.entry(colour).or_insert_with(|| {
+        let built = osage_kart_model::build(livery(colour));
+        let mut add = |part: Vec<(Finish, Mesh)>| -> Meshes {
+            part.into_iter().map(|(finish, mesh)| (finish, meshes.add(mesh))).collect()
+        };
+        let [front, rear] = built.wheels;
+        Model { body: add(built.body), helmet: add(built.helmet), wheels: [add(front), add(rear)] }
+    });
+}
+
+/// A kart's parts under `kart`: its body, its head, and each wheel's pivot and tyre.
+fn assemble(
+    commands: &mut Commands,
+    kit: &Kit,
+    colour: usize,
+    kart: Entity,
+) -> (Entity, Entity, [(Entity, Entity); 4]) {
+    let model = &kit.models[&colour];
+    let body = commands.spawn((Transform::default(), Visibility::default(), ChildOf(kart))).id();
+    spawn_part(commands, kit, &model.body, body);
+    let head = commands.spawn((Transform::from_translation(NECK), Visibility::default(), ChildOf(body))).id();
+    spawn_part(commands, kit, &model.helmet, head);
+    let wheels = [0, 1, 2, 3].map(|i| {
+        let pivot = commands.spawn((Transform::from_translation(AXLES[i]), Visibility::default(), ChildOf(body))).id();
+        // Wheels on the right are the left ones turned round.
+        let facing = if AXLES[i].x < 0.0 { Quat::from_rotation_y(PI) } else { Quat::IDENTITY };
+        let tyre = commands.spawn((Transform::from_rotation(facing), Visibility::default(), ChildOf(pivot))).id();
+        spawn_part(commands, kit, &model.wheels[i / 2], tyre);
+        (pivot, tyre)
+    });
+    (body, head, wheels)
+}
+
+/// Gives every parked kart its model.
+pub fn park(
+    mut commands: Commands,
+    mut kit: ResMut<Kit>,
+    mut meshes: ResMut<Assets<Mesh>>,
+    parked: Query<(Entity, &Parked), Added<Parked>>,
+) {
+    for (kart, parked) in &parked {
+        let colour = parked.colour % PALETTE.len();
+        model_of(&mut kit, &mut meshes, colour);
+        assemble(&mut commands, &kit, colour, kart);
+        commands.entity(kart).insert(Visibility::default());
+    }
+}
+
 /// Gives every new kart its model.
 pub fn dress(
     mut commands: Commands,
@@ -113,29 +170,8 @@ pub fn dress(
 ) {
     for (kart, pose) in &karts {
         let colour = pose.color as usize % PALETTE.len();
-        kit.models.entry(colour).or_insert_with(|| {
-            let built = osage_kart_model::build(livery(colour));
-            let mut add = |part: Vec<(Finish, Mesh)>| -> Meshes {
-                part.into_iter().map(|(finish, mesh)| (finish, meshes.add(mesh))).collect()
-            };
-            let [front, rear] = built.wheels;
-            Model { body: add(built.body), helmet: add(built.helmet), wheels: [add(front), add(rear)] }
-        });
-        let model = &kit.models[&colour];
-
-        let body = commands.spawn((Transform::default(), Visibility::default(), ChildOf(kart))).id();
-        spawn_part(&mut commands, &kit, &model.body, body);
-        let head = commands.spawn((Transform::from_translation(NECK), Visibility::default(), ChildOf(body))).id();
-        spawn_part(&mut commands, &kit, &model.helmet, head);
-        let wheels = [0, 1, 2, 3].map(|i| {
-            let pivot =
-                commands.spawn((Transform::from_translation(AXLES[i]), Visibility::default(), ChildOf(body))).id();
-            // Wheels on the right are the left ones turned round.
-            let facing = if AXLES[i].x < 0.0 { Quat::from_rotation_y(PI) } else { Quat::IDENTITY };
-            let tyre = commands.spawn((Transform::from_rotation(facing), Visibility::default(), ChildOf(pivot))).id();
-            spawn_part(&mut commands, &kit, &model.wheels[i / 2], tyre);
-            (pivot, tyre)
-        });
+        model_of(&mut kit, &mut meshes, colour);
+        let (body, head, wheels) = assemble(&mut commands, &kit, colour, kart);
 
         commands.entity(kart).insert((
             Transform::default(),

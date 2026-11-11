@@ -118,6 +118,7 @@ impl Plugin for ScenePlugin {
                 (
                     circuit,
                     karts::dress,
+                    karts::park,
                     karts::animate,
                     effects::emit,
                     effects::update,
