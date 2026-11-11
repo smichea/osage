@@ -48,8 +48,11 @@ fn colour(land: &Land, at: Vec2, height: f32) -> Vec3 {
 fn meadow(land: &Land, at: Vec2, height: f32) -> Vec3 {
     let tone = |r: f32, g: f32, b: f32| Color::srgb(r, g, b).to_linear().to_vec3();
     let wide = noise(at / 140.0 + 7.0);
-    let fine = noise(at / 9.0 + 11.0);
-    let mut colour = tone(0.24, 0.33, 0.13).lerp(tone(0.3, 0.38, 0.16), wide) * (0.88 + 0.24 * fine);
+    let middle = noise(at / 27.0 + 3.0);
+    let fine = noise(at / 6.0 + 11.0);
+    // Meadows are never one green: sweeps of lighter and darker, yellower and bluer.
+    let mut colour = tone(0.2, 0.3, 0.11).lerp(tone(0.33, 0.4, 0.16), wide) * (0.75 + 0.35 * middle + 0.25 * fine);
+    colour = colour.lerp(tone(0.2, 0.3, 0.16), smooth((middle - 0.6) / 0.3) * 0.5);
     let dry = smooth((noise(at / 38.0 + 40.0) - 0.55) / 0.2) * 0.6;
     colour = colour.lerp(tone(0.45, 0.42, 0.24), dry);
     colour = colour.lerp(tone(0.4, 0.42, 0.2), (height / HILLS).clamp(0.0, 1.0) * 0.5);
@@ -406,6 +409,84 @@ pub fn build(
     commands.insert_resource(land);
 }
 
+/// Lanes across the road's mesh: enough for the racing line to curve smoothly.
+const LANES: usize = 12;
+
+/// Where karts drive, metres right of the centre line, at each frame: a
+/// racing line that cuts to the inside of every bend, from the bend's
+/// curvature averaged over a dozen frames either side.
+fn racing_line(frames: &[Frame], half: f32) -> Vec<f32> {
+    let n = frames.len();
+    (0..n)
+        .map(|i| {
+            let bend = (0..25).map(|k| frames[(i + n + k - 12) % n].bend).sum::<f32>() / 25.0;
+            // A left bend (positive) draws the line to the left (negative).
+            (-bend * 32.0).clamp(-0.55, 0.55) * half
+        })
+        .collect()
+}
+
+/// The road as a grid, `LANES` across, its texture continuous, its colour
+/// darkened where tyres have laid rubber: along the racing line, most at its
+/// middle, in patches along the way.
+fn road_mesh(frames: &[Frame], half: f32) -> Mesh {
+    let line = racing_line(frames, half);
+    let n = frames.len();
+    let (mut positions, mut normals, mut uvs, mut colours, mut indices) =
+        (Vec::new(), Vec::new(), Vec::new(), Vec::new(), Vec::new());
+    // One more row than frames: the last repeats the first, with its texture further on.
+    let total = frames.last().map_or(0.0, |f| f.along + f.at.distance(frames[0].at));
+    for i in 0..=n {
+        let frame = &frames[i % n];
+        let along = if i == n { total } else { frame.along };
+        let patchy = 0.75 + 0.5 * noise(Vec2::new(along / 9.0, 3.0));
+        for j in 0..=LANES {
+            let lateral = -half + 2.0 * half * j as f32 / LANES as f32;
+            let p = frame.at + frame.right * lateral;
+            positions.push([p.x, 0.02, p.y]);
+            normals.push([0.0, 1.0, 0.0]);
+            uvs.push([lateral + half, along]);
+            let off = (lateral - line[i % n]) / half;
+            let rubber = (0.3 * (-(off / 0.3).powi(2)).exp() + 0.08 * (-(off / 0.7).powi(2)).exp()) * patchy;
+            let shade = (1.0 - rubber).clamp(0.5, 1.05);
+            colours.push([shade, shade, shade * 1.01, 1.0]);
+        }
+    }
+    let row = (LANES + 1) as u32;
+    for i in 0..n as u32 {
+        for j in 0..LANES as u32 {
+            let (a, b) = (i * row + j, i * row + j + 1);
+            let (c, d) = (a + row, b + row);
+            // Counter-clockwise seen from above: ahead is +along, right is +lateral.
+            indices.extend([a, b, c, b, d, c]);
+        }
+    }
+    let mesh = Mesh::new(PrimitiveTopology::TriangleList, RenderAssetUsages::default())
+        .with_inserted_attribute(Mesh::ATTRIBUTE_POSITION, positions)
+        .with_inserted_attribute(Mesh::ATTRIBUTE_NORMAL, normals)
+        .with_inserted_attribute(Mesh::ATTRIBUTE_UV_0, uvs)
+        .with_inserted_attribute(Mesh::ATTRIBUTE_COLOR, colours)
+        .with_inserted_indices(Indices::U32(indices));
+    facing_up(mesh)
+}
+
+/// The mesh with its triangles wound to face up, whichever way it was built.
+fn facing_up(mut mesh: Mesh) -> Mesh {
+    let Some(bevy::mesh::VertexAttributeValues::Float32x3(points)) = mesh.attribute(Mesh::ATTRIBUTE_POSITION).cloned()
+    else {
+        return mesh;
+    };
+    if let Some(Indices::U32(indices)) = mesh.indices_mut() {
+        for triangle in indices.as_chunks_mut::<3>().0 {
+            let [a, b, c] = triangle.map(|i| Vec3::from(points[i as usize]));
+            if (b - a).cross(c - a).y < 0.0 {
+                triangle.swap(1, 2);
+            }
+        }
+    }
+    mesh
+}
+
 /// The surfaces of a photographed circuit, from the asset manifest's 2k sets.
 pub struct Photographed {
     asphalt: Surface,
@@ -471,7 +552,7 @@ fn photographed(
         flat(strip.translated_by(Vec3::new(middle.x, -0.4, middle.y)), &fields);
     }
 
-    flat(with_tangents(ribbon(frames, (-half, 0.02), (half, 0.02), (0.0, 1.0), |_| Some(WHITE))), &road);
+    flat(with_tangents(road_mesh(frames, half)), &road);
 
     // Verges of mown grass, in faint stripes; on the outside of a bend, a
     // gravel trap in front of the tyre wall instead.

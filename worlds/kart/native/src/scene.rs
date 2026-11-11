@@ -37,9 +37,11 @@ pub const GRASS: Color = Color::srgb(0.30, 0.40, 0.17);
 
 /// The Poly Haven panorama of the sky: midday, a few clouds, unclipped sun.
 pub const SKY: &str = "kloofendal_48d_partly_cloudy_puresky";
-/// How far the panorama is turned, radians: the sun stands behind the
-/// grid's right shoulder.
-const SKY_TURN: f32 = 2.4;
+/// How far the panorama is turned, radians: the sun comes from the side of
+/// the start straight, ahead and to the right, and shapes the karts with
+/// light and shade (behind the camera, it flattened them; straight ahead,
+/// it washed out the sky).
+const SKY_TURN: f32 = 5.6;
 
 /// The kart world's look: a sunny day as a camera sees it.
 pub fn look() -> Look {

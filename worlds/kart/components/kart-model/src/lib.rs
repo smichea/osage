@@ -362,13 +362,14 @@ fn helmet(livery: Livery) -> Part {
     let profile =
         [(0.0, 0.0), (0.1, 0.01), (0.135, 0.05), (0.15, 0.12), (0.148, 0.19), (0.13, 0.25), (0.09, 0.29), (0.0, 0.305)];
     let shell = Transform::from_scale(Vec3::new(1.0, 1.0, 1.12));
-    part.add(Finish::Varnish, &Shape::lathe(&profile, 28), shell, livery.main);
+    // A shade deeper than the bodywork: a varnished dome reflects the sky and pales.
+    part.add(Finish::Varnish, &Shape::lathe(&profile, 28), shell, livery.main * 0.8);
     // A stripe over the top, front to back.
-    let stripe = Shape::gore(&profile[3..], 4, FRAC_PI_2 - 0.12, 0.24);
+    let stripe = Shape::gore(&profile[3..], 4, FRAC_PI_2 - 0.2, 0.4);
     part.add(Finish::Varnish, &stripe, shell * Transform::from_scale(Vec3::splat(1.01)), livery.second);
     part.add(
         Finish::Varnish,
-        &Shape::gore(&profile[3..], 4, -FRAC_PI_2 - 0.12, 0.24),
+        &Shape::gore(&profile[3..], 4, -FRAC_PI_2 - 0.2, 0.4),
         shell * Transform::from_scale(Vec3::splat(1.01)),
         livery.second,
     );

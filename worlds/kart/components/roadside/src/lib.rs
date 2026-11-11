@@ -81,11 +81,15 @@ pub fn scatters(
             && !clearings.iter().any(|site| site.centre.distance(at) < site.radius)
     };
     // A point beside the track, `low` to `high` metres beyond the barrier, on
-    // either side: plants are where they are seen.
+    // either side: plants are where they are seen. Anywhere along the track,
+    // not only at its frames, or plants would stand in rows.
     let beside = |dice: &mut Dice, low: f32, high: f32| {
-        let frame = &frames[(dice.roll() * frames.len() as f32) as usize % frames.len()];
+        let i = (dice.roll() * frames.len() as f32) as usize % frames.len();
+        let (frame, next) = (&frames[i], &frames[(i + 1) % frames.len()]);
+        let t = dice.roll();
+        let (at, right) = (frame.at.lerp(next.at, t), frame.right.lerp(next.right, t).normalize_or_zero());
         let side = if dice.roll() < 0.5 { -1.0 } else { 1.0 };
-        frame.at + frame.right * side * (roadside + dice.between(low, high))
+        at + right * side * (roadside + dice.between(low, high))
     };
     let stand = |at: Vec2, sink: f32, turn: f32, size: f32| {
         Transform::from_xyz(at.x, land.height(at) - sink, at.y)
@@ -132,10 +136,10 @@ pub fn scatters(
     all.push(scatter(&models.boulder, boulders, Use::Whole, 250.0, true));
 
     if detail == Detail::Full {
-        // Grass: tufts thick near the barrier and in the meadows beyond.
+        // Grass: tufts thick just beyond the barrier, where the camera sees them.
         let mut grass = Vec::new();
         for _ in 0..40_000 {
-            let at = beside(&mut dice, 0.6, 45.0);
+            let at = beside(&mut dice, 0.6, 8.0);
             let (turn, size) = (dice.between(0.0, std::f32::consts::TAU), dice.between(2.2, 3.6));
             if free(at, 0.6) && grass.len() < 22_000 {
                 grass.push(stand(at, 0.02, turn, size));

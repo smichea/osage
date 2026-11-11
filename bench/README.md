@@ -52,6 +52,8 @@ Latest results of the reference machines, one line per machine and tier.
 | 2026-11-10 | same | ThinkPad E14 Gen 5 (Iris Xe), lighter load | T2 | 1920×1080 (1632×918) | 14.0 ms (72 fps) | 16.9 ms | 19.3 ms | 6 % |
 | 2026-11-10 | same, commit 195c7e3 | Google Cloud g2-standard-4 (NVIDIA L4, driver 580), headless | T3 | 2560×1440 | 5.7 ms (174 fps) | 6.9 ms | 7.5 ms | 0 % |
 | 2026-11-10 | same, commit 195c7e3 | Google Cloud g2-standard-4 (NVIDIA L4, driver 580), headless | T4 | 2560×1440 | 6.7 ms (149 fps) | 8.2 ms | 12.8 ms | 0 % |
+| 2026-11-11 | photographed circuit (D-044), commit 883fa2b, roadside models from T3 | Google Cloud g2-standard-4 (NVIDIA L4, driver 580), headless | T3 | 2560×1440 | 10.0 ms (100 fps) | 13.4 ms | 16.6 ms | 0.9 % |
+| 2026-11-11 | same | Google Cloud g2-standard-4 (NVIDIA L4, driver 580), headless | T4 | 2560×1440 | 12.0 ms (84 fps) | 17.7 ms | 21.2 ms | 0 % |
 | 2026-11-11 | photographed circuit (D-044): sky panorama, 2k surfaces, racing karts; no roadside models below T3 | ThinkPad E14 Gen 5 (Iris Xe), headless, load average 10 to 13 | T1 | 1280×720 | 14.1 ms (71 fps) | 19.5 ms | 23.7 ms | 0.1 % |
 | 2026-11-11 | same | ThinkPad E14 Gen 5 (Iris Xe), headless, load average 13 | T2 | 1920×1080 (1632×918) | 17.5 ms (57 fps) | 24.7 ms | 31.1 ms | — |
 
