@@ -37,6 +37,8 @@ struct Piece {
     paint: bool,
     /// Depth of the folds rippling its surface, metres.
     folds: f32,
+    /// The bone that moves it, for a skinned figure ([`Sculpture::skinned`]).
+    bone: u16,
 }
 
 /// The triangles of one group as they are gathered: positions, normals,
@@ -152,7 +154,7 @@ impl Sculpture {
     }
 
     fn push(&mut self, form: Form, group: usize, paint: bool) -> &mut Self {
-        self.pieces.push(Piece { form, group, paint, folds: 0.0 });
+        self.pieces.push(Piece { form, group, paint, folds: 0.0, bone: 0 });
         self
     }
 
@@ -192,6 +194,72 @@ impl Sculpture {
             last.folds = depth;
         }
         self
+    }
+
+    /// The last piece added moves with `bone` (0 unless said).
+    pub fn bone(&mut self, bone: u16) -> &mut Self {
+        if let Some(last) = self.pieces.last_mut() {
+            last.bone = bone;
+        }
+        self
+    }
+
+    /// The two bones nearest a point of the surface and how much each
+    /// moves it: the nearest solid piece's bone, and, within the blend of
+    /// it, the next bone's, weighted so that the surface bends smoothly at
+    /// a joint.
+    pub fn weights(&self, p: Vec3) -> ([u16; 4], [f32; 4]) {
+        let mut nearest: Vec<(u16, f32)> = Vec::new();
+        for piece in self.pieces.iter().filter(|piece| !piece.paint) {
+            let d = piece.distance(p).max(0.0);
+            match nearest.iter_mut().find(|(bone, _)| *bone == piece.bone) {
+                Some(entry) => entry.1 = entry.1.min(d),
+                None => nearest.push((piece.bone, d)),
+            }
+        }
+        nearest.sort_by(|a, b| a.1.total_cmp(&b.1));
+        match nearest.as_slice() {
+            [] => ([0; 4], [1.0, 0.0, 0.0, 0.0]),
+            [only] => ([only.0, 0, 0, 0], [1.0, 0.0, 0.0, 0.0]),
+            [first, second, ..] => {
+                let span = self.blend.max(0.01) * 2.0;
+                let other = (0.5 - (second.1 - first.1) / span).clamp(0.0, 0.5);
+                ([first.0, second.0, 0, 0], [1.0 - other, other, 0.0, 0.0])
+            }
+        }
+    }
+
+    /// The surface as skinned meshes, one per group: positions, normals,
+    /// the colour `paint` gives each group, and for each vertex the bones
+    /// that move it and their weights ([`Sculpture::weights`]), for a
+    /// renderer's skinning.
+    pub fn skinned(&self, cell: f32, paint: impl Fn(usize) -> [f32; 4]) -> Vec<(usize, Mesh)> {
+        use bevy::{
+            asset::RenderAssetUsages,
+            mesh::{Indices, PrimitiveTopology, VertexAttributeValues},
+        };
+        self.shapes(cell)
+            .into_iter()
+            .map(|(group, shape)| {
+                let (joints, weights): (Vec<[u16; 4]>, Vec<[f32; 4]>) =
+                    shape.positions.iter().map(|p| self.weights(*p)).unzip();
+                let colour = paint(group);
+                let mesh = Mesh::new(PrimitiveTopology::TriangleList, RenderAssetUsages::default())
+                    .with_inserted_attribute(
+                        Mesh::ATTRIBUTE_POSITION,
+                        shape.positions.iter().map(|p| p.to_array()).collect::<Vec<_>>(),
+                    )
+                    .with_inserted_attribute(
+                        Mesh::ATTRIBUTE_NORMAL,
+                        shape.normals.iter().map(|n| n.to_array()).collect::<Vec<_>>(),
+                    )
+                    .with_inserted_attribute(Mesh::ATTRIBUTE_COLOR, vec![colour; shape.positions.len()])
+                    .with_inserted_attribute(Mesh::ATTRIBUTE_JOINT_INDEX, VertexAttributeValues::Uint16x4(joints))
+                    .with_inserted_attribute(Mesh::ATTRIBUTE_JOINT_WEIGHT, weights)
+                    .with_inserted_indices(Indices::U32(shape.indices.clone()));
+                (group, mesh)
+            })
+            .collect()
     }
 
     /// Signed distance to the surface: negative inside.
@@ -444,6 +512,27 @@ mod tests {
         assert!(moulded.distance(Vec3::new(0.0, 0.1, 0.0)).abs() < 1e-5);
         // At a corner it is rounded off: the box's corner is outside.
         assert!(moulded.distance(Vec3::new(0.3, 0.1, 0.2)) > 0.02);
+    }
+
+    #[test]
+    fn a_joint_blends_two_bones_and_the_rest_follows_one() {
+        let mut arm = Sculpture::new(0.04);
+        arm.cone(0, Vec3::ZERO, Vec3::X * 0.3, 0.05, 0.05)
+            .bone(1)
+            .cone(0, Vec3::X * 0.3, Vec3::X * 0.6, 0.05, 0.04)
+            .bone(2);
+        let (bones, weights) = arm.weights(Vec3::new(0.05, 0.05, 0.0));
+        assert_eq!((bones[0], weights[0]), (1, 1.0), "far from the elbow: the upper arm alone");
+        let (bones, weights) = arm.weights(Vec3::new(0.3, 0.05, 0.0));
+        assert!(
+            (weights[0] - 0.5).abs() < 0.1 && bones[..2].contains(&1) && bones[..2].contains(&2),
+            "{bones:?} {weights:?}"
+        );
+        let (bones, weights) = arm.weights(Vec3::new(0.55, 0.04, 0.0));
+        assert_eq!((bones[0], weights[0]), (2, 1.0), "the forearm alone");
+        let meshes = arm.skinned(0.02, |_| [1.0; 4]);
+        assert_eq!(meshes.len(), 1);
+        assert!(meshes[0].1.attribute(Mesh::ATTRIBUTE_JOINT_WEIGHT).is_some());
     }
 
     #[test]

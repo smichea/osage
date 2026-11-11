@@ -175,8 +175,13 @@ pub type Part = Vec<(Finish, Mesh)>;
 
 /// The meshes of a kart in one livery.
 pub struct Kart {
-    /// Frame, bodywork, engine, seat, steering and the driver below the neck.
+    /// Frame, bodywork, engine, seat and steering column.
     pub body: Part,
+    /// The driver below the neck, skinned to [`DRIVER_BONES`] bones: each
+    /// mesh's vertices name their bones and weights ([`driver_pose`]).
+    pub driver: Part,
+    /// The steering wheel, around [`steering_column`], turning about its Y.
+    pub steering: Part,
     /// The helmet, around [`NECK`].
     pub helmet: Part,
     /// A front and a rear wheel, around their centre, axle along X, for the
@@ -225,7 +230,90 @@ const WHITE: Vec3 = Vec3::new(0.92, 0.92, 0.9);
 
 /// A kart and its driver in `livery`.
 pub fn build(livery: Livery) -> Kart {
-    Kart { body: body(livery), helmet: helmet(livery), wheels: [wheel(0, livery), wheel(1, livery)] }
+    Kart {
+        body: body(livery),
+        driver: driver(livery),
+        steering: steering_wheel(),
+        helmet: helmet(livery),
+        wheels: [wheel(0, livery), wheel(1, livery)],
+    }
+}
+
+/// Where the steering wheel's centre is, in the kart, facing the driver:
+/// its own Y is the column, its own Z the top of the rim.
+pub fn steering_column() -> Transform {
+    at(0.0, 0.5, 0.17).with_rotation(Quat::from_rotation_x(-1.05))
+}
+
+/// The steering wheel in its own space: the rim round its Y, a spoke and its grips.
+fn steering_wheel() -> Part {
+    let mut wheel = Sorted::default();
+    let rim = Shape::new(
+        Torus { minor_radius: 0.016, major_radius: 0.14 }.mesh().minor_resolution(8).major_resolution(24).build(),
+    );
+    wheel.add(Finish::Satin, &rim, Transform::IDENTITY, BLACK);
+    let spoke = Shape::block(Vec3::new(-0.13, -0.008, -0.015), Vec3::new(0.13, 0.008, 0.015));
+    wheel.add(Finish::Alloy, &spoke, Transform::IDENTITY, ALLOY);
+    let hub = Shape::new(Cylinder::new(0.035, 0.03).mesh().resolution(16));
+    wheel.add(Finish::Alloy, &hub, Transform::IDENTITY, ALLOY);
+    wheel.part()
+}
+
+/// The driver's bones: the trunk, then for each arm, left (+X) and right,
+/// the upper arm, the forearm and the hand, each at its joint.
+pub const DRIVER_BONES: usize = 7;
+
+/// The joints the driver is sculpted at: the trunk at the kart's origin,
+/// then each arm's shoulder, elbow and wrist.
+const JOINTS: [Vec3; DRIVER_BONES] = [
+    Vec3::ZERO,
+    Vec3::new(0.19, 0.6, -0.27),
+    Vec3::new(0.25, 0.47, -0.08),
+    Vec3::new(0.135, 0.5, 0.1),
+    Vec3::new(-0.19, 0.6, -0.27),
+    Vec3::new(-0.25, 0.47, -0.08),
+    Vec3::new(-0.135, 0.5, 0.1),
+];
+
+/// The first bone of an arm: the left's (+X) is 1, the right's 4.
+const fn arm(side: f32) -> u16 {
+    if side > 0.0 { 1 } else { 4 }
+}
+
+/// The bones as sculpted, in the kart: the inverse bind poses of a skin
+/// are their inverses.
+pub fn driver_rest() -> [Transform; DRIVER_BONES] {
+    JOINTS.map(Transform::from_translation)
+}
+
+/// The bones with the steering wheel turned by `turn` radians (positive to
+/// the left): the hands stay on the rim at ten to two and turn with it, the
+/// arms follow, elbows out and down as sculpted (two-bone inverse
+/// kinematics, the arms' lengths kept).
+pub fn driver_pose(turn: f32) -> [Transform; DRIVER_BONES] {
+    let column = steering_column();
+    let spin = column.rotation * Quat::from_rotation_y(turn) * column.rotation.inverse();
+    let mut pose = driver_rest();
+    for side in [1.0f32, -1.0] {
+        let first = arm(side) as usize;
+        let (s, e, w) = (JOINTS[first], JOINTS[first + 1], JOINTS[first + 2]);
+        let (upper, fore) = (e.distance(s), w.distance(e));
+        // The wrist, carried round the column with the rim.
+        let target = column.translation + spin * (w - column.translation);
+        let towards = target - s;
+        let reach = towards.length().clamp((upper - fore).abs() + 1e-3, upper + fore - 1e-3);
+        let along = towards.normalize_or(Vec3::Y);
+        // The elbow bends the way it does at rest.
+        let pole = ((e - s) - along * (e - s).dot(along)).normalize_or(Vec3::NEG_Y);
+        let cos = ((upper * upper + reach * reach - fore * fore) / (2.0 * upper * reach)).clamp(-1.0, 1.0);
+        let elbow = s + upper * (along * cos + pole * (1.0 - cos * cos).sqrt());
+        let wrist = elbow + fore * (target - elbow).normalize_or(w - e);
+        pose[first].rotation = Quat::from_rotation_arc((e - s).normalize(), (elbow - s).normalize());
+        pose[first + 1] = Transform::from_translation(elbow)
+            .with_rotation(Quat::from_rotation_arc((w - e).normalize(), (wrist - elbow).normalize()));
+        pose[first + 2] = Transform::from_translation(wrist).with_rotation(spin);
+    }
+    pose
 }
 
 fn body(livery: Livery) -> Part {
@@ -233,7 +321,7 @@ fn body(livery: Livery) -> Part {
     frame(&mut kart, livery);
     bodywork(&mut kart, livery);
     engine(&mut kart);
-    driver(&mut kart, livery);
+    neck_brace(&mut kart);
     let mut part = kart.part();
     part.push((Finish::Decal, stickers(livery).mesh()));
     part
@@ -344,14 +432,7 @@ fn frame(kart: &mut Sorted, livery: Livery) {
         Transform::IDENTITY,
         BLACK,
     );
-    // The steering wheel, facing the driver, with its grips.
-    let wheel_at = at(0.0, 0.5, 0.17).with_rotation(Quat::from_rotation_x(-1.05));
-    let rim = Shape::new(
-        Torus { minor_radius: 0.016, major_radius: 0.14 }.mesh().minor_resolution(8).major_resolution(24).build(),
-    );
-    kart.add(Finish::Satin, &rim, wheel_at, BLACK);
-    let spoke = Shape::block(Vec3::new(-0.13, -0.008, -0.015), Vec3::new(0.13, 0.008, 0.015));
-    kart.add(Finish::Alloy, &spoke, wheel_at, ALLOY);
+    // The steering wheel turns: it is a part of its own ([`steering_wheel`]).
 }
 
 /// The plastic bodywork: nose, a dome before the front panel, the front panel
@@ -508,8 +589,8 @@ mod worn {
 /// limbs and trunk blended into one surface ([`Sculpture`]), cloth folded
 /// at the elbows and knees, and the suit's panels painted on. The same for
 /// every driver, so sculpted once; each livery only paints it.
-fn sculpted_driver() -> &'static [(usize, Shape)] {
-    static DRIVER: std::sync::OnceLock<Vec<(usize, Shape)>> = std::sync::OnceLock::new();
+fn sculpted_driver() -> &'static [(usize, Mesh)] {
+    static DRIVER: std::sync::OnceLock<Vec<(usize, Mesh)>> = std::sync::OnceLock::new();
     DRIVER.get_or_init(|| {
         use worn::*;
         let lean = Quat::from_rotation_x(-0.38);
@@ -528,13 +609,18 @@ fn sculpted_driver() -> &'static [(usize, Shape)] {
             let wrist = Vec3::new(side * 0.135, 0.5, 0.1);
             let knee = Vec3::new(side * 0.13, 0.27, 0.12);
             let ankle = Vec3::new(side * 0.11, 0.14, 0.48);
+            let bone = arm(side);
             body.cone(SUIT, Vec3::new(0.0, 0.63, -0.31), shoulder, 0.06, 0.068)
                 .cone(SUIT, shoulder, elbow, 0.056, 0.046)
                 .folded(0.0025)
+                .bone(bone)
                 .cone(SUIT, elbow, wrist, 0.045, 0.034)
                 .folded(0.0025)
+                .bone(bone + 1)
                 .cone(GLOVES, wrist + Vec3::new(0.0, 0.0, -0.01), Vec3::new(side * 0.122, 0.51, 0.135), 0.037, 0.035)
+                .bone(bone + 2)
                 .ellipsoid(GLOVES, Vec3::new(side * 0.12, 0.51, 0.15), Vec3::new(0.034, 0.042, 0.05), Quat::IDENTITY)
+                .bone(bone + 2)
                 .cone(SUIT, Vec3::new(side * 0.1, 0.15, -0.16), knee, 0.082, 0.058)
                 .folded(0.003)
                 .cone(SUIT, knee, ankle, 0.056, 0.04)
@@ -552,24 +638,36 @@ fn sculpted_driver() -> &'static [(usize, Shape)] {
         body.paint_box(BAND, Vec3::new(0.0, 0.53, -0.31), Vec3::new(0.3, 0.035, 0.2), lean)
             .paint_cone(PANELS, Vec3::new(0.0, 0.66, -0.3), Vec3::new(0.0, 0.7, -0.29), 0.075, 0.07)
             .paint_box(PATCH, Vec3::new(0.0, 0.46, -0.44), Vec3::new(0.09, 0.06, 0.08), lean);
-        body.shapes(0.012)
+        body.skinned(0.012, |_| [1.0; 4])
     })
 }
 
-/// The driver, sculpted, in the livery's colours.
-fn driver(kart: &mut Sorted, livery: Livery) {
-    for (group, shape) in sculpted_driver() {
-        let (finish, colour) = match *group {
-            worn::SUIT => (Finish::Cloth, livery.suit),
-            worn::PANELS => (Finish::Cloth, livery.main),
-            worn::BAND => (Finish::Cloth, livery.second),
-            worn::GLOVES | worn::BOOTS => (Finish::Rubber, BLACK),
-            worn::RIBS => (Finish::Satin, BLACK),
-            worn::PATCH => (Finish::Cloth, WHITE),
-            _ => (Finish::Cloth, BLACK),
-        };
-        kart.add(finish, shape, Transform::IDENTITY, colour);
-    }
+/// The driver, sculpted and skinned, in the livery's colours: one mesh per
+/// part of the suit.
+fn driver(livery: Livery) -> Part {
+    let linear = |c: Vec3| Color::srgb(c.x, c.y, c.z).to_linear().to_f32_array();
+    sculpted_driver()
+        .iter()
+        .map(|(group, mesh)| {
+            let (finish, colour) = match *group {
+                worn::SUIT => (Finish::Cloth, livery.suit),
+                worn::PANELS => (Finish::Cloth, livery.main),
+                worn::BAND => (Finish::Cloth, livery.second),
+                worn::GLOVES | worn::BOOTS => (Finish::Rubber, BLACK),
+                worn::RIBS => (Finish::Satin, BLACK),
+                worn::PATCH => (Finish::Cloth, WHITE),
+                _ => (Finish::Cloth, BLACK),
+            };
+            let mut mesh = mesh.clone();
+            let count = mesh.count_vertices();
+            mesh.insert_attribute(Mesh::ATTRIBUTE_COLOR, vec![linear(colour); count]);
+            (finish, mesh)
+        })
+        .collect()
+}
+
+/// The foam neck brace karting drivers wear, on the trunk.
+fn neck_brace(kart: &mut Sorted) {
     // The foam neck brace karting drivers wear, tucked under the helmet's
     // rim: seen from behind, a thin dark band, not a ring.
     let brace = Shape::new(
@@ -662,6 +760,52 @@ mod tests {
     use bevy::mesh::VertexAttributeValues;
 
     use super::*;
+
+    #[test]
+    fn at_rest_the_driver_is_as_sculpted_and_turning_keeps_the_arms_whole() {
+        let rest = driver_pose(0.0);
+        for (bone, joint) in rest.iter().zip(driver_rest()) {
+            assert!(bone.translation.distance(joint.translation) < 1e-4, "{bone:?}");
+            assert!(bone.rotation.angle_between(Quat::IDENTITY) < 1e-3, "{bone:?}");
+        }
+        let column = steering_column();
+        let axis = column.rotation * Vec3::Y;
+        // The distance of a point from the column's axis.
+        let off_axis = |p: Vec3| {
+            let d = p - column.translation;
+            (d - axis * d.dot(axis)).length()
+        };
+        for turn in [-0.9f32, -0.4, 0.5, 1.0] {
+            let pose = driver_pose(turn);
+            for first in [1usize, 4] {
+                let (s, e, w) = (JOINTS[first], JOINTS[first + 1], JOINTS[first + 2]);
+                let (shoulder, elbow, wrist) =
+                    (pose[first].translation, pose[first + 1].translation, pose[first + 2].translation);
+                assert!(shoulder.distance(s) < 1e-4, "the shoulder stays");
+                assert!((elbow.distance(shoulder) - e.distance(s)).abs() < 1e-3, "the upper arm keeps its length");
+                assert!((wrist.distance(elbow) - w.distance(e)).abs() < 1e-3, "the forearm keeps its length");
+                assert!((off_axis(wrist) - off_axis(w)).abs() < 0.01, "the hand stays on the rim: {turn}");
+            }
+        }
+        // Turning left, the left hand rises and the right one falls: the rim turns.
+        let left = driver_pose(0.6);
+        assert!(left[3].translation.y < JOINTS[3].y, "{}", left[3].translation);
+        assert!(left[6].translation.y > JOINTS[6].y, "{}", left[6].translation);
+    }
+
+    #[test]
+    fn the_driver_is_skinned_to_its_bones() {
+        let driver = build(livery()).driver;
+        assert!(!driver.is_empty());
+        for (_, mesh) in &driver {
+            let Some(bevy::mesh::VertexAttributeValues::Uint16x4(joints)) = mesh.attribute(Mesh::ATTRIBUTE_JOINT_INDEX)
+            else {
+                panic!("joint indices")
+            };
+            assert!(joints.iter().flatten().all(|&j| (j as usize) < DRIVER_BONES));
+            assert!(mesh.attribute(Mesh::ATTRIBUTE_COLOR).is_some(), "painted");
+        }
+    }
 
     fn livery() -> Livery {
         Livery {

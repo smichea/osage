@@ -1,6 +1,7 @@
 # Knowledge Update Log
 
 ## 2026-11-11
+* **Update**: [Blended solids](/algorithms/blended-solids.md) can be skinned; [osage-kart-model](/modules/kart-model.md)'s drivers steer, their arms following the wheel; its bodywork is moulded.
 * **Update**: [A photographed sky](/techniques/panorama.md): a world may have one photograph per time of day; the kart world gains a late afternoon ([osage-kart-native](/modules/kart-native.md), `--sky evening`).
 * **Update**: [osage-kart-model](/modules/kart-model.md) covers its karts in sponsors' stickers, abstract marks drawn by the program.
 * **Update**: [osage-kart-crowd](/modules/kart-crowd.md) stands people up: onlookers along the fences and marshals at the bends of [osage-kart-native](/modules/kart-native.md).

@@ -18,8 +18,12 @@ use std::{
     f32::consts::{PI, TAU},
 };
 
-use bevy::prelude::*;
-use osage_kart_model::{AXLES, Finish, Livery, NECK, WHEELS};
+use bevy::{
+    camera::visibility::NoFrustumCulling,
+    mesh::skinning::{SkinnedMesh, SkinnedMeshInverseBindposes},
+    prelude::*,
+};
+use osage_kart_model::{AXLES, DRIVER_BONES, Finish, Livery, NECK, WHEELS, driver_pose, driver_rest, steering_column};
 pub use osage_kart_model::{EXHAUSTS, REAR_CONTACTS};
 use osage_kart_physics::{MAX_SPEED, wrap};
 
@@ -34,8 +38,18 @@ type Meshes = Vec<(Finish, Handle<Mesh>)>;
 /// The meshes of one colour of kart.
 struct Model {
     body: Meshes,
+    /// The driver below the neck, skinned to the bones of [`Bones`].
+    driver: Meshes,
+    steering: Meshes,
     helmet: Meshes,
     wheels: [Meshes; 2],
+}
+
+/// A kart's moving parts that steering moves: the steering wheel and the
+/// driver's bones, which the arms follow.
+pub struct Bones {
+    steering: Entity,
+    joints: [Entity; DRIVER_BONES],
 }
 
 /// What the karts share: a material per finish, and a model per colour,
@@ -44,6 +58,8 @@ struct Model {
 pub struct Kit {
     finishes: HashMap<Finish, Handle<StandardMaterial>>,
     models: HashMap<usize, Model>,
+    /// The driver's bones at rest, inverted: every driver's skin.
+    bindposes: Handle<SkinnedMeshInverseBindposes>,
 }
 
 /// The moving parts of a kart and where its motion stands.
@@ -51,6 +67,7 @@ pub struct Kit {
 pub struct Rig {
     body: Entity,
     head: Entity,
+    bones: Bones,
     /// Each wheel's pivot (the front ones turn to steer) and its tyre (which spins).
     wheels: [(Entity, Entity); 4],
     heading: f32,
@@ -69,6 +86,7 @@ pub fn setup(
     mut commands: Commands,
     mut materials: ResMut<Assets<StandardMaterial>>,
     mut images: ResMut<Assets<Image>>,
+    mut skins: ResMut<Assets<SkinnedMeshInverseBindposes>>,
 ) {
     let stickers = images.add(osage_kart_model::decals::atlas());
     let finishes = Finish::ALL
@@ -81,7 +99,8 @@ pub fn setup(
             (finish, materials.add(material))
         })
         .collect();
-    commands.insert_resource(Kit { finishes, models: HashMap::new() });
+    let rest: Vec<Mat4> = driver_rest().iter().map(|bone| bone.to_matrix().inverse()).collect();
+    commands.insert_resource(Kit { finishes, models: HashMap::new(), bindposes: skins.add(rest) });
 }
 
 /// A team's colours from the palette: the paint, white or black stripes
@@ -133,7 +152,13 @@ fn model_of(kit: &mut Kit, meshes: &mut Assets<Mesh>, colour: usize) {
             part.into_iter().map(|(finish, mesh)| (finish, meshes.add(mesh))).collect()
         };
         let [front, rear] = built.wheels;
-        Model { body: add(built.body), helmet: add(built.helmet), wheels: [add(front), add(rear)] }
+        Model {
+            body: add(built.body),
+            driver: add(built.driver),
+            steering: add(built.steering),
+            helmet: add(built.helmet),
+            wheels: [add(front), add(rear)],
+        }
     });
 }
 
@@ -143,10 +168,25 @@ fn assemble(
     kit: &Kit,
     colour: usize,
     kart: Entity,
-) -> (Entity, Entity, [(Entity, Entity); 4]) {
+) -> (Entity, Entity, [(Entity, Entity); 4], Bones) {
     let model = &kit.models[&colour];
     let body = commands.spawn((Transform::default(), Visibility::default(), ChildOf(kart))).id();
     spawn_part(commands, kit, &model.body, body);
+    // The steering wheel turns about its column; the driver's bones follow it.
+    let steering = commands.spawn((steering_column(), Visibility::default(), ChildOf(body))).id();
+    spawn_part(commands, kit, &model.steering, steering);
+    let joints = driver_rest().map(|rest| commands.spawn((rest, ChildOf(body))).id());
+    for (finish, mesh) in &model.driver {
+        commands.spawn((
+            Mesh3d(mesh.clone()),
+            MeshMaterial3d(kit.finishes[finish].clone()),
+            SkinnedMesh { inverse_bindposes: kit.bindposes.clone(), joints: joints.to_vec() },
+            // Its bounds move with its bones: never culled by stale ones.
+            NoFrustumCulling,
+            Transform::default(),
+            ChildOf(body),
+        ));
+    }
     let head = commands.spawn((Transform::from_translation(NECK), Visibility::default(), ChildOf(body))).id();
     spawn_part(commands, kit, &model.helmet, head);
     let wheels = [0, 1, 2, 3].map(|i| {
@@ -157,7 +197,7 @@ fn assemble(
         spawn_part(commands, kit, &model.wheels[i / 2], tyre);
         (pivot, tyre)
     });
-    (body, head, wheels)
+    (body, head, wheels, Bones { steering, joints })
 }
 
 /// Gives every parked kart its model.
@@ -185,7 +225,7 @@ pub fn dress(
     for (kart, pose) in &karts {
         let colour = pose.color as usize % PALETTE.len();
         model_of(&mut kit, &mut meshes, colour);
-        let (body, head, wheels) = assemble(&mut commands, &kit, colour, kart);
+        let (body, head, wheels, bones) = assemble(&mut commands, &kit, colour, kart);
 
         commands.entity(kart).insert((
             Transform::default(),
@@ -193,6 +233,7 @@ pub fn dress(
             Rig {
                 body,
                 head,
+                bones,
                 wheels,
                 heading: pose.kart.heading,
                 speed: pose.kart.speed,
@@ -244,6 +285,17 @@ pub fn animate(time: Res<Time>, mut karts: Query<(Entity, &Pose, &mut Rig)>, mut
         if let Ok(mut head) = transforms.get_mut(rig.head) {
             head.rotation =
                 Quat::from_rotation_y(rig.steer * 0.45 - rig.slip * 0.6) * Quat::from_rotation_z(-rig.lean * 1.5);
+        }
+        // The steering wheel turns twice as far as the front wheels, the
+        // hands on it, the arms following.
+        let turn = rig.steer * 1.1;
+        if let Ok(mut wheel) = transforms.get_mut(rig.bones.steering) {
+            *wheel = steering_column() * Transform::from_rotation(Quat::from_rotation_y(turn));
+        }
+        for (joint, bone) in rig.bones.joints.iter().zip(driver_pose(turn)) {
+            if let Ok(mut place) = transforms.get_mut(*joint) {
+                *place = bone;
+            }
         }
         for (i, (pivot, tyre)) in rig.wheels.into_iter().enumerate() {
             if let (true, Ok(mut pivot)) = (i < 2, transforms.get_mut(pivot)) {

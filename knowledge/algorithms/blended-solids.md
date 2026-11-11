@@ -19,7 +19,7 @@ sources:
   - id: own
     resource: "osage's own design and measurements, 2026-11-11"
     title: osage design
-generated: { by: "claude-code/claude-opus-5-5", at: "2026-11-11T11:00:00Z" }
+generated: { by: "claude-code/claude-opus-5-5", at: "2026-11-11T20:00:00Z" }
 ---
 
 # Problem
@@ -37,13 +37,14 @@ Describe the figure as a signed distance field — negative inside — made of s
 3. **Folds**: a piece may ripple: its distance minus `depth · sin(105·s + 1.7·sin(2θ + 31·s))`, `s` along its axis and `θ` around it — ridges about 6 cm apart, a few millimetres deep, wavering so that no two are alike, as a sleeve gathers at the elbow.
 4. **Mesh by surface nets**: sample the field on a grid of cells (1.2 cm for a driver) over the pieces' boxes and a margin. In every cell whose corners differ in sign, place one vertex at the mean of the points where the field crosses the cell's twelve edges (linear interpolation). For every grid edge the surface crosses, join the vertices of the four cells around it in a quad, ordered counter-clockwise seen from the outside (the end of the edge that is inside tells which way that is); split each quad along its shorter diagonal.
 5. **Normals** from the field's gradient by central differences at each vertex: smooth, and they carry the folds even where the grid is too coarse to.
-6. **Paint**: a triangle takes the group of a paint volume (a cone or box that adds no matter, as a panel is sewn on a suit) that contains its centre — the last listed wins — otherwise the group of the solid piece nearest its centre. Each group becomes its own mesh, so that each can have its material and colour.
+6. **Skin** (for a figure that moves): each piece names a bone; a vertex takes the bone of the nearest solid piece and, within the blend of it, the next bone's too, weighted `0.5 − (d₂ − d₁)/2k` for the second (`d` the distances to the bones' nearest pieces): halfway at a joint, one bone a blend away from it. The meshes carry joint indices and weights for a renderer's skinning.
+7. **Paint**: a triangle takes the group of a paint volume (a cone or box that adds no matter, as a panel is sewn on a suit) that contains its centre — the last listed wins — otherwise the group of the solid piece nearest its centre. Each group becomes its own mesh, so that each can have its material and colour.
 
 In osage, a kart driver is 21 pieces and 10 paint volumes; sculpted once (the same body for every driver), each livery only paints its groups[^own].
 
 # Invariants
 
-Vertices lie on the surface within a cell; normals point outwards; front faces face out; blending fills a corner and leaves far parts alone; paint adds no matter; folds are never deeper than asked. Tested.
+Vertices lie on the surface within a cell; normals point outwards; at a joint two bones share a vertex half and half, away from it one bone has it whole; front faces face out; blending fills a corner and leaves far parts alone; paint adds no matter; folds are never deeper than asked. Tested.
 
 # Cost
 
