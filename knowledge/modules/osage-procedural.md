@@ -27,7 +27,7 @@ The algorithm is [sculpted scenery](/algorithms/sculpted-scenery.md).
 
 # Interfaces
 
-`Shape::{new, lathe, gore, sweep, faces, block, extrude, extrude_rounded}`, `Paint::{plain, blend, shaded}`, `Batch::{add, add_within, append, merged, meshes}`, `box_uv`, `Dice::{roll, between, pick}`, `Sculpture::{new, cone, ellipsoid, cuboid, paint_cone, paint_box, folded, distance, group_at, shapes}`.
+`Shape::{new, lathe, gore, sweep, faces, block, extrude, extrude_rounded}`, `Paint::{plain, blend, shaded}`, `Batch::{add, add_within, append, merged, meshes}`, `box_uv`, `Dice::{roll, between, pick}`, `Sculpture::{new, cone, ellipsoid, cuboid, rounded, paint_cone, paint_box, folded, distance, group_at, shapes}`.
 
 # Invariants
 

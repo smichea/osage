@@ -24,8 +24,9 @@ enum Form {
     Cone { a: Vec3, b: Vec3, ra: f32, rb: f32 },
     /// Centred at `centre`, turned by `turn`, with these radii.
     Ellipsoid { centre: Vec3, radii: Vec3, turn: Quat },
-    /// Centred at `centre`, turned by `turn`, with these half sides.
-    Cuboid { centre: Vec3, half: Vec3, turn: Quat },
+    /// Centred at `centre`, turned by `turn`, with these half sides, its
+    /// edges rounded by `radius`.
+    Cuboid { centre: Vec3, half: Vec3, turn: Quat, radius: f32 },
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -105,7 +106,10 @@ impl Piece {
         let d = match self.form {
             Form::Cone { a, b, ra, rb } => round_cone(p, a, b, ra, rb),
             Form::Ellipsoid { centre, radii, turn } => ellipsoid(turn.inverse() * (p - centre), radii),
-            Form::Cuboid { centre, half, turn } => cuboid(turn.inverse() * (p - centre), half),
+            Form::Cuboid { centre, half, turn, radius } => {
+                let r = radius.min(half.min_element());
+                cuboid(turn.inverse() * (p - centre), half - Vec3::splat(r)) - r
+            }
         };
         if self.folds <= 0.0 {
             return d;
@@ -164,7 +168,12 @@ impl Sculpture {
 
     /// A box with sharp edges (the blend rounds where it meets others).
     pub fn cuboid(&mut self, group: usize, centre: Vec3, half: Vec3, turn: Quat) -> &mut Self {
-        self.push(Form::Cuboid { centre, half, turn }, group, false)
+        self.push(Form::Cuboid { centre, half, turn, radius: 0.0 }, group, false)
+    }
+
+    /// A box with its edges rounded by `radius`, as moulded plastic is.
+    pub fn rounded(&mut self, group: usize, centre: Vec3, half: Vec3, radius: f32, turn: Quat) -> &mut Self {
+        self.push(Form::Cuboid { centre, half, turn, radius }, group, false)
     }
 
     /// Paints `group` on the surface inside a round cone; adds no matter.
@@ -174,7 +183,7 @@ impl Sculpture {
 
     /// Paints `group` on the surface inside a turned box; adds no matter.
     pub fn paint_box(&mut self, group: usize, centre: Vec3, half: Vec3, turn: Quat) -> &mut Self {
-        self.push(Form::Cuboid { centre, half, turn }, group, true)
+        self.push(Form::Cuboid { centre, half, turn, radius: 0.0 }, group, true)
     }
 
     /// Folds `depth` metres deep on the last piece added.
@@ -424,6 +433,17 @@ mod tests {
         bare.pieces.pop();
         let p = Vec3::new(0.0, 0.25, 0.12);
         assert_eq!(bare.distance(p), figure.distance(p));
+    }
+
+    #[test]
+    fn a_rounded_box_keeps_its_size_and_rounds_its_corners() {
+        let mut moulded = Sculpture::new(0.0);
+        moulded.rounded(0, Vec3::ZERO, Vec3::new(0.3, 0.1, 0.2), 0.05, Quat::IDENTITY);
+        // On its faces it is the box.
+        assert!(moulded.distance(Vec3::new(0.3, 0.0, 0.0)).abs() < 1e-5);
+        assert!(moulded.distance(Vec3::new(0.0, 0.1, 0.0)).abs() < 1e-5);
+        // At a corner it is rounded off: the box's corner is outside.
+        assert!(moulded.distance(Vec3::new(0.3, 0.1, 0.2)) > 0.02);
     }
 
     #[test]

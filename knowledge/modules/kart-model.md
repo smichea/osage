@@ -6,7 +6,7 @@ resource: https://github.com/smichea/osage/tree/main/worlds/kart/components/kart
 licence: MIT OR Apache-2.0
 status: draft
 tags: [kart, vehicle, model, component]
-generated: { by: "claude-code/claude-opus-5-5", at: "2026-11-11T16:00:00Z" }
+generated: { by: "claude-code/claude-opus-5-5", at: "2026-11-11T19:00:00Z" }
 ---
 
 # Purpose
@@ -22,7 +22,7 @@ The karts of the kart game as a real racing kart looks: the replacement of the t
 
 # Architecture
 
-Built from simple shapes ([osage-procedural](/modules/osage-procedural.md)): prisms with rounded corners for the nose, side pods and the black rear bumper, as moulded plastic is; tubes swept along paths for the frame and the exhaust; the driver's body sculpted as one smooth surface, limbs and trunk blended, cloth folded at the elbows and knees, panels painted on ([blended solids](/algorithms/blended-solids.md)), once for every driver; capsules and spheres scaled for the bodywork; solids of revolution for the tyres, rims and helmet; slices of revolution for the seat's shell, the helmet's stripe and the visor. Proportions are a real kart's: a 1.04 m wheelbase, 10 and 11 inch slicks, a frame five centimetres off the road, the engine on the driver's right with the chain guard down to the sprocket, a brake disc on the rear axle, a driver in a rib protector and a foam neck brace, whose helmet tops out about a metre high. Colours are in the vertices, so a kart is a few meshes with a handful of shared materials.
+Built from simple shapes ([osage-procedural](/modules/osage-procedural.md)): the moulded plastic — the nose with its crown, black lip and the dome over the pedals, the side pods with their skirt and rounded fronts, the black rear bumper's bar and wings behind the wheels — sculpted once as rounded boxes and ellipsoids blended ([blended solids](/algorithms/blended-solids.md)), painted per livery; tubes swept along paths for the frame and the exhaust; the driver's body sculpted as one smooth surface, limbs and trunk blended, cloth folded at the elbows and knees, panels painted on ([blended solids](/algorithms/blended-solids.md)), once for every driver; capsules and spheres scaled for the bodywork; solids of revolution for the tyres, rims and helmet; slices of revolution for the seat's shell, the helmet's stripe and the visor. Proportions are a real kart's: a 1.04 m wheelbase, 10 and 11 inch slicks, a frame five centimetres off the road, the engine on the driver's right with the chain guard down to the sprocket, a brake disc on the rear axle, a driver in a rib protector and a foam neck brace, whose helmet tops out about a metre high. Colours are in the vertices, so a kart is a few meshes with a handful of shared materials.
 
 # Interfaces
 
@@ -46,4 +46,4 @@ The proportions and the finishes are what makes a kart read as real; the shapes 
 
 # Limits
 
-Bodywork rounded only along its profile, its ends square; numbers are blocks; stickers are flat quads, a little off the curved faces at their edges; the driver's body is generic, its face never seen. Paint has no clear coat: Bevy's paled every dome facing the sky to near white. A modelled kart and driver (workstream R9) are the next step.
+Bodywork is moulded from a few rounded pieces, without a real kart's fine lines and vents; numbers are blocks; stickers are flat quads on the flat faces; the driver's body is generic, its face never seen. Paint has no clear coat: Bevy's paled every dome facing the sky to near white. A modelled kart and driver (workstream R9) are the next step.

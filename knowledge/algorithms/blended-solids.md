@@ -32,7 +32,7 @@ Describe the figure as a signed distance field — negative inside — made of s
 
 # Method
 
-1. **Pieces**[^quilez-sdf]: a round cone from `a` (radius `ra`) to `b` (radius `rb`) for limbs and the neck; an ellipsoid, turned, for the pelvis, belly, chest and hands; a turned box. Each piece belongs to a group (what the surface is there: suit, glove, boot).
+1. **Pieces**[^quilez-sdf]: a round cone from `a` (radius `ra`) to `b` (radius `rb`) for limbs and the neck; an ellipsoid, turned, for the pelvis, belly, chest and hands; a turned box, its edges rounded by `r` (the distance to the box shrunk by `r`, minus `r`): moulded plastic. Each piece belongs to a group (what the surface is there: suit, glove, boot).
 2. **Blend**: the field is the pieces' distances folded with `smin(a, b, k) = min(a, b) − h²k/4`, `h = max(k − |a − b|, 0)/k`; `k` is how far pieces blend (4.5 cm for a driver). Far from a joint it changes nothing.
 3. **Folds**: a piece may ripple: its distance minus `depth · sin(105·s + 1.7·sin(2θ + 31·s))`, `s` along its axis and `θ` around it — ridges about 6 cm apart, a few millimetres deep, wavering so that no two are alike, as a sleeve gathers at the elbow.
 4. **Mesh by surface nets**: sample the field on a grid of cells (1.2 cm for a driver) over the pieces' boxes and a margin. In every cell whose corners differ in sign, place one vertex at the mean of the points where the field crosses the cell's twelve edges (linear interpolation). For every grid edge the surface crosses, join the vertices of the four cells around it in a quad, ordered counter-clockwise seen from the outside (the end of the edge that is inside tells which way that is); split each quad along its shorter diagonal.

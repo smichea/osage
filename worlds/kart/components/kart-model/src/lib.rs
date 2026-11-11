@@ -250,17 +250,14 @@ fn stickers(livery: Livery) -> decals::Decals {
         k
     };
     for side in [-1.0f32, 1.0] {
-        // The pod's upper outer face, which slopes in, a hair proud of it,
-        // read from outside; ahead of the number plate.
+        // The pod's flat outer face, a hair proud of it, read from outside;
+        // ahead of the number plate.
         let along = Vec3::Z * -side;
-        let (up, out) = (Vec3::new(-0.406 * side, 0.914, 0.0), Vec3::new(0.914 * side, 0.406, 0.0));
-        let on_face = |z: f32| Vec3::new(side * 0.62, 0.155, z) + out * 0.004;
-        decals.add(next(), on_face(0.02), along, up, 0.16);
-        decals.add(next(), on_face(0.21), along, up, 0.12);
-        // The nose's top, sloping down to the front.
-        let slope = Vec3::new(0.0, -0.06, 0.25).normalize();
-        let normal = Vec3::new(0.0, 0.25, 0.06).normalize();
-        decals.add(next(), Vec3::new(side * 0.27, 0.19, 0.83) + normal * 0.033, Vec3::X, -slope, 0.2);
+        let on_face = |z: f32| Vec3::new(side * 0.624, 0.125, z);
+        decals.add(next(), on_face(0.02), along, Vec3::Y, 0.15);
+        decals.add(next(), on_face(0.2), along, Vec3::Y, 0.11);
+        // The nose's flat top either side of its crown, read from ahead.
+        decals.add(next(), Vec3::new(side * 0.33, 0.157, 0.86), Vec3::X, Vec3::NEG_Z, 0.2);
     }
     // Beside the front panel's number, facing ahead.
     let panel = at(0.0, 0.25, 0.43).with_rotation(Quat::from_rotation_x(-0.42));
@@ -275,8 +272,8 @@ fn stickers(livery: Livery) -> decals::Decals {
     let back = Vec3::new(0.0, 0.5, -0.33) + lean * Vec3::NEG_Z * 0.114 + lean * Vec3::NEG_Y * 0.04;
     decals.add(next(), back, -Vec3::X, lean * Vec3::Y, 0.15);
     // Along the rear bumper, facing back.
-    decals.add(next(), Vec3::new(-0.36, 0.165, -0.985), -Vec3::X, Vec3::Y, 0.22);
-    decals.add(next(), Vec3::new(0.36, 0.165, -0.985), -Vec3::X, Vec3::Y, 0.22);
+    decals.add(next(), Vec3::new(-0.26, 0.17, -0.962), -Vec3::X, Vec3::Y, 0.16);
+    decals.add(next(), Vec3::new(0.26, 0.17, -0.962), -Vec3::X, Vec3::Y, 0.16);
     decals
 }
 
@@ -359,17 +356,61 @@ fn frame(kart: &mut Sorted, livery: Livery) {
 
 /// The plastic bodywork: nose, a dome before the front panel, the front panel
 /// with its number disc, side pods, the rear bumper; and the bucket seat.
+/// The groups of the moulded bodywork: what colour each part takes.
+mod moulding {
+    pub const PAINT: usize = 0;
+    pub const BLACK: usize = 1;
+    pub const STRIPE: usize = 2;
+}
+
+/// The moulded plastic bodywork, the same for every kart, sculpted once:
+/// rounded boxes and ellipsoids blended as a mould gives them ([`Sculpture`]).
+/// The nose with its black lip and the dome over the pedals; the side pods,
+/// a skirt below, rounded ahead, a stripe along the top; the rear bumper, a
+/// bar and two wings behind the wheels, black, the team's colour on top.
+fn moulded() -> &'static [(usize, Shape)] {
+    static MOULDED: std::sync::OnceLock<Vec<(usize, Shape)>> = std::sync::OnceLock::new();
+    MOULDED.get_or_init(|| {
+        use moulding::*;
+        let flat = Quat::IDENTITY;
+        let mut parts = Vec::new();
+        let mut nose = Sculpture::new(0.05);
+        nose.rounded(PAINT, Vec3::new(0.0, 0.1, 0.84), Vec3::new(0.46, 0.055, 0.15), 0.04, flat)
+            .ellipsoid(PAINT, Vec3::new(0.0, 0.15, 0.78), Vec3::new(0.3, 0.065, 0.15), flat)
+            .ellipsoid(PAINT, Vec3::new(0.0, 0.16, 0.62), Vec3::new(0.24, 0.07, 0.15), flat)
+            .rounded(BLACK, Vec3::new(0.0, 0.065, 0.975), Vec3::new(0.42, 0.025, 0.035), 0.02, flat);
+        parts.extend(nose.shapes(0.012));
+        for side in [-1.0f32, 1.0] {
+            let mut pod = Sculpture::new(0.04);
+            pod.rounded(PAINT, Vec3::new(side * 0.5, 0.125, 0.0), Vec3::new(0.12, 0.07, 0.31), 0.045, flat)
+                .rounded(PAINT, Vec3::new(side * 0.51, 0.065, 0.0), Vec3::new(0.13, 0.025, 0.33), 0.02, flat)
+                .ellipsoid(PAINT, Vec3::new(side * 0.48, 0.12, 0.3), Vec3::new(0.1, 0.06, 0.08), flat)
+                .paint_box(STRIPE, Vec3::new(side * 0.5, 0.195, 0.0), Vec3::new(0.07, 0.012, 0.29), flat);
+            parts.extend(pod.shapes(0.01));
+        }
+        let mut bumper = Sculpture::new(0.05);
+        bumper.rounded(BLACK, Vec3::new(0.0, 0.17, -0.86), Vec3::new(0.4, 0.075, 0.1), 0.04, flat);
+        for side in [-1.0f32, 1.0] {
+            bumper.rounded(BLACK, Vec3::new(side * 0.53, 0.19, -0.84), Vec3::new(0.16, 0.09, 0.13), 0.05, flat);
+        }
+        bumper.paint_box(PAINT, Vec3::new(0.0, 0.245, -0.86), Vec3::new(0.36, 0.014, 0.11), flat);
+        parts.extend(bumper.shapes(0.012));
+        parts
+    })
+}
+
+/// The plastic bodywork: moulded nose, side pods and rear bumper in the
+/// livery's colours, the front panel with its number disc, the number
+/// plates; and the bucket seat.
 fn bodywork(kart: &mut Sorted, livery: Livery) {
-    // Side profiles (ahead, up) are drawn across the kart: the outline's X
-    // becomes the kart's Z, and the extrusion its width.
-    let across = Transform::from_rotation(Quat::from_rotation_y(-FRAC_PI_2));
-    let profile = |points: &[(f32, f32)]| points.iter().map(|&(z, y)| Vec2::new(z, y)).collect::<Vec<_>>();
-    // The nose: a moulded wedge ahead of the front wheels.
-    let nose = profile(&[(0.64, 0.05), (0.97, 0.05), (1.0, 0.1), (0.95, 0.15), (0.7, 0.21), (0.62, 0.17)]);
-    kart.add(Finish::Varnish, &Shape::extrude_rounded(&nose, -0.49, 0.49, 0.03, 3), across, livery.main);
-    // A low dome between the nose and the front panel, over the pedals.
-    let dome = at(0.0, 0.16, 0.6).with_scale(Vec3::new(0.26, 0.07, 0.17));
-    kart.add(Finish::Varnish, &Shape::new(Sphere::new(1.0).mesh().uv(24, 12)), dome, livery.main);
+    for (group, shape) in moulded() {
+        let (finish, colour) = match *group {
+            moulding::PAINT => (Finish::Varnish, livery.main),
+            moulding::STRIPE => (Finish::Varnish, livery.second),
+            _ => (Finish::Satin, BLACK),
+        };
+        kart.add(finish, shape, Transform::IDENTITY, colour);
+    }
     // The front panel, before the driver's shins, leaning back.
     let panel = at(0.0, 0.25, 0.43).with_rotation(Quat::from_rotation_x(-0.42));
     kart.add(
@@ -384,47 +425,23 @@ fn bodywork(kart: &mut Sorted, livery: Livery) {
     for digit in numerals(livery.number, 0.08, 0.003) {
         kart.add(Finish::Varnish, &digit, panel * at(0.0, 0.02, 0.016), BLACK);
     }
-    // Side pods between the wheels: a moulded section along the kart, with
-    // sponsors' stickers on the outside.
     for side in [-1.0f32, 1.0] {
-        let section: Vec<Vec2> = [(0.36, 0.06), (0.58, 0.05), (0.64, 0.11), (0.6, 0.2), (0.42, 0.2), (0.36, 0.14)]
-            .iter()
-            .map(|&(x, y)| Vec2::new(side * x, y))
-            .collect();
+        // A number plate at the back of each pod's flat outer face.
+        let plate_at = at(side * 0.622, 0.125, -0.19).with_rotation(Quat::from_rotation_y(side * FRAC_PI_2));
         kart.add(
             Finish::Varnish,
-            &Shape::extrude_rounded(&section, -0.3, 0.3, 0.035, 3),
-            Transform::IDENTITY,
-            livery.main,
-        );
-        // A number plate at the back of the pod, facing out.
-        let plate_at = at(side * 0.628, 0.135, -0.19).with_rotation(Quat::from_rotation_y(side * FRAC_PI_2));
-        kart.add(
-            Finish::Varnish,
-            &Shape::block(Vec3::new(-0.09, -0.055, 0.0), Vec3::new(0.09, 0.055, 0.003)),
+            &Shape::block(Vec3::new(-0.09, -0.045, 0.0), Vec3::new(0.09, 0.045, 0.003)),
             plate_at,
             WHITE,
         );
-        for digit in numerals(livery.number, 0.07, 0.003) {
+        for digit in numerals(livery.number, 0.065, 0.003) {
             kart.add(Finish::Varnish, &digit, plate_at * at(0.0, 0.0, 0.003), BLACK);
         }
-        // A stripe along the top.
-        let top: Vec<Vec2> = [(0.44, 0.2), (0.58, 0.2), (0.575, 0.208), (0.445, 0.208)]
-            .iter()
-            .map(|&(x, y)| Vec2::new(side * x, y))
-            .collect();
-        kart.add(Finish::Varnish, &Shape::extrude(&top, -0.28, 0.28), Transform::IDENTITY, livery.second);
     }
-    // The rear bumper, wide and moulded in black plastic behind the rear
-    // wheels, a strip of the team's colour along its top.
-    let bumper = profile(&[(-0.74, 0.1), (-0.93, 0.1), (-0.98, 0.17), (-0.94, 0.25), (-0.78, 0.26), (-0.72, 0.2)]);
-    kart.add(Finish::Satin, &Shape::extrude_rounded(&bumper, -0.68, 0.68, 0.035, 3), across, BLACK);
-    let strip = profile(&[(-0.79, 0.255), (-0.93, 0.245), (-0.93, 0.255), (-0.79, 0.265)]);
-    kart.add(Finish::Varnish, &Shape::extrude(&strip, -0.6, 0.6), across, livery.main);
-    // Its number plate, facing back, as the rules want it.
-    let plate_at = at(0.0, 0.18, -0.985).with_rotation(Quat::from_rotation_y(PI));
-    kart.add(Finish::Varnish, &Shape::block(Vec3::new(-0.1, -0.05, 0.0), Vec3::new(0.1, 0.05, 0.003)), plate_at, WHITE);
-    for digit in numerals(livery.number, 0.065, 0.003) {
+    // The rear bumper's number plate, on its flat rear face, as the rules want it.
+    let plate_at = at(0.0, 0.17, -0.962).with_rotation(Quat::from_rotation_y(PI));
+    kart.add(Finish::Varnish, &Shape::block(Vec3::new(-0.1, -0.04, 0.0), Vec3::new(0.1, 0.04, 0.003)), plate_at, WHITE);
+    for digit in numerals(livery.number, 0.06, 0.003) {
         kart.add(Finish::Varnish, &digit, plate_at * at(0.0, 0.0, 0.003), BLACK);
     }
     // The bucket seat: a shell around the driver's back, a base under him.
