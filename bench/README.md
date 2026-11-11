@@ -58,6 +58,12 @@ Latest results of the reference machines, one line per machine and tier.
 | 2026-11-11 | same | Google Cloud g2-standard-4 (NVIDIA L4, driver 580), headless | T4 | 2560×1440 | 12.0 ms (84 fps) | 17.7 ms | 21.2 ms | 0 % |
 | 2026-11-11 | photographed circuit (D-044): sky panorama, 2k surfaces, racing karts; no roadside models below T3 | ThinkPad E14 Gen 5 (Iris Xe), headless, load average 10 to 13 | T1 | 1280×720 | 14.1 ms (71 fps) | 19.5 ms | 23.7 ms | 0.1 % |
 | 2026-11-11 | same | ThinkPad E14 Gen 5 (Iris Xe), headless, load average 13 | T2 | 1920×1080 (1632×918) | 17.5 ms (57 fps) | 24.7 ms | 31.1 ms | — |
+| 2026-11-11 | firs and broadleaf trees, thinned foliage, meadows that vary, sculpted driver, commit 7401532 | Google Cloud g2-standard-4 (NVIDIA L4, driver 580), headless | T3 | 2560×1440 | 13.7 ms (73 fps) | 15.9 ms | 18.2 ms | — |
+| 2026-11-11 | same | Google Cloud g2-standard-4 (NVIDIA L4, driver 580), headless | T4 | 2560×1440 | 14.6 ms (69 fps) | 18.2 ms | 21.5 ms | — |
+| 2026-11-11 | woods of 18 000 tree cards in place of 700 modelled trees, concrete grain, sculpted crowd, onlookers and marshals, commit b7b0c78 | Google Cloud g2-standard-4 (NVIDIA L4, driver 580), headless | T3 | 2560×1440 | 12.9 ms (78 fps) | 14.5 ms | 15.1 ms | 0.09 % |
+| 2026-11-11 | same | Google Cloud g2-standard-4 (NVIDIA L4, driver 580), headless | T4 | 2560×1440 | 13.2 ms (76 fps) | 15.1 ms | 16.7 ms | 0.04 % |
+| 2026-11-11 | sculpted crowd, commit 1159de1 | ThinkPad E14 Gen 5 (Iris Xe), headless | T1 | 1280×720 | 10.6 ms (95 fps) | 13.0 ms | 14.9 ms | — |
+| 2026-11-11 | tree cards, commit 997aaca | ThinkPad E14 Gen 5 (Iris Xe), headless | T2 | 1920×1080 (1632×918) | 12.3 ms (81 fps) | 14.8 ms | 16.3 ms | — |
 
 - "Under load": other programs were using the machine during these runs (load average 8 to 9 on 10 cores); a quiet run is expected to do better and will replace them.
 - T2 holds its budget on average on the integrated GPU, not for every frame. Without drawing under the output size it took 23.2 ms in the same conditions against 18.0 ms with: the scene is bound by the number of pixels there.
@@ -66,6 +72,7 @@ Latest results of the reference machines, one line per machine and tier.
 - The photographed circuit costs nothing measurable at T2: the same run without the content (`OSAGE_ASSETS=none`) took 18.1 ms. Its roadside models (tyre walls, plants, rocks, pines) took T2 to 54 ms on the Iris Xe: they start at T3.
 - Without a window, the bench keeps one frame in flight, as a window does (2026-11-11). Before, nothing paced it: a scene the GPU could not keep up with gave frames of a few milliseconds and then one of seconds, and only the mean was right. Waiting for the GPU after every frame instead left it idle while the next one was prepared (T2: 26 ms against 18).
 - T3 and T4 on the L4 use about a third of their budget (16.7 and 33.3 ms): the high tiers have room for techniques that cost more. Shader compilation stalls the first frame for about 4.5 s on that machine (warm-up, not timed).
+- Commit b7b0c78 on the L4: the slowest timed frame took 0.77 s at both tiers, one or two frames in a lap — a stall to find (a pipeline compiled the first time something is seen is the likely cause). The warm-up now takes about 13 s on that machine: tree cards and sculptures are made on the processor at load.
 
 ### What each technique costs
 
