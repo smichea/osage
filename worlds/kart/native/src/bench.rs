@@ -79,6 +79,7 @@ impl Plugin for BenchPlugin {
                 frame: 0,
                 last: None,
                 times: Vec::new(),
+                slowest: Vec::new(),
                 warm_up_worst: 0.0,
                 skip: 0,
                 saved: Vec::new(),
@@ -114,6 +115,8 @@ struct Bench {
     last: Option<Instant>,
     /// Timed frames, milliseconds.
     times: Vec<f32>,
+    /// The three slowest timed frames and their numbers: where a stall is.
+    slowest: Vec<(u32, f32)>,
     warm_up_worst: f32,
     skip: u32,
     saved: Vec<String>,
@@ -250,7 +253,12 @@ fn measure(
     match elapsed {
         Some(ms) if frame <= WARM_UP => bench.warm_up_worst = bench.warm_up_worst.max(ms),
         Some(_) if bench.skip > 0 => bench.skip -= 1,
-        Some(ms) => bench.times.push(ms),
+        Some(ms) => {
+            bench.times.push(ms);
+            bench.slowest.push((frame, ms));
+            bench.slowest.sort_by(|a, b| b.1.total_cmp(&a.1));
+            bench.slowest.truncate(3);
+        }
         None => {}
     }
     if bench.shots.contains(&frame) {
@@ -309,6 +317,7 @@ fn report(bench: &Bench, rendered: UVec2, adapter: &RenderAdapterInfo) -> anyhow
             "worst": round(sorted[sorted.len() - 1]),
             "warm_up_worst": round(bench.warm_up_worst),
         },
+        "slowest": bench.slowest.iter().map(|&(frame, ms)| json!({ "frame": frame, "ms": round(ms) })).collect::<Vec<_>>(),
         "fps_mean": round(1000.0 / mean),
         "budget_ms": round(budget),
         "over_budget_percent": round(over),
@@ -327,7 +336,7 @@ fn report(bench: &Bench, rendered: UVec2, adapter: &RenderAdapterInfo) -> anyhow
         without => format!("{} without {}", bench.tier, without.join(", ")),
     };
     Ok(format!(
-        "kart-lap/2 · {tier} · {size} · {gpu}\n  frame time: mean {mean:.2} ms ({fps:.0} fps) · p50 {p50:.2} · p95 {p95:.2} · p99 {p99:.2} · worst {worst:.2}\n  \
+        "kart-lap/2 · {tier} · {size} · {gpu}\n  frame time: mean {mean:.2} ms ({fps:.0} fps) · p50 {p50:.2} · p95 {p95:.2} · p99 {p99:.2} · worst {worst:.2} (frame {worst_at})\n  \
          budget {budget:.1} ms: {over:.1} % of frames over · warm-up worst {warm:.0} ms\n  written to {out}",
         gpu = adapter.name,
         fps = 1000.0 / mean,
@@ -335,6 +344,7 @@ fn report(bench: &Bench, rendered: UVec2, adapter: &RenderAdapterInfo) -> anyhow
         p95 = percentile(95),
         p99 = percentile(99),
         worst = sorted[sorted.len() - 1],
+        worst_at = bench.slowest.first().map_or(0, |&(frame, _)| frame),
         warm = bench.warm_up_worst,
         out = bench.out.display(),
     ))

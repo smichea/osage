@@ -10,7 +10,7 @@ sources:
   - id: own
     resource: "osage's own design and measurements, 2026-11-09 and 2026-11-10"
     title: osage design
-generated: { by: "claude-code/claude-opus-5-5", at: "2026-11-10T09:30:00Z" }
+generated: { by: "claude-code/claude-opus-5-5", at: "2026-11-11T15:30:00Z" }
 ---
 
 # Problem
@@ -30,7 +30,7 @@ Take time away from the machine. The simulation advances one fixed step per draw
 5. **Paced by the GPU:** with a window, drawing waits for the screen and the screen for the GPU. Without one (`--headless`), nothing would stop the processor from queuing frames far ahead of the GPU and then stalling until all are drawn — frames of a few milliseconds, then one of seconds, with only the mean meaningful. The render thread therefore keeps one frame in flight, as a window does: once it has handed frame N to the GPU, it waits until frame N − 1 is done (waiting for frame N itself would leave the GPU idle while N + 1 is prepared: 26 ms at T2 on the Iris Xe against 18).
 6. **Timing:** the time between the ends of consecutive frames. The first 120 frames are warm-up. Frames around a screenshot are skipped, because reading the picture back and encoding it is not rendering.
 7. **Screenshots** of the picture at four fixed frames.
-8. **Report:** tier, commit, GPU, driver, CPU, output size and size drawn, mean, median, 95th and 99th percentiles, worst frame, share of frames over the tier's budget.
+8. **Report:** tier, commit, GPU, driver, CPU, output size and size drawn, mean, median, 95th and 99th percentiles, worst frame, the numbers of the three slowest frames (where a stall is, to replay it), share of frames over the tier's budget.
 9. Nothing in the scene uses a random number generator; particles and scenery use repeatable arithmetic.
 
 # Invariants
