@@ -68,6 +68,8 @@ Latest results of the reference machines, one line per machine and tier.
 | 2026-11-11 | same | Google Cloud g2-standard-4 (NVIDIA L4, driver 580), headless | T4 | 2560×1440 | 13.1 ms (76 fps) | 15.3 ms | 16.8 ms | 0.04 % |
 | 2026-11-11 | every level of detail drawn once at the start (no stall), stickers, commit 625290f | Google Cloud g2-standard-4 (NVIDIA L4, driver 580), headless | T3 | 2560×1440 | 11.3 ms (88 fps) | 13.3 ms | 14.1 ms | 0 % (worst 16.0 ms) |
 | 2026-11-11 | same | Google Cloud g2-standard-4 (NVIDIA L4, driver 580), headless | T4 | 2560×1440 | 12.1 ms (83 fps) | 15.1 ms | 17.8 ms | 0 % (worst 23.2 ms) |
+| 2026-11-11 | evening sky available (bench at noon), meadow carpet to 36 m, billboards above the walls, commit 22c7e3b | Google Cloud g2-standard-4 (NVIDIA L4, driver 580), headless | T3 | 2560×1440 | 12.1 ms (83 fps) | 14.0 ms | 15.1 ms | 0.13 % (worst 17.7 ms) |
+| 2026-11-11 | same | Google Cloud g2-standard-4 (NVIDIA L4, driver 580), headless | T4 | 2560×1440 | 12.3 ms (81 fps) | 14.7 ms | 17.2 ms | 0 % (worst 20.0 ms) |
 
 - "Under load": other programs were using the machine during these runs (load average 8 to 9 on 10 cores); a quiet run is expected to do better and will replace them.
 - T2 holds its budget on average on the integrated GPU, not for every frame. Without drawing under the output size it took 23.2 ms in the same conditions against 18.0 ms with: the scene is bound by the number of pixels there.
