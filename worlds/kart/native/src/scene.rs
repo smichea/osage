@@ -153,6 +153,8 @@ impl Plugin for ScenePlugin {
     fn build(&self, app: &mut App) {
         let circuit = (track::build, scenery::build).chain().run_if(resource_exists_and_changed::<Course>);
         app.configure_sets(Update, (Stage::Simulate, Stage::Draw).chain())
+            .init_resource::<View>()
+            .init_resource::<Glance>()
             .add_systems(Startup, (setup, karts::setup, effects::setup, scenery::load_roadside))
             .add_systems(
                 Update,
@@ -167,11 +169,64 @@ impl Plugin for ScenePlugin {
                     scenery::bob,
                     scenery::turn,
                     track::flow,
+                    choose_view,
                     follow,
                 )
                     .chain()
                     .in_set(Stage::Draw),
             );
+    }
+}
+
+/// Where the camera is: behind the kart (the default), at the driver's
+/// eyes, or high above and behind.
+#[derive(Resource, Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum View {
+    #[default]
+    Chase,
+    Cockpit,
+    Bird,
+}
+
+/// Where the player looks, as a turn from ahead (radians, positive to the
+/// left): held keys or the right stick.
+#[derive(Resource, Clone, Copy, Debug, Default)]
+pub struct Glance(pub f32);
+
+/// C (or a gamepad's Select) cycles the views; Q and E, held, look left
+/// and right, X behind; a gamepad's right stick looks round.
+fn choose_view(
+    keys: Res<ButtonInput<KeyCode>>,
+    gamepads: Query<&Gamepad>,
+    mut view: ResMut<View>,
+    mut glance: ResMut<Glance>,
+) {
+    let pad = gamepads.iter().next();
+    if keys.just_pressed(KeyCode::KeyC) || pad.is_some_and(|pad| pad.just_pressed(GamepadButton::Select)) {
+        *view = match *view {
+            View::Chase => View::Cockpit,
+            View::Cockpit => View::Bird,
+            View::Bird => View::Chase,
+        };
+    }
+    let quarter = std::f32::consts::FRAC_PI_2;
+    glance.0 = if keys.pressed(KeyCode::KeyX) {
+        std::f32::consts::PI
+    } else if keys.pressed(KeyCode::KeyQ) {
+        quarter
+    } else if keys.pressed(KeyCode::KeyE) {
+        -quarter
+    } else {
+        0.0
+    };
+    if let Some(pad) = pad {
+        let (x, y) =
+            (pad.get(GamepadAxis::RightStickX).unwrap_or(0.0), pad.get(GamepadAxis::RightStickY).unwrap_or(0.0));
+        if y < -0.6 {
+            glance.0 = std::f32::consts::PI;
+        } else if x.abs() > 0.2 {
+            glance.0 = -x * quarter;
+        }
     }
 }
 
@@ -188,6 +243,8 @@ struct Chase {
     roll: f32,
     jolt: f32,
     time: f32,
+    /// The glance, eased: the head turns, it does not jump.
+    glance: f32,
 }
 
 /// A smooth wobble in -1..1: three sines whose periods never line up.
@@ -213,6 +270,7 @@ fn setup(mut commands: Commands) {
             roll: 0.0,
             jolt: 0.0,
             time: 0.0,
+            glance: 0.0,
         },
     ));
     // A sun of mid-morning, behind the grid's right shoulder.
@@ -225,9 +283,12 @@ fn setup(mut commands: Commands) {
 
 /// Chase camera: behind the followed kart, a little above; it looks ahead of
 /// the kart and widens its view with speed, more when the kart boosts.
+#[allow(clippy::too_many_arguments)]
 fn follow(
     time: Res<Time>,
     course: Option<Res<Course>>,
+    view: Option<Res<View>>,
+    glance: Option<Res<Glance>>,
     viewpoint: Option<Res<Viewpoint>>,
     followed: Query<&Pose, With<Followed>>,
     mut camera: Query<(&mut Transform, &mut Chase, &mut Projection)>,
@@ -269,15 +330,35 @@ fn follow(
         }
     });
     let pace = (kart.speed.abs() / MAX_SPEED).clamp(0.0, 1.3);
-    let amplitude = 0.003 + 0.016 * surface * pace + 0.06 * chase.jolt;
+    let view = view.map_or(View::Chase, |view| *view);
+    let wanted_glance = glance.map_or(0.0, |glance| glance.0);
+    chase.glance += (wanted_glance - chase.glance) * (1.0 - (-seconds * 9.0).exp());
+    // Where the player looks: ahead, turned by the glance.
+    let (sin, cos) = chase.glance.sin_cos();
+    let looking = forward * cos + left * sin;
+    let amplitude =
+        (0.003 + 0.016 * surface * pace + 0.06 * chase.jolt) * if view == View::Cockpit { 0.5 } else { 1.0 };
     let shake = Vec3::new(wobble(chase.time * 23.0, 1.0), wobble(chase.time * 31.0, 4.0), 0.0) * amplitude;
-    // A camera crew's car would follow a real kart this close, a little
-    // late, and looks into the bend the kart turns into.
-    let behind = at - forward * 3.4 + Vec3::Y * 1.35;
-    chase.place = chase.place.lerp(behind, 1.0 - (-seconds * 7.0).exp());
+    let (place, look, ease) = match view {
+        // A camera crew's car would follow a real kart this close, a
+        // little late, and looks into the bend the kart turns into.
+        View::Chase => (
+            at - looking * 3.4 + Vec3::Y * 1.35,
+            at + looking * 2.6 + Vec3::Y * 0.55 + left * turning * 0.9 * cos.max(0.0),
+            7.0,
+        ),
+        // The driver's eyes, inside the helmet (whose inside is not drawn),
+        // fixed to the kart.
+        View::Cockpit => {
+            let eyes = at + Vec3::Y * 0.87 - forward * 0.17;
+            (eyes, eyes + looking * 10.0 - Vec3::Y * 0.9 + left * turning * 1.5 * cos.max(0.0), 40.0)
+        }
+        // High above and behind, the race laid out ahead.
+        View::Bird => (at - looking * 11.0 + Vec3::Y * 8.5, at + looking * 4.0, 5.0),
+    };
+    chase.place = chase.place.lerp(place, 1.0 - (-seconds * ease).exp());
     camera.translation = chase.place;
-    let ahead = at + forward * 2.6 + Vec3::Y * 0.55 + left * turning * 0.9;
-    chase.look = chase.look.lerp(ahead, 1.0 - (-seconds * 10.0).exp());
+    chase.look = chase.look.lerp(look, 1.0 - (-seconds * ease.max(10.0)).exp());
     camera.look_at(chase.look, Vec3::Y);
     let offset = camera.rotation * shake;
     camera.translation += offset;
@@ -287,7 +368,12 @@ fn follow(
     camera.rotate_local_z(chase.roll);
     if let Projection::Perspective(lens) = &mut *projection {
         let pace = (kart.speed / MAX_SPEED).clamp(0.0, 1.4);
-        let wanted = (56.0 + 8.0 * pace + if kart.boost > 0.0 { 4.0 } else { 0.0 }).to_radians();
+        let base = match view {
+            View::Chase => 56.0,
+            View::Cockpit => 72.0,
+            View::Bird => 50.0,
+        };
+        let wanted = (base + 8.0 * pace + if kart.boost > 0.0 { 4.0 } else { 0.0 }).to_radians();
         lens.fov += (wanted - lens.fov) * (seconds * 4.0).min(1.0);
     }
 }
