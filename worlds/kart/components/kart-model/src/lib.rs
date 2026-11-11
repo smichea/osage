@@ -710,7 +710,18 @@ fn helmet(livery: Livery) -> Part {
     // The visor: a band across the front, standing proud of the shell.
     let visor = Shape::gore(&[(0.152, 0.1), (0.157, 0.145), (0.152, 0.19)], 14, FRAC_PI_2 - 1.05, 2.1);
     part.add(Finish::Visor, &visor, shell * Transform::from_scale(Vec3::splat(1.02)), Vec3::splat(0.02));
-    part.part()
+    // A small spoiler at the back of the crown, as karting helmets have,
+    // its profile (back, up) drawn across.
+    let lip = [Vec2::new(-0.13, 0.215), Vec2::new(-0.175, 0.232), Vec2::new(-0.168, 0.25), Vec2::new(-0.12, 0.248)];
+    let across = Transform::from_rotation(Quat::from_rotation_y(-FRAC_PI_2));
+    part.add(Finish::Varnish, &Shape::extrude_rounded(&lip, -0.07, 0.07, 0.007, 2), shell * across, livery.second);
+    let mut parts = part.part();
+    // A sponsor's sticker on the back, under the spoiler, where the chasing camera sees it.
+    let mut sticker = decals::Decals::default();
+    let back = shell.transform_point(Vec3::new(0.0, 0.155, -0.152));
+    sticker.add(livery.number as usize * 3 + 1, back, -Vec3::X, Vec3::Y, 0.075);
+    parts.push((Finish::Decal, sticker.mesh()));
+    parts
 }
 
 /// A wheel for the left side: a slick tyre, an alloy rim with its bolts.
