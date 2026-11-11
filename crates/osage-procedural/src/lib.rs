@@ -158,6 +158,65 @@ impl Shape {
         Self::faces(&faces, false)
     }
 
+    /// A prism like [`Shape::extrude`], its outline's corners rounded with
+    /// `radius` in `steps` facets and its sides shaded smooth across them,
+    /// as moulded plastic is; the two caps stay flat.
+    pub fn extrude_rounded(outline: &[Vec2], near: f32, far: f32, radius: f32, steps: usize) -> Self {
+        let mut outline = outline.to_vec();
+        let n = outline.len();
+        let area: f32 = (0..n).map(|i| outline[i].perp_dot(outline[(i + 1) % n])).sum();
+        if area < 0.0 {
+            outline.reverse();
+        }
+        // Each corner becomes an arc between the points `radius` along its two edges.
+        let mut round = Vec::new();
+        for i in 0..n {
+            let (before, corner, after) = (outline[(i + n - 1) % n], outline[i], outline[(i + 1) % n]);
+            let (into, out) = ((corner - before).normalize_or_zero(), (after - corner).normalize_or_zero());
+            let reach = radius.min(corner.distance(before) / 2.0).min(corner.distance(after) / 2.0);
+            let (start, end) = (corner - into * reach, corner + out * reach);
+            for k in 0..=steps.max(1) {
+                let t = k as f32 / steps.max(1) as f32;
+                // A quadratic curve with the corner as its control point.
+                round.push(start.lerp(corner, t).lerp(corner.lerp(end, t), t));
+            }
+        }
+        let m = round.len();
+        // Outward normal at each point: across the mean of its two edges.
+        let normal = |j: usize| {
+            let (a, b, c) = (round[(j + m - 1) % m], round[j], round[(j + 1) % m]);
+            let along = ((b - a).normalize_or_zero() + (c - b).normalize_or_zero()).normalize_or(Vec2::X);
+            Vec2::new(along.y, -along.x)
+        };
+        let (mut positions, mut normals, mut indices) = (Vec::new(), Vec::new(), Vec::new());
+        for (j, point) in round.iter().enumerate() {
+            let nrm = normal(j).extend(0.0);
+            positions.extend([point.extend(near), point.extend(far)]);
+            normals.extend([nrm, nrm]);
+        }
+        for j in 0..m as u32 {
+            let (a, b) = (2 * j, 2 * ((j + 1) % m as u32));
+            // Near and far of this point, then of the next: counter-clockwise from outside.
+            indices.extend([a, b, a + 1, b, b + 1, a + 1]);
+        }
+        // The caps, flat, as fans.
+        for (z, facing) in [(far, 1.0f32), (near, -1.0)] {
+            let first = positions.len() as u32;
+            for p in &round {
+                positions.push(p.extend(z));
+                normals.push(Vec3::Z * facing);
+            }
+            for j in 1..m as u32 - 1 {
+                if facing > 0.0 {
+                    indices.extend([first, first + j, first + j + 1]);
+                } else {
+                    indices.extend([first, first + j + 1, first + j]);
+                }
+            }
+        }
+        Self::from_parts(positions, normals, indices)
+    }
+
     /// A box between two corners.
     pub fn block(low: Vec3, high: Vec3) -> Self {
         let size = high - low;
@@ -322,6 +381,22 @@ impl Dice {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_rounded_extrusion_faces_outwards_and_keeps_its_size() {
+        let outline = [Vec2::new(0.0, 0.0), Vec2::new(1.0, 0.0), Vec2::new(1.0, 0.6), Vec2::new(0.0, 0.6)];
+        let shape = Shape::extrude_rounded(&outline, -0.2, 0.2, 0.1, 3);
+        let centre = Vec3::new(0.5, 0.3, 0.0);
+        for t in shape.indices.as_chunks::<3>().0 {
+            let [a, b, c] = t.map(|i| shape.positions[i as usize]);
+            let normal = (b - a).cross(c - a);
+            assert!(normal.dot((a + b + c) / 3.0 - centre) > 0.0, "a face looks inwards");
+        }
+        let (low, high) = shape.positions.iter().fold((Vec3::MAX, Vec3::MIN), |(l, h), p| (l.min(*p), h.max(*p)));
+        assert!(low.x >= -1e-5 && high.x <= 1.0 + 1e-5 && (high.y - 0.6).abs() < 1e-5, "within the outline");
+        // The corner itself is cut off.
+        assert!(shape.positions.iter().all(|p| p.xy().distance(Vec2::new(1.0, 0.6)) > 0.02));
+    }
 
     #[test]
     fn an_extruded_outline_faces_outwards_whichever_way_it_turns() {

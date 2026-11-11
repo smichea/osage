@@ -311,7 +311,7 @@ fn bodywork(kart: &mut Sorted, livery: Livery) {
     let profile = |points: &[(f32, f32)]| points.iter().map(|&(z, y)| Vec2::new(z, y)).collect::<Vec<_>>();
     // The nose: a moulded wedge ahead of the front wheels.
     let nose = profile(&[(0.64, 0.05), (0.97, 0.05), (1.0, 0.1), (0.95, 0.15), (0.7, 0.21), (0.62, 0.17)]);
-    kart.add(Finish::Varnish, &Shape::extrude(&nose, -0.49, 0.49), across, livery.main);
+    kart.add(Finish::Varnish, &Shape::extrude_rounded(&nose, -0.49, 0.49, 0.03, 3), across, livery.main);
     // A low dome between the nose and the front panel, over the pedals.
     let dome = at(0.0, 0.16, 0.6).with_scale(Vec3::new(0.26, 0.07, 0.17));
     kart.add(Finish::Varnish, &Shape::new(Sphere::new(1.0).mesh().uv(24, 12)), dome, livery.main);
@@ -336,7 +336,12 @@ fn bodywork(kart: &mut Sorted, livery: Livery) {
             .iter()
             .map(|&(x, y)| Vec2::new(side * x, y))
             .collect();
-        kart.add(Finish::Varnish, &Shape::extrude(&section, -0.3, 0.3), Transform::IDENTITY, livery.main);
+        kart.add(
+            Finish::Varnish,
+            &Shape::extrude_rounded(&section, -0.3, 0.3, 0.035, 3),
+            Transform::IDENTITY,
+            livery.main,
+        );
         let face = side * 0.625;
         let sticker = |low: Vec3, high: Vec3| Shape::block(low, high);
         kart.add(
@@ -371,7 +376,7 @@ fn bodywork(kart: &mut Sorted, livery: Livery) {
     }
     // The rear bumper, wide and moulded, behind the rear wheels.
     let bumper = profile(&[(-0.74, 0.1), (-0.93, 0.1), (-0.98, 0.17), (-0.94, 0.27), (-0.78, 0.28), (-0.72, 0.2)]);
-    kart.add(Finish::Varnish, &Shape::extrude(&bumper, -0.68, 0.68), across, livery.main);
+    kart.add(Finish::Varnish, &Shape::extrude_rounded(&bumper, -0.68, 0.68, 0.035, 3), across, livery.main);
     // The bucket seat: a shell around the driver's back, a base under him.
     let shell = Shape::gore(&[(0.17, 0.0), (0.19, 0.12), (0.2, 0.3), (0.18, 0.42)], 16, PI + 0.35, PI - 0.7);
     let seat = at(0.0, 0.08, -0.25).with_rotation(Quat::from_rotation_x(-0.42)).with_scale(Vec3::new(1.15, 1.0, 1.0));
