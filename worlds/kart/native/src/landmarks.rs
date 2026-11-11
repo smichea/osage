@@ -378,6 +378,63 @@ fn pits(set: &mut Set, circuit: &Circuit) {
     }
 }
 
+/// Advertising boards behind the walls where the circuit bends gently, from
+/// 60 m past the start: three metres wide, each in two colours with an abstract mark —
+/// a disc and bars standing for a name. No real brand.
+pub fn hoardings(set: &mut Set, circuit: &Circuit, frames: &[Frame]) {
+    let track = &circuit.track;
+    let (length, offset) = (track.length(), track.half_width + track.verge + BARRIER + 1.2);
+    let schemes = [
+        ((0.1, 0.16, 0.38), (0.95, 0.95, 0.93)),
+        ((0.95, 0.78, 0.1), (0.08, 0.08, 0.09)),
+        ((0.78, 0.1, 0.08), (0.96, 0.96, 0.94)),
+        ((0.94, 0.94, 0.92), (0.1, 0.35, 0.2)),
+        ((0.08, 0.08, 0.09), (0.9, 0.42, 0.08)),
+    ];
+    let board = Shape::block(Vec3::new(-1.5, 0.0, -0.03), Vec3::new(1.5, 0.9, 0.03));
+    let disc = Shape::new(Cylinder::new(0.28, 0.02).mesh().resolution(20));
+    let bar = |w: f32| Shape::block(Vec3::new(0.0, -0.05, 0.0), Vec3::new(w, 0.05, 0.02));
+    let leg = Shape::block(Vec3::new(-0.03, 0.0, -0.03), Vec3::new(0.03, 0.35, 0.03));
+    let mut since = 0.0;
+    for (i, frame) in frames.iter().enumerate() {
+        let from_start = (frame.along - circuit.start + length / 2.0).rem_euclid(length) - length / 2.0;
+        let next = &frames[(i + 1) % frames.len()];
+        since += frame.at.distance(next.at);
+        // The circuit is short and winding: boards stand wherever it bends gently.
+        if from_start.abs() < 60.0 || frame.bend.abs() > 0.015 || since < 3.4 {
+            continue;
+        }
+        since = 0.0;
+        let k = (frame.along / 3.4) as usize;
+        let side = if k % 7 < 4 { -1.0 } else { 1.0 };
+        let at = frame.at + frame.right * side * offset;
+        // Facing the track: its front (+Z) towards the centre line.
+        let facing = heading(-frame.right * side);
+        let place = Transform::from_xyz(at.x, 0.35, at.y).with_rotation(upright(facing));
+        let (ground, mark) = schemes[(k * 3 + 1) % schemes.len()];
+        let paint = |c: (f32, f32, f32)| Paint::plain(c.0, c.1, c.2);
+        set.satin.add_within(place.translation, &board, place, paint(ground));
+        let face = place * Transform::from_xyz(0.0, 0.45, 0.03);
+        set.satin.add_within(
+            place.translation,
+            &disc,
+            face * Transform::from_xyz(-0.95, 0.0, 0.0).with_rotation(Quat::from_rotation_x(FRAC_PI_2)),
+            paint(mark),
+        );
+        for (y, w) in [(0.1, 1.6), (-0.12, 1.1)] {
+            set.satin.add_within(place.translation, &bar(w), face * Transform::from_xyz(-0.5, y, 0.0), paint(mark));
+        }
+        for x in [-1.3, 1.3] {
+            set.satin.add_within(
+                place.translation,
+                &leg,
+                place * Transform::from_xyz(x, -0.35, 0.0),
+                Paint::plain(0.45, 0.46, 0.48),
+            );
+        }
+    }
+}
+
 /// Chain-link fences along the straights near the start, between the wall
 /// and the spectators: galvanised posts every 2.5 m, a top rail, and wire
 /// woven in diamonds, drawn as a texture with see-through holes.
