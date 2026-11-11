@@ -6,7 +6,7 @@ resource: https://github.com/smichea/osage/tree/main/crates/osage-props
 licence: MIT OR Apache-2.0
 status: draft
 tags: [content, gltf, instancing, scenery]
-generated: { by: "claude-code/claude-opus-5-5", at: "2026-11-11T09:00:00Z" }
+generated: { by: "claude-code/claude-opus-5-5", at: "2026-11-11T13:00:00Z" }
 ---
 
 # Purpose
@@ -19,6 +19,7 @@ Put a model of the asset manifest (a glTF file) at hundreds or thousands of plac
 - **Use:** the whole model at each place, or one of its **variants**: libraries such as Poly Haven lay several plants or rocks side by side in one file, each a top-level node.
 - **Waiting:** the number of scatters whose model is still loading.
 - **Carpet:** a model laid around the camera in a grid of cells and moved with it, where the world says it grows: grass as seen up close.
+- **Woods:** a model at many places always far from the camera, drawn as crossed cards showing pictures of it ([tree cards](/algorithms/tree-cards.md)); the number of trees is logged at `debug`.
 - **Tint:** a plain colour instead of a model's colour texture, for tiny things whose texture is an atlas on black.
 - **Opaque:** a model's blended materials drawn opaque, for leaves modelled as geometry whose texture has no transparency: blending sorts and costs, and leaves showed the sky through them.
 - **Levels of detail:** for dense models seen far, two coarser meshes made from each mesh — by [thinning](/algorithms/aggregate-thinning.md) for foliage, by vertex clustering for solid things — the scatter's places drawing the whole mesh near, then the coarser ones, fading from one to the next.
@@ -29,7 +30,7 @@ A Bevy plugin. Each frame it looks at scatters not yet placed whose model has lo
 
 # Interfaces
 
-`PropsPlugin`, `Scatter { model, places, using, within, shadows, lods, tint, opaque }`, `Use::{Whole, Variants}`, `Waiting`, `poly_haven(server, id)` (the path of a Poly Haven model in the manifest's content), `lod::{simplify, thin, extent}`, `Carpet { model, using, spacing, radius, ground, tint }`.
+`PropsPlugin`, `Scatter { model, places, using, within, shadows, lods, tint, opaque }`, `Use::{Whole, Variants}`, `Waiting`, `poly_haven(server, id)` (the path of a Poly Haven model in the manifest's content), `lod::{simplify, thin, extent}`, `Carpet { model, using, spacing, radius, ground, tint }`, `Woods { model, using, places }`, `impostor::{VIEWS, View, axes}`.
 
 # Invariants
 
@@ -42,7 +43,7 @@ A Bevy plugin. Each frame it looks at scatters not yet placed whose model has lo
 
 # Knowledge
 
-- Algorithm: [aggregate thinning](/algorithms/aggregate-thinning.md).
+- Algorithms: [aggregate thinning](/algorithms/aggregate-thinning.md), [tree cards](/algorithms/tree-cards.md).
 - Used by [osage-kart-roadside](/modules/kart-roadside.md).
 - Oracle: the crate's tests (node composition, variants at the origin, broken models) and [the render bench](/oracles/render-bench.md).
 
@@ -52,4 +53,4 @@ Any Bevy app: give the asset server the manifest's content as its root and spawn
 
 # Limits
 
-Vertex clustering is coarse; thinning cannot lighten a tree whose needles are joined to its twigs. An error-driven simplification and impostors (a tree as a card far away) would go further. Skinned and animated models are drawn in their rest pose.
+Vertex clustering is coarse; thinning cannot lighten a tree whose needles are joined to its twigs. An error-driven simplification would go further; tree cards serve only trees that are always far. Skinned and animated models are drawn in their rest pose.

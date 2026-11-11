@@ -205,6 +205,10 @@ pub fn build(
             }
             let carpet = osage_kart_roadside::carpet(&land, &frames, track, &roadside.models);
             commands.spawn((Part, carpet));
+            // Woods off the circuit: thousands of trees, drawn as cards.
+            for woods in osage_kart_roadside::woods(&land, &frames, track, &set.clearings, &roadside.models) {
+                commands.spawn((Part, woods));
+            }
             // Modelled woods stand far too: nothing procedural is needed.
             Growth::None
         } else {

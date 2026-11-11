@@ -45,6 +45,7 @@ What osage knows about its own modules: their architecture, the algorithms and t
 * [Sculpted scenery](algorithms/sculpted-scenery.md) - Static scenery built from simple shapes, painted through vertex colours and merged into one mesh per material and patch of land, so that thousands of objects cost a few dozen draws.
 * [Aggregate thinning](algorithms/aggregate-thinning.md) - A coarser level of detail for foliage — needles, leaves, blades — made by keeping a random share of its small pieces and growing each kept one so that the crown covers as much as before.
 * [Blended solids](algorithms/blended-solids.md) - Organic shapes — a figure, cloth over limbs — made of round cones, ellipsoids and boxes blended by a signed distance field and meshed by surface nets, painted by the piece nearest each point or by paint volumes.
+* [Tree cards](algorithms/tree-cards.md) - Woods of thousands of trees for a few thousand triangles — each tree drawn as crossed cards showing pictures of the real model, rendered on the processor at load from its own geometry and textures.
 * [Particle pool](algorithms/particle-pool.md) - A fixed pool of camera-facing squares for sparks, smoke and flames, where a particle fades by shrinking so that each kind is drawn in one batch.
 
 ## Oracles

@@ -15,10 +15,10 @@ use bevy::{gltf::Gltf, prelude::*};
 use osage_kart_land::{BARRIER, Frame, Land, Site, noise};
 use osage_kart_physics::Track;
 use osage_procedural::Dice;
-use osage_props::{Scatter, Use, poly_haven};
+use osage_props::{Scatter, Use, Woods, poly_haven};
 
 /// The models, from the asset manifest.
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub struct Models {
     pub tyre: Handle<Gltf>,
     pub grass: Handle<Gltf>,
@@ -65,6 +65,44 @@ pub enum Detail {
 const TYRE: f32 = 0.6;
 const TYRE_HEIGHT: f32 = 0.16;
 
+/// Where things may grow along the circuit.
+struct Verge<'a> {
+    land: &'a Land,
+    frames: &'a [Frame],
+    /// The barrier line, from the centre line.
+    roadside: f32,
+    clearings: &'a [Site],
+}
+
+impl Verge<'_> {
+    /// Whether a plant may grow here: clear of the barrier by `margin`, not
+    /// in the lake or on its beach, not in a clearing.
+    fn free(&self, at: Vec2, margin: f32) -> bool {
+        self.land.distance_to_track(at) > self.roadside + margin
+            && !self.land.wet(at)
+            && !self.clearings.iter().any(|site| site.centre.distance(at) < site.radius)
+    }
+
+    /// A point beside the track, `low` to `high` metres beyond the barrier,
+    /// on either side: plants are where they are seen. Anywhere along the
+    /// track, not only at its frames, or plants would stand in rows.
+    fn beside(&self, dice: &mut Dice, low: f32, high: f32) -> Vec2 {
+        let frames = self.frames;
+        let i = (dice.roll() * frames.len() as f32) as usize % frames.len();
+        let (frame, next) = (&frames[i], &frames[(i + 1) % frames.len()]);
+        let t = dice.roll();
+        let (at, right) = (frame.at.lerp(next.at, t), frame.right.lerp(next.right, t).normalize_or_zero());
+        let side = if dice.roll() < 0.5 { -1.0 } else { 1.0 };
+        at + right * side * (self.roadside + dice.between(low, high))
+    }
+
+    fn stand(&self, at: Vec2, sink: f32, turn: f32, size: f32) -> Transform {
+        Transform::from_xyz(at.x, self.land.height(at) - sink, at.y)
+            .with_rotation(Quat::from_rotation_y(turn))
+            .with_scale(Vec3::splat(size))
+    }
+}
+
 /// Every scatter of the roadside. `clearings` are places kept free (a
 /// grandstand, a building).
 pub fn scatters(
@@ -76,30 +114,11 @@ pub fn scatters(
     detail: Detail,
 ) -> Vec<Scatter> {
     let roadside = track.half_width + track.verge + BARRIER;
+    let verge = Verge { land, frames, roadside, clearings };
     let mut dice = Dice(11);
-    // Whether a plant may grow here: clear of the barrier by `margin`, not in
-    // the lake or on its beach, not in a clearing.
-    let free = |at: Vec2, margin: f32| {
-        land.distance_to_track(at) > roadside + margin
-            && !land.wet(at)
-            && !clearings.iter().any(|site| site.centre.distance(at) < site.radius)
-    };
-    // A point beside the track, `low` to `high` metres beyond the barrier, on
-    // either side: plants are where they are seen. Anywhere along the track,
-    // not only at its frames, or plants would stand in rows.
-    let beside = |dice: &mut Dice, low: f32, high: f32| {
-        let i = (dice.roll() * frames.len() as f32) as usize % frames.len();
-        let (frame, next) = (&frames[i], &frames[(i + 1) % frames.len()]);
-        let t = dice.roll();
-        let (at, right) = (frame.at.lerp(next.at, t), frame.right.lerp(next.right, t).normalize_or_zero());
-        let side = if dice.roll() < 0.5 { -1.0 } else { 1.0 };
-        at + right * side * (roadside + dice.between(low, high))
-    };
-    let stand = |at: Vec2, sink: f32, turn: f32, size: f32| {
-        Transform::from_xyz(at.x, land.height(at) - sink, at.y)
-            .with_rotation(Quat::from_rotation_y(turn))
-            .with_scale(Vec3::splat(size))
-    };
+    let free = |at: Vec2, margin: f32| verge.free(at, margin);
+    let beside = |dice: &mut Dice, low: f32, high: f32| verge.beside(dice, low, high);
+    let stand = |at: Vec2, sink: f32, turn: f32, size: f32| verge.stand(at, sink, turn, size);
     // Dense models seen far (trees, bushes, rocks) get coarser meshes with distance.
     let scatter = |model: &Handle<Gltf>, places: Vec<Transform>, using: Use, within: f32, shadows: bool| Scatter {
         model: model.clone(),
@@ -152,23 +171,7 @@ pub fn scatters(
     all.push(Scatter { opaque: true, ..scatter(&models.fir, firs, Use::Variants, 500.0, true) });
     all.push(Scatter { opaque: true, ..scatter(&models.broadleaf, broadleaves, Use::Whole, 500.0, true) });
 
-    // Woods further off, to the edge of the modelled land: groves on the
-    // hills, tall, seen far as coarse meshes.
-    let mut woods = Vec::new();
-    for _ in 0..9000 {
-        let at = beside(&mut dice, 140.0, 400.0);
-        let (turn, size, chance) = (dice.between(0.0, std::f32::consts::TAU), dice.between(5.0, 9.0), dice.roll());
-        let inside = (at - land.centre()).abs().max_element() < osage_kart_land::LAND / 2.0 - 30.0;
-        if inside && chance < (noise(at / 70.0 + 9.0) - 0.42) * 2.2 && free(at, 8.0) && woods.len() < 700 {
-            woods.push(stand(at, 0.2, turn, size));
-        }
-    }
-    // A third of the woods are firs, which are full grown at their own size.
-    let firs_far: Vec<Transform> =
-        woods.iter().skip(2).step_by(3).map(|t| t.with_scale(Vec3::splat(t.scale.x / 6.5))).collect();
-    let pines_far: Vec<Transform> = woods.iter().enumerate().filter(|(i, _)| i % 3 != 2).map(|(_, t)| *t).collect();
-    all.push(scatter(&models.pine, pines_far, Use::Variants, 900.0, true));
-    all.push(Scatter { opaque: true, ..scatter(&models.fir, firs_far, Use::Variants, 900.0, true) });
+    // The woods further off are not models but pictures of them: [`woods`].
 
     // Bushes and boulders.
     let mut bushes = Vec::new();
@@ -241,6 +244,58 @@ const GRASS: Color = Color::srgb(0.29, 0.38, 0.15);
 /// Grass around the camera (`osage_props::Carpet`): mown short on the
 /// verges, tall beyond the wall; none on the road, the kerbs, the wall, in a
 /// gravel trap or in the lake.
+/// Nearer than this to the track's centre line, no tree of the woods: they
+/// are cards, and must never be seen close.
+pub const WOODS_FROM: f32 = 110.0;
+
+/// The woods off the circuit, out to the edge of the modelled land: groves
+/// of pines, firs and broadleaf trees, dense as woods grow (a tree every
+/// twenty square metres or so), drawn as cards ([`osage_props::Woods`]):
+/// thousands of trees, always at least [`WOODS_FROM`] from the camera.
+pub fn woods(land: &Land, frames: &[Frame], track: &Track, clearings: &[Site], models: &Models) -> Vec<Woods> {
+    let roadside = track.half_width + track.verge + BARRIER;
+    let verge = Verge { land, frames, roadside, clearings };
+    let mut dice = Dice(23);
+    let edge = osage_kart_land::LAND / 2.0 - 20.0;
+    // One tree per cell of a grid at most: trees stand apart.
+    const SPACING: f32 = 3.6;
+    let mut taken = std::collections::HashSet::new();
+    let (mut pines, mut firs, mut broadleaves) = (Vec::new(), Vec::new(), Vec::new());
+    for _ in 0..600 {
+        let centre = verge.beside(&mut dice, 120.0, 430.0);
+        let radius = dice.between(14.0, 45.0);
+        if noise(centre / 90.0 + 5.0) < 0.42 {
+            continue;
+        }
+        let count = (std::f32::consts::PI * radius * radius / 20.0) as usize;
+        for _ in 0..count {
+            let at = centre + Vec2::from_angle(dice.between(0.0, std::f32::consts::TAU)) * radius * dice.roll().sqrt();
+            let (turn, kind) = (dice.between(0.0, std::f32::consts::TAU), dice.roll());
+            let cell = (at / SPACING).floor().as_ivec2();
+            if (at - land.centre()).abs().max_element() > edge
+                || land.distance_to_track(at) < WOODS_FROM
+                || !verge.free(at, 12.0)
+                || !taken.insert(cell)
+            {
+                continue;
+            }
+            // Pines are saplings grown tall; firs and broadleaf trees full grown.
+            if kind < 0.45 {
+                pines.push(verge.stand(at, 0.2, turn, dice.between(5.5, 9.0)));
+            } else if kind < 0.85 {
+                firs.push(verge.stand(at, 0.2, turn, dice.between(0.9, 1.35)));
+            } else {
+                broadleaves.push(verge.stand(at, 0.2, turn, dice.between(1.7, 2.5)));
+            }
+        }
+    }
+    vec![
+        Woods { model: models.pine.clone(), using: Use::Variants, places: pines },
+        Woods { model: models.fir.clone(), using: Use::Variants, places: firs },
+        Woods { model: models.broadleaf.clone(), using: Use::Whole, places: broadleaves },
+    ]
+}
+
 pub fn carpet(land: &Land, frames: &[Frame], track: &Track, models: &Models) -> osage_props::Carpet {
     let (land, half, wall) = (land.clone(), track.half_width, track.half_width + track.verge + BARRIER);
     let bends: Vec<(Vec2, Vec2, f32)> = frames.iter().map(|f| (f.at, f.right, f.bend)).collect();
@@ -345,6 +400,27 @@ mod tests {
                 assert!(at.distance(clearing) >= 30.0, "{at} is in the clearing");
                 assert!((place.translation.y - land.height(at)).abs() < 0.3, "{at} stands on the ground");
             }
+        }
+    }
+
+    #[test]
+    fn woods_are_dense_far_and_on_the_land() {
+        let circuit = Circuit::new();
+        let frames = frames(&circuit.track);
+        let land = Land::new(&frames, &circuit.track);
+        let models = Models::default();
+        let woods = woods(&land, &frames, &circuit.track, &[], &models);
+        let trees: usize = woods.iter().map(|w| w.places.len()).sum();
+        assert!(trees > 1500, "{trees} trees");
+        assert!(woods.iter().all(|w| !w.places.is_empty()), "pines, firs and broadleaf trees");
+        let mut cells = std::collections::HashSet::new();
+        for place in woods.iter().flat_map(|w| &w.places) {
+            let at = place.translation.xz();
+            assert!(land.distance_to_track(at) >= WOODS_FROM, "{at} is too near the track");
+            assert!(!land.wet(at), "{at} is in the lake");
+            assert!((at - land.centre()).abs().max_element() <= osage_kart_land::LAND / 2.0, "{at} is off the land");
+            assert!((place.translation.y - land.height(at)).abs() < 0.3, "{at} stands on the ground");
+            assert!(cells.insert((at / 3.6).floor().as_ivec2()), "{at}: two trees in one spot");
         }
     }
 

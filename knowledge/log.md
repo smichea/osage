@@ -1,6 +1,7 @@
 # Knowledge Update Log
 
 ## 2026-11-11
+* **Creation**: Added the algorithm [tree cards](/algorithms/tree-cards.md) to [osage-props](/modules/osage-props.md); [osage-kart-roadside](/modules/kart-roadside.md) grows woods of a few thousand trees with it.
 * **Creation**: Added the module [osage-kart-crowd](/modules/kart-crowd.md): the grandstand's spectators are sculpted figures in three poses.
 * **Update**: [Sculpted scenery](/algorithms/sculpted-scenery.md) gains texture coordinates in metres, projected from the side each face faces most; the photographed kart circuit lays a concrete grain over what is built.
 * **Creation**: Added the algorithm [blended solids](/algorithms/blended-solids.md) to [osage-procedural](/modules/osage-procedural.md); [osage-kart-model](/modules/kart-model.md) sculpts its driver with it.

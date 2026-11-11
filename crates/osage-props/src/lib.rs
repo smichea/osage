@@ -10,7 +10,8 @@
 //! nothing, a tyre wall casts its shadow.
 //!
 //! A [`Carpet`] lays a model around the camera instead, cell by cell, and
-//! moves with it: grass as seen up close.
+//! moves with it: grass as seen up close. [`Woods`] draw a model always
+//! seen from afar as crossed cards, pictures of it: forests.
 //!
 //! The app loads models through its asset server, whose root must be the
 //! manifest's content (`osage_content::root`); [`poly_haven`] names a Poly
@@ -19,9 +20,11 @@
 use std::collections::HashMap;
 
 pub mod carpet;
+pub mod impostor;
 pub mod lod;
 
 pub use carpet::Carpet;
+pub use impostor::Woods;
 
 use bevy::{
     camera::visibility::VisibilityRange,
@@ -37,7 +40,7 @@ impl Plugin for PropsPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<Converted>()
             .init_resource::<Waiting>()
-            .add_systems(Update, (scatter, carpet::lay).chain())
+            .add_systems(Update, (scatter, carpet::lay, impostor::plant).chain())
             .add_systems(PostUpdate, carpet::follow.before(bevy::transform::TransformSystems::Propagate));
     }
 }
@@ -69,9 +72,9 @@ pub struct Scatter {
     /// `None`: at any distance.
     pub within: Option<f32>,
     pub shadows: bool,
-    /// Coarser meshes further off ([`lod`]): the whole mesh up to an eighth
-    /// of `within`, a simplified one to a third, a coarse one beyond. For
-    /// dense models seen far away: trees, bushes, rocks.
+    /// Coarser meshes further off ([`lod`]): the whole mesh near, a
+    /// simplified one further, a coarse one beyond (foliage thinned, solid
+    /// things clustered). For dense models seen far away: trees, bushes, rocks.
     pub lods: bool,
     /// A plain colour instead of the model's colour texture: for tiny
     /// things (tufts of grass) whose texture, an atlas on black, would
