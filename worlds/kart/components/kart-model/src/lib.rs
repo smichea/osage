@@ -44,7 +44,7 @@ pub const NECK: Vec3 = Vec3::new(0.0, 0.74, -0.27);
 /// How a surface reflects light. Each is one material, shared by every kart.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum Finish {
-    /// Varnished paint on plastic or fibreglass: the bodywork, the helmet.
+    /// Glossy paint on plastic or fibreglass: the bodywork, the helmet.
     Varnish,
     /// Satin plastic: the seat, the airbox, the floor tray, the grips.
     Satin,
@@ -78,12 +78,10 @@ impl Finish {
     pub fn material(self) -> StandardMaterial {
         let base = StandardMaterial { base_color: Color::WHITE, ..default() };
         match self {
-            Finish::Varnish => StandardMaterial {
-                perceptual_roughness: 0.32,
-                clearcoat: 1.0,
-                clearcoat_perceptual_roughness: 0.08,
-                ..base
-            },
+            // Glossy paint. Bevy's clear coat paled every dome that faced the
+            // sky to near white (a red helmet looked grey; 2026-11-11): a
+            // smooth base with a stronger specular stands in for it.
+            Finish::Varnish => StandardMaterial { perceptual_roughness: 0.25, reflectance: 0.6, ..base },
             Finish::Satin => StandardMaterial { perceptual_roughness: 0.5, reflectance: 0.4, ..base },
             Finish::Rubber => StandardMaterial { perceptual_roughness: 0.82, reflectance: 0.35, ..base },
             Finish::Steel => StandardMaterial { perceptual_roughness: 0.3, metallic: 0.6, ..base },
@@ -617,6 +615,6 @@ mod tests {
         assert!(kart.helmet.iter().any(|(f, _)| *f == Finish::Visor));
         assert!(Finish::Chrome.material().metallic > 0.9 && Finish::Chrome.material().perceptual_roughness < 0.15);
         assert!(Finish::Cloth.material().perceptual_roughness > 0.8);
-        assert!(Finish::Varnish.material().clearcoat > 0.0);
+        assert!(Finish::Varnish.material().perceptual_roughness < Finish::Satin.material().perceptual_roughness);
     }
 }

@@ -15,7 +15,7 @@ The karts of the kart game as a real racing kart looks: the replacement of the t
 
 # Concepts
 
-- **Finish:** how a surface reflects light; one material each, shared by every kart: varnished paint (with a clear coat), satin plastic, rubber, painted steel, machined alloy, chrome, race-suit cloth, a tinted visor.
+- **Finish:** how a surface reflects light; one material each, shared by every kart: glossy paint, satin plastic, rubber, painted steel, machined alloy, chrome, race-suit cloth, a tinted visor.
 - **Livery:** a team's colours in sRGB: the main colour, a second for stripes and panels, the frame's paint, and its racing number, drawn in seven segments on the front panel and on plates on the side pods.
 - **Parts:** the body (frame, bodywork, engine, seat, steering, the driver below the neck), the helmet, and a front and a rear wheel; each part is a mesh per finish.
 
@@ -31,7 +31,7 @@ Built from simple shapes ([osage-procedural](/modules/osage-procedural.md)): pri
 
 - A real kart's size: about 1.9 m long, at most 1.4 m wide, its lowest point a few centimetres off the road, the helmet's top about a metre high. Tested.
 - Each wheel touches the road and has its tyre's width; tyres are rubber, rims alloy. Tested.
-- Each finish is its own material; chrome is metal and nearly a mirror, cloth is rough, paint has a clear coat. Tested.
+- Each finish is its own material; chrome is metal and nearly a mirror, cloth is rough, paint is glossier than satin. Tested.
 - A number lights its digits' segments, the digits' cells centred. Tested.
 
 # Knowledge
@@ -45,4 +45,4 @@ The proportions and the finishes are what makes a kart read as real; the shapes 
 
 # Limits
 
-Bodywork rounded only along its profile, its ends square; stickers and numbers are blocks, not printed decals; no cloth folds. The driver is a mannequin under a helmet. A modelled kart and driver (workstream R9) are the next step.
+Bodywork rounded only along its profile, its ends square; stickers and numbers are blocks, not printed decals; no cloth folds. The driver is a mannequin under a helmet. Paint has no clear coat: Bevy's paled every dome facing the sky to near white. A modelled kart and driver (workstream R9) are the next step.
