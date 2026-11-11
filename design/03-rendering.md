@@ -44,7 +44,7 @@ How to run it, and the results of the reference machines: [`bench/README.md`](..
 | Machine | Tier | Role |
 |---|---|---|
 | Laptop, Intel Iris Xe (Raptor Lake-P) | T2 | the "modest hardware" reference |
-| Desktop with ray tracing (maintainer) | T3–T4 | the high-end reference |
+| Google Cloud g2-standard-4, NVIDIA L4 (D-042) | T3–T4 | the high-end reference, made for each run |
 | CI, software Vulkan (lavapipe) | — | correctness screenshots only, no timings |
 
 **Budgets** (frame time at the bench's resolution; first proposal, to be refined with measurements):
@@ -64,19 +64,19 @@ Each workstream has a scope, a state, its next milestones and its oracle. Milest
 
 | # | Workstream | State (2026-11) | Next milestones | Accepted when |
 |---|---|---|---|---|
-| R1 | **Sky and sun**: physical atmosphere, sun, time of day | `osage_render::sky`: physical atmosphere (T2+), flat sky and fog (T1); `osage_render::sky_light`: the atmosphere lights the scene (T3+), a constant light below | time of day; clouds (with R12) | bench screenshots at three times of day; no budget regression |
+| R1 | **Sky and sun**: physical atmosphere, sun, time of day | `osage_render::sky`: physical atmosphere (T2+), flat sky and fog (T1); `osage_render::panorama`: a world's unclipped HDR photograph of the sky, the sun found in it and calibrated to 100 000 lux, its light from T3 with the sun taken out (the kart world, 2026-11-11); `osage_render::sky_light`: a constant light below T3 | time of day; moving clouds (with R12); several panoramas | bench screenshots at three times of day; no budget regression |
 | R2 | **Shadows**: cascades, contact shadows, soft shadows | `osage_render::shadows`: cascades per tier, contact shadows T3+ | soft shadows (PCSS) T3+; tuning from the bench shots | no visible shadow acne or peter-panning in shots; budget held |
 | R3 | **Ambient occlusion** | `osage_render::ambient_occlusion`: screen-space, T2+ | cost on integrated GPUs; GTAO-class quality T3 | shots; budget |
 | R4 | **Global illumination** | none (T1–T3); Solari experimental (T4) | probe GI (T2–T3: irradiance volumes or DDGI-like); Solari on the desktop (T4) | indirect light visible under the bridge/barriers; budget per tier |
 | R5 | **Reflections** | Bevy SSR; Solari reflections (T4) | SSR T3; RT reflections T4; reflection probes | wet asphalt and kart paint shots |
-| R6 | **Materials and textures** | road and grass from Poly Haven texture sets (colour, normal, occlusion-roughness), with mipmaps and anisotropic filtering; plain colours without them | texture quality per tier; road wear and tyre marks; texture streaming | shots; asset manifest checks |
-| R7 | **Vegetation and terrain** | hills from noise around a flat track corridor; about 400 procedural trees of three kinds | modelled trees (CC0 kits); grass blades near the camera; merged or instanced scenery with levels of detail | 10 000+ plants within T2 budget |
-| R8 | **Geometry and LOD** | none | glTF kart; meshlets (T3+); HLOD for scenery | dense scenery shot within budget |
-| R9 | **Vehicles and effects** | a rounded procedural kart with its driver; wheels that spin and steer, a body that leans, pitches and hops; drift sparks, smoke, boost flames, dust from a fixed pool of particles | modelled karts and drivers (CC0 kits); tyre marks; speed lines | shots; effects within budget |
-| R10 | **Post-processing and anti-aliasing** | `osage_render::post`: HDR and exposure (all), FXAA (T1–T2), bloom (T2+), TAA and motion blur (T3+); the tonemapper, saturation and exposure offset are the world's `Look` | SMAA; auto exposure; depth of field for replays | shots; budget |
+| R6 | **Materials and textures** | 2k Poly Haven surfaces through `osage-content` (mipmaps in linear light, anisotropy): asphalt darkened along the racing line, grass as a grain under meadow colours, gravel traps, painted concrete kerbs and walls; farmland colours far out | road wear and tyre marks as decals; texture streaming and compression (KTX2); detail maps against repetition | shots; asset manifest checks |
+| R7 | **Vegetation and terrain** | hills from noise (`osage-kart-land`); from T3, modelled pines in clumps and woods, bushes, ferns, flowers and rocks placed by `osage-kart-roadside` on `osage-props`, a carpet of grass tufts that follows the camera; procedural trees below T3 | real tree models (a second content batch); impostors far away; grass fields in 3D | 10 000+ plants within T2 budget |
+| R8 | **Geometry and LOD** | `osage-props`: glTF models placed many times in batches, with levels of detail by vertex clustering (T3 on the Iris Xe from about 125 to 81 ms with twice the trees) | error-driven simplification; meshlets (T3+); HLOD for static scenery | dense scenery shot within budget |
+| R9 | **Vehicles and effects** | `osage-kart-model`: a racing kart and driver to scale with a material per finish, rounded moulded bodywork, numbers; tyre smoke and dust, no sparks or flames on the photographed circuit | modelled karts and drivers; decals; tyre marks | shots; effects within budget |
+| R10 | **Post-processing and anti-aliasing** | `osage_render::post`: HDR and exposure (all), FXAA (T1–T2), bloom (T2+), TAA and motion blur (T3+); the world's `Look`: tonemapper (ACES for the kart world), saturation, exposure offset, and a lens from T3 (vignette, colour fringes) | SMAA; auto exposure; depth of field for replays | shots; budget |
 | R11 | **Upscaling and denoising** | `osage_render::resolution`: the scene is drawn into a picture no taller than the tier allows and stretched to the window under a sharp interface; T2 draws 85 % of its output size | a sharper upscaler than bilinear; temporal upscaling (T3+); open denoiser research (research/04 takeaway 2); DLSS behind licence answer | quality vs native resolution at equal time |
 | R12 | **Weather, water, volumetrics** | none | volumetric fog, clouds, rain, wet surfaces | shots; budget |
-| R13 | **Performance and scalability** | the bench | GPU timings per pass; automatic tier detection; frames drawn between physics steps on fast displays; a universal shader while specialised ones compile (no first-use stutter); CI budgets on reference machines | every PR shows its bench |
+| R13 | **Performance and scalability** | the bench, on the laptop (T1, T2) and a cloud L4 (T3, T4, at most once an hour, D-042, D-043); it waits for the scenery to load and, without a window, keeps one frame in flight | GPU timings per pass; automatic tier detection; a universal shader while specialised ones compile (no first-use stutter) | every PR shows its bench |
 | R14 | **Content pipeline and tools** | `assets/manifest.toml` and `tools/fetch-assets.py` (download, hash check; files a person must download are marked); content is optional at run time | glTF import of the CC0 kits; KTX2 textures; a CI check that nothing outside the manifest is used; debug views (wireframe, overdraw) | CI checks the manifest |
 
 The research is clear that the hardest gap is **content and tools** (research/04 §C): R6–R9 and R14 are as important as the techniques.
