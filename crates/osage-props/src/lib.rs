@@ -77,15 +77,23 @@ pub struct Scatter {
     /// things (tufts of grass) whose texture, an atlas on black, would
     /// darken as it shrinks.
     pub tint: Option<Color>,
+    /// Drawn opaque whatever the model says: libraries mark leaves made of
+    /// real geometry as blended, with textures that have no alpha; blended,
+    /// they would be drawn without depth and overlap out of order.
+    pub opaque: bool,
 }
 
 /// The model's material as a standard material, its colour texture
-/// replaced by `tint` if there is one.
-pub(crate) fn finish(source: &GltfMaterial, tint: Option<Color>) -> StandardMaterial {
+/// replaced by `tint` if there is one, opaque if asked.
+pub(crate) fn finish(source: &GltfMaterial, tint: Option<Color>, opaque: bool) -> StandardMaterial {
     let mut material = standard_material_from_gltf_material(source);
     if let Some(tint) = tint {
         material.base_color = tint;
         material.base_color_texture = None;
+    }
+    if opaque {
+        material.alpha_mode = AlphaMode::Opaque;
+        material.base_color = material.base_color.with_alpha(1.0);
     }
     material
 }
@@ -102,15 +110,25 @@ struct Scattered;
 /// The standard material made of each glTF material, made once; the
 /// coarser meshes made of each mesh, made once.
 #[derive(Resource, Default)]
-struct Converted(
-    HashMap<AssetId<GltfMaterial>, Handle<StandardMaterial>>,
-    HashMap<AssetId<Mesh>, [Option<Handle<Mesh>>; 2]>,
-);
+struct Converted(HashMap<AssetId<GltfMaterial>, Handle<StandardMaterial>>, HashMap<AssetId<Mesh>, Levels>);
 
-/// How much of the mesh's size each coarser level merges.
+/// The two coarser meshes of a mesh, and where its first two levels end.
+#[derive(Clone)]
+struct Levels {
+    meshes: [Option<Handle<Mesh>>; 2],
+    ends: [f32; 2],
+}
+
+/// Solid things, by clustering: how much of the mesh's size each coarser
+/// level merges, and where each level ends, as a share of the distance a
+/// scatter is seen at.
 const COARSER: [f32; 2] = [0.025, 0.06];
-/// Where each level ends, as a share of the distance a scatter is seen at.
 const LEVEL_ENDS: [f32; 2] = [0.15, 0.45];
+/// Aggregates (needles, leaves), by thinning: the share of pieces each
+/// coarser level keeps, and where each level ends. A needle is thinner than
+/// a pixel a few metres off, so the full mesh is needed only close by.
+const KEPT: [f32; 2] = [0.15, 0.03];
+const THINNED_ENDS: [f32; 2] = [0.04, 0.15];
 
 /// A mesh with its material, where the model puts it.
 pub(crate) type Look = (Handle<Mesh>, Handle<StandardMaterial>, Transform);
@@ -234,28 +252,30 @@ fn scatter(
             end_margin: to * 0.9..to,
             use_aabb: false,
         };
-        let levels: Vec<(usize, Option<VisibilityRange>)> = match far {
-            Some(far) if scatter.lods => vec![
-                (0, Some(VisibilityRange { start_margin: 0.0..0.0, ..fade(0.0, far * LEVEL_ENDS[0]) })),
-                (1, Some(fade(far * LEVEL_ENDS[0], far * LEVEL_ENDS[1]))),
-                (2, Some(fade(far * LEVEL_ENDS[1], far))),
-            ],
-            Some(far) => vec![(0, Some(VisibilityRange { start_margin: 0.0..0.0, ..fade(0.0, far) }))],
-            None => vec![(0, None)],
+        let levels = |ends: [f32; 2]| -> Vec<(usize, Option<VisibilityRange>)> {
+            match far {
+                Some(far) if scatter.lods => vec![
+                    (0, Some(VisibilityRange { start_margin: 0.0..0.0, ..fade(0.0, far * ends[0]) })),
+                    (1, Some(fade(far * ends[0], far * ends[1]))),
+                    (2, Some(fade(far * ends[1], far))),
+                ],
+                Some(far) => vec![(0, Some(VisibilityRange { start_margin: 0.0..0.0, ..fade(0.0, far) }))],
+                None => vec![(0, None)],
+            }
         };
         let mut material = |piece: &Piece| -> Handle<StandardMaterial> {
             let Some(handle) = &piece.material else { return Handle::default() };
-            // A tinted material is this scatter's own: the shared one keeps the model's colours.
-            if scatter.tint.is_some() {
+            // A tinted or forced-opaque material is this scatter's own: the shared one keeps the model's.
+            if scatter.tint.is_some() || scatter.opaque {
                 let source = gltf_materials.get(handle).cloned().unwrap_or_default();
-                return materials.add(finish(&source, scatter.tint));
+                return materials.add(finish(&source, scatter.tint, scatter.opaque));
             }
             converted
                 .0
                 .entry(handle.id())
                 .or_insert_with(|| {
                     let source = gltf_materials.get(handle).cloned().unwrap_or_default();
-                    materials.add(finish(&source, scatter.tint))
+                    materials.add(finish(&source, scatter.tint, false))
                 })
                 .clone()
         };
@@ -263,34 +283,52 @@ fn scatter(
             .iter()
             .map(|pieces| pieces.iter().map(|p| (p.mesh.clone(), material(p), p.place)).collect())
             .collect();
-        // Each mesh at each level; the coarser ones made once per mesh, a
-        // level that leaves nothing keeping the finer one.
+        // Each mesh at each level, and where its levels end; the coarser
+        // ones made once per mesh, a level that leaves nothing keeping the
+        // finer one.
         let mut level_meshes: HashMap<(AssetId<Mesh>, usize), Handle<Mesh>> = HashMap::new();
+        let mut level_ends: HashMap<AssetId<Mesh>, [f32; 2]> = HashMap::new();
         for (mesh, ..) in looks.iter().flatten() {
             for level in 0..3 {
                 level_meshes.insert((mesh.id(), level), mesh.clone());
             }
+            level_ends.insert(mesh.id(), LEVEL_ENDS);
             if !scatter.lods {
                 continue;
             }
-            let [first, second] = converted
+            let Levels { meshes: [first, second], ends } = converted
                 .1
                 .entry(mesh.id())
                 .or_insert_with(|| {
-                    let made = models.get(mesh).map(|source| {
+                    let Some(source) = models.get(mesh) else {
+                        return Levels { meshes: [None, None], ends: LEVEL_ENDS };
+                    };
+                    // One seed for both levels: the pieces the coarser keeps are among those the finer keeps.
+                    let thinned = KEPT.map(|keep| lod::thin(source, keep, 0x05a6e));
+                    let (made, ends) = if thinned.iter().all(Option::is_some) {
+                        (thinned, THINNED_ENDS)
+                    } else {
                         let size = lod::extent(source);
-                        COARSER.map(|share| lod::simplify(source, size * share))
-                    });
-                    match made {
-                        Some([first, second]) => [first.map(|m| models.add(m)), second.map(|m| models.add(m))],
-                        None => [None, None],
-                    }
+                        (COARSER.map(|share| lod::simplify(source, size * share)), LEVEL_ENDS)
+                    };
+                    let triangles = |mesh: Option<&Mesh>| mesh.and_then(Mesh::indices).map_or(0, |i| i.len() / 3);
+                    debug!(
+                        "levels of detail of {:?}: {} {} {} triangles{}",
+                        server.get_path(&scatter.model),
+                        triangles(Some(source)),
+                        triangles(made[0].as_ref()),
+                        triangles(made[1].as_ref()),
+                        if ends == THINNED_ENDS { ", thinned" } else { "" }
+                    );
+                    let [first, second] = made;
+                    Levels { meshes: [first.map(|m| models.add(m)), second.map(|m| models.add(m))], ends }
                 })
                 .clone();
             let first = first.unwrap_or_else(|| mesh.clone());
             let second = second.unwrap_or_else(|| first.clone());
             level_meshes.insert((mesh.id(), 1), first);
             level_meshes.insert((mesh.id(), 2), second);
+            level_ends.insert(mesh.id(), ends);
         }
         let mut scattered = commands.entity(entity);
         scattered.insert((Scattered, Transform::IDENTITY, Visibility::Inherited));
@@ -300,7 +338,7 @@ fn scatter(
         scattered.with_children(|parent| {
             for (i, place) in scatter.places.iter().enumerate() {
                 for (mesh, material, inside) in &looks[i % looks.len()] {
-                    for (level, range) in &levels {
+                    for (level, range) in &levels(level_ends[&mesh.id()]) {
                         let mesh = level_meshes[&(mesh.id(), *level)].clone();
                         let mut child =
                             parent.spawn((Mesh3d(mesh), MeshMaterial3d(material.clone()), *place * *inside));

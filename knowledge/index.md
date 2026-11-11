@@ -41,6 +41,7 @@ What osage knows about its own modules: their architecture, the algorithms and t
 * [Timedemo bench](algorithms/timedemo-bench.md) - A benchmark that draws the same frames on every machine by stepping a deterministic simulation once per frame and drawing off screen.
 * [Land around a track](algorithms/land-around-a-track.md) - Hills generated from noise that stay flat along a circuit and fade out at the edge of the modelled land, with a knoll and a lake placed in the room the circuit leaves inside its loop.
 * [Sculpted scenery](algorithms/sculpted-scenery.md) - Static scenery built from simple shapes, painted through vertex colours and merged into one mesh per material and patch of land, so that thousands of objects cost a few dozen draws.
+* [Aggregate thinning](algorithms/aggregate-thinning.md) - A coarser level of detail for foliage — needles, leaves, blades — made by keeping a random share of its small pieces and growing each kept one so that the crown covers as much as before.
 * [Particle pool](algorithms/particle-pool.md) - A fixed pool of camera-facing squares for sparks, smoke and flames, where a particle fades by shrinking so that each kind is drawn in one batch.
 
 ## Oracles

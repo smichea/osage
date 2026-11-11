@@ -121,7 +121,7 @@ pub(crate) fn lay(
                     .map(|p| {
                         let source =
                             p.material.as_ref().and_then(|m| gltf_materials.get(m)).cloned().unwrap_or_default();
-                        (p.mesh.clone(), materials.add(crate::finish(&source, carpet.tint)), p.place)
+                        (p.mesh.clone(), materials.add(crate::finish(&source, carpet.tint, false)), p.place)
                     })
                     .collect()
             })

@@ -1,6 +1,7 @@
 # Knowledge Update Log
 
 ## 2026-11-11
+* **Creation**: Added the algorithm [aggregate thinning](/algorithms/aggregate-thinning.md): [osage-props](/modules/osage-props.md) thins foliage instead of clustering it, and can draw blended materials opaque; [osage-kart-roadside](/modules/kart-roadside.md) plants firs and broadleaf trees.
 * **Creation**: Added the technique [a photographed sky](/techniques/panorama.md) and the modules [osage-content](/modules/osage-content.md), [osage-procedural](/modules/osage-procedural.md), [osage-props](/modules/osage-props.md), [osage-kart-land](/modules/kart-land.md), [osage-kart-roadside](/modules/kart-roadside.md) and [osage-kart-model](/modules/kart-model.md): the kart client split into components (D-035) on the way to a photographed circuit.
 * **Update**: [osage-props](/modules/osage-props.md) lays carpets — grass around the camera, moved with it — and can tint tiny models; [osage-kart-roadside](/modules/kart-roadside.md) lays one along the circuit.
 * **Update**: [Post-processing](/techniques/post-processing.md): a world's look can name a lens — vignette and colour fringes — from T3.

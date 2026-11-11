@@ -29,6 +29,8 @@ pub struct Models {
     pub boulder: Handle<Gltf>,
     pub stone: Handle<Gltf>,
     pub pine: Handle<Gltf>,
+    pub fir: Handle<Gltf>,
+    pub broadleaf: Handle<Gltf>,
 }
 
 impl Models {
@@ -44,6 +46,8 @@ impl Models {
             boulder: model("rock_07"),
             stone: model("rock_09"),
             pine: model("pine_sapling_small"),
+            fir: model("fir_sapling_medium"),
+            broadleaf: model("island_tree_02"),
         }
     }
 }
@@ -105,6 +109,7 @@ pub fn scatters(
         shadows,
         lods: within >= 60.0,
         tint: None,
+        opaque: false,
     };
 
     let mut all = vec![scatter(&models.tyre, tyre_walls(frames, track), Use::Whole, 160.0, true)];
@@ -114,7 +119,7 @@ pub fn scatters(
     for _ in 0..4000 {
         let at = beside(&mut dice, 8.0, 140.0);
         let (turn, size, chance) = (dice.between(0.0, std::f32::consts::TAU), dice.between(4.0, 7.5), dice.roll());
-        if chance < (noise(at / 45.0 + 3.0) - 0.4) * 1.8 && free(at, 8.0) && pines.len() < 420 {
+        if chance < (noise(at / 45.0 + 3.0) - 0.4) * 1.8 && free(at, 8.0) && pines.len() < 300 {
             // A clump: one tall sapling and a few smaller ones close by, as
             // young pines grow, which reads as one full crown from afar.
             pines.push(stand(at, 0.1, turn, size));
@@ -129,6 +134,24 @@ pub fn scatters(
     }
     all.push(scatter(&models.pine, pines, Use::Variants, 450.0, true));
 
+    // Firs and broadleaf trees, full grown, among the pines.
+    let (mut firs, mut broadleaves) = (Vec::new(), Vec::new());
+    for _ in 0..3000 {
+        let at = beside(&mut dice, 9.0, 150.0);
+        let (turn, roll, chance) = (dice.between(0.0, std::f32::consts::TAU), dice.roll(), dice.roll());
+        if chance > (noise(at / 50.0 + 21.0) - 0.38) * 1.6 || !free(at, 9.0) {
+            continue;
+        }
+        if roll < 0.62 && firs.len() < 120 {
+            firs.push(stand(at, 0.15, turn, dice.between(0.85, 1.25)));
+        } else if roll >= 0.62 && broadleaves.len() < 70 {
+            broadleaves.push(stand(at, 0.15, turn, dice.between(1.6, 2.4)));
+        }
+    }
+    // Their leaves are geometry, marked blended with textures without alpha: drawn opaque.
+    all.push(Scatter { opaque: true, ..scatter(&models.fir, firs, Use::Variants, 500.0, true) });
+    all.push(Scatter { opaque: true, ..scatter(&models.broadleaf, broadleaves, Use::Whole, 500.0, true) });
+
     // Woods further off, to the edge of the modelled land: groves on the
     // hills, tall, seen far as coarse meshes.
     let mut woods = Vec::new();
@@ -140,7 +163,12 @@ pub fn scatters(
             woods.push(stand(at, 0.2, turn, size));
         }
     }
-    all.push(scatter(&models.pine, woods, Use::Variants, 900.0, true));
+    // A third of the woods are firs, which are full grown at their own size.
+    let firs_far: Vec<Transform> =
+        woods.iter().skip(2).step_by(3).map(|t| t.with_scale(Vec3::splat(t.scale.x / 6.5))).collect();
+    let pines_far: Vec<Transform> = woods.iter().enumerate().filter(|(i, _)| i % 3 != 2).map(|(_, t)| *t).collect();
+    all.push(scatter(&models.pine, pines_far, Use::Variants, 900.0, true));
+    all.push(Scatter { opaque: true, ..scatter(&models.fir, firs_far, Use::Variants, 900.0, true) });
 
     // Bushes and boulders.
     let mut bushes = Vec::new();
@@ -297,6 +325,8 @@ mod tests {
             boulder: Handle::default(),
             stone: Handle::default(),
             pine: Handle::default(),
+            fir: Handle::default(),
+            broadleaf: Handle::default(),
         };
         let clearings = [Site { centre: frames[0].at, radius: 30.0 }];
         (scatters(&land, &frames, &circuit.track, &clearings, &models, detail), land, circuit)

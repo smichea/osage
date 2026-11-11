@@ -837,3 +837,176 @@ licence = "CC0-1.0"
 author = "Rob Tuytel, Rico Cilliers (Poly Haven)"
 source = "https://polyhaven.com/a/dandelion_01"
 used_by = "worlds/kart/native: flowers in the grass (R7); model texture, 1k"
+
+# Second photoreal batch, trees, approved by the maintainer on 2026-11-11 (about 124 MB).
+
+[[asset]]
+path = "assets/polyhaven/island_tree_02/island_tree_02_1k.gltf"
+url = "https://dl.polyhaven.org/file/ph-assets/Models/gltf/1k/island_tree_02/island_tree_02_1k.gltf"
+sha256 = "d8c5d9ead41cdbef91a648f40ff60470faa19eb3a7010e59e44cb1a01250f75d"
+licence = "CC0-1.0"
+author = "Rob Tuytel, Rico Cilliers (Poly Haven)"
+source = "https://polyhaven.com/a/island_tree_02"
+used_by = "worlds/kart/native: broadleaf trees (R7); glTF model"
+
+[[asset]]
+path = "assets/polyhaven/island_tree_02/textures/island_tree_02_nor_gl_1k.jpg"
+url = "https://dl.polyhaven.org/file/ph-assets/Models/jpg/1k/island_tree_02/island_tree_02_nor_gl_1k.jpg"
+sha256 = "1580d5a42d02f4ede51bfb03972ab0aef3d8acafbd3692276879171007bb70ec"
+licence = "CC0-1.0"
+author = "Rob Tuytel, Rico Cilliers (Poly Haven)"
+source = "https://polyhaven.com/a/island_tree_02"
+used_by = "worlds/kart/native: broadleaf trees (R7); model texture, 1k"
+
+[[asset]]
+path = "assets/polyhaven/island_tree_02/textures/island_tree_02_diff_1k.jpg"
+url = "https://dl.polyhaven.org/file/ph-assets/Models/jpg/1k/island_tree_02/island_tree_02_diff_1k.jpg"
+sha256 = "8fc20397ab5d514c119d7a025868414d78e436138d3867a4b7ba12334a72ec3a"
+licence = "CC0-1.0"
+author = "Rob Tuytel, Rico Cilliers (Poly Haven)"
+source = "https://polyhaven.com/a/island_tree_02"
+used_by = "worlds/kart/native: broadleaf trees (R7); model texture, 1k"
+
+[[asset]]
+path = "assets/polyhaven/island_tree_02/textures/island_tree_02_arm_1k.jpg"
+url = "https://dl.polyhaven.org/file/ph-assets/Models/jpg/1k/island_tree_02/island_tree_02_arm_1k.jpg"
+sha256 = "ada61dd4fad023e699b6314b8b76590017b301719bf74ffc9e20b95893ed62b6"
+licence = "CC0-1.0"
+author = "Rob Tuytel, Rico Cilliers (Poly Haven)"
+source = "https://polyhaven.com/a/island_tree_02"
+used_by = "worlds/kart/native: broadleaf trees (R7); model texture, 1k"
+
+[[asset]]
+path = "assets/polyhaven/island_tree_02/textures/island_tree_02_leaves_nor_gl_1k.jpg"
+url = "https://dl.polyhaven.org/file/ph-assets/Models/jpg/1k/island_tree_02/island_tree_02_leaves_nor_gl_1k.jpg"
+sha256 = "07ba461c0c95da4e49a42981766bdb6191d4c3c4d815796c082266dcc3cecdb8"
+licence = "CC0-1.0"
+author = "Rob Tuytel, Rico Cilliers (Poly Haven)"
+source = "https://polyhaven.com/a/island_tree_02"
+used_by = "worlds/kart/native: broadleaf trees (R7); model texture, 1k"
+
+[[asset]]
+path = "assets/polyhaven/island_tree_02/textures/island_tree_02_leaves_diff_1k.jpg"
+url = "https://dl.polyhaven.org/file/ph-assets/Models/jpg/1k/island_tree_02/island_tree_02_leaves_diff_1k.jpg"
+sha256 = "f56d762a1507754752abf164cc12acbc1e87ce87fa609ac44b98a1b0037c89d8"
+licence = "CC0-1.0"
+author = "Rob Tuytel, Rico Cilliers (Poly Haven)"
+source = "https://polyhaven.com/a/island_tree_02"
+used_by = "worlds/kart/native: broadleaf trees (R7); model texture, 1k"
+
+[[asset]]
+path = "assets/polyhaven/island_tree_02/textures/island_tree_02_leaves_arm_1k.jpg"
+url = "https://dl.polyhaven.org/file/ph-assets/Models/jpg/1k/island_tree_02/island_tree_02_leaves_arm_1k.jpg"
+sha256 = "90da3a072dbcb052715b1313b9dbc69a4aa8a09a31a4b3868411a2bb51d72037"
+licence = "CC0-1.0"
+author = "Rob Tuytel, Rico Cilliers (Poly Haven)"
+source = "https://polyhaven.com/a/island_tree_02"
+used_by = "worlds/kart/native: broadleaf trees (R7); model texture, 1k"
+
+[[asset]]
+path = "assets/polyhaven/island_tree_02/textures/island_tree_02_branches_nor_gl_1k.jpg"
+url = "https://dl.polyhaven.org/file/ph-assets/Models/jpg/1k/island_tree_02/island_tree_02_branches_nor_gl_1k.jpg"
+sha256 = "2d67393ba76a0f49cf965fa0c99d8c16268e71e87b1203d35539bfdb971a514e"
+licence = "CC0-1.0"
+author = "Rob Tuytel, Rico Cilliers (Poly Haven)"
+source = "https://polyhaven.com/a/island_tree_02"
+used_by = "worlds/kart/native: broadleaf trees (R7); model texture, 1k"
+
+[[asset]]
+path = "assets/polyhaven/island_tree_02/textures/island_tree_02_branches_diff_1k.jpg"
+url = "https://dl.polyhaven.org/file/ph-assets/Models/jpg/1k/island_tree_02/island_tree_02_branches_diff_1k.jpg"
+sha256 = "bee5ec22196e9e31ad0c95a5a9b4636571cc0124d5bb27a92f1e307d289cc60d"
+licence = "CC0-1.0"
+author = "Rob Tuytel, Rico Cilliers (Poly Haven)"
+source = "https://polyhaven.com/a/island_tree_02"
+used_by = "worlds/kart/native: broadleaf trees (R7); model texture, 1k"
+
+[[asset]]
+path = "assets/polyhaven/island_tree_02/textures/island_tree_02_branches_arm_1k.jpg"
+url = "https://dl.polyhaven.org/file/ph-assets/Models/jpg/1k/island_tree_02/island_tree_02_branches_arm_1k.jpg"
+sha256 = "9e3f82263247ce4f619692cea4c4f6fe9936ff465a86623481849062642c7d05"
+licence = "CC0-1.0"
+author = "Rob Tuytel, Rico Cilliers (Poly Haven)"
+source = "https://polyhaven.com/a/island_tree_02"
+used_by = "worlds/kart/native: broadleaf trees (R7); model texture, 1k"
+
+[[asset]]
+path = "assets/polyhaven/island_tree_02/island_tree_02.bin"
+url = "https://dl.polyhaven.org/file/ph-assets/Models/gltf/8k/island_tree_02/island_tree_02.bin"
+sha256 = "427d69ccc1ea12d1fb9c6af89691563b4a097f39a6f34c15be6e45ef5e5fd4ce"
+licence = "CC0-1.0"
+author = "Rob Tuytel, Rico Cilliers (Poly Haven)"
+source = "https://polyhaven.com/a/island_tree_02"
+used_by = "worlds/kart/native: broadleaf trees (R7); model data"
+
+[[asset]]
+path = "assets/polyhaven/fir_sapling_medium/fir_sapling_medium_1k.gltf"
+url = "https://dl.polyhaven.org/file/ph-assets/Models/gltf/1k/fir_sapling_medium/fir_sapling_medium_1k.gltf"
+sha256 = "2e80cd49d716c99bdead5a42aa6441e89443044d9a0edc31b56b5dbf87fc41de"
+licence = "CC0-1.0"
+author = "Rob Tuytel, Rico Cilliers (Poly Haven)"
+source = "https://polyhaven.com/a/fir_sapling_medium"
+used_by = "worlds/kart/native: firs (R7); glTF model"
+
+[[asset]]
+path = "assets/polyhaven/fir_sapling_medium/textures/fir_sapling_medium_branches_nor_gl_1k.jpg"
+url = "https://dl.polyhaven.org/file/ph-assets/Models/jpg/1k/fir_sapling_medium/fir_sapling_medium_branches_nor_gl_1k.jpg"
+sha256 = "6a570ab53ab2249ecdfa93e7d3b9a8a2cb1a8ad391400e5a64c708914779b2c3"
+licence = "CC0-1.0"
+author = "Rob Tuytel, Rico Cilliers (Poly Haven)"
+source = "https://polyhaven.com/a/fir_sapling_medium"
+used_by = "worlds/kart/native: firs (R7); model texture, 1k"
+
+[[asset]]
+path = "assets/polyhaven/fir_sapling_medium/textures/fir_sapling_medium_branches_diff_1k.jpg"
+url = "https://dl.polyhaven.org/file/ph-assets/Models/jpg/1k/fir_sapling_medium/fir_sapling_medium_branches_diff_1k.jpg"
+sha256 = "a5d25150ba1bee10008c039f98aa3c73b4477a404d6715c511ca9b5b0f4a9077"
+licence = "CC0-1.0"
+author = "Rob Tuytel, Rico Cilliers (Poly Haven)"
+source = "https://polyhaven.com/a/fir_sapling_medium"
+used_by = "worlds/kart/native: firs (R7); model texture, 1k"
+
+[[asset]]
+path = "assets/polyhaven/fir_sapling_medium/textures/fir_sapling_medium_branches_arm_1k.jpg"
+url = "https://dl.polyhaven.org/file/ph-assets/Models/jpg/1k/fir_sapling_medium/fir_sapling_medium_branches_arm_1k.jpg"
+sha256 = "95d4e9e62cd309fbc38a175e2306379c76c062425b09c0fb72c5b7356a719123"
+licence = "CC0-1.0"
+author = "Rob Tuytel, Rico Cilliers (Poly Haven)"
+source = "https://polyhaven.com/a/fir_sapling_medium"
+used_by = "worlds/kart/native: firs (R7); model texture, 1k"
+
+[[asset]]
+path = "assets/polyhaven/fir_sapling_medium/textures/fir_sapling_medium_twigs_nor_gl_1k.jpg"
+url = "https://dl.polyhaven.org/file/ph-assets/Models/jpg/1k/fir_sapling_medium/fir_sapling_medium_twigs_nor_gl_1k.jpg"
+sha256 = "d470dc39b1d02bbeba06feb0ad818680ef3c24623b4db597270301a5fb8c9369"
+licence = "CC0-1.0"
+author = "Rob Tuytel, Rico Cilliers (Poly Haven)"
+source = "https://polyhaven.com/a/fir_sapling_medium"
+used_by = "worlds/kart/native: firs (R7); model texture, 1k"
+
+[[asset]]
+path = "assets/polyhaven/fir_sapling_medium/textures/fir_sapling_medium_twigs_diff_1k.jpg"
+url = "https://dl.polyhaven.org/file/ph-assets/Models/jpg/1k/fir_sapling_medium/fir_sapling_medium_twigs_diff_1k.jpg"
+sha256 = "db1113d37d68d960b84eb14ce67a4022d02bf10d6f0c078d689063f6296eaa1d"
+licence = "CC0-1.0"
+author = "Rob Tuytel, Rico Cilliers (Poly Haven)"
+source = "https://polyhaven.com/a/fir_sapling_medium"
+used_by = "worlds/kart/native: firs (R7); model texture, 1k"
+
+[[asset]]
+path = "assets/polyhaven/fir_sapling_medium/textures/fir_sapling_medium_twigs_arm_1k.jpg"
+url = "https://dl.polyhaven.org/file/ph-assets/Models/jpg/1k/fir_sapling_medium/fir_sapling_medium_twigs_arm_1k.jpg"
+sha256 = "d66c81fc073ee7ea97a76b6da2399769f16944e50ef0e007f09c95619f597c79"
+licence = "CC0-1.0"
+author = "Rob Tuytel, Rico Cilliers (Poly Haven)"
+source = "https://polyhaven.com/a/fir_sapling_medium"
+used_by = "worlds/kart/native: firs (R7); model texture, 1k"
+
+[[asset]]
+path = "assets/polyhaven/fir_sapling_medium/fir_sapling_medium.bin"
+url = "https://dl.polyhaven.org/file/ph-assets/Models/gltf/8k/fir_sapling_medium/fir_sapling_medium.bin"
+sha256 = "e3f3fabcaa1bacfc8b1feca5e6500b13c63a0e45cd812e663d01d31b042d73b1"
+licence = "CC0-1.0"
+author = "Rob Tuytel, Rico Cilliers (Poly Haven)"
+source = "https://polyhaven.com/a/fir_sapling_medium"
+used_by = "worlds/kart/native: firs (R7); model data"
