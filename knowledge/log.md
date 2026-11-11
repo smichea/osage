@@ -1,6 +1,7 @@
 # Knowledge Update Log
 
 ## 2026-11-11
+* **Update**: [osage-kart-crowd](/modules/kart-crowd.md) stands people up: onlookers along the fences and marshals at the bends of [osage-kart-native](/modules/kart-native.md).
 * **Update**: [osage-props](/modules/osage-props.md) can light grass as the ground; [osage-kart-roadside](/modules/kart-roadside.md)'s grass no longer reads as dark leaves on the meadow.
 * **Creation**: Added the algorithm [tree cards](/algorithms/tree-cards.md) to [osage-props](/modules/osage-props.md); [osage-kart-roadside](/modules/kart-roadside.md) grows woods of a few thousand trees with it.
 * **Creation**: Added the module [osage-kart-crowd](/modules/kart-crowd.md): the grandstand's spectators are sculpted figures in three poses.

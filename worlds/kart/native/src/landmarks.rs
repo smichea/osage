@@ -16,7 +16,7 @@ use bevy::{light::NotShadowCaster, prelude::*};
 use osage_kart_physics::Track;
 use osage_world_kart::Circuit;
 
-use osage_kart_crowd::Wear;
+use osage_kart_crowd::{Stance, Wear};
 use osage_procedural::{Batch, Paint, Shape};
 
 use crate::{
@@ -219,19 +219,6 @@ fn grandstand(set: &mut Set, stand: Transform, shape: (f32, f32, f32, usize, f32
     let seat_colour = Paint::plain(0.12, 0.27, 0.55);
     let seat = Shape::block(Vec3::new(-0.2, 0.0, -0.21), Vec3::new(0.2, 0.06, 0.21));
     let backrest = Shape::block(Vec3::new(-0.04, 0.0, -0.21), Vec3::new(0.04, 0.38, 0.21));
-    let clothes = [
-        (0.12, 0.15, 0.24),
-        (0.85, 0.85, 0.83),
-        (0.25, 0.26, 0.28),
-        (0.55, 0.12, 0.1),
-        (0.62, 0.55, 0.42),
-        (0.08, 0.08, 0.09),
-        (0.3, 0.38, 0.52),
-        (0.4, 0.42, 0.3),
-    ];
-    let skins = [(0.86, 0.68, 0.56), (0.74, 0.55, 0.42), (0.52, 0.36, 0.25), (0.34, 0.23, 0.16)];
-    let hairs = [(0.08, 0.06, 0.05), (0.25, 0.16, 0.09), (0.55, 0.42, 0.24), (0.6, 0.6, 0.58), (0.12, 0.1, 0.09)];
-    let shoes = [(0.9, 0.9, 0.88), (0.1, 0.1, 0.11), (0.35, 0.25, 0.18)];
     for k in 0..tiers {
         let (x, y) = (front - k as f32 * depth, 0.3 + k as f32 * rise);
         let tier = Shape::block(
@@ -250,8 +237,8 @@ fn grandstand(set: &mut Set, stand: Transform, shape: (f32, f32, f32, usize, f32
                 continue;
             }
             // A whole figure, in one of a few poses, dressed at random.
-            let (shirt, skin) = (set.dice.pick(&clothes), set.dice.pick(&skins));
-            let (trousers, hair, shoe) = (set.dice.pick(&clothes), set.dice.pick(&hairs), set.dice.pick(&shoes));
+            let (shirt, skin) = (set.dice.pick(&CLOTHES), set.dice.pick(&SKINS));
+            let (trousers, hair, shoe) = (set.dice.pick(&CLOTHES), set.dice.pick(&HAIRS), set.dice.pick(&SHOES));
             let pose = set.dice.pick(&osage_kart_crowd::Pose::ALL);
             let turn = Quat::from_rotation_y(set.dice.between(-0.25, 0.25));
             let seated = at * Transform::from_xyz(-0.05, 0.06, 0.0).with_rotation(turn);
@@ -549,6 +536,150 @@ pub fn fences(set: &mut Set, props: &mut Props, circuit: &Circuit, frames: &[Fra
             MeshMaterial3d(wire.clone()),
             NotShadowCaster,
         ));
+    }
+}
+
+/// The clothes people wear at a summer race: (shirt, trousers) pairs drawn
+/// from these, skin, hair and shoes.
+const CLOTHES: [(f32, f32, f32); 8] = [
+    (0.12, 0.15, 0.24),
+    (0.85, 0.85, 0.83),
+    (0.25, 0.26, 0.28),
+    (0.55, 0.12, 0.1),
+    (0.62, 0.55, 0.42),
+    (0.08, 0.08, 0.09),
+    (0.3, 0.38, 0.52),
+    (0.4, 0.42, 0.3),
+];
+const SKINS: [(f32, f32, f32); 4] = [(0.86, 0.68, 0.56), (0.74, 0.55, 0.42), (0.52, 0.36, 0.25), (0.34, 0.23, 0.16)];
+const HAIRS: [(f32, f32, f32); 5] =
+    [(0.08, 0.06, 0.05), (0.25, 0.16, 0.09), (0.55, 0.42, 0.24), (0.6, 0.6, 0.58), (0.12, 0.1, 0.09)];
+const SHOES: [(f32, f32, f32); 3] = [(0.9, 0.9, 0.88), (0.1, 0.1, 0.11), (0.35, 0.25, 0.18)];
+
+/// The turn about the vertical that makes a figure (facing +X) face `towards`.
+fn facing(towards: Vec2) -> Quat {
+    Quat::from_rotation_y((-towards.y).atan2(towards.x))
+}
+
+/// Someone standing at `place`, dressed in `shirt` and `trousers`, the rest
+/// picked by the set's dice.
+fn person(set: &mut Set, stance: Stance, place: Transform, shirt: (f32, f32, f32), trousers: (f32, f32, f32)) {
+    let (skin, hair, shoe) = (set.dice.pick(&SKINS), set.dice.pick(&HAIRS), set.dice.pick(&SHOES));
+    for (wear, shape) in osage_kart_crowd::standing(stance) {
+        let paint = match wear {
+            Wear::Shirt => Paint::shaded(shirt.0, shirt.1, shirt.2, 0.2),
+            Wear::Trousers => Paint::plain(trousers.0 * 0.8, trousers.1 * 0.8, trousers.2 * 0.8),
+            Wear::Skin => Paint::plain(skin.0, skin.1, skin.2),
+            Wear::Hair => Paint::plain(hair.0, hair.1, hair.2),
+            Wear::Shoes => Paint::plain(shoe.0, shoe.1, shoe.2),
+        };
+        set.standing.add_within(place.translation, shape, place, paint);
+    }
+}
+
+/// People standing behind the fences along the start straight, beyond the
+/// grandstand and the pits, in small groups, facing the track.
+pub fn onlookers(set: &mut Set, circuit: &Circuit, land: &Land, frames: &[Frame]) {
+    let track = &circuit.track;
+    let (length, fence) = (track.length(), track.half_width + track.verge + BARRIER + 1.9);
+    let mut since = 0.0;
+    for (i, frame) in frames.iter().enumerate() {
+        let next = &frames[(i + 1) % frames.len()];
+        since += frame.at.distance(next.at);
+        let from = (frame.along - circuit.start + length / 2.0).rem_euclid(length) - length / 2.0;
+        if !(42.0..105.0).contains(&from.abs()) || frame.bend.abs() > 0.006 || since < set.dice.between(5.0, 11.0) {
+            continue;
+        }
+        since = 0.0;
+        for side in [-1.0f32, 1.0] {
+            if set.dice.roll() < 0.35 {
+                continue;
+            }
+            let towards = -frame.right * side;
+            let along = (next.at - frame.at).normalize_or_zero();
+            let back = set.dice.between(0.7, 1.8);
+            for k in 0..(1 + (set.dice.roll() * 3.5) as usize) {
+                let at = frame.at
+                    + frame.right * side * (fence + back + set.dice.between(0.0, 0.5))
+                    + along * (k as f32 * set.dice.between(0.6, 0.9));
+                let stance = set.dice.pick(&[Stance::Watching, Stance::Watching, Stance::ArmsFolded, Stance::Waving]);
+                let turn = facing(towards) * Quat::from_rotation_y(set.dice.between(-0.4, 0.4));
+                let place = Transform::from_xyz(at.x, land.height(at), at.y).with_rotation(turn);
+                let (shirt, trousers) = (set.dice.pick(&CLOTHES), set.dice.pick(&CLOTHES));
+                person(set, stance, place, shirt, trousers);
+                set.clear(at, 2.5);
+            }
+        }
+    }
+}
+
+/// Marshal posts at the sharpest bends, behind the barrier on the outside:
+/// a white post with an orange band and its number facing the track, a
+/// red extinguisher, and a marshal in orange holding a yellow flag.
+pub fn marshals(set: &mut Set, circuit: &Circuit, land: &Land, frames: &[Frame]) {
+    let track = &circuit.track;
+    let wall = track.half_width + track.verge + BARRIER;
+    // The sharpest point of each bend, bends at least 60 m apart.
+    let mut posts: Vec<usize> = Vec::new();
+    let mut order: Vec<usize> = (0..frames.len()).filter(|&i| frames[i].bend.abs() > 0.02).collect();
+    order.sort_by(|&a, &b| frames[b].bend.abs().total_cmp(&frames[a].bend.abs()));
+    for i in order {
+        if posts.iter().all(|&j| (frames[i].along - frames[j].along).abs() > 60.0) && posts.len() < 6 {
+            posts.push(i);
+        }
+    }
+    posts.sort_unstable();
+    for (n, &i) in posts.iter().enumerate() {
+        let frame = &frames[i];
+        let side = frame.bend.signum();
+        let at = frame.at + frame.right * side * (wall + 2.4);
+        let towards = -frame.right * side;
+        let ground = land.height(at);
+        let post = Transform::from_xyz(at.x, ground, at.y).with_rotation(facing(towards));
+        set.clear(at, 4.0);
+        let white = Paint::shaded(0.9, 0.9, 0.88, 0.2);
+        set.satin.add_within(
+            post.translation,
+            &Shape::block(Vec3::new(-0.45, 0.0, -0.45), Vec3::new(0.45, 1.15, 0.45)),
+            post,
+            white,
+        );
+        set.satin.add_within(
+            post.translation,
+            &Shape::block(Vec3::new(-0.46, 0.9, -0.46), Vec3::new(0.46, 1.1, 0.46)),
+            post,
+            Paint::plain(0.95, 0.42, 0.05),
+        );
+        for digit in osage_kart_model::numerals(n as u32 + 1, 0.4, 0.02) {
+            let face = post * Transform::from_xyz(0.46, 0.5, 0.0).with_rotation(Quat::from_rotation_y(FRAC_PI_2));
+            set.satin.add_within(post.translation, &digit, face, Paint::plain(0.08, 0.08, 0.09));
+        }
+        let extinguisher = Shape::new(Capsule3d::new(0.08, 0.35).mesh().rings(2).latitudes(6).longitudes(12).build());
+        set.satin.add_within(
+            post.translation,
+            &extinguisher,
+            post * Transform::from_xyz(0.2, 0.25, 0.7),
+            Paint::plain(0.75, 0.06, 0.05),
+        );
+        // The marshal beside the post, in orange, the flag raised.
+        let marshal = post * Transform::from_xyz(0.1, 0.0, -1.1);
+        let orange = (0.95, 0.45, 0.08);
+        person(set, Stance::HoldingFlag, marshal, orange, orange);
+        let hand = Stance::FLAG_HAND;
+        let top = hand + Vec3::new(0.3, 0.95, 0.0);
+        set.satin.add_within(
+            post.translation,
+            &rod(hand - Vec3::new(0.05, 0.15, 0.0), top, 0.012),
+            marshal,
+            Paint::plain(0.2, 0.2, 0.2),
+        );
+        let cloth = Shape::block(Vec3::new(0.0, -0.42, -0.005), Vec3::new(0.55, 0.0, 0.005));
+        set.matte.add_within(
+            post.translation,
+            &cloth,
+            marshal * Transform::from_translation(top),
+            Paint::plain(0.97, 0.82, 0.05),
+        );
     }
 }
 

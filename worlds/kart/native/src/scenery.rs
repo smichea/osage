@@ -85,6 +85,8 @@ pub struct Set {
     pub crowd: Batch,
     /// Windows: dark glass that mirrors the sky.
     pub glass: Batch,
+    /// People standing in the open: cloth, casting shadows.
+    pub standing: Batch,
     pub dice: Dice,
     /// Places kept clear of trees.
     pub clearings: Vec<Site>,
@@ -183,6 +185,7 @@ pub fn build(
         bright: Batch::default(),
         crowd: Batch::default(),
         glass: Batch::default(),
+        standing: Batch::default(),
         dice: Dice(7),
         clearings: Vec::new(),
     };
@@ -200,6 +203,8 @@ pub fn build(
     // With the manifest's content, the circuit is photographed: no toys.
     if photographed {
         landmarks::fences(&mut set, &mut props, &course.0, &frames);
+        landmarks::onlookers(&mut set, &course.0, &land, &frames);
+        landmarks::marshals(&mut set, &course.0, &land, &frames);
         landmarks::hoardings(&mut set, &course.0, &frames);
         let look = if let Some(roadside) = &roadside {
             let scatters =
@@ -278,6 +283,9 @@ fn spawn(
     }
     for mesh in set.satin.meshes() {
         commands.spawn((Part, Mesh3d(meshes.add(tangents(mesh))), MeshMaterial3d(satin.clone())));
+    }
+    for mesh in set.standing.meshes() {
+        commands.spawn((Part, Mesh3d(meshes.add(mesh)), MeshMaterial3d(cloth.clone())));
     }
     for mesh in set.glass.meshes() {
         commands.spawn((Part, Mesh3d(meshes.add(mesh)), MeshMaterial3d(glass.clone())));
