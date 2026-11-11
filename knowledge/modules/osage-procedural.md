@@ -17,7 +17,7 @@ Build static scenery from code at little cost, and scatter things the same way a
 
 - **Shape:** a mesh in its own space: a Bevy primitive, a solid of revolution, a tube along a path, flat faces, a block, a prism extruded from a convex outline, crisp (sheet metal) or with rounded corners shaded smooth (moulded plastic).
 - **Paint:** vertex colours, plain or from foot to top.
-- **Batch:** placed, painted shapes gathered into one mesh per patch of land.
+- **Batch:** placed, painted shapes gathered into one mesh per patch of land, with texture coordinates in metres projected from the side each face faces most (`box_uv`), so that a grain laid on the batch keeps its size on every object.
 - **Dice:** a small seeded generator: the same numbers on every machine.
 - **Sculpture:** round cones, ellipsoids and boxes blended into one smooth surface, folded like cloth where asked, painted by groups: a figure without seams ([blended solids](/algorithms/blended-solids.md)).
 
@@ -27,11 +27,11 @@ The algorithm is [sculpted scenery](/algorithms/sculpted-scenery.md).
 
 # Interfaces
 
-`Shape::{new, lathe, gore, sweep, faces, block, extrude, extrude_rounded}`, `Paint::{plain, blend, shaded}`, `Batch::{add, add_within, append, merged, meshes}`, `Dice::{roll, between, pick}`, `Sculpture::{new, cone, ellipsoid, cuboid, paint_cone, paint_box, folded, distance, group_at, shapes}`.
+`Shape::{new, lathe, gore, sweep, faces, block, extrude, extrude_rounded}`, `Paint::{plain, blend, shaded}`, `Batch::{add, add_within, append, merged, meshes}`, `box_uv`, `Dice::{roll, between, pick}`, `Sculpture::{new, cone, ellipsoid, cuboid, paint_cone, paint_box, folded, distance, group_at, shapes}`.
 
 # Invariants
 
-Every kind of shape faces outwards, mirrored placements and outlines turning either way included; a batch splits by patch of land; paint by height runs from foot to top; a sculpture's mesh lies on its surface, faces out, and is painted by its pieces. Tested.
+Every kind of shape faces outwards, mirrored placements and outlines turning either way included; a batch splits by patch of land; paint by height runs from foot to top; texture coordinates are metres on the side a face faces; a sculpture's mesh lies on its surface, faces out, and is painted by its pieces. Tested.
 
 # Knowledge
 

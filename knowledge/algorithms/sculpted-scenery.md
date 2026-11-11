@@ -13,7 +13,7 @@ sources:
   - id: own
     resource: "osage's own design and measurements, 2026-11-10"
     title: osage design
-generated: { by: "claude-code/claude-opus-5-5", at: "2026-11-10T09:30:00Z" }
+generated: { by: "claude-code/claude-opus-5-5", at: "2026-11-11T11:30:00Z" }
 ---
 
 # Problem
@@ -28,7 +28,7 @@ Whatever does not move is merged, at load time, into as few meshes as there are 
 
 1. **Shapes** are triangle lists in their own space, with normals: an engine primitive, a solid of revolution from a profile of (radius, height) pairs, a slice of one (alternate slices in two colours make striped tents and balloons), a round tube swept along a path, or flat convex polygons.
 2. **Paint** is two colours, one at the shape's lowest point and one at its highest, blended by height. A darker foot is the cheapest shading there is: it reads as contact shadow and as depth inside a crown of leaves.
-3. **A batch** belongs to one material. Adding a shape at a placement transforms its positions by the placement and its normals by the inverse transpose of the placement's linear part, writes the paint into the vertex colours, and appends the triangles to the patch of land where the object's anchor stands (90 m squares). A placement that mirrors (negative determinant) turns every triangle over, to keep the front faces outward.
+3. **A batch** belongs to one material. Adding a shape at a placement transforms its positions by the placement and its normals by the inverse transpose of the placement's linear part, writes the paint into the vertex colours and texture coordinates in metres projected from the side each face faces most (x–z from above, z–y or x–y from the sides), and appends the triangles to the patch of land where the object's anchor stands (90 m squares). A placement that mirrors (negative determinant) turns every triangle over, to keep the front faces outward.
 4. **Objects** of several parts give all their parts the same anchor, so that an object is never split between patches.
 5. At the end, each patch of each batch becomes one mesh. Three batches are enough here: rough things, smooth things, and small bright things that cast no shadow (flowers).
 6. **What moves** (the sails of a mill, a big wheel, a balloon, a boat) is sculpted the same way, merged into one mesh of its own, and moved as one object.
@@ -47,7 +47,7 @@ Building the kart circuit's scenery (about 760 trees, bushes, flower drifts, roc
 
 - A patch too large is drawn whole when a corner of it is in view; too small, and the draws come back. 90 m suits a circuit seen from a kart.
 - Merged meshes cannot be culled object by object, nor given levels of detail one by one.
-- Vertex colours cannot carry a texture; a surface that needs one keeps its own material.
+- Vertex colours cannot carry a texture of their own; a batch's material can lay one grain over everything in it (concrete, at the same size on every object), and projection from the box's sides streaks it where a face is turned 45°. A surface that needs its own texture keeps its own material.
 
 # Alternatives
 

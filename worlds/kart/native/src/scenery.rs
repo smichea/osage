@@ -24,6 +24,7 @@ use bevy::{
     render::render_resource::PrimitiveTopology,
 };
 
+use osage_content::GRAIN;
 use osage_kart_roadside::{Detail, Models};
 use osage_procedural::{Batch, Paint, Shape};
 use osage_render::Tier;
@@ -135,6 +136,7 @@ pub fn build(
     course: Res<Course>,
     land: Res<Land>,
     roadside: Option<Res<Roadside>>,
+    grains: Option<Res<track::Grains>>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
     mut images: ResMut<Assets<Image>>,
@@ -142,8 +144,32 @@ pub fn build(
     let track = &course.0.track;
     let frames = track::frames(track);
     let centre = frames.iter().map(|f| f.at).sum::<Vec2>() / frames.len() as f32;
-    let matte = materials.add(StandardMaterial { perceptual_roughness: 0.85, ..default() });
-    let satin = materials.add(StandardMaterial { perceptual_roughness: 0.38, ..default() });
+    // On a photographed circuit, what is built has a grain: concrete, two
+    // metres and a half a repeat (the worn paint of the kerbs blotched
+    // whole buildings). Its own roughness is left out: paint on steel
+    // stays smooth.
+    let (matte, satin) = match grains.as_deref() {
+        Some(grains) => {
+            let brighter = Color::linear_rgb(1.0 / GRAIN, 1.0 / GRAIN, 1.0 / GRAIN);
+            let matte = StandardMaterial {
+                base_color: brighter,
+                perceptual_roughness: 0.85,
+                metallic_roughness_texture: None,
+                ..grains.concrete.material(2.5)
+            };
+            let satin = StandardMaterial {
+                base_color: brighter,
+                perceptual_roughness: 0.38,
+                metallic_roughness_texture: None,
+                ..grains.concrete.material(2.5)
+            };
+            (materials.add(matte), materials.add(satin))
+        }
+        None => (
+            materials.add(StandardMaterial { perceptual_roughness: 0.85, ..default() }),
+            materials.add(StandardMaterial { perceptual_roughness: 0.38, ..default() }),
+        ),
+    };
     let mut set = Set {
         matte: Batch::default(),
         satin: Batch::default(),
@@ -227,11 +253,16 @@ fn spawn(
     matte: Handle<StandardMaterial>,
     satin: Handle<StandardMaterial>,
 ) {
+    // Tangents, for the grain's relief where there is one.
+    let tangents = |mesh: Mesh| {
+        let plain = mesh.clone();
+        mesh.with_generated_tangents().unwrap_or(plain)
+    };
     for mesh in set.matte.meshes() {
-        commands.spawn((Part, Mesh3d(meshes.add(mesh)), MeshMaterial3d(matte.clone())));
+        commands.spawn((Part, Mesh3d(meshes.add(tangents(mesh))), MeshMaterial3d(matte.clone())));
     }
     for mesh in set.satin.meshes() {
-        commands.spawn((Part, Mesh3d(meshes.add(mesh)), MeshMaterial3d(satin.clone())));
+        commands.spawn((Part, Mesh3d(meshes.add(tangents(mesh))), MeshMaterial3d(satin.clone())));
     }
     for mesh in set.bright.meshes() {
         commands.spawn((Part, Mesh3d(meshes.add(mesh)), MeshMaterial3d(matte.clone()), NotShadowCaster));

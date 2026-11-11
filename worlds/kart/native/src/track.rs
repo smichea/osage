@@ -577,6 +577,13 @@ fn facing_up(mut mesh: Mesh) -> Mesh {
     mesh
 }
 
+/// The grain for what is built around the photographed circuit: concrete,
+/// laid on the scenery's batches.
+#[derive(Resource, Clone)]
+pub struct Grains {
+    pub concrete: Surface,
+}
+
 /// The surfaces of a photographed circuit, from the asset manifest's 2k sets.
 pub struct Photographed {
     asphalt: Surface,
@@ -615,6 +622,7 @@ fn photographed(
 ) {
     let track = &circuit.track;
     let (half, verge) = (track.half_width, track.verge);
+    commands.insert_resource(Grains { concrete: set.concrete.clone() });
     let road = materials.add(set.asphalt.material(5.0));
     // Grass varies in clumps and patches, so that its grain never reads as a carpet.
     let grass = grounds.add(GroundMaterial { base: set.grass.material(2.6), extension: Ground::meadow() });

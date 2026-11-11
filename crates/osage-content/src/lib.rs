@@ -36,6 +36,7 @@ pub fn root() -> Option<PathBuf> {
 }
 
 /// The three maps of a surface: colour, normal, and occlusion-roughness-metal.
+#[derive(Clone)]
 pub struct Surface {
     colour: Handle<Image>,
     normal: Handle<Image>,

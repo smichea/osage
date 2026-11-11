@@ -1,6 +1,7 @@
 # Knowledge Update Log
 
 ## 2026-11-11
+* **Update**: [Sculpted scenery](/algorithms/sculpted-scenery.md) gains texture coordinates in metres, projected from the side each face faces most; the photographed kart circuit lays a concrete grain over what is built.
 * **Creation**: Added the algorithm [blended solids](/algorithms/blended-solids.md) to [osage-procedural](/modules/osage-procedural.md); [osage-kart-model](/modules/kart-model.md) sculpts its driver with it.
 * **Creation**: Added the technique [ground that varies](/techniques/ground-variation.md) to [osage-render](/modules/osage-render.md); the kart circuit's meadows, verges and aprons use it.
 * **Update**: [osage-kart-model](/modules/kart-model.md): a livery names the suit's own colour; two-tone helmets, a neck brace, a black rear bumper with its number plate.

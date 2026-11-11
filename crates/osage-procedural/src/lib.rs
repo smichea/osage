@@ -277,7 +277,24 @@ struct Patch {
     positions: Vec<[f32; 3]>,
     normals: Vec<[f32; 3]>,
     colours: Vec<[f32; 4]>,
+    /// Texture coordinates in metres, projected from the side each face
+    /// faces most: a grain laid on the batch keeps its size on every object.
+    uvs: Vec<[f32; 2]>,
     indices: Vec<u32>,
+}
+
+/// Where a point lies on a texture projected onto the three planes of its
+/// box, chosen by the direction it faces most: (x, z) from above or below,
+/// (z, y) from the sides, (x, y) from the front or back. In metres.
+pub fn box_uv(position: Vec3, normal: Vec3) -> [f32; 2] {
+    let a = normal.abs();
+    if a.y >= a.x && a.y >= a.z {
+        [position.x, position.z]
+    } else if a.x >= a.z {
+        [position.z, -position.y]
+    } else {
+        [position.x, -position.y]
+    }
 }
 
 impl Patch {
@@ -286,9 +303,11 @@ impl Patch {
         let first = self.positions.len() as u32;
         let tall = (shape.top - shape.foot).max(1e-6);
         for (position, normal) in shape.positions.iter().zip(&shape.normals) {
-            self.positions.push(matrix.transform_point3(*position).to_array());
-            self.normals.push((for_normals * *normal).normalize_or(Vec3::Y).to_array());
+            let (placed, facing) = (matrix.transform_point3(*position), (for_normals * *normal).normalize_or(Vec3::Y));
+            self.positions.push(placed.to_array());
+            self.normals.push(facing.to_array());
             self.colours.push(paint.at((position.y - shape.foot) / tall));
+            self.uvs.push(box_uv(placed, facing));
         }
         // A mirrored placement turns every triangle over: turn it back.
         let mirrored = matrix.matrix3.determinant() < 0.0;
@@ -303,6 +322,7 @@ impl Patch {
             .with_inserted_attribute(Mesh::ATTRIBUTE_POSITION, self.positions)
             .with_inserted_attribute(Mesh::ATTRIBUTE_NORMAL, self.normals)
             .with_inserted_attribute(Mesh::ATTRIBUTE_COLOR, self.colours)
+            .with_inserted_attribute(Mesh::ATTRIBUTE_UV_0, self.uvs)
             .with_inserted_indices(Indices::U32(self.indices))
     }
 }
@@ -339,6 +359,7 @@ impl Batch {
             mine.positions.extend(patch.positions);
             mine.normals.extend(patch.normals);
             mine.colours.extend(patch.colours);
+            mine.uvs.extend(patch.uvs);
             mine.indices.extend(patch.indices.into_iter().map(|index| index + first));
         }
     }
@@ -351,6 +372,7 @@ impl Batch {
             whole.positions.extend(patch.positions);
             whole.normals.extend(patch.normals);
             whole.colours.extend(patch.colours);
+            whole.uvs.extend(patch.uvs);
             whole.indices.extend(patch.indices.into_iter().map(|index| index + first));
         }
         whole.mesh()
@@ -480,6 +502,38 @@ mod tests {
             patch.indices.clone(),
         );
         faces_outwards(&placed, |_| Vec3::new(5.0, 0.0, 0.0));
+    }
+
+    #[test]
+    fn texture_coordinates_are_metres_on_the_side_a_face_faces() {
+        let mut batch = Batch::default();
+        let place = Transform::from_xyz(10.0, 0.0, 20.0);
+        batch.add(&Shape::block(Vec3::ZERO, Vec3::new(4.0, 2.0, 1.0)), place, Paint::plain(1.0, 1.0, 1.0));
+        let mesh = batch.merged();
+        let Some(VertexAttributeValues::Float32x3(positions)) = mesh.attribute(Mesh::ATTRIBUTE_POSITION) else {
+            panic!("positions")
+        };
+        let Some(VertexAttributeValues::Float32x3(normals)) = mesh.attribute(Mesh::ATTRIBUTE_NORMAL) else {
+            panic!("normals")
+        };
+        let Some(VertexAttributeValues::Float32x2(uvs)) = mesh.attribute(Mesh::ATTRIBUTE_UV_0) else { panic!("uvs") };
+        for ((p, n), uv) in positions.iter().zip(normals).zip(uvs) {
+            let (p, n) = (Vec3::from(*p), Vec3::from(*n));
+            let expected = if n.y.abs() > 0.9 {
+                [p.x, p.z]
+            } else if n.x.abs() > 0.9 {
+                [p.z, -p.y]
+            } else {
+                [p.x, -p.y]
+            };
+            assert_eq!(*uv, expected, "at {p} facing {n}");
+        }
+        // The top face spans its 4 by 1 metres in texture coordinates, wherever it stands.
+        let top: Vec<[f32; 2]> = normals.iter().zip(uvs).filter(|(n, _)| n[1] > 0.9).map(|(_, uv)| *uv).collect();
+        let span = |k: usize| {
+            top.iter().map(|uv| uv[k]).fold(f32::MIN, f32::max) - top.iter().map(|uv| uv[k]).fold(f32::MAX, f32::min)
+        };
+        assert!((span(0) - 4.0).abs() < 1e-4 && (span(1) - 1.0).abs() < 1e-4);
     }
 
     #[test]
