@@ -94,12 +94,14 @@ impl Finish {
 }
 
 /// A team's colours, in sRGB: the bodywork and helmet, a second colour for
-/// stripes and the suit's panels, and the frame's paint.
+/// stripes, the frame's paint, and the race suit's own colour — rarely the
+/// kart's: a suit in the kart's colour from head to foot reads as a toy.
 #[derive(Clone, Copy, Debug)]
 pub struct Livery {
     pub main: Vec3,
     pub second: Vec3,
     pub frame: Vec3,
+    pub suit: Vec3,
     /// The racing number, on the front panel and on the side pods.
     pub number: u32,
 }
@@ -372,9 +374,18 @@ fn bodywork(kart: &mut Sorted, livery: Livery) {
             .collect();
         kart.add(Finish::Varnish, &Shape::extrude(&top, -0.28, 0.28), Transform::IDENTITY, livery.second);
     }
-    // The rear bumper, wide and moulded, behind the rear wheels.
-    let bumper = profile(&[(-0.74, 0.1), (-0.93, 0.1), (-0.98, 0.17), (-0.94, 0.27), (-0.78, 0.28), (-0.72, 0.2)]);
-    kart.add(Finish::Varnish, &Shape::extrude_rounded(&bumper, -0.68, 0.68, 0.035, 3), across, livery.main);
+    // The rear bumper, wide and moulded in black plastic behind the rear
+    // wheels, a strip of the team's colour along its top.
+    let bumper = profile(&[(-0.74, 0.1), (-0.93, 0.1), (-0.98, 0.17), (-0.94, 0.25), (-0.78, 0.26), (-0.72, 0.2)]);
+    kart.add(Finish::Satin, &Shape::extrude_rounded(&bumper, -0.68, 0.68, 0.035, 3), across, BLACK);
+    let strip = profile(&[(-0.79, 0.255), (-0.93, 0.245), (-0.93, 0.255), (-0.79, 0.265)]);
+    kart.add(Finish::Varnish, &Shape::extrude(&strip, -0.6, 0.6), across, livery.main);
+    // Its number plate, facing back, as the rules want it.
+    let plate_at = at(0.0, 0.18, -0.985).with_rotation(Quat::from_rotation_y(PI));
+    kart.add(Finish::Varnish, &Shape::block(Vec3::new(-0.1, -0.05, 0.0), Vec3::new(0.1, 0.05, 0.003)), plate_at, WHITE);
+    for digit in numerals(livery.number, 0.065, 0.003) {
+        kart.add(Finish::Varnish, &digit, plate_at * at(0.0, 0.0, 0.003), BLACK);
+    }
     // The bucket seat: a shell around the driver's back, a base under him.
     let shell = Shape::gore(&[(0.17, 0.0), (0.19, 0.12), (0.2, 0.3), (0.18, 0.42)], 16, PI + 0.35, PI - 0.7);
     let seat = at(0.0, 0.08, -0.25).with_rotation(Quat::from_rotation_x(-0.42)).with_scale(Vec3::new(1.15, 1.0, 1.0));
@@ -426,8 +437,8 @@ fn engine(kart: &mut Sorted) {
 
 /// The driver, sitting low with legs ahead, hands on the wheel.
 fn driver(kart: &mut Sorted, livery: Livery) {
-    let suit = livery.main * 0.8 + Vec3::splat(0.06);
-    let panels = livery.second;
+    // The suit in its own colour, the team's on its panels.
+    let (suit, panels) = (livery.suit, livery.main);
     // The torso, leaning back into the seat.
     let torso = at(0.0, 0.42, -0.31).with_rotation(Quat::from_rotation_x(-0.38)).with_scale(Vec3::new(1.1, 1.0, 0.72));
     kart.add(Finish::Cloth, &capsule(0.15, 0.26), torso, suit);
@@ -441,9 +452,14 @@ fn driver(kart: &mut Sorted, livery: Livery) {
     kart.add(Finish::Satin, &capsule(0.152, 0.2), ribs, BLACK);
     // A band of the second colour across the chest.
     let band = at(0.0, 0.5, -0.27).with_rotation(Quat::from_rotation_x(-0.38)).with_scale(Vec3::new(1.12, 0.25, 0.75));
-    kart.add(Finish::Cloth, &capsule(0.152, 0.0), band, panels);
-    // The collar, in the second colour, as race suits have it.
+    kart.add(Finish::Cloth, &capsule(0.152, 0.0), band, livery.second);
+    // The collar, in the team's colour, and over it the black foam neck
+    // brace karting drivers wear, on which the helmet rests.
     kart.add(Finish::Cloth, &capsule(0.08, 0.0), at(0.0, 0.69, -0.28).with_scale(Vec3::new(1.0, 0.6, 1.0)), panels);
+    let brace = Shape::new(
+        Torus { minor_radius: 0.035, major_radius: 0.105 }.mesh().minor_resolution(10).major_resolution(24).build(),
+    );
+    kart.add(Finish::Satin, &brace, at(0.0, 0.725, -0.275).with_scale(Vec3::new(1.15, 1.0, 1.05)), BLACK);
     let leaning = Quat::from_rotation_x(-0.38);
     // Side panels down the torso.
     for side in [-1.0f32, 1.0] {
@@ -499,6 +515,14 @@ fn helmet(livery: Livery) -> Part {
     let shell = Transform::from_scale(Vec3::new(1.0, 1.0, 1.12));
     // A shade deeper than the bodywork: a varnished dome reflects the sky and pales.
     part.add(Finish::Varnish, &Shape::lathe(&profile, 28), shell, livery.main * 0.8);
+    // Its lower half in the second colour, as helmet painters split them,
+    // with a black rubber trim round the opening.
+    let lower = Shape::gore(&profile[..4], 28, 0.0, TAU);
+    part.add(Finish::Varnish, &lower, shell * Transform::from_scale(Vec3::splat(1.006)), livery.second);
+    let trim = Shape::new(
+        Torus { minor_radius: 0.012, major_radius: 0.105 }.mesh().minor_resolution(8).major_resolution(28).build(),
+    );
+    part.add(Finish::Rubber, &trim, shell * at(0.0, 0.012, 0.0), BLACK);
     // A stripe over the top, front to back.
     let stripe = Shape::gore(&profile[3..], 4, FRAC_PI_2 - 0.2, 0.4);
     part.add(Finish::Varnish, &stripe, shell * Transform::from_scale(Vec3::splat(1.01)), livery.second);
@@ -563,7 +587,13 @@ mod tests {
     use super::*;
 
     fn livery() -> Livery {
-        Livery { main: Vec3::new(0.9, 0.2, 0.15), second: WHITE, frame: Vec3::new(0.8, 0.8, 0.82), number: 47 }
+        Livery {
+            main: Vec3::new(0.9, 0.2, 0.15),
+            second: WHITE,
+            frame: Vec3::new(0.8, 0.8, 0.82),
+            suit: Vec3::splat(0.15),
+            number: 47,
+        }
     }
 
     fn bounds(part: &Part) -> (Vec3, Vec3) {

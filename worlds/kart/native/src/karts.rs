@@ -83,7 +83,13 @@ fn livery(colour: usize) -> Livery {
     let frame = if colour.is_multiple_of(2) { Vec3::new(0.8, 0.81, 0.83) } else { main * 0.7 };
     // Each colour has its number, as a team keeps it season after season.
     let number = [7, 12, 23, 31, 44, 58, 66, 89][colour % 8];
-    Livery { main, second, frame, number }
+    // Suits: anthracite, white, or a deep shade of the team's colour.
+    let suit = match colour % 3 {
+        0 => Vec3::new(0.13, 0.13, 0.15),
+        1 => Vec3::new(0.88, 0.88, 0.86),
+        _ => main * 0.45,
+    };
+    Livery { main, second, frame, suit, number }
 }
 
 /// Children with the meshes of `part`, each in its finish's material.
