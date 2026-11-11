@@ -33,6 +33,8 @@ pub const SUN: f32 = lux::DIRECT_SUNLIGHT;
 const VISIBILITY: f32 = 6000.0;
 /// Around the sun's centre, what is the sun: degrees.
 const SUN_RADIUS: f32 = 2.5;
+/// The light from the sky is at most this many times the sky's median.
+const CEILING: f32 = 6.0;
 
 /// An equirectangular photograph of the sky in linear light: `width` by
 /// `height` pixels, row by row from straight up down to straight down;
@@ -145,6 +147,10 @@ struct Analysis<'a> {
     sun_colour: Vec3,
     /// The sky's colour just around the sun: what stands in for it.
     around_sun: Vec3,
+    /// The brightest the light from the sky may be, in units of the
+    /// panorama: a few times its median. The glow around the sun, outside
+    /// its disc, would otherwise light glossy things like a second sun.
+    ceiling: f32,
     /// cd/m² for one unit of the panorama.
     scale: f32,
     /// What the sun gives a surface facing it, in units of the panorama.
@@ -207,6 +213,13 @@ impl<'a> Analysis<'a> {
             }
         }
         let around_sun = ring / ring_weight.max(1e-9);
+        let mut upper: Vec<f32> = (0..h / 2)
+            .step_by(4)
+            .flat_map(|y| (0..w).step_by(4).map(move |x| (x, y)))
+            .map(|(x, y)| luminance(pixel(x, y)))
+            .collect();
+        upper.sort_by(f32::total_cmp);
+        let ceiling = CEILING * upper.get(upper.len() / 2).copied().unwrap_or(1.0).max(1e-6);
         // The sun's own light: what is above the sky around it, within its circle.
         let inner_area = std::f32::consts::TAU * (1.0 - cos_inner);
         let excess = (sun - around_sun * inner_area).max(Vec3::ZERO);
@@ -219,6 +232,7 @@ impl<'a> Analysis<'a> {
             to_sun: turn * sun_direction.normalize_or(centre),
             sun_colour: excess / sun_illuminance,
             around_sun,
+            ceiling,
             scale: SUN / sun_illuminance,
             sun_illuminance,
             sky_illuminance,
@@ -257,6 +271,8 @@ impl<'a> Analysis<'a> {
         let d = d.normalize();
         let sky =
             if d.dot(self.to_sun) > (1.5 * SUN_RADIUS).to_radians().cos() { self.around_sun } else { self.sample(d) };
+        let bright = luminance(sky);
+        let sky = if bright > self.ceiling { sky * (self.ceiling / bright) } else { sky };
         if d.y >= 0.0 {
             return sky;
         }
@@ -364,6 +380,33 @@ mod tests {
         // No jump at the horizon.
         let (above, below) = (green.light(Vec3::new(1.0, 1e-3, 0.0)), green.light(Vec3::new(1.0, -1e-3, 0.0)));
         assert!(above.distance(below) < 0.1 * luminance(above), "{above} {below}");
+    }
+
+    #[test]
+    fn the_glow_around_the_sun_lights_no_more_than_a_few_skies() {
+        let mut panorama = sky(40.0, 0.0);
+        // A glow ten degrees wide around the sun, a hundred times the sky.
+        let sun = Vec3::new(0.0, 40f32.to_radians().sin(), -40f32.to_radians().cos());
+        let (w, h) = (panorama.width, panorama.height);
+        for y in 0..h {
+            for x in 0..w {
+                let longitude = (x as f32 + 0.5) / w as f32 * std::f32::consts::TAU - std::f32::consts::PI;
+                let latitude = std::f32::consts::FRAC_PI_2 - (y as f32 + 0.5) / h as f32 * std::f32::consts::PI;
+                let d = Vec3::new(latitude.cos() * longitude.sin(), latitude.sin(), -latitude.cos() * longitude.cos());
+                let angle = d.angle_between(sun).to_degrees();
+                if angle > 4.0 && angle < 10.0 {
+                    panorama.pixels[y * w + x] = [100.0; 3];
+                }
+            }
+        }
+        let analysis = Analysis::of(&panorama, Vec3::splat(0.2));
+        let glow = Quat::from_rotation_x(7f32.to_radians()) * analysis.to_sun;
+        assert!(luminance(analysis.sample(glow)) > 50.0, "the glow is in the sky seen");
+        assert!(luminance(analysis.light(glow)) <= analysis.ceiling * 1.001, "but not as bright in its light");
+        assert!(
+            (luminance(analysis.light(Vec3::Y)) - luminance(analysis.sample(Vec3::Y))).abs() < 1e-3,
+            "the sky overhead is untouched"
+        );
     }
 
     #[test]
