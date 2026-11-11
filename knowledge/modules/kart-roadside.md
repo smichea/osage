@@ -24,7 +24,7 @@ One pure function, `scatters`, from the land ([osage-kart-land](/modules/kart-la
 
 # Interfaces
 
-`Models::load(server)`, `Models::trees(server)` (the trees alone, for the woods), `Detail`, `scatters(land, frames, track, clearings, models, detail)`, `woods(land, frames, track, clearings, models, from)` and `WOODS_FROM` (110 m, where modelled trees stand nearer; a client with nothing nearer may bring the woods closer), `carpet(land, frames, track, models)`: grass around the camera, mown short on the verges, tall beyond the wall, none on the road, kerbs, wall, gravel traps or in the lake. All the grass is lit as the ground it grows from, in the meadow's green.
+`Models::load(server)`, `Models::trees(server)` (the trees alone, for the woods), `Detail`, `scatters(land, frames, track, clearings, models, detail)`, `woods(land, frames, track, clearings, models, from)` and `WOODS_FROM` (110 m, where modelled trees stand nearer; a client with nothing nearer may bring the woods closer), `carpet(land, frames, track, models)`: grass around the camera, mown short on the verges, tall beyond the wall, none on the road, kerbs, wall, gravel traps or in the lake. `meadow_carpet(land, track, models)`: clumps of tall grass beyond the wall, one a metre out to 36 m, so that the meadow has relief where the near carpet ends. All the grass is lit as the ground it grows from, in the meadow's green.
 
 # Invariants
 

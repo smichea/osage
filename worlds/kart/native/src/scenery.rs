@@ -221,6 +221,7 @@ pub fn build(
             }
             let carpet = osage_kart_roadside::carpet(&land, &frames, track, &roadside.models);
             commands.spawn((Part, carpet));
+            commands.spawn((Part, osage_kart_roadside::meadow_carpet(&land, track, &roadside.models)));
             // Woods off the circuit: thousands of trees, drawn as cards.
             let from = osage_kart_roadside::WOODS_FROM;
             for woods in osage_kart_roadside::woods(&land, &frames, track, &set.clearings, &roadside.models, from) {

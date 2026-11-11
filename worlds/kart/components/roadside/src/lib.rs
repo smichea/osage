@@ -353,6 +353,26 @@ pub fn carpet(land: &Land, frames: &[Frame], track: &Track, models: &Models) -> 
     }
 }
 
+/// Clumps of tall grass in the meadows beyond the wall, one in each metre
+/// out to 36 m around the camera: the meadow has relief where the near
+/// carpet ends, before its texture alone carries it.
+pub fn meadow_carpet(land: &Land, track: &Track, models: &Models) -> osage_props::Carpet {
+    let (land, wall) = (land.clone(), track.half_width + track.verge + BARRIER);
+    let ground = move |at: Vec2| -> Option<(f32, f32)> {
+        let distance = land.distance_to_track(at);
+        (distance > wall + 1.5 && !land.wet(at)).then(|| (land.height(at) - 0.03, 3.4))
+    };
+    osage_props::Carpet {
+        model: models.grass.clone(),
+        using: Use::Variants,
+        spacing: 1.0,
+        radius: 36.0,
+        ground: std::sync::Arc::new(ground),
+        tint: Some(GRASS),
+        lit_as_ground: true,
+    }
+}
+
 /// Tyres lying flat in stacks of three, two rows deep, along the inside of
 /// the barrier on the outside of every bend: where a kart that runs wide ends.
 fn tyre_walls(frames: &[Frame], track: &Track) -> Vec<Transform> {
