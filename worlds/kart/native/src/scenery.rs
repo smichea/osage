@@ -159,10 +159,11 @@ pub fn build(
         satin: satin.clone(),
     };
 
-    landmarks::start(&mut set, &mut props, &course.0, &land);
+    let photographed = osage_content::root().is_some();
+    landmarks::start(&mut set, &mut props, &course.0, &land, photographed);
     landmarks::lake(&mut set, &mut props, &land);
     // With the manifest's content, the circuit is photographed: no toys.
-    if osage_content::root().is_some() {
+    if photographed {
         let look = if let Some(roadside) = &roadside {
             let scatters =
                 osage_kart_roadside::scatters(&land, &frames, track, &set.clearings, &roadside.models, roadside.detail);

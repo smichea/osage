@@ -73,8 +73,10 @@ fn bunting(batch: &mut Batch, from: Vec3, to: Vec3, colours: &[(f32, f32, f32)])
 }
 
 /// The start: a gantry over the road with its lamps and banner, a grandstand
-/// full of people with flags above it, and the grid's clearing.
-pub fn start(set: &mut Set, props: &mut Props, circuit: &Circuit, land: &Land) {
+/// full of people with flags above it, and the grid's clearing. `real`: as a
+/// club circuit has them — a galvanised gantry, plastic seats on concrete
+/// tiers under a sheet-metal roof, spectators in everyday clothes, no flags.
+pub fn start(set: &mut Set, props: &mut Props, circuit: &Circuit, land: &Land, real: bool) {
     let track = &circuit.track;
     let (half, verge) = (track.half_width, track.verge);
     let (line, line_heading) = track.at(circuit.start);
@@ -90,7 +92,8 @@ pub fn start(set: &mut Set, props: &mut Props, circuit: &Circuit, land: &Land) {
         set.satin.add(&pillar, across_road * Transform::from_xyz(side * span / 2.0, 0.0, 0.0), steel);
     }
     let beam = Shape::block(Vec3::new(-span / 2.0 - 0.3, 6.0, -0.35), Vec3::new(span / 2.0 + 0.3, 7.2, 0.35));
-    set.satin.add_within(across_road.translation, &beam, across_road, Paint::plain(0.86, 0.12, 0.12));
+    let beam_paint = if real { Paint::shaded(0.62, 0.64, 0.66, 0.2) } else { Paint::plain(0.86, 0.12, 0.12) };
+    set.satin.add_within(across_road.translation, &beam, across_road, beam_paint);
     let banner = props.materials.add(StandardMaterial {
         base_color_texture: Some(props.images.add(track::chequers(24, 2, [245, 245, 245], [20, 20, 22]))),
         perceptual_roughness: 0.7,
@@ -131,6 +134,11 @@ pub fn start(set: &mut Set, props: &mut Props, circuit: &Circuit, land: &Land) {
     let skins = [(0.98, 0.8, 0.66), (0.86, 0.64, 0.46), (0.62, 0.42, 0.28), (0.42, 0.28, 0.2)];
     let shirts: Vec<(f32, f32, f32)> =
         PALETTE.iter().copied().chain([(0.95, 0.95, 0.95), (0.95, 0.85, 0.2), (0.2, 0.25, 0.4)]).collect();
+    if real {
+        grandstand(set, stand, (front, back, length, tiers, depth, rise));
+        let _ = land;
+        return;
+    }
     for k in 0..tiers {
         let (x, y) = (front - k as f32 * depth, 0.3 + k as f32 * rise);
         let tier = Shape::block(
@@ -196,6 +204,109 @@ pub fn start(set: &mut Set, props: &mut Props, circuit: &Circuit, land: &Land) {
         props.commands.spawn((crate::scene::Part, Mesh3d(mesh), MeshMaterial3d(props.satin.clone()), stand));
     }
     let _ = land;
+}
+
+/// A club circuit's grandstand: concrete tiers with rows of plastic seats,
+/// a handrail at the front, a sheet-metal roof on steel posts, and people
+/// here and there in everyday clothes. `shape`: (front, back, length,
+/// tiers, depth, rise), with the tiers stepping away towards -X.
+fn grandstand(set: &mut Set, stand: Transform, shape: (f32, f32, f32, usize, f32, f32)) {
+    let (front, back, length, tiers, depth, rise) = shape;
+    let concrete = Paint::shaded(0.6, 0.6, 0.58, 0.3);
+    let steel = Paint::shaded(0.55, 0.57, 0.6, 0.2);
+    let seat_colour = Paint::plain(0.12, 0.27, 0.55);
+    let seat = Shape::block(Vec3::new(-0.2, 0.0, -0.21), Vec3::new(0.2, 0.06, 0.21));
+    let backrest = Shape::block(Vec3::new(-0.04, 0.0, -0.21), Vec3::new(0.04, 0.38, 0.21));
+    let torso = Shape::new(Capsule3d::new(0.17, 0.32).mesh().rings(2).latitudes(6).longitudes(10).build());
+    let head = Shape::new(Sphere::new(0.105).mesh().ico(2).expect("a small icosphere"));
+    let thigh = Shape::block(Vec3::new(0.0, -0.08, -0.17), Vec3::new(0.45, 0.07, 0.17));
+    let clothes = [
+        (0.12, 0.15, 0.24),
+        (0.85, 0.85, 0.83),
+        (0.25, 0.26, 0.28),
+        (0.55, 0.12, 0.1),
+        (0.62, 0.55, 0.42),
+        (0.08, 0.08, 0.09),
+        (0.3, 0.38, 0.52),
+        (0.4, 0.42, 0.3),
+    ];
+    let skins = [(0.86, 0.68, 0.56), (0.74, 0.55, 0.42), (0.52, 0.36, 0.25), (0.34, 0.23, 0.16)];
+    for k in 0..tiers {
+        let (x, y) = (front - k as f32 * depth, 0.3 + k as f32 * rise);
+        let tier = Shape::block(
+            Vec3::new(x - depth / 2.0, 0.0, -length / 2.0),
+            Vec3::new(x + depth / 2.0, y + rise / 2.0, length / 2.0),
+        );
+        set.satin.add_within(stand.translation, &tier, stand, concrete);
+        let step = y + rise / 2.0;
+        for place in 0..42 {
+            let z = -length / 2.0 + 0.7 + place as f32 * 1.02;
+            // Seats face the road (+X): the backrest behind, towards -X.
+            let at = stand * Transform::from_xyz(x + 0.15, step + 0.42, z);
+            set.satin.add_within(stand.translation, &seat, at, seat_colour);
+            set.satin.add_within(stand.translation, &backrest, at * Transform::from_xyz(-0.2, 0.0, 0.0), seat_colour);
+            if set.dice.roll() > 0.45 {
+                continue;
+            }
+            let (shirt, skin) = (set.dice.pick(&clothes), set.dice.pick(&skins));
+            let trousers = set.dice.pick(&clothes);
+            let lean = Quat::from_rotation_z(set.dice.between(-0.12, 0.05));
+            let seated = at * Transform::from_xyz(-0.05, 0.06, 0.0).with_rotation(lean);
+            set.matte.add_within(
+                stand.translation,
+                &torso,
+                seated * Transform::from_xyz(0.0, 0.33, 0.0),
+                Paint::shaded(shirt.0, shirt.1, shirt.2, 0.25),
+            );
+            set.matte.add_within(
+                stand.translation,
+                &head,
+                seated * Transform::from_xyz(0.02, 0.78, 0.0),
+                Paint::plain(skin.0, skin.1, skin.2),
+            );
+            set.matte.add_within(
+                stand.translation,
+                &thigh,
+                seated,
+                Paint::plain(trousers.0 * 0.8, trousers.1 * 0.8, trousers.2 * 0.8),
+            );
+            // Shins down to the tier in front.
+            let shin = Shape::block(Vec3::new(0.38, -0.5, -0.15), Vec3::new(0.5, 0.0, 0.15));
+            set.matte.add_within(
+                stand.translation,
+                &shin,
+                seated,
+                Paint::plain(trousers.0 * 0.7, trousers.1 * 0.7, trousers.2 * 0.7),
+            );
+        }
+    }
+    // A handrail along the front.
+    for z in [-length / 2.0, length / 2.0] {
+        let post = rod(Vec3::new(front + 0.9, 0.0, z), Vec3::new(front + 0.9, 1.05, z), 0.03);
+        set.satin.add_within(stand.translation, &post, stand, steel);
+    }
+    let rail = rod(Vec3::new(front + 0.9, 1.05, -length / 2.0), Vec3::new(front + 0.9, 1.05, length / 2.0), 0.03);
+    set.satin.add_within(stand.translation, &rail, stand, steel);
+    // A sheet-metal roof on steel posts, sloping to the back.
+    let top = tiers as f32 * rise + 3.4;
+    for z in [-length / 2.0, -length / 6.0, length / 6.0, length / 2.0] {
+        let post = rod(Vec3::new(back + 0.2, 0.0, z), Vec3::new(back + 0.2, top + 0.4, z), 0.12);
+        set.satin.add_within(stand.translation, &post, stand, steel);
+    }
+    let roof = [
+        Vec3::new(back - 0.6, top + 0.5, -length / 2.0 - 0.6),
+        Vec3::new(back - 0.6, top + 0.5, length / 2.0 + 0.6),
+        Vec3::new(front + 1.6, top + 0.1, length / 2.0 + 0.6),
+        Vec3::new(front + 1.6, top + 0.1, -length / 2.0 - 0.6),
+    ];
+    set.satin.add_within(stand.translation, &Shape::faces(&[&roof], true), stand, Paint::shaded(0.66, 0.68, 0.7, 0.15));
+    // Its ribs, every metre.
+    let mut z = -length / 2.0 - 0.5;
+    while z < length / 2.0 + 0.6 {
+        let rib = rod(Vec3::new(back - 0.6, top + 0.53, z), Vec3::new(front + 1.6, top + 0.13, z), 0.025);
+        set.satin.add_within(stand.translation, &rib, stand, Paint::plain(0.6, 0.62, 0.64));
+        z += 1.0;
+    }
 }
 
 /// At the bends: tyre stacks along the outer barrier, chevron boards behind it.
