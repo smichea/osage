@@ -10,6 +10,7 @@ import { create, toBinary } from "@bufbuild/protobuf";
 import { World, components, connect, hello, types, v0 } from "@osage/sdk";
 import * as THREE from "three";
 import {
+  ChoiceSchema,
   ControlsSchema,
   KartStateSchema,
   Phase,
@@ -20,6 +21,7 @@ import {
   RacerSchema,
   type Record as KartRecord,
   RecordsSchema,
+  RosterSchema,
   TrackSchema,
 } from "./gen/kart/v1/kart_pb.js";
 import { Input } from "./input.js";
@@ -34,6 +36,8 @@ const KART = {
   track: "kart.track/1",
   race: "kart.race/1",
   records: "kart.records/1",
+  choice: "kart.choice/1",
+  roster: "kart.roster/1",
 };
 
 const $ = (id: string) => document.getElementById(id)!;
@@ -68,6 +72,8 @@ const clock = (ms: number) => `${Math.floor(ms / 60000)}:${((ms / 1000) % 60).to
 
 interface Shown {
   view: KartView;
+  /** The palette colour it is painted in: its driver's (D-055). */
+  color: number;
   /** Where it is drawn, gliding towards the server's latest state. */
   x: number;
   z: number;
@@ -128,6 +134,11 @@ try {
     return `<hr><b>Records</b><br><small>best laps</small>${rows(value.laps)}${races}`;
   };
   const state = (entity: bigint): KartValues | undefined => world.get(entity, KART.state, KartStateSchema);
+  // The kart as its own driver built it (D-055): what the predictor steps.
+  const built = (entity: bigint, kart: KartValues): KartValues => {
+    const b = racer(entity)?.build;
+    return b ? { ...kart, top: b.top, accel: b.accel, handling: b.handling, grip: b.grip, weight: b.weight } : kart;
+  };
   const finished = (entity: bigint) => (racer(entity)?.finishMs ?? 0n) > 0n;
 
   session.onMessage((message) => {
@@ -147,13 +158,13 @@ try {
         const who = racer(event.entity);
         const kart = state(event.entity);
         if (who && kart) {
-          const shown = { view: buildKart(who.color), x: kart.x, z: kart.z, heading: kart.heading };
+          const shown = { view: buildKart(who.color), color: who.color, x: kart.x, z: kart.z, heading: kart.heading };
           karts.set(event.entity, shown);
           scene.add(shown.view.root);
           if (world.get(event.entity, types.controller, components.ControllerSchema)?.perWorldId === me) {
             mine = event.entity;
             predictor = new Predictor(physics);
-            predictor.reconcile(kart, 0n);
+            predictor.reconcile(built(event.entity, kart), 0n);
           }
         }
       } else if (event.kind === "left") {
@@ -163,7 +174,7 @@ try {
         if (event.entity === mine) [mine, predictor] = [undefined, undefined];
       } else if (event.kind === "changed" && event.typeName === KART.state && event.entity === mine && predictor) {
         const server = world.get(event.entity, KART.state, KartStateSchema)!;
-        predictor.reconcile(server, server.applied);
+        predictor.reconcile(built(event.entity, server), server.applied);
       }
     }
   });
@@ -188,7 +199,64 @@ try {
     if (mine !== undefined && now?.phase === Phase.READY && now.host === mine) [call, callsLeft] = [RaceCall.START, 6];
   };
   addEventListener("keydown", (event) => event.key === "Enter" && startRace());
-  $("banner").addEventListener("click", (event) => (event.target as HTMLElement).id === "start" && startRace());
+  $("banner").addEventListener("click", (event) => {
+    const id = (event.target as HTMLElement).id;
+    if (id === "start") startRace();
+    const turns: Record<string, [number, number]> = {
+      "driver-back": [-1, 0],
+      "driver-on": [1, 0],
+      "kart-back": [0, -1],
+      "kart-on": [0, 1],
+    };
+    if (turns[id]) choose(...turns[id]);
+  });
+
+  /** The driver and kart picked here (D-055), as indices into the world's roster. */
+  let chosen: [number, number] | undefined;
+  const roster = () => {
+    for (const entity of world.entities()) {
+      const found = world.get(entity, KART.roster, RosterSchema);
+      if (found) return found;
+    }
+  };
+  const between = () => [Phase.WAITING, Phase.READY, Phase.FINISHED].includes(race()?.phase ?? Phase.UNSPECIFIED);
+  /** Picks the next or previous driver or kart; on the grid the world changes the kart at once. */
+  function choose(driver: number, kart: number) {
+    const list = roster();
+    const choiceType = world.typeId(KART.choice);
+    if (mine === undefined || !list || choiceType === undefined || !between()) return;
+    const me = racer(mine);
+    const at = (ids: string[], id = "") => Math.max(0, ids.indexOf(id));
+    const [d, k] = chosen ?? [at(list.drivers.map((d) => d.id), me?.driver), at(list.karts.map((k) => k.id), me?.kart)];
+    const turn = (i: number, by: number, of: number) => (((i + by) % of) + of) % of;
+    chosen = [turn(d, driver, list.drivers.length), turn(k, kart, list.karts.length)];
+    const choice = create(ChoiceSchema, { driver: list.drivers[chosen[0]].id, kart: list.karts[chosen[1]].id });
+    session.sendIntent(0n, mine, choiceType, toBinary(ChoiceSchema, choice));
+  }
+  addEventListener("keydown", (event) => {
+    if (!between() || event.repeat) return;
+    const turns: Record<string, [number, number]> = {
+      ArrowLeft: [-1, 0],
+      ArrowRight: [1, 0],
+      ArrowUp: [0, -1],
+      ArrowDown: [0, 1],
+    };
+    if (turns[event.key]) choose(...turns[event.key]);
+  });
+  /** Who drives my kart and in what, with buttons to change it. */
+  const pick = () => {
+    const list = roster();
+    const me = mine !== undefined ? racer(mine) : undefined;
+    if (!list || !me) return "";
+    const driver = chosen ? list.drivers[chosen[0]] : list.drivers.find((d) => d.id === me.driver);
+    const kart = chosen ? list.karts[chosen[1]] : list.karts.find((k) => k.id === me.kart);
+    if (!driver || !kart) return "";
+    return (
+      `<hr><button id="driver-back">◀</button> <b>${driver.name}</b> (${driver.class}) <button id="driver-on">▶</button>` +
+      `<br><small>${driver.about}</small><br>` +
+      `<button id="kart-back">◀</button> <b>${kart.name}</b> <button id="kart-on">▶</button><br><small>${kart.about}</small>`
+    );
+  };
 
   /** The frame's steps to the world, in one message. */
   function send(fresh: number) {
@@ -209,6 +277,13 @@ try {
     for (const [entity, shown] of karts) {
       const server = state(entity);
       if (!server) continue;
+      // Another driver, another colour: the kart is built again in it.
+      const color = racer(entity)?.color;
+      if (color !== undefined && color !== shown.color) {
+        scene.remove(shown.view.root);
+        [shown.view, shown.color] = [buildKart(color), color];
+        scene.add(shown.view.root);
+      }
       let target = { x: server.x, z: server.z, heading: server.heading };
       let effects: KartValues = server;
       if (entity === mine && predictor?.kart && !finished(entity)) {
@@ -288,23 +363,27 @@ try {
     }
 
     const banner = $("banner");
+    // Rewritten only when it changes, so that its buttons take a click.
+    const show = (html: string) => {
+      if (html !== shownBanner) [banner.innerHTML, shownBanner] = [html, html];
+    };
     if (now.phase === Phase.FINISHED) {
       const podium = rows.slice(0, 8).join("");
       const myName = mine !== undefined ? racer(mine)?.name : undefined;
-      banner.innerHTML = `<div class="panel"><b>Results</b> · next race in ${Math.max(0, Math.ceil(remaining / 1000))} s<hr>${podium}${records(myName)}</div>`;
+      show(`<div class="panel"><b>Results</b> · next race in ${Math.max(0, Math.ceil(remaining / 1000))} s<hr>${podium}${records(myName)}${pick()}</div>`);
     } else if (now.phase === Phase.READY) {
       const host = now.host === 0n ? undefined : racer(now.host)?.name;
-      banner.innerHTML =
-        mine !== undefined && now.host === mine
-          ? `<div class="panel"><b>Ready</b> · others can still join<br><button id="start">Start the race</button></div>`
-          : `<div class="panel">waiting for ${host ?? "the host"} to start the race…</div>`;
+      show(mine !== undefined && now.host === mine
+          ? `<div class="panel"><b>Ready</b> · others can still join<br><button id="start">Start the race</button>${pick()}</div>`
+          : `<div class="panel">waiting for ${host ?? "the host"} to start the race…${pick()}</div>`);
     } else if (now.phase === Phase.WAITING) {
-      banner.innerHTML = `<div class="panel">waiting for drivers…</div>`;
+      show(`<div class="panel">waiting for drivers…${pick()}</div>`);
     } else {
-      banner.innerHTML = "";
+      show("");
     }
   }
 
+  let shownBanner = "";
   let last = performance.now();
   let pending = 0;
   let sinceHud = 0;

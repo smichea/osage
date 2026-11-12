@@ -214,6 +214,8 @@ pub fn drive_among(
     track: &Track,
 ) -> Controls {
     let spot = field[me].spot;
+    // Its own kart's build (D-055): how fast it goes, how sharply it turns.
+    let build = kart.build.sanitized();
     let room = track.half_width - EDGE;
     let lateral = *mind.lateral.get_or_insert(spot.lateral);
     let others = || field.iter().enumerate().filter(move |(i, _)| *i != me).map(|(_, r)| r);
@@ -272,7 +274,7 @@ pub fn drive_among(
     for d in 0..=14 {
         let distance = 5.0 * d as f32;
         let (radius, _) = bend(track, spot.along + distance);
-        let corner = margin * TURN_RATE * (radius + 3.0);
+        let corner = margin * (TURN_RATE * build.handling) * (radius + 3.0);
         allowed = allowed.min(sqrtf(corner * corner + 2.0 * braking * distance));
     }
 
@@ -392,7 +394,7 @@ pub fn drive_among(
     let lateral = lateral + (wanted - lateral).clamp(-lane * DT, lane * DT);
     mind.lateral = Some(lateral);
 
-    let top = pace * MAX_SPEED + if kart.boost > 0.0 { 6.0 } else { 0.0 };
+    let top = pace * (MAX_SPEED * build.top) + if kart.boost > 0.0 { 6.0 } else { 0.0 };
     let tight = sharpest < 40.0 && at < 15.0;
     let mut controls =
         steer(kart, spot, lateral, top.min(allowed), allowed, temper.drifts && tight && mind.plan != Plan::Wait, track);
@@ -410,17 +412,18 @@ pub fn drive_among(
 /// knows nothing of the other karts.
 pub fn follow(kart: &Kart, pace: f32, line: f32, drift: bool, track: &Track) -> Controls {
     let spot = track.locate(kart.x, kart.z);
+    let build = kart.build.sanitized();
     let mut allowed = f32::INFINITY;
     let mut tight = false;
     for d in 0..=14 {
         let distance = 5.0 * d as f32;
         let (radius, _) = bend(track, spot.along + distance);
-        let corner = 0.77 * TURN_RATE * (radius + 3.0);
+        let corner = 0.77 * (TURN_RATE * build.handling) * (radius + 3.0);
         allowed = allowed.min(sqrtf(corner * corner + 2.0 * BRAKING * distance));
         tight |= radius < 40.0 && distance < 15.0;
     }
     let lateral = line.clamp(-1.0, 1.0) * (track.half_width - 1.5);
-    let top = pace.clamp(0.0, 1.0) * MAX_SPEED;
+    let top = pace.clamp(0.0, 1.0) * (MAX_SPEED * build.top);
     steer(kart, spot, lateral, top.min(allowed), allowed, drift && tight, track)
 }
 

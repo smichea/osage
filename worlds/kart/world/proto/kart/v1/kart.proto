@@ -116,6 +116,56 @@ message Racer {
   bool trailing = 10;
   // Seconds nothing on the track touches it for (a pit-crew push).
   float guard = 11;
+  // Added with D-055. Who is at the wheel and in what (kart.roster/1's ids),
+  // and the build they give the kart: a client predicting its own kart
+  // steps it with this build.
+  string driver = 12;
+  string kart = 13;
+  Build build = 14;
+}
+
+// How a kart is built (D-055): top speed, acceleration, handling, grip and
+// weight as shares of the standard kart's (1). Absent: the standard kart.
+message Build {
+  float top = 1;
+  float accel = 2;
+  float handling = 3;
+  float grip = 4;
+  float weight = 5;
+}
+
+// kart.choice/1 — intent for your own kart (humans and agents alike): the
+// driver and the kart body to race with, by kart.roster/1's ids. On the grid
+// it changes the kart at once; during a race, from the next one. Kept for
+// the races that follow. An unknown id keeps what you had.
+message Choice {
+  string driver = 1;
+  string kart = 2;
+}
+
+// kart.roster/1 — on the race board: the drivers and kart bodies there are,
+// with the build each gives (a driver's for its weight class; a pair's is
+// the two multiplied).
+message Roster {
+  repeated RosterDriver drivers = 1;
+  repeated RosterKart karts = 2;
+}
+
+message RosterDriver {
+  string id = 1;
+  string name = 2;
+  // light, medium or heavy.
+  string class = 3;
+  uint32 color = 4;
+  string about = 5;
+  Build build = 6;
+}
+
+message RosterKart {
+  string id = 1;
+  string name = 2;
+  string about = 3;
+  Build build = 4;
 }
 
 enum Item {

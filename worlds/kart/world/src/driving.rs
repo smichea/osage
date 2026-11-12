@@ -18,6 +18,7 @@ use crate::{
     paddock::Items,
     proto::{self, Phase},
     race::{Calls, Progress, Race},
+    roster::Choices,
 };
 
 /// With more steps than this waiting, a kart catches up two steps a tick.
@@ -87,12 +88,27 @@ impl Pilot {
 
 pub fn intents(
     ids: Res<Ids>,
+    race: Res<Race>,
     mut intents: MessageReader<IntentReceived>,
     mut calls: ResMut<Calls>,
-    mut pilots: Query<(&mut Pilot, Option<&osage_world_module_api::Owner>)>,
+    mut choices: ResMut<Choices>,
+    mut pilots: Query<(&mut Pilot, Option<&osage_world_module_api::Owner>, &mut Body, &mut Progress)>,
 ) {
     for intent in intents.read() {
-        let Ok((mut pilot, owner)) = pilots.get_mut(intent.entity) else { continue };
+        let Ok((mut pilot, owner, mut body, mut progress)) = pilots.get_mut(intent.entity) else { continue };
+        // A driver and a kart, chosen: kept for the races that follow, and
+        // on the grid at once (D-055).
+        if intent.type_id == ids.choice
+            && let Some(owner) = owner
+        {
+            let Ok(choice) = proto::Choice::decode(intent.value.as_slice()) else { continue };
+            let pair = choices.take(owner.0, &choice);
+            if matches!(race.phase, Phase::Ready | Phase::Countdown | Phase::Waiting) {
+                body.0.build = osage_kart_roster::build(pair.0, pair.1);
+                progress.set_pair(pair);
+            }
+            continue;
+        }
         match &mut *pilot {
             Pilot::Human(steps) if intent.type_id == ids.controls => {
                 let Ok(controls) = proto::Controls::decode(intent.value.as_slice()) else { continue };

@@ -490,3 +490,38 @@ fn records_are_kept_beaten_and_survive_a_restart() {
     assert!(second.laps[0].ms < lap.ms && second.laps[0].fresh, "beaten: {second:?}");
     std::fs::remove_dir_all(&dir).unwrap();
 }
+
+/// Drivers and karts (kart.choice/1, D-055): on the grid a choice changes
+/// the kart at once, its racer says who drives in what with the build it
+/// gives; an unknown id keeps what was there; the choice holds for the next
+/// race; the roster lists everyone.
+#[test]
+fn a_driver_chooses_who_drives_and_in_what() {
+    let mut harness = Harness::new(KartWorld { grid: 3, laps: 1, host_starts: true, records: None }, TICK_HZ);
+    let mut alice = Client::join(&mut harness, SessionKind::Human, Role::Player, "alice");
+    run_until(&mut harness, &mut alice, 5, |c| phase(&c.race()) == proto::Phase::Ready);
+    let (entity, before, _) = alice.kart_of("alice");
+    assert_eq!((before.driver.as_str(), before.kart.as_str()), ("nova", "classic"), "the default");
+    let board = alice.world.entities().find(|&e| alice.world.get::<proto::Race>(e, types::RACE).is_some()).unwrap();
+    let roster: proto::Roster = alice.world.get(board, types::ROSTER).expect("the roster on the race board");
+    assert_eq!((roster.drivers.len(), roster.karts.len()), (8, 4));
+
+    let choice_type = alice.world.types().id(types::CHOICE).unwrap();
+    let chosen = proto::Choice { driver: "bolt".into(), kart: "cruiser".into() };
+    harness.send(alice.session, intent(1, entity, choice_type, &chosen));
+    harness.run(2);
+    let (_, after, _) = alice.kart_of("alice");
+    assert_eq!((after.driver.as_str(), after.kart.as_str()), ("bolt", "cruiser"));
+    let build = after.build.expect("a build");
+    assert!(build.weight > 1.2 && build.accel < 0.85 && build.top > 1.01, "heavy in a cruiser: {build:?}");
+    assert_ne!(after.color, before.color, "Bolt's colour");
+
+    // An unknown driver keeps Bolt; the kart changes.
+    let half = proto::Choice { driver: "nobody".into(), kart: "sprint".into() };
+    harness.send(alice.session, intent(2, entity, choice_type, &half));
+    harness.run(2);
+    let (_, now, _) = alice.kart_of("alice");
+    assert_eq!((now.driver.as_str(), now.kart.as_str()), ("bolt", "sprint"));
+    // The bots race as the roster's drivers.
+    assert!(alice.karts().iter().filter(|(_, r, _)| r.bot).all(|(_, r, _)| !r.driver.is_empty() && r.build.is_some()));
+}

@@ -26,6 +26,8 @@ pub const TRACK: &str = "paddock";
 pub struct Timed {
     pub name: String,
     pub bot: bool,
+    /// The driver and kart it was set with.
+    pub pair: crate::roster::Pair,
     pub event: Event,
     pub ms: u64,
 }
@@ -77,7 +79,8 @@ pub fn keep(
     let at = SystemTime::now().duration_since(UNIX_EPOCH).map_or(0, |d| d.as_secs());
     let mut entered = false;
     for time in times.0.drain(..).filter(|t| !t.bot) {
-        let record = Record { name: time.name.clone(), ms: time.ms, at, kart: String::new(), driver: String::new() };
+        let (kart, driver) = (time.pair.1.name.to_owned(), time.pair.0.name.to_owned());
+        let record = Record { name: time.name.clone(), ms: time.ms, at, kart, driver };
         if let Entered::At(_) = book.records.offer(TRACK, time.event, record) {
             book.fresh.insert((time.event, time.name));
             entered = true;

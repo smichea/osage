@@ -75,6 +75,11 @@ fn field(kart: &mut Kart, i: u32) -> Option<&mut f32> {
         13 => &mut kart.stall,
         14 => &mut kart.draft,
         15 => &mut kart.held,
+        16 => &mut kart.build.top,
+        17 => &mut kart.build.accel,
+        18 => &mut kart.build.handling,
+        19 => &mut kart.build.grip,
+        20 => &mut kart.build.weight,
         _ => return None,
     })
 }

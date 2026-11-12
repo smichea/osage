@@ -29,6 +29,12 @@ export interface KartValues {
   draft?: number;
   /** 1 when the drift button was held at the last step. */
   held?: number;
+  /** How the kart is built (D-055), shares of the standard kart's: 1 when absent. */
+  top?: number;
+  accel?: number;
+  handling?: number;
+  grip?: number;
+  weight?: number;
 }
 
 /** The fields of a kart, in the order the WebAssembly physics numbers them. */
@@ -36,6 +42,8 @@ const FIELDS = [
   "x", "z", "heading", "speed", "slide", "drift", "charge", "boost", "spin",
   "rocket", "height", "climb", "trick", "stall", "draft", "held",
 ] as const;
+/** Then the build's, numbered on from the state's; 1 when not given. */
+const BUILD = ["top", "accel", "handling", "grip", "weight"] as const;
 
 /** A crest across the road, as in `kart.track/1` (D-051). */
 export interface CrestValues {
@@ -95,9 +103,11 @@ export class Physics {
   step(k: KartValues, d: Drive): KartValues {
     const w = this.wasm;
     FIELDS.forEach((name, i) => w.kart_set(i, k[name] ?? 0));
+    BUILD.forEach((name, i) => w.kart_set(FIELDS.length + i, k[name] ?? 1));
     w.kart_step(d.throttle, d.steer, d.drift ? 1 : 0);
-    const out = {} as Record<(typeof FIELDS)[number], number>;
+    const out = {} as Record<(typeof FIELDS)[number] | (typeof BUILD)[number], number>;
     FIELDS.forEach((name, i) => (out[name] = w.kart_get(i)));
+    BUILD.forEach((name, i) => (out[name] = w.kart_get(FIELDS.length + i)));
     return out;
   }
 }

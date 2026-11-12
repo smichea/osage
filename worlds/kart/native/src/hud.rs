@@ -53,6 +53,8 @@ pub struct RaceView {
     pub alone: bool,
     /// The world's records on this track (D-053): best laps, best races.
     pub records: Records,
+    /// Who drives the player's kart and in what, and how to change it (D-055).
+    pub pick: String,
 }
 
 /// The world's records as the HUD shows them.
@@ -404,9 +406,10 @@ fn write(
             Label::Prompt => match view.stage {
                 Lights::Ready(true) => {
                     tint = Some(Color::srgb(1.0, 0.85, 0.3));
-                    "Press Enter to start the race\n(others can still join)".to_owned()
+                    format!("Press Enter to start the race\n(others can still join)\n\n{}", view.pick)
                 }
-                Lights::Ready(false) => format!("Waiting for {} to start the race", view.host),
+                Lights::Ready(false) => format!("Waiting for {} to start the race\n\n{}", view.host, view.pick),
+                Lights::Waiting | Lights::Results(_) => view.pick.clone(),
                 Lights::Count(_) if me.is_some() => "Throttle as the lights go out, not before".to_owned(),
                 _ => String::new(),
             },

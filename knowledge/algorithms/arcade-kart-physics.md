@@ -66,6 +66,8 @@ The values that make the feel, in one place: what to change, and the oracle that
 | Start | `LAUNCH_WINDOW`, `LAUNCH_EARLY` | 0.4 s, 1.5 s | an easier boost; a later stall |
 | Barriers | `WALL_RESTITUTION`, `WALL_FRICTION` | 0.2, 0.3 | more bounce; more scrape |
 
+Builds (D-055): a kart's top speed and boost speed, acceleration, turn rates (driving and drifting) and grip (driving and drifting) are the table's values times its build's shares; its weight is a mass in contacts, so that the impulse between two karts moves each by its inverse mass (yaw included) and momentum is kept. The shares are clamped narrowly: a build is a character, not another vehicle.
+
 # Invariants
 
 Every operation is a floating-point add, multiply, compare, or a `libm` function: the result is the same on every platform. Controls are sanitised first.

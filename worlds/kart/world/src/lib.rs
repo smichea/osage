@@ -12,6 +12,7 @@ mod driving;
 mod paddock;
 mod race;
 mod records;
+mod roster;
 
 use bevy::prelude::*;
 use osage_kart_physics::Kart;
@@ -26,8 +27,21 @@ pub mod proto {
 }
 
 /// Encoded descriptor set of the kart messages.
+/// How a kart is built, from its `kart.racer/1` (D-055): the standard kart
+/// when the racer says nothing.
+pub fn build_of(racer: &proto::Racer) -> osage_kart_physics::Build {
+    racer.build.as_ref().map_or(osage_kart_physics::Build::STANDARD, |b| osage_kart_physics::Build {
+        top: b.top,
+        accel: b.accel,
+        handling: b.handling,
+        grip: b.grip,
+        weight: b.weight,
+    })
+}
+
 /// A kart's physics state from its `kart.state/1`: what a predicting
-/// client restarts from.
+/// client restarts from, with the standard build — set its own from its
+/// racer ([`build_of`]).
 pub fn kart_of(state: &proto::KartState) -> osage_kart_physics::Kart {
     osage_kart_physics::Kart {
         x: state.x,
@@ -46,6 +60,7 @@ pub fn kart_of(state: &proto::KartState) -> osage_kart_physics::Kart {
         stall: state.stall,
         draft: state.draft,
         held: state.held,
+        build: osage_kart_physics::Build::STANDARD,
     }
 }
 
@@ -61,6 +76,8 @@ pub mod types {
     pub const RACE: &str = "kart.race/1";
     pub const PADDOCK: &str = "kart.paddock/1";
     pub const RECORDS: &str = "kart.records/1";
+    pub const CHOICE: &str = "kart.choice/1";
+    pub const ROSTER: &str = "kart.roster/1";
 }
 
 /// The kart world; runs at 60 ticks per second, one physics step per tick.
@@ -98,6 +115,7 @@ impl Plugin for KartWorld {
             .init_resource::<race::Race>()
             .init_resource::<race::Drivers>()
             .init_resource::<records::Times>()
+            .init_resource::<roster::Choices>()
             .insert_resource(records::Book::open(self.records.clone()))
             .add_systems(Startup, setup)
             .add_systems(
@@ -159,6 +177,20 @@ impl WorldModule for KartWorld {
                  Autopilot.use_items) and what karts left on the track: rolling tyres, cones, oil.",
             ),
             spec(
+                types::CHOICE,
+                "Choice",
+                false,
+                "Intent for your own kart: the driver and kart body to race with (ids from kart.roster/1). \
+                 On the grid it changes your kart at once; during a race, from the next one.",
+            ),
+            spec(
+                types::ROSTER,
+                "Roster",
+                false,
+                "The drivers (light, medium, heavy) and kart bodies there are, each with the build it gives: \
+                 top speed, acceleration, handling, grip and weight as shares of the standard kart's.",
+            ),
+            spec(
                 types::RECORDS,
                 "Records",
                 false,
@@ -195,6 +227,7 @@ struct Ids {
     race: u32,
     paddock: u32,
     records: u32,
+    choice: u32,
 }
 
 /// The entity carrying `kart.race/1`.
@@ -223,6 +256,7 @@ fn setup(
         race: id(types::RACE),
         paddock: id(types::PADDOCK),
         records: id(types::RECORDS),
+        choice: id(types::CHOICE),
     };
     commands.insert_resource(kart);
     commands.spawn((
@@ -234,7 +268,7 @@ fn setup(
     commands.spawn((
         ids.next_id(),
         Transform::default(),
-        Discrete::default().with(kart.race, &board),
+        Discrete::default().with(kart.race, &board).with(id(types::ROSTER), &roster::to_proto()),
         Volatile::default(),
         RaceBoard,
     ));

@@ -64,9 +64,13 @@ impl Plugin for PlayPlugin {
             .insert_resource(Driver { autodrive: self.autodrive, ..default() })
             .insert_resource(Shots { after: self.screenshot_after.clone() })
             .init_resource::<CallWanted>()
+            .init_resource::<Chosen>()
             .add_plugins((HudPlugin, PaddockPlugin))
             .add_systems(FixedUpdate, drive)
-            .add_systems(Update, (receive, send, poses, follow_someone, summarise).chain().in_set(Stage::Simulate))
+            .add_systems(
+                Update,
+                (receive, choose, send, poses, follow_someone, summarise).chain().in_set(Stage::Simulate),
+            )
             .add_systems(Update, screenshots);
     }
 }
@@ -96,6 +100,7 @@ struct Replica {
     mine: Option<u64>,
     followed: Option<Entity>,
     controls_type: Option<u32>,
+    choice_type: Option<u32>,
     /// The world's clock minus ours, microseconds.
     clock_offset: i64,
     status: String,
@@ -114,6 +119,11 @@ impl Replica {
     fn records(&self) -> Option<proto::Records> {
         let world = self.world.as_ref()?;
         world.entities().find_map(|entity| world.get(entity, types::RECORDS))
+    }
+
+    fn roster(&self) -> Option<proto::Roster> {
+        let world = self.world.as_ref()?;
+        world.entities().find_map(|entity| world.get(entity, types::ROSTER))
     }
 
     fn paddock(&self) -> Option<proto::Paddock> {
@@ -231,15 +241,27 @@ fn kart_of(state: &proto::KartState) -> Kart {
     osage_world_kart::kart_of(state)
 }
 
+/// The kart as its own driver built it (D-055): what the predictor steps.
+fn built(state: &proto::KartState, racer: Option<&proto::Racer>) -> Kart {
+    Kart { build: racer.map_or(osage_kart_physics::Build::STANDARD, osage_world_kart::build_of), ..kart_of(state) }
+}
+
 /// Applies what the world sent: the circuit, karts coming and going, and the
 /// state of this player's kart, which the predictor restarts from.
-fn receive(mut commands: Commands, inbox: Res<NetInbox>, mut replica: ResMut<Replica>, mut driver: ResMut<Driver>) {
+fn receive(
+    mut commands: Commands,
+    inbox: Res<NetInbox>,
+    mut replica: ResMut<Replica>,
+    mut driver: ResMut<Driver>,
+    poses: Query<&Pose>,
+) {
     for net in inbox.0.try_iter() {
         let message = match net {
             Net::Welcome(welcome, transport) => {
                 let world = World::new(&welcome);
                 replica.me = welcome.identity.as_ref().map(|i| i.per_world_id.clone()).unwrap_or_default();
                 replica.controls_type = world.types().id(types::CONTROLS);
+                replica.choice_type = world.types().id(types::CHOICE);
                 let descriptor = welcome.world.clone().unwrap_or_default();
                 // AGPL section 13: show where the server's Corresponding Source is.
                 let source = descriptor.source_offer.map(|s| format!("\nserver source: {} ({})", s.url, s.version));
@@ -291,7 +313,7 @@ fn receive(mut commands: Commands, inbox: Res<NetInbox>, mut replica: ResMut<Rep
                         *mine = Some(entity);
                         driver.predictor = Predictor::default();
                         if let Some(circuit) = circuit {
-                            driver.predictor.reconcile(kart, state.applied, &circuit.track);
+                            driver.predictor.reconcile(built(&state, Some(&racer)), state.applied, &circuit.track);
                         }
                     }
                 }
@@ -307,7 +329,20 @@ fn receive(mut commands: Commands, inbox: Res<NetInbox>, mut replica: ResMut<Rep
                     if let (Some(state), Some(circuit)) =
                         (world.get::<proto::KartState>(entity, types::STATE), &circuit)
                     {
-                        driver.predictor.reconcile(kart_of(&state), state.applied, &circuit.track);
+                        let racer = world.get::<proto::Racer>(entity, types::RACER);
+                        driver.predictor.reconcile(built(&state, racer.as_ref()), state.applied, &circuit.track);
+                    }
+                }
+                // Another driver, another colour (D-055): the kart's model
+                // is built again in it.
+                WorldEvent::Changed { entity, type_name } if type_name == types::RACER => {
+                    let Some(racer) = world.get::<proto::Racer>(entity, types::RACER) else { continue };
+                    let Some(&model) = karts.get(&entity) else { continue };
+                    let Ok(pose) = poses.get(model) else { continue };
+                    if pose.color != racer.color {
+                        let pose = Pose { color: racer.color, ..*pose };
+                        commands.entity(model).despawn();
+                        karts.insert(entity, commands.spawn((pose, Remote(entity))).id());
                     }
                 }
                 WorldEvent::Changed { .. } => {}
@@ -376,6 +411,73 @@ fn drive(
     let controls = controls.sanitized();
     driver.predictor.step(controls, using, &circuit.track);
     driver.fresh += 1;
+}
+
+/// The driver and kart this player picked (D-055), as indices into the
+/// world's roster; none until they pick.
+#[derive(Resource, Default)]
+struct Chosen(Option<(usize, usize)>);
+
+/// Between races, the player picks who drives and in what: left and right
+/// (or a pad's d-pad) the driver, up and down the kart. On the grid the world
+/// changes the kart at once; after a race, from the next one.
+fn choose(
+    replica: Res<Replica>,
+    outbox: Res<NetOutbox>,
+    keys: Res<ButtonInput<KeyCode>>,
+    gamepads: Query<&Gamepad>,
+    menu: Res<Menu>,
+    mut chosen: ResMut<Chosen>,
+) {
+    let (Some(mine), Some(choice_type), Some(roster)) = (replica.mine, replica.choice_type, replica.roster()) else {
+        return;
+    };
+    let between =
+        replica.race().is_some_and(|race| matches!(race.phase(), Phase::Waiting | Phase::Ready | Phase::Finished));
+    if !between || menu.0 || roster.drivers.is_empty() || roster.karts.is_empty() {
+        return;
+    }
+    let pressed = |key: KeyCode, button: GamepadButton| {
+        keys.just_pressed(key) || gamepads.iter().any(|pad| pad.just_pressed(button))
+    };
+    let by = |forward: bool, back: bool| i64::from(forward) - i64::from(back);
+    let driver = by(
+        pressed(KeyCode::ArrowRight, GamepadButton::DPadRight),
+        pressed(KeyCode::ArrowLeft, GamepadButton::DPadLeft),
+    );
+    let kart =
+        by(pressed(KeyCode::ArrowDown, GamepadButton::DPadDown), pressed(KeyCode::ArrowUp, GamepadButton::DPadUp));
+    if driver == 0 && kart == 0 {
+        return;
+    }
+    let (now_driver, now_kart) = chosen.0.unwrap_or_else(|| {
+        let racer = replica.racer(mine).unwrap_or_default();
+        let at = |ids: Vec<&str>, id: &str| ids.iter().position(|i| *i == id).unwrap_or(0);
+        (
+            at(roster.drivers.iter().map(|d| d.id.as_str()).collect(), &racer.driver),
+            at(roster.karts.iter().map(|k| k.id.as_str()).collect(), &racer.kart),
+        )
+    });
+    let turn = |at: usize, by: i64, of: usize| (at as i64 + by).rem_euclid(of as i64) as usize;
+    let picked = (turn(now_driver, driver, roster.drivers.len()), turn(now_kart, kart, roster.karts.len()));
+    chosen.0 = Some(picked);
+    let choice = proto::Choice { driver: roster.drivers[picked.0].id.clone(), kart: roster.karts[picked.1].id.clone() };
+    let _ = outbox.0.send(intent(0, mine, choice_type, &choice));
+}
+
+/// Who drives the player's kart and in what, as the HUD says it.
+fn pick(roster: Option<proto::Roster>, racer: Option<&proto::Racer>, chosen: Option<(usize, usize)>) -> String {
+    let (Some(roster), Some(racer)) = (roster, racer) else { return String::new() };
+    let driver = chosen
+        .and_then(|(d, _)| roster.drivers.get(d))
+        .or_else(|| roster.drivers.iter().find(|d| d.id == racer.driver));
+    let kart =
+        chosen.and_then(|(_, k)| roster.karts.get(k)).or_else(|| roster.karts.iter().find(|k| k.id == racer.kart));
+    let (Some(driver), Some(kart)) = (driver, kart) else { return String::new() };
+    format!(
+        "Left/Right  driver: {} ({})  -  {}\nUp/Down  kart: {}  -  {}",
+        driver.name, driver.class, driver.about, kart.name, kart.about
+    )
 }
 
 /// The frame's steps to the world, in one message.
@@ -477,6 +579,7 @@ fn screenshots(mut commands: Commands, time: Res<Time>, keys: Res<ButtonInput<Ke
 fn summarise(
     replica: Res<Replica>,
     driver: Res<Driver>,
+    chosen: Res<Chosen>,
     karts: Query<(&Remote, &Pose)>,
     mut view: ResMut<RaceView>,
     mut paddock: ResMut<PaddockView>,
@@ -494,6 +597,7 @@ fn summarise(
     view.count = racer.as_ref().map_or(0, |racer| racer.held_count.min(9) as u8);
     view.trailing = racer.as_ref().is_some_and(|racer| racer.trailing);
     view.guard = racer.as_ref().map_or(0.0, |racer| racer.guard);
+    view.pick = pick(replica.roster(), racer.as_ref(), chosen.0);
     let race = replica.race();
     let now = replica.world_time();
     let seconds_left = |race: &proto::Race| ((race.phase_ends_us as i64 - now) as f32 / 1e6).ceil() as i64;

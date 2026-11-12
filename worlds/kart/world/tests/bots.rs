@@ -47,3 +47,54 @@ fn eight_drivers_race_the_circuit_and_keep_to_the_road() {
     let mistakes: u32 = minds.iter().map(Mind::mistakes).sum();
     eprintln!("laps {laps:?}, grass {share}, mistakes {mistakes}");
 }
+
+/// D-055: every driver in every kart, alone on the circuit with a steady
+/// driver who never errs, laps within a few per cent of the standard
+/// kart, and keeps to the road: a build is a flavour, not a ladder.
+#[test]
+fn every_driver_in_every_kart_laps_within_a_band() {
+    use osage_kart_roster::{BODIES, DRIVERS, build};
+    let circuit = Circuit::new();
+    let track = &circuit.track;
+    let temper = Temper { consistency: 1.0, ..Temper::STEADY };
+    // Seconds for two laps from the grid: the first from a standing start.
+    let two_laps = |kart: osage_kart_physics::Kart| -> (f32, usize) {
+        let mut kart = kart;
+        let mut mind = Mind::new(1);
+        let (mut travelled, mut grass) = (0.0f32, 0usize);
+        let mut last = track.locate(kart.x, kart.z).along;
+        for i in 0..(150.0 / DT) as usize {
+            let field = field(track, &[kart]);
+            let controls = drive(&kart, 0, &field, &temper, &mut mind, track);
+            step(&mut kart, controls, track);
+            let along = track.locate(kart.x, kart.z).along;
+            let moved = (along - last).rem_euclid(track.length());
+            travelled += if moved > track.length() / 2.0 { moved - track.length() } else { moved };
+            last = along;
+            grass += wheels(&kart, track).contains(&Ground::Grass) as usize;
+            if travelled >= 2.0 * track.length() {
+                return (i as f32 * DT, grass);
+            }
+        }
+        panic!("two laps not done: {travelled}");
+    };
+    let (standard, _) = two_laps(circuit.grid_slot(0));
+    let mut times = Vec::new();
+    for d in &DRIVERS {
+        for b in &BODIES {
+            let (time, grass) = two_laps(osage_kart_physics::Kart { build: build(d, b), ..circuit.grid_slot(0) });
+            assert!(grass < 30, "{} in a {} ran wide: {grass} steps on the grass", d.name, b.name);
+            times.push((time, d.name, b.name));
+        }
+    }
+    times.sort_by(|a, b| a.0.total_cmp(&b.0));
+    let (fastest, slowest) = (times[0], times[times.len() - 1]);
+    eprintln!("standard {standard:.2} s; fastest {fastest:?}; slowest {slowest:?}");
+    for (time, driver, body) in &times {
+        eprintln!("  {driver:>6} {body:<8} {time:.2} s ({:+.1} %)", 100.0 * (time / standard - 1.0));
+    }
+    for (time, driver, body) in &times {
+        assert!((time / standard - 1.0).abs() < 0.02, "{driver} in a {body}: {time:.2} s against {standard:.2}");
+    }
+    assert!(slowest.0 - fastest.0 > 0.05, "the builds differ at all");
+}

@@ -23,18 +23,19 @@ One implementation of how a kart moves, shared by everything that must agree on 
 
 # Architecture
 
-A pure function `step(kart, controls, track)` and a `Track` that answers three questions: where a point is relative to the centre line (`locate`), where the centre line is at a distance from the start (`at`), what the ground is at a distance from it (`ground`), and how high the road is at a distance from the start (`lift`). The rules that involve several karts or the race are separate functions the world calls: `slipstream` and `launch`. Driving is arcade ([arcade kart physics](/algorithms/arcade-kart-physics.md)); contacts — between karts in `bump`, with the barriers at the end of `step` — are impulses ([capsule contacts](/algorithms/capsule-contacts.md), D-045). No state outside its arguments, no clock, no random numbers. A small WebAssembly interface exchanges numbers only, with no shared memory.
+A pure function `step(kart, controls, track)` and a `Track` that answers three questions: where a point is relative to the centre line (`locate`), where the centre line is at a distance from the start (`at`), what the ground is at a distance from it (`ground`), and how high the road is at a distance from the start (`lift`). The rules that involve several karts or the race are separate functions the world calls: `slipstream` and `launch`. Driving is arcade ([arcade kart physics](/algorithms/arcade-kart-physics.md)); contacts — between karts in `bump`, with the barriers at the end of `step` — are impulses ([capsule contacts](/algorithms/capsule-contacts.md), D-045), shared by mass between karts. A kart carries its `Build` (D-055): five shares of the standard kart's top speed, acceleration, handling, grip and weight, sanitised at each step; the standard build is the old kart bit for bit, and its drivers and bodies are [osage-kart-roster](/modules/kart-roster.md)'s. No state outside its arguments, no clock, no random numbers. A small WebAssembly interface exchanges numbers only, with no shared memory.
 
 # Interfaces
 
-`step`, `bump` (two karts collide), `slipstream`, `launch`, `turbo_level`, `wheels` (the ground under each wheel), `Kart::velocity`, `Track::new`, `Track::with_crests`, `Crest::profile`, `Track::locate`, `Track::at`, `Track::ground`, `Track::lift`, `Controls::sanitized`, `wrap`, and the constants `KART_REACH`, `KART_RADIUS`, `KERB`, `BARRIER`, `TURBO_CHARGES`, `TURBO_BOOSTS`, `GRAVITY`, `TRICK_BOOST`, `DRAFT_CHARGE`, `LAUNCH_WINDOW`, `LAUNCH_EARLY`; in WebAssembly `track_clear`, `track_point`, `track_crest`, `track_close`, `track_lift`, `kart_set`, `kart_step`, `kart_get` (a kart's sixteen fields by number, so that a new field changes no signature).
+`step`, `bump` (two karts collide), `slipstream`, `launch`, `turbo_level`, `wheels` (the ground under each wheel), `Kart::velocity`, `Track::new`, `Track::with_crests`, `Crest::profile`, `Track::locate`, `Track::at`, `Track::ground`, `Track::lift`, `Controls::sanitized`, `Build` (`STANDARD`, `sanitized`), `wrap`, and the constants `KART_REACH`, `KART_RADIUS`, `KERB`, `BARRIER`, `TURBO_CHARGES`, `TURBO_BOOSTS`, `GRAVITY`, `TRICK_BOOST`, `DRAFT_CHARGE`, `LAUNCH_WINDOW`, `LAUNCH_EARLY`; in WebAssembly `track_clear`, `track_point`, `track_crest`, `track_close`, `track_lift`, `kart_set`, `kart_step`, `kart_get` (a kart's fields by number, so that a new field changes no signature: sixteen of its state, then the build's five, 16 to 20).
 
 # Invariants
 
 - **Same bits everywhere.** Every non-trivial function comes from `libm`, steps are fixed, and controls are sanitised: the native and the WebAssembly builds give identical results. [The golden file](/oracles/physics-golden.md) proves it on every change.
 - Hostile controls (not a number, infinite, out of range) cannot produce a state that is not finite.
 - A kart's outline never ends a step beyond the barriers' face.
-- A contact between karts keeps their momentum and makes no energy.
+- A contact between karts keeps their momentum and makes no energy; a heavier kart is moved less. Tested.
+- A build sets top speed, acceleration, handling and grip where they apply; the standard build changes nothing (the golden file). Tested.
 
 # Knowledge
 

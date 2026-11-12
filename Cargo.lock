@@ -4900,6 +4900,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "osage-kart-roster"
+version = "0.1.0"
+dependencies = [
+ "osage-kart-physics",
+]
+
+[[package]]
 name = "osage-kart-server"
 version = "0.1.0"
 dependencies = [
@@ -5015,6 +5022,7 @@ dependencies = [
  "osage-kart-physics",
  "osage-kart-racecraft",
  "osage-kart-records",
+ "osage-kart-roster",
  "osage-sdk",
  "osage-server",
  "osage-world-module-api",

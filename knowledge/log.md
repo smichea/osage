@@ -1,6 +1,7 @@
 # Knowledge Update Log
 
 ## 2026-11-12
+* **Creation**: Added the module [osage-kart-roster](/modules/kart-roster.md): eight drivers in three classes and four kart bodies, each pair a build within a narrow band (D-055); [osage-kart-physics](/modules/kart-physics.md) and [Arcade kart physics](/algorithms/arcade-kart-physics.md) carry a build and share bumps by mass; [osage-kart-racecraft](/modules/kart-racecraft.md) drives each build at its limits; [osage-kart-native](/modules/kart-native.md) chooses between races.
 * **Update**: [Ground that varies](/techniques/ground-variation.md) samples a grain without a tile (hexagonal cells) and draws a road's history; [osage-kart-native](/modules/kart-native.md) untiles its road from T2 and grass and gravel from T3; [osage-kart-roadside](/modules/kart-roadside.md)'s species follow the place (D-054).
 * **Creation**: Added the module [osage-kart-records](/modules/kart-records.md): the kart world keeps best laps and races across restarts (D-053); [osage-kart-native](/modules/kart-native.md) shows them between races.
 * **Update**: [osage-kart-items](/modules/kart-items.md) has ten items drawn by place and gap to the leader, some held behind as a shield, a drone, a bumper and a pit-crew push (D-052); [osage-kart-sound](/modules/kart-sound.md) gains cues and a drone's buzz; [osage-kart-native](/modules/kart-native.md) draws and plays them; [osage-kart-racecraft](/modules/kart-racecraft.md)'s bots steer round what lies on the road.

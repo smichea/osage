@@ -43,4 +43,19 @@ describe("kart physics in WebAssembly", () => {
     }
     expect(lines.join("\n") + "\n").toBe(golden);
   });
+
+  it("drives a kart with its build, and gives the build back (D-055)", async () => {
+    const physics = await Physics.load(readFileSync(new URL("../public/physics.wasm", import.meta.url)));
+    physics.setTrack([0, 0, 0, 400, -100, 400, -100, 0], 6, 3, []);
+    const run = (build: Partial<KartValues>) => {
+      let kart: KartValues = { x: 0, z: 10, heading: 0, speed: 0, slide: 0, drift: 0, charge: 0, boost: 0, spin: 0, ...build };
+      for (let i = 0; i < 240; i++) kart = physics.step(kart, { throttle: 1, steer: 0, drift: false });
+      return kart;
+    };
+    const standard = run({});
+    const quick = run({ top: 1.1, accel: 1.3, handling: 1, grip: 1, weight: 0.8 });
+    expect(quick.speed).toBeGreaterThan(standard.speed);
+    expect([quick.top, quick.accel, quick.weight].map((v) => +(v ?? 0).toFixed(3))).toEqual([1.1, 1.3, 0.8]);
+    expect([standard.top, standard.accel].map((v) => v ?? 1)).toEqual([1, 1]);
+  });
 });

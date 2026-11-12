@@ -17,7 +17,7 @@ Something to come back for: the best laps and races ever driven in a world, with
 
 - **Event:** what a time is of — a lap (line to line) or a race of a number of laps (lights to flag).
 - **Board:** the times of one event on one track, fastest first, at most `KEPT` (10), one per driver name: that driver's best. A tie keeps the earlier time.
-- **Record:** a name, a time in milliseconds, when (seconds since 1970), the kart and the driver character chosen (empty until there is a choice, milestone M3).
+- **Record:** a name, a time in milliseconds, when (seconds since 1970), the kart body and the driver chosen ([osage-kart-roster](/modules/kart-roster.md), D-055).
 - **Fresh:** set in the race just run; the world forgets which are fresh when the next race lines up.
 
 # Architecture

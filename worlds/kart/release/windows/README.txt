@@ -45,6 +45,14 @@ tyres, cones and oil can be held behind your kart: keep F down and they
 shield you from a tyre thrown from behind; let go of F to throw or drop
 them. A bumper knocks aside the karts right beside you.
 
+Who drives, and in what: between races (on the grid, or on the results),
+left and right choose the driver, up and down the kart. Light drivers
+are quick off the line but pushed around; heavy ones are slow to get
+going and hard to shift. The Sprint leaps out of bends, the Cruiser holds
+its speed, the Drifter slides. No pair is faster than the others: pick
+the one you like to drive. On the grid your kart changes at once; after
+a race, from the next one.
+
 The world keeps its records: the ten best laps and races, one per driver,
 shown between races (NEW! when you just set one). They are kept in
 kart-records.txt in this folder, on the computer that hosts; updates leave

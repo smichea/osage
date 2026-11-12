@@ -19,6 +19,11 @@
 //! drift button is a trick that boosts on landing; a kart in another's wake charges a
 //! slipstream boost ([`slipstream`]); and the world judges each start
 //! ([`launch`]): a boost for throttle in time, a stall for throttle too early.
+//!
+//! Karts differ (D-055): each carries a [`Build`] — top speed, acceleration,
+//! handling, grip and weight as shares of the standard kart's — that its
+//! driver and its body give it. The standard build changes nothing, bit for
+//! bit.
 
 #[cfg(target_arch = "wasm32")]
 mod wasm;
@@ -115,6 +120,42 @@ const GRASS_GRIP: f32 = 0.5;
 /// turns towards it by this many rad/s per m/s.
 const GRASS_PULL: f32 = 0.02;
 
+/// How a kart is built, each as a share of the standard kart's (1): top
+/// speed (and boosted speed), acceleration, rate of turn (and of a drift),
+/// grip (how fast a slide is scrubbed off), and weight (in a knock, the
+/// heavier is moved less). A rocket's speed is the same for all.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Build {
+    pub top: f32,
+    pub accel: f32,
+    pub handling: f32,
+    pub grip: f32,
+    pub weight: f32,
+}
+
+impl Build {
+    /// The standard kart.
+    pub const STANDARD: Build = Build { top: 1.0, accel: 1.0, handling: 1.0, grip: 1.0, weight: 1.0 };
+
+    /// Each share kept within reason: a build is a flavour, not a cheat.
+    pub fn sanitized(self) -> Build {
+        let within = |v: f32, low: f32, high: f32| if v.is_finite() { v.clamp(low, high) } else { 1.0 };
+        Build {
+            top: within(self.top, 0.85, 1.15),
+            accel: within(self.accel, 0.7, 1.4),
+            handling: within(self.handling, 0.75, 1.3),
+            grip: within(self.grip, 0.7, 1.4),
+            weight: within(self.weight, 0.7, 1.4),
+        }
+    }
+}
+
+impl Default for Build {
+    fn default() -> Self {
+        Build::STANDARD
+    }
+}
+
 /// A kart's physical state.
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct Kart {
@@ -148,6 +189,8 @@ pub struct Kart {
     pub draft: f32,
     /// 1 when the drift button was held at the last step: a press is a change.
     pub held: f32,
+    /// How it is built: fixed for a race, set by the world.
+    pub build: Build,
 }
 
 /// The level of mini-turbo a drift of `charge` seconds has reached: 0 (none) to 3.
@@ -422,12 +465,13 @@ pub fn step(kart: &mut Kart, controls: Controls, track: &Track) {
     let (grass_left, grass_right) = (count(Ground::Grass, &[0, 2]), count(Ground::Grass, &[1, 3]));
     let grass = (grass_left + grass_right) / 4.0;
     let kerb = count(Ground::Kerb, &[0, 1, 2, 3]) / 4.0;
+    let build = kart.build.sanitized();
     let fastest = if kart.rocket > 0.0 {
         ROCKET_SPEED
     } else if kart.boost > 0.0 {
-        BOOST_SPEED
+        BOOST_SPEED * build.top
     } else {
-        MAX_SPEED
+        MAX_SPEED * build.top
     };
     let top = fastest - (fastest - OFF_ROAD_SPEED) * grass;
     let footing = 1.0 - (1.0 - KERB_GRIP) * kerb - (1.0 - GRASS_GRIP) * grass;
@@ -436,7 +480,7 @@ pub fn step(kart: &mut Kart, controls: Controls, track: &Track) {
     if flying {
     } else if throttle > 0.0 {
         if kart.speed < top {
-            kart.speed = (kart.speed + throttle * ACCELERATION * DT).min(top);
+            kart.speed = (kart.speed + throttle * (ACCELERATION * build.accel) * DT).min(top);
         }
     } else if throttle < 0.0 {
         let rate = if kart.speed > 0.0 { BRAKING } else { ACCELERATION / 2.0 };
@@ -446,7 +490,7 @@ pub fn step(kart: &mut Kart, controls: Controls, track: &Track) {
         kart.speed -= roll * kart.speed.signum();
     }
     if kart.boost > 0.0 {
-        kart.speed = (kart.speed + BOOST_ACCELERATION * DT).min(BOOST_SPEED.max(kart.speed));
+        kart.speed = (kart.speed + BOOST_ACCELERATION * DT).min((BOOST_SPEED * build.top).max(kart.speed));
         kart.boost = (kart.boost - DT).max(0.0);
     }
     if kart.rocket > 0.0 {
@@ -487,14 +531,14 @@ pub fn step(kart: &mut Kart, controls: Controls, track: &Track) {
     let (target_slide, grip) = if kart.drift != 0.0 {
         // Steering into the drift tightens it, against it widens it.
         let tightness = 1.0 + 0.45 * steer * kart.drift;
-        kart.heading -= kart.drift * tightness * DRIFT_TURN_RATE * steering * DT;
+        kart.heading -= kart.drift * tightness * (DRIFT_TURN_RATE * build.handling) * steering * DT;
         if !flying {
             kart.charge += DT * tightness;
         }
-        (-kart.drift * kart.speed * 0.12, DRIFT_GRIP)
+        (-kart.drift * kart.speed * 0.12, DRIFT_GRIP * build.grip)
     } else {
-        kart.heading -= steer * TURN_RATE * steering * DT;
-        (0.0, GRIP)
+        kart.heading -= steer * (TURN_RATE * build.handling) * steering * DT;
+        (0.0, GRIP * build.grip)
     };
     let grip = if flying { grip * 0.1 } else { grip };
     kart.slide += (target_slide - kart.slide) * (grip * footing * DT).min(1.0);
@@ -658,15 +702,18 @@ pub fn bump(a: &mut Kart, b: &mut Kart) {
         return;
     }
     let along = (-normal.1, normal.0);
+    // Weights as shares of the standard kart's: the impulse is shared out
+    // by mass, and each moment of inertia grows with its mass.
+    let (ma, mb) = (a.build.sanitized().weight, b.build.sanitized().weight);
     let resistance = |n: (f32, f32)| {
         let (ka, kb) = (dot(swept(ra), n), dot(swept(rb), n));
-        2.0 + (ka * ka + kb * kb) / YAW_INERTIA
+        (1.0 / ma + 1.0 / mb) + (ka * ka / ma + kb * kb / mb) / YAW_INERTIA
     };
     let push = -(1.0 + KART_RESTITUTION) * closing / resistance(normal);
     let rub = (-dot(relative, along) / resistance(along)).clamp(-KART_FRICTION * push, KART_FRICTION * push);
     let j = (normal.0 * push + along.0 * rub, normal.1 * push + along.1 * rub);
-    a.take((-j.0, -j.1), ra);
-    b.take(j, rb);
+    a.take((-j.0 / ma, -j.1 / ma), ra);
+    b.take((j.0 / mb, j.1 / mb), rb);
 }
 
 /// An angle in `(-π, π]`.
@@ -691,6 +738,77 @@ mod tests {
     }
 
     const FULL: Controls = Controls { throttle: 1.0, steer: 0.0, drift: false };
+
+    /// A kart built otherwise: one share changed.
+    fn built(change: impl Fn(&mut Build)) -> Kart {
+        let mut build = Build::STANDARD;
+        change(&mut build);
+        Kart { z: 10.0, build, ..Kart::default() }
+    }
+
+    #[test]
+    fn a_build_sets_top_speed_acceleration_handling_and_grip() {
+        let track = track();
+        // Top speed: 10 % more.
+        let mut fast = built(|b| b.top = 1.1);
+        drive(&mut fast, FULL, 4.0, &track);
+        assert!((fast.speed - 1.1 * MAX_SPEED).abs() < 0.05, "{fast:?}");
+        // Acceleration: to 15 m/s sooner.
+        let time_to = |mut kart: Kart| {
+            (1..600).find(|_| {
+                step(&mut kart, FULL, &track);
+                kart.speed >= 15.0
+            })
+        };
+        let (quick, standard) = (time_to(built(|b| b.accel = 1.3)), time_to(built(|_| {})));
+        assert!(quick < standard, "{quick:?} {standard:?}");
+        // Handling: turns further in a second.
+        let turned = |mut kart: Kart| {
+            kart.speed = 15.0;
+            drive(&mut kart, Controls { steer: 1.0, ..FULL }, 0.5, &track);
+            kart.heading.abs()
+        };
+        assert!(turned(built(|b| b.handling = 1.2)) > 1.1 * turned(built(|_| {})));
+        // Grip: a slide is scrubbed off sooner.
+        let scrubbed = |mut kart: Kart| {
+            (kart.speed, kart.slide) = (15.0, 4.0);
+            (1..600).find(|_| {
+                step(&mut kart, FULL, &track);
+                kart.slide.abs() < 0.2
+            })
+        };
+        assert!(scrubbed(built(|b| b.grip = 1.3)) < scrubbed(built(|_| {})));
+        // Outside reason, a build is brought back: no 3× top speed.
+        let mut cheat = built(|b| b.top = 3.0);
+        drive(&mut cheat, FULL, 4.0, &track);
+        assert!(cheat.speed < 1.16 * MAX_SPEED, "{cheat:?}");
+    }
+
+    #[test]
+    fn a_heavy_kart_is_moved_less_and_momentum_is_kept() {
+        let mut heavy =
+            Kart { x: 0.0, z: 10.0, speed: 0.0, build: Build { weight: 1.3, ..Build::STANDARD }, ..Kart::default() };
+        let mut light = Kart {
+            x: 1.2,
+            z: 10.0,
+            heading: std::f32::consts::FRAC_PI_2,
+            speed: -6.0,
+            build: Build { weight: 0.8, ..Build::STANDARD },
+            ..Kart::default()
+        };
+        let momentum = |a: &Kart, b: &Kart| {
+            let (va, vb) = (a.velocity(), b.velocity());
+            (a.build.weight * va.0 + b.build.weight * vb.0, a.build.weight * va.1 + b.build.weight * vb.1)
+        };
+        let (before_h, before_l) = (heavy.velocity(), light.velocity());
+        let before = momentum(&heavy, &light);
+        bump(&mut heavy, &mut light);
+        let after = momentum(&heavy, &light);
+        assert!((before.0 - after.0).abs() < 1e-3 && (before.1 - after.1).abs() < 1e-3, "{before:?} {after:?}");
+        let change = |a: (f32, f32), b: (f32, f32)| sqrtf((a.0 - b.0).powi(2) + (a.1 - b.1).powi(2));
+        let (dh, dl) = (change(before_h, heavy.velocity()), change(before_l, light.velocity()));
+        assert!(dh > 0.1 && dl > 1.5 * dh, "the light one moves more: {dh} {dl}");
+    }
 
     #[test]
     fn full_throttle_reaches_top_speed_on_a_straight() {
