@@ -25,6 +25,29 @@ pub mod proto {
 }
 
 /// Encoded descriptor set of the kart messages.
+/// A kart's physics state from its `kart.state/1`: what a predicting
+/// client restarts from.
+pub fn kart_of(state: &proto::KartState) -> osage_kart_physics::Kart {
+    osage_kart_physics::Kart {
+        x: state.x,
+        z: state.z,
+        heading: state.heading,
+        speed: state.speed,
+        slide: state.slide,
+        drift: state.drift,
+        charge: state.charge,
+        boost: state.boost,
+        spin: state.spin,
+        rocket: state.rocket,
+        height: state.height,
+        climb: state.climb,
+        trick: state.trick,
+        stall: state.stall,
+        draft: state.draft,
+        held: state.held,
+    }
+}
+
 pub const DESCRIPTORS: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/kart_descriptors.bin"));
 
 /// Names of the kart world's component types.

@@ -21,9 +21,9 @@ import {
   TrackSchema,
 } from "./gen/kart/v1/kart_pb.js";
 import { Input } from "./input.js";
-import { type KartValues, LONG_TURBO_CHARGE, Physics, STEP_SECONDS, SHORT_TURBO_CHARGE } from "./physics.js";
+import { type KartValues, Physics, STEP_SECONDS, TURBO_CHARGES } from "./physics.js";
 import { Predictor } from "./prediction.js";
-import { type CircuitView, type KartView, PALETTE, buildCircuit, buildKart, poseKart } from "./scene.js";
+import { type CircuitView, type KartView, PALETTE, buildCircuit, buildKart, poseKart, sparkColour } from "./scene.js";
 
 const KART = {
   controls: "kart.controls/1",
@@ -92,9 +92,9 @@ try {
     ? `<a href="${escape(source.url)}" target="_blank" rel="noopener">${input.touchScreen ? "server source" : escape(source.url)}</a> (${escape(source.version)})`
     : "";
   $("status").innerHTML = input.touchScreen
-    ? `${escape(me)} · via ${session.transport} · ${sourceLink}<br>hold DRIFT through bends, release for a turbo`
+    ? `${escape(me)} · via ${session.transport} · ${sourceLink}<br>hold DRIFT through bends, release for a turbo (three levels); press it in the air for a trick`
     : `world <b>${escape(session.welcome.world?.name ?? "")}</b> · you are ${escape(me)} · via ${session.transport}<br>` +
-      `drive: ↑ ↓ ← → or WASD · drift: Space or Shift (hold through a bend, release for a mini-turbo) · gamepad works too<br>` +
+      `drive: ↑ ↓ ← → or WASD · drift: Space or Shift (hold through a bend, release for a mini-turbo of up to three levels; press it off a ramp for a trick) · throttle as the lights go out for a boost, too early and you stall · gamepad works too<br>` +
       (source ? `server source: ${sourceLink}` : "");
 
   const race = (): Race | undefined => {
@@ -114,9 +114,9 @@ try {
       if (event.kind === "entered") {
         const track = world.get(event.entity, KART.track, TrackSchema);
         if (track) {
-          physics.setTrack(track.points, track.halfWidth, track.verge);
+          physics.setTrack(track.points, track.halfWidth, track.verge, track.ramps);
           if (circuit) scene.remove(circuit.group);
-          circuit = buildCircuit(track.points, track.halfWidth, track.verge, track.start);
+          circuit = buildCircuit(track.points, track.halfWidth, track.verge, track.start, track.ramps);
           scene.add(circuit.group);
         }
         const who = racer(event.entity);
@@ -240,8 +240,8 @@ try {
 
     const kart = mine !== undefined ? (predictor?.kart ?? state(mine)) : undefined;
     if (kart) {
-      const charge = Math.min(1, kart.charge / LONG_TURBO_CHARGE);
-      const colour = kart.charge >= LONG_TURBO_CHARGE ? "#ff8c1a" : kart.charge >= SHORT_TURBO_CHARGE ? "#3fa9ff" : "#fff6d5";
+      const charge = Math.min(1, kart.charge / TURBO_CHARGES[2]);
+      const colour = sparkColour(kart.charge);
       $("speed").innerHTML =
         `<b>${Math.round(Math.abs(kart.speed) * 3.6)}</b> km/h${kart.boost > 0 ? " · <b style='color:#ff9a3c'>TURBO</b>" : ""}<br>` +
         `mini-turbo <span class="gauge"><i style="width:${(charge * 100).toFixed(0)}%;background:${colour}"></i></span>`;

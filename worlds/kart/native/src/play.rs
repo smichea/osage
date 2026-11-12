@@ -43,8 +43,8 @@ pub struct PlayPlugin {
     /// The world's autopilot holds the wheel: a demo, and a way to check
     /// prediction end to end without a driver.
     pub autodrive: bool,
-    /// Saves a screenshot this many seconds after the start.
-    pub screenshot_after: Option<f32>,
+    /// Saves a screenshot at each of these many seconds after the start.
+    pub screenshot_after: Vec<f32>,
 }
 
 impl Plugin for PlayPlugin {
@@ -62,7 +62,7 @@ impl Plugin for PlayPlugin {
             .insert_resource(NetOutbox(out_tx))
             .insert_resource(Replica { status: format!("connecting to {}…", self.url), ..default() })
             .insert_resource(Driver { autodrive: self.autodrive, ..default() })
-            .insert_resource(Shots { after: self.screenshot_after })
+            .insert_resource(Shots { after: self.screenshot_after.clone() })
             .init_resource::<CallWanted>()
             .add_plugins((HudPlugin, PaddockPlugin))
             .add_systems(FixedUpdate, drive)
@@ -164,7 +164,7 @@ const CALL_SENDS: u8 = 6;
 
 #[derive(Resource)]
 struct Shots {
-    after: Option<f32>,
+    after: Vec<f32>,
 }
 
 /// The world's entity a kart model stands for.
@@ -208,18 +208,7 @@ fn network(url: String, tier: v0::Tier, tx: Sender<Net>, mut outbox: UnboundedRe
 }
 
 fn kart_of(state: &proto::KartState) -> Kart {
-    Kart {
-        x: state.x,
-        z: state.z,
-        heading: state.heading,
-        speed: state.speed,
-        slide: state.slide,
-        drift: state.drift,
-        charge: state.charge,
-        boost: state.boost,
-        spin: state.spin,
-        rocket: state.rocket,
-    }
+    osage_world_kart::kart_of(state)
 }
 
 /// Applies what the world sent: the circuit, karts coming and going, and the
@@ -376,7 +365,8 @@ fn send(
     let hosting = race.as_ref().is_some_and(|race| race.phase() == Phase::Ready && race.host == mine);
     let pressed =
         keys.just_pressed(KeyCode::Enter) || gamepads.iter().any(|pad| pad.just_pressed(GamepadButton::North));
-    if hosting && pressed && !menu.0 {
+    // Driven by the autopilot (a demonstration, a screenshot), the host starts at once.
+    if hosting && (pressed || driver.autodrive) && !menu.0 {
         wanted.0 = Some(proto::RaceCall::Start);
     }
     if let Some(call) = wanted.0.take() {
@@ -441,12 +431,12 @@ fn follow_someone(mut commands: Commands, mut replica: ResMut<Replica>) {
 /// F12, or the delay asked on the command line, saves what the window shows
 /// to `kart-native-<time>.png` in the current directory.
 fn screenshots(mut commands: Commands, time: Res<Time>, keys: Res<ButtonInput<KeyCode>>, mut shots: ResMut<Shots>) {
-    let due = shots.after.is_some_and(|after| time.elapsed_secs() >= after);
-    if due {
-        shots.after = None;
-    }
+    let elapsed = time.elapsed_secs();
+    let before = shots.after.len();
+    shots.after.retain(|after| elapsed < *after);
+    let due = shots.after.len() < before;
     if due || keys.just_pressed(KeyCode::F12) {
-        let name = format!("kart-native-{}.png", now_us() / 1_000_000);
+        let name = format!("kart-native-{}.png", now_us() / 1_000);
         commands.spawn(Screenshot::primary_window()).observe(save_to_disk(name));
     }
 }
@@ -510,4 +500,5 @@ fn summarise(
     view.alone = view.me.is_some() && view.karts.iter().filter(|kart| !kart.bot).count() == 1;
     let kart = driver.predictor.kart.unwrap_or_default();
     (view.speed, view.charge, view.boosting) = (kart.speed, kart.charge, kart.boost > 0.0);
+    view.stalled = kart.stall > 0.0;
 }

@@ -17,7 +17,7 @@ use bevy::{
     prelude::*,
     render::render_resource::{Extent3d, TextureDimension, TextureFormat},
 };
-use osage_kart_physics::{LONG_TURBO_CHARGE, SHORT_TURBO_CHARGE};
+use osage_kart_physics::turbo_level;
 use osage_render::OsageCamera;
 
 use crate::{
@@ -30,8 +30,13 @@ const POOL: usize = 1200;
 
 #[derive(Clone, Copy)]
 enum Kind {
-    /// Drift sparks: no charge yet, short turbo ready, long turbo ready.
+    /// Drift sparks by the level of mini-turbo charged: none yet, then
+    /// blue, orange and violet (D-050).
     Spark(usize),
+    /// Air rushing past a kart in another's wake: faint streaks.
+    Wind,
+    /// A stalled engine coughing black smoke.
+    Soot,
     Smoke,
     Dust,
     Flame,
@@ -58,7 +63,9 @@ pub struct Particle {
 #[derive(Resource)]
 pub struct Pool {
     idle: Vec<Entity>,
-    sparks: [Handle<StandardMaterial>; 3],
+    sparks: [Handle<StandardMaterial>; 4],
+    wind: Handle<StandardMaterial>,
+    soot: Handle<StandardMaterial>,
     smoke: Handle<StandardMaterial>,
     /// Tyre smoke on the photographed circuit: a faint grey veil.
     veil: Handle<StandardMaterial>,
@@ -121,8 +128,10 @@ pub fn setup(
     let light = |r: f32, g: f32, b: f32| LinearRgba::new(r * 3.0, g * 3.0, b * 3.0, 1.0);
     let smoke = material(LinearRgba::new(0.85, 0.85, 0.88, 0.32), AlphaMode::Blend);
     let pool = Pool {
-        sparks: [light(1.0, 0.9, 0.55), light(0.2, 0.6, 1.0), light(1.0, 0.45, 0.08)]
+        sparks: [light(1.0, 0.9, 0.55), light(0.2, 0.6, 1.0), light(1.0, 0.45, 0.08), light(0.75, 0.25, 1.0)]
             .map(|c| material(c, AlphaMode::Add)),
+        wind: material(LinearRgba::new(0.5, 0.55, 0.6, 1.0), AlphaMode::Add),
+        soot: material(LinearRgba::new(0.06, 0.06, 0.06, 0.6), AlphaMode::Blend),
         dust: material(LinearRgba::new(0.5, 0.42, 0.28, 0.55), AlphaMode::Blend),
         flame: material(light(1.0, 0.55, 0.15), AlphaMode::Add),
         smoke: smoke.clone(),
@@ -176,6 +185,8 @@ pub fn emit(
         let Ok((mut particle, mut place, mut shown, mut material)) = particles.get_mut(entity) else { return };
         let (span, size, growth, gravity, look) = match kind {
             Kind::Spark(stage) => (0.22 + 0.2 * pool.vary(), 0.16, -0.6, 9.0, pool.sparks[stage].clone()),
+            Kind::Wind => (0.18 + 0.1 * pool.vary(), 0.07, 0.0, 0.0, pool.wind.clone()),
+            Kind::Soot => (0.7 + 0.4 * pool.vary(), 0.3, 2.5, -0.5, pool.soot.clone()),
             Kind::Smoke if real => (0.9 + 0.5 * pool.vary(), 0.45, 3.2, -0.25, pool.veil.clone()),
             Kind::Smoke => (0.4 + 0.25 * pool.vary(), 0.3, 1.8, -0.6, pool.smoke.clone()),
             Kind::Dust => (0.5 + 0.3 * pool.vary(), 0.5, 2.0, -0.3, pool.dust.clone()),
@@ -196,11 +207,7 @@ pub fn emit(
         let (forward, speed) = (place.rotation * Vec3::Z, kart.speed);
         let behind = -forward * speed;
         if kart.drift != 0.0 {
-            let stage = match kart.charge {
-                c if c >= LONG_TURBO_CHARGE => 2,
-                c if c >= SHORT_TURBO_CHARGE => 1,
-                _ => 0,
-            };
+            let stage = turbo_level(kart.charge);
             for contact in REAR_CONTACTS {
                 let at = place.transform_point(contact);
                 for _ in 0..if real { 0 } else { 2 } {
@@ -222,6 +229,20 @@ pub fn emit(
                     let puff = -forward * 2.0 + Vec3::Y * 0.6 + pool.spread(0.4);
                     launch(&mut pool, Kind::Exhaust, at, forward * speed * 0.6 + puff);
                 }
+            }
+        }
+        // In a wake, air streams past the sides; a stalled engine coughs.
+        if kart.draft > 0.15 {
+            for side in [-1.0, 1.0] {
+                let at =
+                    place.transform_point(Vec3::new(side * (0.9 + 0.3 * pool.vary()), 0.4 + 0.6 * pool.vary(), 1.8));
+                launch(&mut pool, Kind::Wind, at, forward * (speed - 14.0));
+            }
+        }
+        if kart.stall > 0.0 && frame.is_multiple_of(3) {
+            for exhaust in EXHAUSTS {
+                let puff = Vec3::Y * 0.9 - forward * 0.8 + pool.spread(0.4);
+                launch(&mut pool, Kind::Soot, place.transform_point(exhaust), puff);
             }
         }
         if kart.rocket > 0.0 {
@@ -289,7 +310,7 @@ pub fn prewarm(
     }
     *frame += 1;
     let Some(camera) = camera.iter().next() else { return };
-    let looks = pool.sparks.iter().chain([&pool.smoke, &pool.veil, &pool.dust, &pool.flame]);
+    let looks = pool.sparks.iter().chain([&pool.smoke, &pool.veil, &pool.dust, &pool.flame, &pool.wind, &pool.soot]);
     // The first idle particles are the last a launch takes.
     for (look, &entity) in looks.zip(&pool.idle) {
         let Ok((mut place, mut shown, mut material)) = particles.get_mut(entity) else { continue };

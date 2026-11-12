@@ -13,6 +13,12 @@
 //! The driving is arcade (a speed along the kart, a slide across it); the
 //! contacts are physical (D-045): a kart has an outline, a mass and a moment
 //! of inertia, and a knock is an impulse at the point where it lands.
+//!
+//! Skill is rewarded (D-050): a drift charges a mini-turbo of three levels;
+//! ramps throw karts into the air, where a press of the drift button is a
+//! trick that boosts on landing; a kart in another's wake charges a
+//! slipstream boost ([`slipstream`]); and the world judges each start
+//! ([`launch`]): a boost for throttle in time, a stall for throttle too early.
 
 #[cfg(target_arch = "wasm32")]
 mod wasm;
@@ -39,9 +45,32 @@ const DRIFT_MIN_SPEED: f32 = 10.0;
 /// A drift turns tighter than plain steering: that is what it is for.
 const DRIFT_TURN_RATE: f32 = 2.7;
 const DRIFT_GRIP: f32 = 3.0;
-/// Drift seconds for a short and a long mini-turbo.
-pub const SHORT_TURBO_CHARGE: f32 = 0.7;
-pub const LONG_TURBO_CHARGE: f32 = 1.5;
+/// Drift seconds for each level of mini-turbo, and the boost seconds each
+/// gives on release.
+pub const TURBO_CHARGES: [f32; 3] = [0.6, 1.2, 2.0];
+pub const TURBO_BOOSTS: [f32; 3] = [0.5, 1.0, 1.6];
+/// Pulled down in the air, m/s²: a little more than the Earth's, as karts in
+/// games fall.
+pub const GRAVITY: f32 = 18.0;
+/// In the air, steering turns the kart this share of what it does on the ground.
+const AIR_STEER: f32 = 0.25;
+/// A trick in the air: the boost seconds it gives on landing.
+pub const TRICK_BOOST: f32 = 0.7;
+/// Slipstream: within this far ahead (m) and this far across (m) behind a
+/// kart, above this speed (m/s), it charges; this many seconds of it give a
+/// boost of this many seconds.
+const DRAFT_AHEAD: (f32, f32) = (1.5, 10.0);
+const DRAFT_ACROSS: f32 = 1.4;
+const DRAFT_MIN_SPEED: f32 = 14.0;
+pub const DRAFT_CHARGE: f32 = 1.2;
+const DRAFT_BOOST: f32 = 0.6;
+/// The start (judged by [`launch`]): throttle pressed at most this many
+/// seconds before the lights go boosts for this long; pressed earlier than
+/// this, the engine floods and the kart stalls for this long.
+pub const LAUNCH_WINDOW: f32 = 0.4;
+const LAUNCH_BOOST: f32 = 1.0;
+pub const LAUNCH_EARLY: f32 = 1.5;
+const LAUNCH_STALL: f32 = 0.8;
 const BOOST_SPEED: f32 = 28.0;
 const BOOST_ACCELERATION: f32 = 40.0;
 /// A rocket strapped to the kart: faster than a boost, and pushing on
@@ -107,6 +136,31 @@ pub struct Kart {
     /// Rate of turn a knock gave, rad/s, positive to the left (as the
     /// heading grows); the tyres stop it.
     pub spin: f32,
+    /// Height above the road, m, and speed upwards, m/s: off a ramp.
+    pub height: f32,
+    pub climb: f32,
+    /// 1 when a trick was done in this jump: a boost on landing.
+    pub trick: f32,
+    /// Seconds the engine is stalled for (a start too early): no throttle.
+    pub stall: f32,
+    /// Seconds in another kart's wake so far: enough of it gives a boost.
+    pub draft: f32,
+    /// 1 when the drift button was held at the last step: a press is a change.
+    pub held: f32,
+}
+
+/// The level of mini-turbo a drift of `charge` seconds has reached: 0 (none) to 3.
+pub fn turbo_level(charge: f32) -> usize {
+    TURBO_CHARGES.iter().filter(|&&c| charge >= c).count()
+}
+
+/// A ramp across the whole road: from `along` it rises over `length` metres
+/// to `height`, and drops at its lip.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Ramp {
+    pub along: f32,
+    pub length: f32,
+    pub height: f32,
 }
 
 /// What a wheel runs on.
@@ -146,6 +200,7 @@ pub struct Track {
     length: f32,
     pub half_width: f32,
     pub verge: f32,
+    ramps: Vec<Ramp>,
 }
 
 /// Where a position is relative to the track.
@@ -168,7 +223,30 @@ impl Track {
             distances.push(length);
             length += distance(points[i], points[(i + 1) % points.len()]);
         }
-        Self { points, distances, length, half_width, verge }
+        Self { points, distances, length, half_width, verge, ramps: Vec::new() }
+    }
+
+    /// The same track with ramps across its road.
+    pub fn with_ramps(mut self, ramps: Vec<Ramp>) -> Self {
+        self.ramps = ramps;
+        self
+    }
+
+    pub fn ramps(&self) -> &[Ramp] {
+        &self.ramps
+    }
+
+    /// The road's height at `along` (on a ramp, or 0), and its slope
+    /// (rise per metre along the track).
+    pub fn lift(&self, along: f32) -> (f32, f32) {
+        for ramp in &self.ramps {
+            let into = (along - ramp.along).rem_euclid(self.length);
+            if into < ramp.length {
+                let slope = ramp.height / ramp.length.max(f32::EPSILON);
+                return (slope * into, slope);
+            }
+        }
+        (0.0, 0.0)
     }
 
     pub fn points(&self) -> &[[f32; 2]] {
@@ -300,10 +378,19 @@ fn wheels_at(kart: &Kart, track: &Track, spot: Spot) -> [Ground; 4] {
 
 /// Advances `kart` by one step of [`DT`] seconds.
 pub fn step(kart: &mut Kart, controls: Controls, track: &Track) {
-    let Controls { throttle, steer, drift } = controls.sanitized();
+    let Controls { mut throttle, steer, drift } = controls.sanitized();
+    let pressed = drift && kart.held == 0.0;
+    kart.held = if drift { 1.0 } else { 0.0 };
+    if kart.stall > 0.0 {
+        throttle = 0.0;
+        kart.stall = (kart.stall - DT).max(0.0);
+    }
+    let here = track.locate(kart.x, kart.z);
+    let flying = kart.height > track.lift(here.along).0 + 1e-3;
     // Each wheel feels its ground: grass slows the kart in proportion and
-    // drags it towards the side it is on; kerbs and grass grip less.
-    let ground = wheels_at(kart, track, track.locate(kart.x, kart.z));
+    // drags it towards the side it is on; kerbs and grass grip less. In the
+    // air, nothing does.
+    let ground = if flying { [Ground::Road; 4] } else { wheels_at(kart, track, here) };
     let count = |on: Ground, wheels: &[usize]| wheels.iter().filter(|&&i| ground[i] == on).count() as f32;
     let (grass_left, grass_right) = (count(Ground::Grass, &[0, 2]), count(Ground::Grass, &[1, 3]));
     let grass = (grass_left + grass_right) / 4.0;
@@ -318,8 +405,9 @@ pub fn step(kart: &mut Kart, controls: Controls, track: &Track) {
     let top = fastest - (fastest - OFF_ROAD_SPEED) * grass;
     let footing = 1.0 - (1.0 - KERB_GRIP) * kerb - (1.0 - GRASS_GRIP) * grass;
 
-    // Along the kart.
-    if throttle > 0.0 {
+    // Along the kart: wheels in the air neither drive nor brake.
+    if flying {
+    } else if throttle > 0.0 {
         if kart.speed < top {
             kart.speed = (kart.speed + throttle * ACCELERATION * DT).min(top);
         }
@@ -344,7 +432,12 @@ pub fn step(kart: &mut Kart, controls: Controls, track: &Track) {
 
     // Drift: starts with the button, a direction and some speed; releasing
     // it after a long enough drift gives a mini-turbo.
-    if kart.drift == 0.0 {
+    if flying {
+        // A press of the button in the air is a trick.
+        if pressed && kart.trick == 0.0 {
+            kart.trick = 1.0;
+        }
+    } else if kart.drift == 0.0 {
         if drift && fabsf(steer) > 0.2 && kart.speed > DRIFT_MIN_SPEED {
             kart.drift = steer.signum();
             kart.charge = 0.0;
@@ -353,29 +446,30 @@ pub fn step(kart: &mut Kart, controls: Controls, track: &Track) {
         if drift {
             kart.charge = 0.0; // too slow: the drift is lost
         }
-        kart.boost = kart.boost.max(if kart.charge >= LONG_TURBO_CHARGE {
-            1.2
-        } else if kart.charge >= SHORT_TURBO_CHARGE {
-            0.6
-        } else {
-            0.0
-        });
+        let level = turbo_level(kart.charge);
+        if level > 0 {
+            kart.boost = kart.boost.max(TURBO_BOOSTS[level - 1]);
+        }
         kart.drift = 0.0;
         kart.charge = 0.0;
     }
 
     // Turning: weaker at low speed, reversed when reversing.
-    let steering = (fabsf(kart.speed) / FULL_STEER_SPEED).min(1.0) * kart.speed.signum();
+    let steering =
+        (fabsf(kart.speed) / FULL_STEER_SPEED).min(1.0) * kart.speed.signum() * if flying { AIR_STEER } else { 1.0 };
     let (target_slide, grip) = if kart.drift != 0.0 {
         // Steering into the drift tightens it, against it widens it.
         let tightness = 1.0 + 0.45 * steer * kart.drift;
         kart.heading -= kart.drift * tightness * DRIFT_TURN_RATE * steering * DT;
-        kart.charge += DT * tightness;
+        if !flying {
+            kart.charge += DT * tightness;
+        }
         (-kart.drift * kart.speed * 0.12, DRIFT_GRIP)
     } else {
         kart.heading -= steer * TURN_RATE * steering * DT;
         (0.0, GRIP)
     };
+    let grip = if flying { grip * 0.1 } else { grip };
     kart.slide += (target_slide - kart.slide) * (grip * footing * DT).min(1.0);
     kart.heading += (grass_left - grass_right) / 2.0 * GRASS_PULL * kart.speed * DT;
     // A knock's spin turns the kart, which keeps going the way it went: the
@@ -395,6 +489,73 @@ pub fn step(kart: &mut Kart, controls: Controls, track: &Track) {
     kart.x += v.0 * DT;
     kart.z += v.1 * DT;
     walls(kart, track);
+    fly(kart, track, flying);
+}
+
+/// Up and down: a kart on the road follows it (up a ramp, its speed lifts
+/// it); off a ramp's lip it flies, falls and lands — with a boost if it did
+/// a trick.
+fn fly(kart: &mut Kart, track: &Track, flying: bool) {
+    let (surface, slope) = track.lift(track.locate(kart.x, kart.z).along);
+    if flying {
+        kart.climb -= GRAVITY * DT;
+        kart.height += kart.climb * DT;
+    }
+    if kart.height <= surface || !flying && kart.height <= surface + 1e-3 {
+        if flying && kart.trick > 0.0 {
+            kart.boost = kart.boost.max(TRICK_BOOST);
+        }
+        kart.height = surface;
+        kart.climb = slope * kart.speed.max(0.0);
+        kart.trick = 0.0;
+    } else if !flying {
+        // Just over the lip: the speed upwards it had carries it.
+        kart.height += kart.climb * DT;
+    }
+}
+
+/// Every kart in another's wake charges its slipstream; a full charge is a
+/// boost. The world runs it after the karts have moved.
+pub fn slipstream(karts: &mut [Kart]) {
+    let wake: Vec<bool> = (0..karts.len())
+        .map(|i| {
+            let me = &karts[i];
+            let (forward, right) = axes(me.heading);
+            me.speed > DRAFT_MIN_SPEED
+                && me.height < 0.05
+                && karts.iter().enumerate().any(|(j, other)| {
+                    let gap = (other.x - me.x, other.z - me.z);
+                    let ahead = dot(gap, forward);
+                    j != i
+                        && other.speed > DRAFT_MIN_SPEED * 0.7
+                        && ahead > DRAFT_AHEAD.0
+                        && ahead < DRAFT_AHEAD.1
+                        && fabsf(dot(gap, right)) < DRAFT_ACROSS
+                })
+        })
+        .collect();
+    for (kart, wake) in karts.iter_mut().zip(wake) {
+        if wake {
+            kart.draft += DT;
+            if kart.draft >= DRAFT_CHARGE {
+                kart.boost = kart.boost.max(DRAFT_BOOST);
+                kart.draft = 0.0;
+            }
+        } else {
+            kart.draft = (kart.draft - 2.0 * DT).max(0.0);
+        }
+    }
+}
+
+/// The start, as the lights go: `pressed` is how many seconds before it the
+/// throttle was pressed and held down since (`None`: not held). In time is a
+/// boost; too early floods the engine, which stalls.
+pub fn launch(kart: &mut Kart, pressed: Option<f32>) {
+    match pressed {
+        Some(before) if before <= LAUNCH_WINDOW => kart.boost = kart.boost.max(LAUNCH_BOOST),
+        Some(before) if before > LAUNCH_EARLY => kart.stall = LAUNCH_STALL,
+        _ => {}
+    }
 }
 
 /// The barriers: a kart's outline pushed back to their face, and an impulse
@@ -527,12 +688,118 @@ mod tests {
         let drifting = Controls { steer: 1.0, drift: true, ..FULL };
         step(&mut kart, drifting, &track);
         assert_eq!(kart.drift, 1.0);
-        drive(&mut kart, Controls { steer: 0.0, ..drifting }, LONG_TURBO_CHARGE + 0.1, &track);
+        drive(&mut kart, Controls { steer: 0.0, ..drifting }, TURBO_CHARGES[2] + 0.1, &track);
         assert!(kart.slide < 0.0, "a right drift slides outwards, to the left: {kart:?}");
+        assert_eq!(turbo_level(kart.charge), 3);
         step(&mut kart, FULL, &track);
-        assert!(kart.boost > 1.0 && kart.drift == 0.0, "{kart:?}");
+        assert!(kart.boost > TURBO_BOOSTS[2] - 0.05 && kart.drift == 0.0, "{kart:?}");
         drive(&mut kart, FULL, 0.5, &track);
         assert!(kart.speed > MAX_SPEED, "boosted: {kart:?}");
+    }
+
+    #[test]
+    fn each_level_of_drift_gives_a_longer_boost() {
+        assert_eq!(turbo_level(0.0), 0);
+        assert_eq!(turbo_level(TURBO_CHARGES[0]), 1);
+        assert_eq!(turbo_level(TURBO_CHARGES[1] + 0.01), 2);
+        let wide = Track { half_width: 60.0, ..track() };
+        let mut boosts = Vec::new();
+        for seconds in [0.3, TURBO_CHARGES[0] + 0.05, TURBO_CHARGES[1] + 0.05, TURBO_CHARGES[2] + 0.05] {
+            let mut kart = Kart { speed: 20.0, ..Kart::default() };
+            drive(&mut kart, Controls { steer: 1.0, drift: true, ..FULL }, DT, &wide);
+            drive(&mut kart, Controls { steer: 0.0, drift: true, ..FULL }, seconds, &wide);
+            step(&mut kart, FULL, &wide);
+            boosts.push(kart.boost);
+        }
+        assert_eq!(boosts[0], 0.0, "too short a drift: {boosts:?}");
+        assert!(boosts.windows(2).all(|w| w[1] > w[0]), "{boosts:?}");
+    }
+
+    /// The loop with a ramp on its first straight: 6 m long, 1.2 m high.
+    fn ramped() -> Track {
+        track().with_ramps(vec![Ramp { along: 40.0, length: 6.0, height: 1.2 }])
+    }
+
+    #[test]
+    fn a_ramp_throws_the_kart_into_the_air_and_it_lands() {
+        let track = ramped();
+        let mut kart = Kart { z: 20.0, speed: MAX_SPEED, ..Kart::default() };
+        let mut highest: f32 = 0.0;
+        let mut airborne = 0;
+        for _ in 0..120 {
+            step(&mut kart, FULL, &track);
+            highest = highest.max(kart.height);
+            if kart.height > track.lift(track.locate(kart.x, kart.z).along).0 + 1e-3 {
+                airborne += 1;
+            }
+        }
+        assert!(highest > 1.4, "flew above the lip: {highest}");
+        assert!((20..60).contains(&airborne), "{airborne} steps in the air");
+        assert!(kart.height == 0.0 && kart.climb == 0.0, "landed: {kart:?}");
+        assert_eq!(kart.boost, 0.0, "no trick, no boost");
+        // No drive in the air: the speed it took off with, it keeps.
+        assert!((kart.speed - MAX_SPEED).abs() < 0.5, "{kart:?}");
+    }
+
+    #[test]
+    fn a_trick_in_the_air_boosts_on_landing() {
+        let track = ramped();
+        let mut kart = Kart { z: 20.0, speed: MAX_SPEED, ..Kart::default() };
+        let mut tricked = false;
+        for _ in 0..120 {
+            let flying = kart.height > track.lift(track.locate(kart.x, kart.z).along).0 + 1e-3;
+            // The button pressed once, just past the lip.
+            let press = flying && !tricked;
+            tricked |= press;
+            step(&mut kart, Controls { drift: press, ..FULL }, &track);
+            if tricked && kart.height == 0.0 {
+                break;
+            }
+        }
+        assert!(tricked && kart.boost > TRICK_BOOST - 0.05, "{kart:?}");
+        // Holding the button from before the ramp is no trick: it must be pressed.
+        let mut kart = Kart { z: 20.0, speed: MAX_SPEED, held: 1.0, ..Kart::default() };
+        drive(&mut kart, Controls { drift: true, ..FULL }, 1.5, &track);
+        assert_eq!(kart.boost, 0.0, "{kart:?}");
+    }
+
+    #[test]
+    fn a_kart_in_anothers_wake_gets_a_boost() {
+        let mut karts = [Kart { speed: 20.0, ..Kart::default() }, Kart { z: 5.0, speed: 20.0, ..Kart::default() }];
+        let mut boosted = None;
+        for i in 0..120 {
+            slipstream(&mut karts);
+            if karts[0].boost > 0.0 {
+                boosted = Some(i);
+                break;
+            }
+        }
+        let steps = boosted.expect("a boost in the wake");
+        assert!((steps as f32 * DT - DRAFT_CHARGE).abs() < 0.05, "{steps}");
+        assert_eq!(karts[1].boost, 0.0, "the leader gets none");
+        // Beside it, no wake.
+        let mut karts =
+            [Kart { speed: 20.0, ..Kart::default() }, Kart { x: 3.0, z: 5.0, speed: 20.0, ..Kart::default() }];
+        for _ in 0..120 {
+            slipstream(&mut karts);
+        }
+        assert_eq!(karts[0].boost + karts[0].draft, 0.0);
+    }
+
+    #[test]
+    fn a_start_in_time_boosts_and_one_too_early_stalls() {
+        let track = track();
+        let mut good = Kart::default();
+        launch(&mut good, Some(0.2));
+        let mut early = Kart::default();
+        launch(&mut early, Some(2.0));
+        let mut plain = Kart::default();
+        launch(&mut plain, Some(0.8));
+        for kart in [&mut good, &mut early, &mut plain] {
+            drive(kart, FULL, 1.0, &track);
+        }
+        assert!(good.speed > plain.speed + 3.0, "{good:?} {plain:?}");
+        assert!(early.speed < plain.speed - 5.0, "{early:?} {plain:?}");
     }
 
     #[test]

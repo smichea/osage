@@ -339,7 +339,14 @@ pub fn drive(kart: &Kart, me: usize, field: &[Rival], temper: &Temper, mind: &mu
 
     let top = pace * MAX_SPEED + if kart.boost > 0.0 { 6.0 } else { 0.0 };
     let tight = sharpest < 40.0 && at < 15.0;
-    steer(kart, spot, lateral, top.min(allowed), allowed, temper.drifts && tight && mind.plan != Plan::Wait, track)
+    let mut controls =
+        steer(kart, spot, lateral, top.min(allowed), allowed, temper.drifts && tight && mind.plan != Plan::Wait, track);
+    // Off a ramp, the bold do a trick: a press of the button in the air.
+    let flying = kart.height > track.lift(spot.along).0 + 1e-3;
+    if flying && kart.trick == 0.0 && temper.nerve > 0.4 {
+        controls.drift = kart.held == 0.0;
+    }
+    controls
 }
 
 /// The world's plain autopilot, for drivers who say only how to race: a

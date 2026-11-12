@@ -61,6 +61,7 @@ Each milestone ends with every oracle in AGENTS.md green, screenshots of what ch
 
 | Task | What | Oracle |
 | --- | --- | --- |
+| V1.0 Nothing repeats | Ground textures sampled without a visible tile (hex-tile blending, offsets and turns by position); the road varied along its length by a deterministic function of the distance (wear and rubber on the racing line, patches, seams, cracks, stains); grass with species, flowers and bare soil by place; every tree's species, size, turn and tint drawn from its position. | Reference screenshots; an autocorrelation test that finds no period in a road or grass strip; the same picture on every client. |
 | V1.1 Marks on the track | Skid marks and tyre rubber as decals that fade; dust and gravel when off track; debris after hits. | Bench budget at each tier. |
 | V1.2 Drivers animated | A rigged driver per character: steering, leaning, looking back, hit reaction, celebration on the podium. | Screenshots; animation unit tests on poses. |
 | V1.3 Crowd and marshals | The grandstand crowd animated (impostors far, meshes near), marshals waving flags. | Bench budget. |
@@ -79,7 +80,7 @@ Each milestone ends with every oracle in AGENTS.md green, screenshots of what ch
 
 ## 3. Order and parallel work
 
-M1 and M2 first: little work, and what players feel first. M3 then M4 for depth. M5 can start beside M3 (different crates). M6 last, on top of the models of M5. Within a milestone, tasks touching different crates can go to parallel agents.
+M1 and M2 first: little work, and what players feel first. Two pieces of the look go early, beside M2, at the responsible person's request: V1.0 (nothing repeats) and a first ray-traced picture of the karts at T4 (Solari: reflections and global illumination on an RTX card such as Adrien's), which then matures through M6. The bar for the look is the [rendering programme](03-rendering.md)'s: GTA 6 class at T4. M3 then M4 for depth. M5 can start beside M3 (different crates). M6 last, on top of the models of M5. Within a milestone, tasks touching different crates can go to parallel agents.
 
 ## 4. Done
 

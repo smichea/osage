@@ -23,7 +23,8 @@ message Step {
   // 1 full right, -1 full left.
   float steer = 3;
   // The drift button is held: steer and hold it at speed to drift; release
-  // after a long drift for a mini-turbo.
+  // for a mini-turbo of one to three levels, by how long the drift lasted.
+  // Pressed in the air, it is a trick: a boost on landing.
   bool drift = 4;
   // The use button is held: what the kart holds is used as it goes down
   // (kart.paddock/1).
@@ -75,6 +76,20 @@ message KartState {
   // to kart.state/1: a reader that ignores it predicts a rocket as a plain
   // kart, and is corrected.
   float rocket = 11;
+  // Added to kart.state/1 with jumps, tricks, starts and slipstreams
+  // (D-050); a reader that ignores them predicts a flat track and is
+  // corrected. Height above the road, m, and speed upwards, m/s.
+  float height = 12;
+  float climb = 13;
+  // 1 once a trick was done in this jump: a boost on landing.
+  float trick = 14;
+  // Seconds the engine is stalled for, after a start too early.
+  float stall = 15;
+  // Seconds in another kart's wake so far: enough of it gives a boost.
+  float draft = 16;
+  // 1 when the drift button was held at the last step applied: a trick
+  // needs a press.
+  float held = 17;
 }
 
 // kart.racer/1 — who drives a kart and how their race goes.
@@ -148,6 +163,16 @@ message Track {
   float start = 4;
   // Sectors a lap is cut into; a lap counts only through all of them, in order.
   uint32 sectors = 5;
+  // Ramps across the road (D-050): a kart that runs up one flies off its lip.
+  repeated Ramp ramps = 6;
+}
+
+message Ramp {
+  // Where it starts, metres along the centre line; over `length` metres it
+  // rises to `height`.
+  float along = 1;
+  float length = 2;
+  float height = 3;
 }
 
 // kart.race/1 — the race in progress.

@@ -449,8 +449,103 @@ pub fn build(
         ));
         commands.insert_resource(Water(water));
     }
+    spawn_ramps(&mut commands, &mut meshes, &mut materials, &mut images, track, &road_material);
 
     commands.insert_resource(land);
+}
+
+/// The ramps across the road (D-050), as the physics has them
+/// ([`osage_kart_physics::Track::lift`]): a slab of the road's own surface
+/// rising to its lip, from barrier to barrier; the lip and the sides striped
+/// black and yellow, to be seen from afar.
+fn spawn_ramps(
+    commands: &mut Commands,
+    meshes: &mut Assets<Mesh>,
+    materials: &mut Assets<StandardMaterial>,
+    images: &mut Assets<Image>,
+    track: &osage_kart_physics::Track,
+    road: &Handle<StandardMaterial>,
+) {
+    if track.ramps().is_empty() {
+        return;
+    }
+    // Reflective paint: it shines a little of its own, in shade too.
+    let painted = images.add(chequers(10, 1, [250, 196, 20], [20, 20, 20]));
+    let stripes = materials.add(StandardMaterial {
+        base_color_texture: Some(painted.clone()),
+        emissive: LinearRgba::rgb(0.35, 0.35, 0.35),
+        emissive_texture: Some(painted),
+        perceptual_roughness: 0.55,
+        cull_mode: None,
+        double_sided: true,
+        ..default()
+    });
+    for ramp in track.ramps() {
+        let (top, sides) = ramp_meshes(track, ramp);
+        commands.spawn((Part, Mesh3d(meshes.add(with_tangents(top))), MeshMaterial3d(road.clone())));
+        commands.spawn((Part, Mesh3d(meshes.add(sides)), MeshMaterial3d(stripes.clone())));
+    }
+}
+
+/// A ramp's top, wound up, and its lip and sides.
+fn ramp_meshes(track: &osage_kart_physics::Track, ramp: &osage_kart_physics::Ramp) -> (Mesh, Mesh) {
+    const ROWS: usize = 8;
+    // From barrier to barrier, as the physics lifts every kart that passes:
+    // no wheel drops off its edge.
+    let reach = track.half_width + track.verge + osage_kart_physics::BARRIER;
+    let point = |s: usize, lateral: f32| {
+        let along = ramp.along + ramp.length * s as f32 / ROWS as f32;
+        let (centre, heading) = track.at(along);
+        // Right of the road is (-cos h, sin h); a whisker above the road.
+        let y = 0.03 + ramp.height * s as f32 / ROWS as f32;
+        Vec3::new(centre[0] - heading.cos() * lateral, y, centre[1] + heading.sin() * lateral)
+    };
+    let (mut positions, mut uvs, mut indices) = (Vec::new(), Vec::new(), Vec::new());
+    for s in 0..=ROWS {
+        for lateral in [-reach, reach] {
+            positions.push(point(s, lateral).to_array());
+            uvs.push([lateral + reach, ramp.length * s as f32 / ROWS as f32]);
+        }
+    }
+    for s in 0..ROWS as u32 {
+        let (a, b, c, d) = (2 * s, 2 * s + 1, 2 * s + 2, 2 * s + 3);
+        indices.extend([a, b, c, b, d, c]);
+    }
+    let normals = vec![[0.0, 1.0, 0.0]; positions.len()];
+    let top = Mesh::new(PrimitiveTopology::TriangleList, RenderAssetUsages::default())
+        .with_inserted_attribute(Mesh::ATTRIBUTE_POSITION, positions)
+        .with_inserted_attribute(Mesh::ATTRIBUTE_NORMAL, normals)
+        .with_inserted_attribute(Mesh::ATTRIBUTE_UV_0, uvs)
+        .with_inserted_indices(Indices::U32(indices));
+    let mut top = facing_up(top);
+    top.compute_smooth_normals();
+
+    // The lip, across the road, and each side, down to the road.
+    let (mut positions, mut uvs, mut indices) = (Vec::new(), Vec::new(), Vec::<u32>::new());
+    // The stripes texture does not repeat: `u` runs 0 to 1 across each face
+    // (ten stripes across the lip), or over a share of it along a side.
+    let mut quad = |a: Vec3, b: Vec3, (u0, u1): (f32, f32)| {
+        let base = positions.len() as u32;
+        let (a0, b0) = (Vec3::new(a.x, 0.0, a.z), Vec3::new(b.x, 0.0, b.z));
+        positions.extend([a0, b0, b, a].map(|v| v.to_array()));
+        uvs.extend([[u0, 1.0], [u1, 1.0], [u1, 0.0], [u0, 0.0]]);
+        indices.extend([base, base + 1, base + 2, base, base + 2, base + 3]);
+    };
+    quad(point(ROWS, -reach), point(ROWS, reach), (0.0, 1.0));
+    let share = ramp.length / (2.0 * reach);
+    for lateral in [-reach, reach] {
+        for s in 0..ROWS {
+            let (u0, u1) = (s as f32 / ROWS as f32 * share, (s + 1) as f32 / ROWS as f32 * share);
+            quad(point(s, lateral), point(s + 1, lateral), (u0, u1));
+        }
+    }
+    let mut sides = Mesh::new(PrimitiveTopology::TriangleList, RenderAssetUsages::default())
+        .with_inserted_attribute(Mesh::ATTRIBUTE_POSITION, positions)
+        .with_inserted_attribute(Mesh::ATTRIBUTE_UV_0, uvs)
+        .with_inserted_indices(Indices::U32(indices));
+    sides.duplicate_vertices();
+    sides.compute_flat_normals();
+    (top, sides)
 }
 
 /// Lanes across the road's mesh: enough for the racing line to curve smoothly.
@@ -793,4 +888,5 @@ fn photographed(
     for (mesh, material) in grassed {
         commands.spawn((Part, Mesh3d(meshes.add(mesh)), MeshMaterial3d(material.clone()), NotShadowCaster));
     }
+    spawn_ramps(commands, meshes, materials, images, track, &road);
 }

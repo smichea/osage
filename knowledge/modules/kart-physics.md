@@ -6,7 +6,7 @@ resource: https://github.com/smichea/osage/tree/main/worlds/kart/physics
 licence: MIT OR Apache-2.0
 status: draft
 tags: [kart, physics, determinism, webassembly]
-generated: { by: "claude-code/claude-opus-5-5", at: "2026-11-12T00:30:00Z" }
+generated: { by: "claude-code/claude-opus-5-5", at: "2026-11-12T12:30:00Z" }
 ---
 
 # Purpose
@@ -15,19 +15,19 @@ One implementation of how a kart moves, shared by everything that must agree on 
 
 # Concepts
 
-- **Kart:** position `x, z`, `heading`, forward `speed`, sideways `slide`, `drift` direction, drift `charge`, `boost` time left, `rocket` time left (a paddock object: faster than a boost, 34 m/s, D-048), and the `spin` a knock gave it. For contacts, an outline: a capsule 1.9 m by 1.3 m, with a mass and a moment of inertia.
+- **Kart:** position `x, z`, `heading`, forward `speed`, sideways `slide`, `drift` direction, drift `charge`, `boost` time left, `rocket` time left (a paddock object: faster than a boost, 34 m/s, D-048), the `spin` a knock gave it, and (D-050) its `height` and `climb` off a ramp, a `trick` done in the air, a `stall` after a start too early, its slipstream `draft` and whether the drift button was `held`. For contacts, an outline: a capsule 1.9 m by 1.3 m, with a mass and a moment of inertia.
 - **Controls:** `throttle` and `steer` in −1…1, and the `drift` button.
-- **Track:** a closed centre line, the road's half width, and the verge beyond it; kerbs (`KERB`, 1 m) beyond the road's edge, grass beyond them, and the barriers' face `BARRIER` (0.9 m) beyond the verge.
+- **Track:** a closed centre line, the road's half width, the verge beyond it, and ramps across it (`Ramp`: where, how long, how high); kerbs (`KERB`, 1 m) beyond the road's edge, grass beyond them, and the barriers' face `BARRIER` (0.9 m) beyond the verge.
 - **Ground:** what each wheel runs on — road, kerb or grass.
 - **Step:** one sixtieth of a second. Nothing happens between steps.
 
 # Architecture
 
-A pure function `step(kart, controls, track)` and a `Track` that answers three questions: where a point is relative to the centre line (`locate`), where the centre line is at a distance from the start (`at`), and what the ground is at a distance from it (`ground`). Driving is arcade ([arcade kart physics](/algorithms/arcade-kart-physics.md)); contacts — between karts in `bump`, with the barriers at the end of `step` — are impulses ([capsule contacts](/algorithms/capsule-contacts.md), D-045). No state outside its arguments, no clock, no random numbers. A small WebAssembly interface exchanges numbers only, with no shared memory.
+A pure function `step(kart, controls, track)` and a `Track` that answers three questions: where a point is relative to the centre line (`locate`), where the centre line is at a distance from the start (`at`), what the ground is at a distance from it (`ground`), and how high the road is at a distance from the start (`lift`). The rules that involve several karts or the race are separate functions the world calls: `slipstream` and `launch`. Driving is arcade ([arcade kart physics](/algorithms/arcade-kart-physics.md)); contacts — between karts in `bump`, with the barriers at the end of `step` — are impulses ([capsule contacts](/algorithms/capsule-contacts.md), D-045). No state outside its arguments, no clock, no random numbers. A small WebAssembly interface exchanges numbers only, with no shared memory.
 
 # Interfaces
 
-`step`, `bump` (two karts collide), `wheels` (the ground under each wheel), `Kart::velocity`, `Track::new`, `Track::locate`, `Track::at`, `Track::ground`, `Controls::sanitized`, `wrap`, and the constants `KART_REACH`, `KART_RADIUS`, `KERB`, `BARRIER`; in WebAssembly `track_clear`, `track_point`, `track_close`, `kart_step`, `kart_get`.
+`step`, `bump` (two karts collide), `slipstream`, `launch`, `turbo_level`, `wheels` (the ground under each wheel), `Kart::velocity`, `Track::new`, `Track::with_ramps`, `Track::locate`, `Track::at`, `Track::ground`, `Track::lift`, `Controls::sanitized`, `wrap`, and the constants `KART_REACH`, `KART_RADIUS`, `KERB`, `BARRIER`, `TURBO_CHARGES`, `TURBO_BOOSTS`, `GRAVITY`, `TRICK_BOOST`, `DRAFT_CHARGE`, `LAUNCH_WINDOW`, `LAUNCH_EARLY`; in WebAssembly `track_clear`, `track_point`, `track_ramp`, `track_close`, `kart_set`, `kart_step`, `kart_get` (a kart's sixteen fields by number, so that a new field changes no signature).
 
 # Invariants
 
@@ -47,4 +47,4 @@ The crate has no dependency but `libm` and no engine type: it can be used as is 
 
 # Limits
 
-Flat ground only: no jumps, slopes, or kerbs that lift a wheel; contacts are in the plane, so no kart rides over another. Contacts between karts run on the server: a client predicting its kart sees a knock when the server's state arrives.
+Ramps are the only relief: no slopes, banking or kerbs that lift a wheel, and a ramp spans the whole width (a kart beside it rides it too). Driving backwards into a lip lifts the kart onto it at once. Contacts are in the plane, so no kart rides over another, even one in the air. Contacts between karts run on the server: a client predicting its kart sees a knock when the server's state arrives.

@@ -33,6 +33,8 @@ use crate::scene::{Course, PALETTE, Pose, roughness, wobble};
 
 /// A hop into a drift lasts this long, seconds.
 const HOP: f32 = 0.28;
+/// Seconds a trick's roll takes.
+const TRICK_ROLL: f32 = 0.45;
 
 /// The rockets of a rocket item (paddock objects), strapped either side
 /// behind the seat, pointing back: where each sits, and its nozzle.
@@ -117,6 +119,10 @@ pub struct Rig {
     /// Seconds driven, and this kart's own offset, for its rumble.
     time: f32,
     seed: f32,
+    /// The nose up a ramp and through the air, radians (down is positive).
+    attitude: f32,
+    /// How far through its roll a trick is, 0 to 1.
+    trick: f32,
 }
 
 pub fn setup(
@@ -401,6 +407,8 @@ pub fn dress(
                 sway: Vec2::ZERO,
                 time: 0.0,
                 seed: (kart.index_u32() % 97) as f32 * 0.61,
+                attitude: 0.0,
+                trick: 0.0,
             },
         ));
     }
@@ -453,8 +461,23 @@ pub fn animate(
         rig.torso += sway * step;
         let lean = Quat::from_rotation_x(rig.torso.y) * Quat::from_rotation_z(rig.torso.x);
 
+        // Up a ramp and through the air, the nose follows the path (D-050);
+        // a trick is a full roll of the body while it flies.
+        let path = -(kart.climb / kart.speed.abs().max(4.0)).atan().clamp(-0.5, 0.5);
+        rig.attitude += (path - rig.attitude) * ease(14.0);
+        if kart.trick > 0.0 {
+            rig.trick = (rig.trick + seconds / TRICK_ROLL).min(1.0);
+        } else {
+            rig.trick = 0.0;
+        }
+        let eased = rig.trick * rig.trick * (3.0 - 2.0 * rig.trick);
+        let roll = TAU * eased * if (rig.seed as i32) % 2 == 0 { 1.0 } else { -1.0 };
         if let Ok(mut place) = transforms.get_mut(entity) {
-            *place = Transform::from_xyz(kart.x, hop, kart.z).with_rotation(Quat::from_rotation_y(kart.heading));
+            *place = Transform::from_xyz(kart.x, kart.height + hop, kart.z)
+                .with_rotation(Quat::from_rotation_y(kart.heading) * Quat::from_rotation_x(rig.attitude))
+                * Transform::from_xyz(0.0, 0.5, 0.0)
+                * Transform::from_rotation(Quat::from_rotation_z(roll))
+                * Transform::from_xyz(0.0, -0.5, 0.0);
         }
         // What it holds, on its back.
         for (item, model) in osage_kart_items::Item::ALL.into_iter().zip(&rig.carried) {

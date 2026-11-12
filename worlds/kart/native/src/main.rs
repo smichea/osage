@@ -9,7 +9,7 @@
 //!   `--fps N|off` sets the frame rate wanted for this game (settings). Drive with the arrows or WASD,
 //!   drift with Space or Shift; a gamepad works too. F12 saves a screenshot.
 //!   `--autodrive` lets the world's autopilot hold the wheel;
-//!   `--screenshot-after SECONDS` saves a screenshot by itself.
+//!   `--screenshot-after SECONDS[,SECONDS…]` saves screenshots by itself.
 //! - `kart-native --bench [--tier T…] [--frames N] [--resolution WxH] [--out DIR]`
 //!   runs the bench without a server and writes `report.json` and screenshots
 //!   to `bench/out/<tier>-<time>/`.
@@ -60,7 +60,7 @@ use osage_sdk::v0;
 fn main() -> Result<()> {
     let (mut url, mut tier, mut bench) = ("ws://127.0.0.1:7878".to_owned(), Tier::T2, false);
     let (mut frames, mut resolution, mut out, mut without) = (2400u32, None, None, Vec::new());
-    let (mut autodrive, mut screenshot_after, mut viewpoint, mut headless) = (false, None, None, false);
+    let (mut autodrive, mut screenshot_after, mut viewpoint, mut headless) = (false, Vec::new(), None, false);
     let mut sky = scene::Sky::Noon;
     let mut fps = None;
     let mut args = std::env::args().skip(1);
@@ -70,7 +70,13 @@ fn main() -> Result<()> {
             "--bench" => bench = true,
             "--autodrive" => autodrive = true,
             "--headless" => headless = true,
-            "--screenshot-after" => screenshot_after = Some(value()?.parse().context("--screenshot-after")?),
+            "--screenshot-after" => {
+                screenshot_after = value()?
+                    .split(',')
+                    .map(|s| s.trim().parse::<f32>())
+                    .collect::<Result<_, _>>()
+                    .context("--screenshot-after takes seconds, comma-separated")?
+            }
             "--tier" => tier = value()?.parse().map_err(anyhow::Error::msg)?,
             "--sky" => sky = value()?.parse().map_err(anyhow::Error::msg)?,
             "--fps" => fps = Some(settings::parse_fps(&value()?).map_err(anyhow::Error::msg)?),

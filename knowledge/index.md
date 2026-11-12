@@ -44,7 +44,7 @@ What osage knows about its own modules: their architecture, the algorithms and t
 ## Algorithms
 
 * [Exact client-side prediction](algorithms/exact-client-prediction.md) - A client predicts its own vehicle with no visible correction, because the server applies exactly the steps the client sent and never makes one up.
-* [Arcade kart physics](algorithms/arcade-kart-physics.md) - A small kart model with drifting and two mini-turbo stages, made of a forward speed, a sideways slide and a heading.
+* [Arcade kart physics](algorithms/arcade-kart-physics.md) - A small kart model with drifting, three mini-turbo levels, ramps and tricks, starts and slipstreams, made of a forward speed, a sideways slide, a heading and a height.
 * [Capsule contacts with impulses](algorithms/capsule-contacts.md) - Two bodies in the plane, each a capsule with a mass and a moment of inertia, touch — they are pushed apart and exchange one impulse at the contact point, with restitution and friction, so that a knock pushes, slows and spins each by where it lands.
 * [Timedemo bench](algorithms/timedemo-bench.md) - A benchmark that draws the same frames on every machine by stepping a deterministic simulation once per frame and drawing off screen.
 * [Land around a track](algorithms/land-around-a-track.md) - Hills generated from noise that stay flat along a circuit and fade out at the edge of the modelled land, with a knoll and a lake placed in the room the circuit leaves inside its loop.

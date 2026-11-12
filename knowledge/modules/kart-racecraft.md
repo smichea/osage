@@ -6,7 +6,7 @@ resource: https://github.com/smichea/osage/tree/main/worlds/kart/components/race
 licence: MIT OR Apache-2.0
 status: draft
 tags: [kart, ai, drivers, determinism, component]
-generated: { by: "claude-code/claude-opus-5-5", at: "2026-11-12T02:00:00Z" }
+generated: { by: "claude-code/claude-opus-5-5", at: "2026-11-12T12:30:00Z" }
 ---
 
 # Purpose
@@ -54,6 +54,8 @@ Opponents that race as people do, each in their own way: one brakes late and div
 # Reuse
 
 Any racing game on a track given as a centre line: the bend speeds follow from the vehicle's turning rate, the temperaments from a seed.
+
+Off a ramp, the bold (nerve above 0.4) do a trick: a press of the drift button in the air (D-050).
 
 # Limits
 

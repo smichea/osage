@@ -9,13 +9,28 @@
 //! Contacts between karts run on the server only: their script is checked
 //! natively, against `golden-contacts.txt`.
 
-use osage_kart_physics::{Controls, Kart, Track, bump, step};
+use osage_kart_physics::{Controls, Kart, Ramp, Track, bump, step};
 
 const GOLDEN: &str = include_str!("golden.txt");
 const CONTACTS: &str = include_str!("golden-contacts.txt");
 
 fn bits(kart: &Kart) -> String {
-    let fields = [kart.x, kart.z, kart.heading, kart.speed, kart.slide, kart.drift, kart.charge, kart.boost, kart.spin];
+    let fields = [
+        kart.x,
+        kart.z,
+        kart.heading,
+        kart.speed,
+        kart.slide,
+        kart.drift,
+        kart.charge,
+        kart.boost,
+        kart.spin,
+        kart.height,
+        kart.climb,
+        kart.trick,
+        kart.stall,
+        kart.held,
+    ];
     fields.iter().map(|f| format!("{:08x}", f.to_bits())).collect::<Vec<_>>().join(" ")
 }
 
@@ -27,10 +42,14 @@ fn check(results: &str, recorded: &str, file: &str) {
     assert_eq!(results, recorded, "the physics changed: if on purpose, rerun with UPDATE_GOLDEN=1");
 }
 
-/// The script the client test replays: 1200 steps on a 200 m × 100 m loop.
+/// The script the client test replays: 1200 steps on a 200 m × 100 m loop
+/// with a ramp on each long side, from a stalled start.
 fn run() -> String {
-    let track = Track::new(vec![[0.0, 0.0], [0.0, 200.0], [-100.0, 200.0], [-100.0, 0.0]], 6.0, 3.0);
-    let mut kart = Kart { z: 10.0, ..Kart::default() };
+    let track = Track::new(vec![[0.0, 0.0], [0.0, 200.0], [-100.0, 200.0], [-100.0, 0.0]], 6.0, 3.0).with_ramps(vec![
+        Ramp { along: 20.0, length: 6.0, height: 1.25 },
+        Ramp { along: 34.0, length: 3.0, height: 0.5 },
+    ]);
+    let mut kart = Kart { z: 10.0, stall: 0.5, ..Kart::default() };
     let mut out = String::new();
     for i in 0..1200u32 {
         let controls = Controls {
@@ -39,7 +58,8 @@ fn run() -> String {
             drift: i / 120 % 2 == 1,
         };
         step(&mut kart, controls, &track);
-        if i % 60 == 59 {
+        // Every second, and every step in the air.
+        if i % 60 == 59 || kart.height > 0.0 {
             out.push_str(&format!("{} {}\n", i + 1, bits(&kart)));
         }
     }

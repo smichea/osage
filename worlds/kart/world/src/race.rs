@@ -64,6 +64,18 @@ pub struct Race {
     races: u32,
 }
 
+impl Race {
+    /// Seconds left until the lights go, during the countdown.
+    pub fn countdown_left(&self, now: Duration) -> Option<f32> {
+        (self.phase == Phase::Countdown).then(|| self.ends.map_or(0.0, |end| end.saturating_sub(now).as_secs_f32()))
+    }
+
+    /// Races lined up so far.
+    pub fn races(&self) -> u32 {
+        self.races
+    }
+}
+
 impl Default for Race {
     fn default() -> Self {
         Self {
@@ -260,8 +272,17 @@ fn line_up(
             .with(ids.controller, &controller)
             .with(ids.racer, &racer(&progress, None, None));
         let volatile = Volatile::default().with(ids.state, &state(&kart, 0));
-        let parts =
-            (entity_ids.next_id(), transform(&kart), discrete, volatile, Body(kart), pilot, progress, Seat(slot));
+        let parts = (
+            entity_ids.next_id(),
+            transform(&kart),
+            discrete,
+            volatile,
+            Body(kart),
+            pilot,
+            progress,
+            Seat(slot),
+            crate::driving::Launch::default(),
+        );
         let mut spawned = commands.spawn(parts);
         if let Some(session) = owner {
             spawned.insert(Owner(session));
@@ -383,7 +404,7 @@ pub fn publish(
 }
 
 fn transform(kart: &Kart) -> Transform {
-    Transform::from_xyz(kart.x, 0.0, kart.z).with_rotation(Quat::from_rotation_y(kart.heading))
+    Transform::from_xyz(kart.x, kart.height, kart.z).with_rotation(Quat::from_rotation_y(kart.heading))
 }
 
 fn state(kart: &Kart, applied: u64) -> proto::KartState {
@@ -399,6 +420,12 @@ fn state(kart: &Kart, applied: u64) -> proto::KartState {
         applied,
         spin: kart.spin,
         rocket: kart.rocket,
+        height: kart.height,
+        climb: kart.climb,
+        trick: kart.trick,
+        stall: kart.stall,
+        draft: kart.draft,
+        held: kart.held,
     }
 }
 

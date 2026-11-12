@@ -58,7 +58,8 @@ impl Client {
         self.catch_up();
         let entity = self.world.entities().find(|&e| self.world.get::<proto::Track>(e, types::TRACK).is_some());
         let track: proto::Track = self.world.get(entity.expect("the track"), types::TRACK).unwrap();
-        Track::new(track.points.chunks(2).map(|p| [p[0], p[1]]).collect(), track.half_width, track.verge)
+        // Ramps and all, as a client builds it.
+        osage_world_kart::Circuit::from_proto(&track).track
     }
 }
 
@@ -133,18 +134,7 @@ fn a_client_predicts_its_kart_exactly() {
 
     let (_, _, server) = alice.kart_of("alice");
     assert_eq!(server.applied, 600);
-    let server = Kart {
-        x: server.x,
-        z: server.z,
-        heading: server.heading,
-        speed: server.speed,
-        slide: server.slide,
-        drift: server.drift,
-        charge: server.charge,
-        boost: server.boost,
-        spin: server.spin,
-        rocket: server.rocket,
-    };
+    let server = osage_world_kart::kart_of(&server);
     assert_eq!(server, predicted, "bit for bit");
     assert!(fastest > 21.0 && drifted, "the kart reached full speed and drifted: {fastest}");
 }
@@ -252,4 +242,164 @@ fn the_host_starts_the_race_and_a_driver_alone_can_end_it() {
     call(&mut harness, &mut alice, "alice", 3, proto::RaceCall::Stop);
     assert_eq!(phase(&alice.race()), proto::Phase::Finished, "alone, alice ends it");
     run_until(&mut harness, &mut alice, 10, |c| phase(&c.race()) == proto::Phase::Ready);
+}
+
+/// The start is judged against the lights (D-050): a driver who holds the
+/// throttle through the countdown stalls, one who presses it as the lights
+/// go gets a boost.
+#[test]
+fn a_start_in_time_boosts_and_one_too_early_stalls() {
+    // Ticks before the end of the countdown at which the throttle goes down.
+    let start = |pressed_before: usize| {
+        let mut harness = Harness::new(KartWorld::unattended(1, 3), TICK_HZ);
+        let mut alice = Client::join(&mut harness, SessionKind::Human, Role::Player, "alice");
+        harness.run(2);
+        assert_eq!(phase(&alice.race()), proto::Phase::Countdown);
+        let (entity, _, _) = alice.kart_of("alice");
+        let controls_type = alice.world.types().id(types::CONTROLS).unwrap();
+        let countdown = 3 * SECOND;
+        for sequence in 1..=(countdown + 30) as u64 {
+            let throttle = if sequence as usize + pressed_before >= countdown { 1.0 } else { 0.0 };
+            let step = proto::Step { sequence, throttle, ..Default::default() };
+            harness
+                .send(alice.session, intent(sequence, entity, controls_type, &proto::Controls { steps: vec![step] }));
+            harness.run(1);
+            if phase(&alice.race()) == proto::Phase::Racing {
+                harness.run(2);
+                break;
+            }
+        }
+        alice.kart_of("alice").2
+    };
+    let in_time = start(SECOND / 6);
+    assert!(in_time.boost > 0.5 && in_time.stall == 0.0, "{in_time:?}");
+    let early = start(3 * SECOND);
+    assert!(early.stall > 0.0 && early.boost == 0.0, "{early:?}");
+    let late = start(0);
+    assert!(late.stall == 0.0, "{late:?}");
+}
+
+/// The circuit's ramps throw karts into the air, and the bold among the
+/// bots do a trick off them for a boost on landing.
+#[test]
+fn bots_fly_off_the_ramps_and_trick() {
+    let mut harness = Harness::new(KartWorld::unattended(6, 3), TICK_HZ);
+    let mut alice = Client::join(&mut harness, SessionKind::Human, Role::Player, "alice");
+    run_until(&mut harness, &mut alice, 5, |c| phase(&c.race()) == proto::Phase::Racing);
+    assert_eq!(alice.track().ramps().len(), 2, "the circuit has its ramps");
+    let (mut flew, mut tricked) = (false, false);
+    for _ in 0..60 * SECOND {
+        harness.run(1);
+        for (_, _, kart) in alice.karts() {
+            flew |= kart.height > 1.0;
+            tricked |= kart.trick > 0.0;
+        }
+        if flew && tricked {
+            return;
+        }
+    }
+    panic!("flew {flew}, tricked {tricked}");
+}
+
+/// The feel of the driving is tuned against the bots (D-050): their race
+/// time over two laps stays in a band, so that a change to the physics that
+/// makes the circuit much faster or slower is seen.
+#[test]
+fn bots_lap_the_circuit_in_their_time_band() {
+    let mut harness = Harness::new(KartWorld::unattended(6, 2), TICK_HZ);
+    let mut alice = Client::join(&mut harness, SessionKind::Human, Role::Player, "alice");
+    run_until(&mut harness, &mut alice, 5, |c| phase(&c.race()) == proto::Phase::Racing);
+    run_until(&mut harness, &mut alice, 120, |c| c.karts().iter().filter(|(_, r, _)| r.finish_ms > 0).count() >= 3);
+    let mut times: Vec<u64> =
+        alice.karts().iter().filter(|(_, r, _)| r.finish_ms > 0).map(|(_, r, _)| r.finish_ms).collect();
+    times.sort();
+    let winner = times[0] as f32 / 1000.0;
+    assert!((BAND.0..BAND.1).contains(&winner), "winner in {winner} s");
+}
+
+/// The winning bot's time over two laps, seconds: 60.1 s when the band was
+/// set (2026-11-12, with jumps, three-level mini-turbos and slipstreams),
+/// give or take a tenth.
+const BAND: (f32, f32) = (54.0, 66.0);
+
+/// Every flight off a ramp in a race of bots, watched step by step: karts
+/// take off at speed, fly a little over half a second, land on the road
+/// pointing down it, and race on without losing their speed (D-050).
+#[test]
+fn every_kart_flies_off_the_ramps_and_lands_on_the_road() {
+    #[derive(Debug, Default)]
+    struct Flight {
+        takeoff: f32,
+        peak: f32,
+        steps: u32,
+        landing: Option<(f32, f32, f32)>,
+        after: Option<f32>,
+    }
+    let mut harness = Harness::new(KartWorld::unattended(6, 2), TICK_HZ);
+    let mut alice = Client::join(&mut harness, SessionKind::Human, Role::Player, "alice");
+    run_until(&mut harness, &mut alice, 5, |c| phase(&c.race()) == proto::Phase::Racing);
+    let track = alice.track();
+    let mut flights: Vec<(u64, Flight)> = Vec::new();
+    let mut flying: std::collections::HashMap<u64, usize> = Default::default();
+    let mut since: std::collections::HashMap<u64, u32> = Default::default();
+    for _ in 0..70 * SECOND {
+        harness.run(1);
+        for (entity, racer, kart) in alice.karts() {
+            if racer.finish_ms > 0 {
+                continue;
+            }
+            let spot = track.locate(kart.x, kart.z);
+            let airborne = kart.height > track.lift(spot.along).0 + 1e-3;
+            match (airborne, flying.get(&entity).copied()) {
+                (true, None) => {
+                    flying.insert(entity, flights.len());
+                    flights.push((
+                        entity,
+                        Flight { takeoff: kart.speed, peak: kart.height, steps: 1, ..Default::default() },
+                    ));
+                }
+                (true, Some(i)) => {
+                    let flight = &mut flights[i].1;
+                    flight.peak = flight.peak.max(kart.height);
+                    flight.steps += 1;
+                }
+                (false, Some(i)) => {
+                    let (_, road) = track.at(spot.along);
+                    let off = osage_kart_physics::wrap(kart.heading - road).abs();
+                    flights[i].1.landing = Some((spot.lateral, off, kart.speed));
+                    flying.remove(&entity);
+                    since.insert(entity, 0);
+                }
+                (false, None) => {}
+            }
+            // Half a second after landing: still racing.
+            if let Some(n) = since.get_mut(&entity) {
+                *n += 1;
+                if *n == SECOND as u32 / 2 {
+                    if let Some((_, flight)) = flights.iter_mut().rev().find(|(e, _)| *e == entity) {
+                        flight.after = Some(kart.speed);
+                    }
+                    since.remove(&entity);
+                }
+            }
+        }
+    }
+    assert!(flights.len() >= 12, "six karts, two ramps, two laps: {} flights", flights.len());
+    for (entity, f) in &flights {
+        let (lateral, off, speed) = f.landing.unwrap_or_else(|| panic!("kart {entity} never landed: {f:?}"));
+        assert!(f.takeoff > 12.0, "kart {entity} took off slowly: {f:?}");
+        assert!((0.2..1.0).contains(&(f.steps as f32 / TICK_HZ as f32)), "kart {entity} flew {} steps", f.steps);
+        assert!(f.peak < 2.5, "kart {entity} flew too high: {f:?}");
+        assert!(
+            lateral.abs() < track.half_width + osage_kart_physics::KERB,
+            "kart {entity} landed off the road: {f:?}"
+        );
+        assert!(off < 0.5, "kart {entity} landed askew: {f:?}");
+        // Only a boost that runs out in the air brings it back to top speed.
+        let kept = f.takeoff.min(osage_kart_physics::MAX_SPEED);
+        assert!(speed > kept - 2.0, "kart {entity} lost speed in the air: {f:?}");
+        if let Some(after) = f.after {
+            assert!(after > 0.7 * speed, "kart {entity} lost its speed after landing: {f:?}");
+        }
+    }
 }

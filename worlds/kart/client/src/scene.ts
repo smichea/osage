@@ -5,7 +5,13 @@
 // (road, kerbs, walls, start line, trees) and the karts — all procedural.
 
 import * as THREE from "three";
-import { BARRIER, KERB, LONG_TURBO_CHARGE, SHORT_TURBO_CHARGE } from "./physics.js";
+import { BARRIER, KERB, type RampValues, TURBO_CHARGES } from "./physics.js";
+
+/** The colour of drift sparks by the level of mini-turbo charged: none, blue, orange, violet. */
+export function sparkColour(charge: number): string {
+  const level = TURBO_CHARGES.filter((c) => charge >= c).length;
+  return ["#fff6d5", "#3fa9ff", "#ff8c1a", "#bf4dff"][level];
+}
 
 export const PALETTE = ["#e5534b", "#539bf5", "#57ab5a", "#c69026", "#b083f0", "#39c5cf", "#e0823d", "#f778ba"];
 
@@ -61,7 +67,13 @@ export interface CircuitView {
   at(along: number): { x: number; z: number; heading: number };
 }
 
-export function buildCircuit(points: ArrayLike<number>, halfWidth: number, verge: number, start: number): CircuitView {
+export function buildCircuit(
+  points: ArrayLike<number>,
+  halfWidth: number,
+  verge: number,
+  start: number,
+  ramps: RampValues[] = [],
+): CircuitView {
   const f = frames(points);
   const group = new THREE.Group();
 
@@ -120,6 +132,40 @@ export function buildCircuit(points: ArrayLike<number>, halfWidth: number, verge
   line.rotation.y = s.heading;
   group.add(line);
 
+  // Ramps across the road (D-050): a slab rising to its lip, from barrier
+  // to barrier, as the physics lifts every kart that passes.
+  const slab = new THREE.MeshStandardMaterial({ color: "#454b54", roughness: 0.9, side: THREE.DoubleSide });
+  for (const ramp of ramps) {
+    const rows = 8;
+    const reach = halfWidth + verge + BARRIER;
+    const point = (row: number, lateral: number, top: boolean) => {
+      const p = at(ramp.along + (ramp.length * row) / rows);
+      const y = top ? 0.03 + (ramp.height * row) / rows : 0;
+      // Right of the road is (-cos h, sin h).
+      return [p.x - Math.cos(p.heading) * lateral, y, p.z + Math.sin(p.heading) * lateral];
+    };
+    const positions: number[] = [];
+    const quad = (a: number[], b: number[], c: number[], d: number[]) => positions.push(...a, ...b, ...c, ...a, ...c, ...d);
+    for (let r = 0; r < rows; r++) {
+      quad(point(r, -reach, true), point(r, reach, true), point(r + 1, reach, true), point(r + 1, -reach, true));
+      for (const side of [-reach, reach]) quad(point(r, side, false), point(r + 1, side, false), point(r + 1, side, true), point(r, side, true));
+    }
+    quad(point(rows, -reach, false), point(rows, reach, false), point(rows, reach, true), point(rows, -reach, true));
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
+    geometry.computeVertexNormals();
+    group.add(new THREE.Mesh(geometry, slab));
+    // The lip, striped yellow to be seen from afar.
+    const lip = new THREE.Mesh(
+      new THREE.PlaneGeometry(2 * reach, ramp.height),
+      new THREE.MeshStandardMaterial({ color: "#f5c414", roughness: 0.6, side: THREE.DoubleSide }),
+    );
+    const end = at(ramp.along + ramp.length);
+    lip.position.set(end.x, ramp.height / 2, end.z);
+    lip.rotation.y = end.heading;
+    group.add(lip);
+  }
+
   // Trees outside the walls, placed the same way on every client.
   let seed = 7;
   const random = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
@@ -150,6 +196,8 @@ export interface KartView {
   wheels: THREE.Mesh[];
   sparks: THREE.Mesh[];
   flame: THREE.Mesh;
+  /** How far through a trick's roll, 0 to 1. */
+  trick: number;
 }
 
 const shared = {
@@ -194,19 +242,32 @@ export function buildKart(colour: number): KartView {
   flame.visible = false;
   body.add(...sparks, flame);
   const root = new THREE.Group();
+  // Heading, then the nose's pitch, then a trick's roll.
+  root.rotation.order = "YXZ";
   root.add(body);
-  return { root, body, wheels, sparks, flame };
+  return { root, body, wheels, sparks, flame, trick: 0 };
 }
 
 /** Pose and effects of a kart from its state. */
-export function poseKart(view: KartView, x: number, z: number, heading: number, state: { speed: number; drift: number; charge: number; boost: number }, seconds: number) {
-  view.root.position.set(x, 0, z);
+export function poseKart(
+  view: KartView,
+  x: number,
+  z: number,
+  heading: number,
+  state: { speed: number; drift: number; charge: number; boost: number; height?: number; climb?: number; trick?: number },
+  seconds: number,
+) {
+  view.root.position.set(x, state.height ?? 0, z);
   view.root.rotation.y = heading;
+  // Up a ramp and in the air the nose follows the path; a trick is a roll.
+  view.root.rotation.x = -Math.atan((state.climb ?? 0) / Math.max(4, Math.abs(state.speed)));
+  view.trick = (state.trick ?? 0) > 0 ? Math.min(1, view.trick + seconds / 0.45) : 0;
+  view.root.rotation.z = 2 * Math.PI * view.trick * view.trick * (3 - 2 * view.trick);
   // A drifting kart is drawn turned into the slide.
   const slip = -state.drift * 0.35;
   view.body.rotation.y += (slip - view.body.rotation.y) * Math.min(1, seconds * 10);
   for (const wheel of view.wheels) wheel.rotation.x += (state.speed * seconds) / 0.32;
-  const colour = state.charge >= LONG_TURBO_CHARGE ? "#ff8c1a" : state.charge >= SHORT_TURBO_CHARGE ? "#3fa9ff" : "#fff6d5";
+  const colour = sparkColour(state.charge);
   for (const spark of view.sparks) {
     spark.visible = state.drift !== 0 && Math.random() < 0.8;
     (spark.material as THREE.MeshBasicMaterial).color.set(colour);

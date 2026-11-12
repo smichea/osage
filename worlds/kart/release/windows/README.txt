@@ -29,6 +29,14 @@ Controls
   A gamepad works too: triggers or South/East to drive, West to drift,
   North to use the item, the right stick to look round.
 
+Driving well pays:
+  - hold a drift through a bend: the sparks turn blue, orange, then
+    violet; release for a mini-turbo, longer at each colour;
+  - off a ramp, press drift in the air for a trick and a boost on landing;
+  - press the throttle as the lights go out for a boost; press it too
+    early and the engine stalls;
+  - stay right behind another kart for a moment: its wake slings you past.
+
 Racing friends on the same Wi-Fi
 --------------------------------
 1. One computer hosts: double-click host.bat. It shows this computer's

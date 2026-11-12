@@ -15,7 +15,7 @@ use bevy::{
     text::FontSize,
 };
 use osage_kart_items::Item;
-use osage_kart_physics::{LONG_TURBO_CHARGE, SHORT_TURBO_CHARGE};
+use osage_kart_physics::{TURBO_CHARGES, turbo_level};
 
 use crate::scene::{Course, PALETTE, Stage};
 
@@ -38,6 +38,8 @@ pub struct RaceView {
     pub speed: f32,
     pub charge: f32,
     pub boosting: bool,
+    /// The engine stalled: a start too early.
+    pub stalled: bool,
     /// What the player's kart holds, from a crate.
     pub held: Option<Item>,
     /// The host's name, who starts each race; empty when races start by themselves.
@@ -291,6 +293,14 @@ fn write(
             },
             Label::Lights => match view.stage {
                 Lights::Count(seconds) => seconds.max(1).to_string(),
+                Lights::Go if view.stalled => {
+                    tint = Some(Color::srgb(1.0, 0.3, 0.25));
+                    "STALLED".to_owned()
+                }
+                Lights::Go if view.boosting => {
+                    tint = Some(Color::srgb(1.0, 0.75, 0.2));
+                    "GREAT START!".to_owned()
+                }
                 Lights::Go => {
                     tint = Some(Color::srgb(0.35, 1.0, 0.45));
                     "GO!".to_owned()
@@ -305,6 +315,7 @@ fn write(
                     "Press Enter to start the race\n(others can still join)".to_owned()
                 }
                 Lights::Ready(false) => format!("Waiting for {} to start the race", view.host),
+                Lights::Count(_) if me.is_some() => "Throttle as the lights go out, not before".to_owned(),
                 _ => String::new(),
             },
         };
@@ -328,14 +339,16 @@ fn write(
     }
 
     if let Ok((mut bar, mut fill)) = gauge.single_mut() {
-        let share = if me.is_some() { (view.charge / LONG_TURBO_CHARGE).clamp(0.0, 1.0) } else { 0.0 };
+        let share = if me.is_some() { (view.charge / TURBO_CHARGES[2]).clamp(0.0, 1.0) } else { 0.0 };
         let width = percent(share * 100.0);
         if bar.width != width {
             bar.width = width;
         }
-        let stage = match view.charge {
-            c if c >= LONG_TURBO_CHARGE => Color::srgb(1.0, 0.55, 0.1),
-            c if c >= SHORT_TURBO_CHARGE => Color::srgb(0.25, 0.65, 1.0),
+        // The sparks' colours (effects): blue, orange, violet.
+        let stage = match turbo_level(view.charge) {
+            3 => Color::srgb(0.75, 0.3, 1.0),
+            2 => Color::srgb(1.0, 0.55, 0.1),
+            1 => Color::srgb(0.25, 0.65, 1.0),
             _ => Color::srgb(1.0, 0.95, 0.75),
         };
         if fill.0 != stage {
