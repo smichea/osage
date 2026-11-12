@@ -22,12 +22,17 @@ Controls
   A gamepad works too: triggers or South/East to drive, West to drift,
   North to use the item, the right stick to look round.
 
-Racing a friend
----------------
-On one computer, start kart-server.exe with
-    kart-server.exe --listen 0.0.0.0:7878 --webtransport 0.0.0.0:7879
-and let Windows' firewall accept it on the private network. On the other:
-    kart-native.exe ws://ADDRESS-OF-THE-FIRST:7878
+Racing friends on the same Wi-Fi
+--------------------------------
+1. One computer hosts: double-click host.bat. It shows this computer's
+   address (like 192.168.1.20). If Windows' firewall asks, allow
+   "kart-server" on private networks.
+2. Each of the others double-clicks join.bat and types that address.
+3. Whoever arrives during the countdown takes a bot's place; whoever
+   arrives during a race joins the next one.
+If join.bat cannot connect: the Wi-Fi must be a "private" network in
+Windows' settings on the host, and guest or public Wi-Fi often keeps
+devices from seeing one another (use a phone's hotspot instead).
 
 Graphics
 --------

@@ -1,7 +1,8 @@
 # Builds the kart game for Windows and attaches it to a GitHub release:
-# kart-native.exe (the game), kart-server.exe (the world, to race the bots
-# locally), play.bat and a README. The content (textures, sound clips) is
-# attached to the release separately, from a machine that has it.
+# kart-native.exe (the game), kart-server.exe (the world), play.bat (race
+# the bots), host.bat and join.bat (race on the same network) and a README.
+# The content (textures, sound clips) is attached to the release
+# separately, from a machine that has it.
 name: release-windows
 
 on:
@@ -37,7 +38,7 @@ jobs:
         run: |
           mkdir -p dist/osage-kart
           cp target/release/kart-native.exe target/release/kart-server.exe dist/osage-kart/
-          cp worlds/kart/release/windows/play.bat worlds/kart/release/windows/README.txt dist/osage-kart/
+          cp worlds/kart/release/windows/*.bat worlds/kart/release/windows/README.txt dist/osage-kart/
           cp -r LICENSE LICENSE-EXCEPTIONS.md LICENSES dist/osage-kart/
           cd dist && 7z a -tzip osage-kart-windows-x64.zip osage-kart
       - name: Attach to the release
