@@ -26,6 +26,7 @@ mod effects;
 mod hud;
 mod karts;
 mod landmarks;
+mod paddock;
 mod play;
 mod predict;
 mod scene;

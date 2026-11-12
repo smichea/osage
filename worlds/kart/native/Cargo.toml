@@ -18,6 +18,7 @@ path = "src/main.rs"
 [dependencies]
 osage-kart-physics.workspace = true
 osage-kart-racecraft.workspace = true
+osage-kart-items.workspace = true
 osage-kart-sound.workspace = true
 osage-kart-land.workspace = true
 osage-kart-roadside.workspace = true

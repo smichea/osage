@@ -4824,6 +4824,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "osage-kart-items"
+version = "0.1.0"
+dependencies = [
+ "libm",
+ "osage-kart-physics",
+]
+
+[[package]]
 name = "osage-kart-land"
 version = "0.1.0"
 dependencies = [
@@ -4849,6 +4857,7 @@ dependencies = [
  "crossbeam-channel",
  "osage-content",
  "osage-kart-crowd",
+ "osage-kart-items",
  "osage-kart-land",
  "osage-kart-model",
  "osage-kart-physics",
@@ -4993,6 +5002,7 @@ dependencies = [
  "libm",
  "osage-agent",
  "osage-credentials",
+ "osage-kart-items",
  "osage-kart-physics",
  "osage-kart-racecraft",
  "osage-sdk",

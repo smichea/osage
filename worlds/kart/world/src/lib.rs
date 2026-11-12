@@ -9,11 +9,12 @@
 
 mod circuit;
 mod driving;
+mod paddock;
 mod race;
 
 use bevy::prelude::*;
 use osage_kart_physics::Kart;
-use osage_world_module_api::{Discrete, EntityIds, RegionSet, Schema, TypeSpec, WorldModule};
+use osage_world_module_api::{Discrete, EntityIds, RegionSet, Schema, TypeSpec, Volatile, WorldModule};
 
 pub use circuit::Circuit;
 pub use driving::autopilot;
@@ -34,6 +35,7 @@ pub mod types {
     pub const RACER: &str = "kart.racer/1";
     pub const TRACK: &str = "kart.track/1";
     pub const RACE: &str = "kart.race/1";
+    pub const PADDOCK: &str = "kart.paddock/1";
 }
 
 /// The kart world; runs at 60 ticks per second, one physics step per tick.
@@ -66,6 +68,7 @@ impl Plugin for KartWorld {
                     race::flow,
                     driving::drive,
                     driving::collide,
+                    paddock::items,
                     race::progress,
                     race::publish,
                 )
@@ -106,6 +109,13 @@ impl WorldModule for KartWorld {
                 false,
                 "The race: phase (waiting, countdown, racing, finished), when it ends, laps, order.",
             ),
+            spec(
+                types::PADDOCK,
+                "Paddock",
+                true,
+                "Crates across the road (break one for an item: see Racer.held, use it with Step.use_item or \
+                 Autopilot.use_items) and what karts left on the track: rolling tyres, cones, oil.",
+            ),
         ]
     }
 
@@ -133,6 +143,7 @@ struct Ids {
     state: u32,
     racer: u32,
     race: u32,
+    paddock: u32,
 }
 
 /// The entity carrying `kart.race/1`.
@@ -159,6 +170,7 @@ fn setup(
         state: id(types::STATE),
         racer: id(types::RACER),
         race: id(types::RACE),
+        paddock: id(types::PADDOCK),
     };
     commands.insert_resource(kart);
     commands.spawn((
@@ -167,5 +179,11 @@ fn setup(
         Discrete::default().with(id(types::TRACK), &course.0.to_proto()),
     ));
     let board = proto::Race { phase: proto::Phase::Waiting.into(), laps: rules.laps, ..default() };
-    commands.spawn((ids.next_id(), Transform::default(), Discrete::default().with(kart.race, &board), RaceBoard));
+    commands.spawn((
+        ids.next_id(),
+        Transform::default(),
+        Discrete::default().with(kart.race, &board),
+        Volatile::default(),
+        RaceBoard,
+    ));
 }

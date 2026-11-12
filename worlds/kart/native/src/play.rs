@@ -13,7 +13,8 @@ use bevy::{
     render::view::screenshot::{Screenshot, save_to_disk},
 };
 use crossbeam_channel::{Receiver, Sender};
-use osage_kart_physics::{Controls, Kart, wrap};
+use osage_kart_items::wants;
+use osage_kart_physics::{Controls, Kart, Spot, wrap};
 use osage_sdk::{
     Transport, World, WorldEvent, components, connect, hello, intent, types as core,
     v0::{self, Role, ServerMessage, Welcome, client_message, server_message},
@@ -27,6 +28,7 @@ use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 
 use crate::{
     hud::{Entry, HudPlugin, Lights, RaceView},
+    paddock::{PaddockPlugin, PaddockView, item},
     predict::Predictor,
     scene::{Course, Followed, Pose, Stage},
 };
@@ -60,7 +62,7 @@ impl Plugin for PlayPlugin {
             .insert_resource(Replica { status: format!("connecting to {}…", self.url), ..default() })
             .insert_resource(Driver { autodrive: self.autodrive, ..default() })
             .insert_resource(Shots { after: self.screenshot_after })
-            .add_plugins(HudPlugin)
+            .add_plugins((HudPlugin, PaddockPlugin))
             .add_systems(FixedUpdate, drive)
             .add_systems(Update, (receive, send, poses, follow_someone, summarise).chain().in_set(Stage::Simulate))
             .add_systems(Update, screenshots);
@@ -105,6 +107,26 @@ impl Replica {
 
     fn racer(&self, kart: u64) -> Option<proto::Racer> {
         self.world.as_ref()?.get(kart, types::RACER)
+    }
+
+    fn paddock(&self) -> Option<proto::Paddock> {
+        let world = self.world.as_ref()?;
+        world.entities().find_map(|entity| world.get(entity, types::PADDOCK))
+    }
+
+    /// Every kart on the track, and which of them is this player's.
+    fn field(&self, circuit: &Circuit) -> (Vec<Spot>, Option<usize>) {
+        let Some(world) = &self.world else { return (Vec::new(), None) };
+        let mut spots = Vec::new();
+        let mut me = None;
+        for &id in self.karts.keys() {
+            let Some(state) = world.get::<proto::KartState>(id, types::STATE) else { continue };
+            if Some(id) == self.mine {
+                me = Some(spots.len());
+            }
+            spots.push(circuit.track.locate(state.x, state.z));
+        }
+        (spots, me)
     }
 
     fn finished(&self, kart: u64) -> bool {
@@ -279,6 +301,7 @@ fn drive(
     let mut throttle = key(&[KeyCode::ArrowUp, KeyCode::KeyW]) - key(&[KeyCode::ArrowDown, KeyCode::KeyS]);
     let wanted = key(&[KeyCode::ArrowRight, KeyCode::KeyD]) - key(&[KeyCode::ArrowLeft, KeyCode::KeyA]);
     let mut drift = keys.any_pressed([KeyCode::Space, KeyCode::ShiftLeft, KeyCode::ShiftRight]);
+    let mut using = keys.any_pressed([KeyCode::KeyF, KeyCode::ControlLeft, KeyCode::ControlRight]);
     let swing = STEER_RATE * time.delta_secs();
     driver.steer += (wanted - driver.steer).clamp(-swing, swing);
 
@@ -295,17 +318,22 @@ fn drive(
             throttle = pedal;
         }
         drift |= pad.any_pressed([GamepadButton::RightTrigger, GamepadButton::LeftTrigger, GamepadButton::West]);
+        using |= pad.pressed(GamepadButton::North);
     }
     let mut controls = Controls { throttle, steer: driver.steer, drift };
     if let (true, Some(kart)) = (driver.autodrive, driver.predictor.kart) {
-        controls = autopilot(&kart, &proto::Autopilot { pace: 0.9, line: 0.0, drift: true }, circuit);
+        controls = autopilot(&kart, &proto::Autopilot { pace: 0.9, line: 0.0, drift: true, use_items: false }, circuit);
+        // And uses what it picks up as the world's drivers do.
+        let held = replica.racer(mine).and_then(|racer| item(racer.held()));
+        let (spots, me) = replica.field(circuit);
+        using = held.zip(me).is_some_and(|(held, me)| wants(held, me, &spots, &kart, &circuit.track));
     }
     // The lights hold the karts: the world ignores the throttle until the start.
     if replica.race().is_none_or(|race| race.phase() != Phase::Racing) {
         controls.throttle = 0.0;
     }
     let controls = controls.sanitized();
-    driver.predictor.step(controls, &circuit.track);
+    driver.predictor.step(controls, using, &circuit.track);
     driver.fresh += 1;
 }
 
@@ -374,7 +402,17 @@ fn screenshots(mut commands: Commands, time: Res<Time>, keys: Res<ButtonInput<Ke
 }
 
 /// What the interface shows this frame, from what the world sent.
-fn summarise(replica: Res<Replica>, driver: Res<Driver>, karts: Query<(&Remote, &Pose)>, mut view: ResMut<RaceView>) {
+fn summarise(
+    replica: Res<Replica>,
+    driver: Res<Driver>,
+    karts: Query<(&Remote, &Pose)>,
+    mut view: ResMut<RaceView>,
+    mut paddock: ResMut<PaddockView>,
+) {
+    if let Some(now) = replica.paddock().filter(|now| *now != paddock.0) {
+        paddock.0 = now;
+    }
+    view.held = replica.mine.and_then(|mine| replica.racer(mine)).and_then(|racer| item(racer.held()));
     let race = replica.race();
     let now = replica.world_time();
     let seconds_left = |race: &proto::Race| ((race.phase_ends_us as i64 - now) as f32 / 1e6).ceil() as i64;

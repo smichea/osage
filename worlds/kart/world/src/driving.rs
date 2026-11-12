@@ -41,8 +41,10 @@ pub enum Pilot {
 /// (D-031). A late step makes the kart wait a tick rather than guess.
 #[derive(Default)]
 pub struct Steps {
-    waiting: BTreeMap<u64, Controls>,
+    waiting: BTreeMap<u64, (Controls, bool)>,
     applied: u64,
+    /// The use button, as of the last step applied.
+    using: bool,
     credit: u32,
     idle: u32,
 }
@@ -68,6 +70,17 @@ impl Pilot {
             _ => 0,
         }
     }
+
+    /// Whether the use button is down; `None` when the world's rule for
+    /// its own drivers decides ([`osage_kart_items::wants`]).
+    pub fn uses_items(&self) -> Option<bool> {
+        match self {
+            Self::Human(steps) => Some(steps.using),
+            Self::Agent(autopilot) if autopilot.use_items => None,
+            Self::Agent(_) => Some(false),
+            Self::Bot(_) => None,
+        }
+    }
 }
 
 pub fn intents(ids: Res<Ids>, mut intents: MessageReader<IntentReceived>, mut pilots: Query<&mut Pilot>) {
@@ -78,7 +91,7 @@ pub fn intents(ids: Res<Ids>, mut intents: MessageReader<IntentReceived>, mut pi
                 let Ok(controls) = proto::Controls::decode(intent.value.as_slice()) else { continue };
                 for step in controls.steps.into_iter().filter(|s| s.sequence > steps.applied) {
                     let controls = Controls { throttle: step.throttle, steer: step.steer, drift: step.drift };
-                    steps.waiting.insert(step.sequence, controls.sanitized());
+                    steps.waiting.insert(step.sequence, (controls.sanitized(), step.use_item));
                 }
                 while steps.waiting.len() > 4 * BACKLOG {
                     steps.waiting.pop_first();
@@ -91,6 +104,7 @@ pub fn intents(ids: Res<Ids>, mut intents: MessageReader<IntentReceived>, mut pi
                     pace: clean(wanted.pace, 0.0),
                     line: clean(wanted.line, -1.0),
                     drift: wanted.drift,
+                    use_items: wanted.use_items,
                 };
             }
             _ => {}
@@ -115,7 +129,7 @@ pub fn drive(race: Res<Race>, course: Res<Course>, mut karts: Query<(&mut Body, 
         };
         // Past the line, the autopilot brings the kart round gently.
         if progress.finish_ms.is_some() {
-            controls = vec![autopilot(&body.0, &proto::Autopilot { pace: 0.5, line: 0.0, drift: false }, &course.0)];
+            controls = vec![autopilot(&body.0, &proto::Autopilot { pace: 0.5, line: 0.0, ..default() }, &course.0)];
         }
         for mut controls in controls {
             // The lights hold the karts; after the race, they coast.
@@ -134,8 +148,9 @@ fn next_steps(steps: &mut Steps) -> Vec<Controls> {
     let burst = if steps.waiting.len() > BACKLOG { 2 } else { 1 };
     let mut taken = Vec::with_capacity(burst);
     while taken.len() < burst && steps.credit > 0 {
-        let Some((sequence, controls)) = steps.waiting.pop_first() else { break };
+        let Some((sequence, (controls, using))) = steps.waiting.pop_first() else { break };
         steps.applied = sequence;
+        steps.using = using;
         steps.credit -= 1;
         taken.push(controls);
     }

@@ -449,3 +449,12 @@ Date: 2026-11-12 · Amends [D-031](#d-031--the-kart-world-shared-physics-exact-p
 - **How:** the state gains one number, `spin`, the rate of turn a knock gave. It travels in `kart.state/1` as field 10 — an added field, which older readers ignore, predicting without it until they update — and through the WebAssembly interface. The barriers' face is part of the physics (`BARRIER`, 0.9 m beyond the verge, where the native client already drew them): the kart's outline stops there. Contacts between karts run on the server only; a second golden file records them, natively.
 - **Why:** contact was a separation without momentum — karts slid off one another and walls stopped them on a line through their centre, turned by a fixed share. In close racing, contact is what players feel most.
 - **Kept:** determinism (fixed steps, `libm`, sanitised controls); the golden files change once, in the same review.
+
+## D-046 — Paddock objects in the kart world's races
+
+Date: 2026-11-12 · With the maintainer, who asked for objects to collect and throw during a race and chose paddock objects among the proposals.
+
+- **Decision:** the kart world's races have items. Racks of crates stand across the road at three places of the lap; breaking one gives a kart one item: a nitro canister (a boost), a tyre thrown ahead that rolls and bounces off the barriers and spins the first kart it meets, a cone dropped behind (it slows and knocks), an oil patch left behind (a kart that drives in spins). The draw favours the back of the field. The world's bots use them, and agents can let the world use theirs.
+- **How:** a new component, `osage-kart-items` (D-035), deterministic like the physics, run by the world server, which alone decides what items do. The protocol grows by added fields — `Step.use_item`, `Autopilot.use_items`, `Racer.held` — and one new volatile type, `kart.paddock/1`, on the race board; older clients ignore them and race without items. A human's predicted kart is corrected for what items do to it as for a contact (D-031, D-045).
+- **Why:** items mix the field and give AI drivers one more way to race; paddock objects suit a circuit and are the world's own design, not a copy of another game's.
+- **Kept:** the bench's race (`kart-lap/3`) has no items: its pictures and its golden race do not change.

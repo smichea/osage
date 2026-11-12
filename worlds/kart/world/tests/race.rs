@@ -122,7 +122,7 @@ fn a_client_predicts_its_kart_exactly() {
             201..=250 => (0.3, true), // a drift…
             _ => (0.0, false),        // …then straight on, into the wall: walls are predicted too
         };
-        let step_controls = proto::Step { sequence, throttle: 1.0, steer, drift };
+        let step_controls = proto::Step { sequence, throttle: 1.0, steer, drift, use_item: false };
         let message = proto::Controls { steps: vec![step_controls] };
         harness.send(alice.session, intent(sequence, entity, controls_type, &message));
         harness.run(1);
@@ -158,7 +158,7 @@ fn an_agent_drives_through_the_autopilot() {
     assert_eq!(waiting.speed, 0.0, "an agent's kart waits for its first instruction");
 
     let autopilot_type = agent.world.types().id(types::AUTOPILOT).unwrap();
-    let pace = proto::Autopilot { pace: 0.8, line: 0.0, drift: false };
+    let pace = proto::Autopilot { pace: 0.8, line: 0.0, drift: false, use_items: false };
     harness.send(agent.session, intent(1, entity, autopilot_type, &pace));
     harness.run(20 * SECOND);
     let (_, racer, driving) = agent.kart_of("agent-1.alice");
@@ -187,4 +187,31 @@ fn a_late_driver_takes_a_bots_place_and_an_empty_world_stops() {
     harness.run(10 * SECOND);
     assert_eq!(phase(&observer.race()), proto::Phase::Waiting);
     assert!(observer.karts().is_empty());
+}
+
+/// Paddock objects (kart.paddock/1): bots break crates, hold what they get
+/// — the world says so in their Racer — and use it on the track.
+#[test]
+fn bots_pick_items_from_the_crates_and_use_them() {
+    let mut harness = Harness::new(KartWorld { grid: 6, laps: 3 }, TICK_HZ);
+    let mut alice = Client::join(&mut harness, SessionKind::Human, Role::Player, "alice");
+    run_until(&mut harness, &mut alice, 5, |c| phase(&c.race()) == proto::Phase::Racing);
+    let paddock = |c: &mut Client| -> proto::Paddock {
+        c.catch_up();
+        let board = c.world.entities().find(|&e| c.world.get::<proto::Paddock>(e, types::PADDOCK).is_some());
+        board.and_then(|e| c.world.get(e, types::PADDOCK)).expect("the paddock")
+    };
+    assert_eq!(paddock(&mut alice).crates.len(), 12);
+    let (mut broken, mut held, mut used) = (false, false, false);
+    for _ in 0..90 * 4 {
+        harness.run(SECOND / 4);
+        let now = paddock(&mut alice);
+        broken |= now.crates.iter().any(|c| !c.standing);
+        used |= !now.things.is_empty();
+        held |= alice.karts().iter().any(|(_, r, _)| r.held() != proto::Item::None);
+        if broken && held && used {
+            return;
+        }
+    }
+    panic!("broken {broken}, held {held}, used {used}");
 }

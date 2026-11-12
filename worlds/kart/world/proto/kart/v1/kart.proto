@@ -25,6 +25,9 @@ message Step {
   // The drift button is held: steer and hold it at speed to drift; release
   // after a long drift for a mini-turbo.
   bool drift = 4;
+  // The use button is held: what the kart holds is used as it goes down
+  // (kart.paddock/1).
+  bool use_item = 5;
 }
 
 // kart.autopilot/1 — intent for AI agents: how the world's autopilot drives
@@ -36,6 +39,9 @@ message Autopilot {
   float line = 2;
   // Drift through bends for mini-turbos: faster, riskier.
   bool drift = 3;
+  // Use what the kart picks up as the world's own drivers do: a nitro on a
+  // straight, a tyre at a kart ahead, a cone or oil for one close behind.
+  bool use_items = 4;
 }
 
 // kart.state/1 — a kart's physics state, sent every step.
@@ -67,6 +73,46 @@ message Racer {
   uint32 position = 5;
   // Race time at the finish line, milliseconds; 0 while racing.
   uint64 finish_ms = 6;
+  // What the kart holds, from a crate (kart.paddock/1).
+  Item held = 7;
+}
+
+enum Item {
+  ITEM_NONE = 0;
+  // A boost, as a long drift gives.
+  ITEM_NITRO = 1;
+  // Thrown ahead: it rolls, bounces off the barriers and spins the first
+  // kart it meets.
+  ITEM_TYRE = 2;
+  // Dropped behind: slows and knocks the kart that hits it.
+  ITEM_CONE = 3;
+  // A patch left behind: a kart that drives into it spins.
+  ITEM_OIL = 4;
+}
+
+// kart.paddock/1 — crates to pick items from, and what karts left on the
+// track. Sent when it changes: every step while a tyre rolls.
+message Paddock {
+  repeated Crate crates = 1;
+  repeated Thing things = 2;
+}
+
+message Crate {
+  float x = 1;
+  float z = 2;
+  // Broken, it is back in a few seconds.
+  bool standing = 3;
+}
+
+message Thing {
+  Item kind = 1;
+  float x = 2;
+  float z = 3;
+  // Velocity, m/s: a tyre rolls.
+  float vx = 4;
+  float vz = 5;
+  // Seconds before it goes.
+  float life = 6;
 }
 
 // kart.track/1 — the circuit: centre line, road and walls.

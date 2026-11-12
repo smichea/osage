@@ -18,6 +18,7 @@ use osage_world_module_api::{
 use crate::{
     Body, Course, Ids, RaceBoard, Rules,
     driving::Pilot,
+    paddock::{Items, Seat, item, items_for, to_proto},
     proto::{self, Phase},
 };
 
@@ -51,11 +52,20 @@ pub struct Race {
     started: Duration,
     first_finish: Option<Duration>,
     order: Vec<u64>,
+    /// Races lined up so far: each draws its items differently.
+    races: u32,
 }
 
 impl Default for Race {
     fn default() -> Self {
-        Self { phase: Phase::Waiting, ends: None, started: Duration::ZERO, first_finish: None, order: Vec::new() }
+        Self {
+            phase: Phase::Waiting,
+            ends: None,
+            started: Duration::ZERO,
+            first_finish: None,
+            order: Vec::new(),
+            races: 0,
+        }
     }
 }
 
@@ -71,7 +81,7 @@ pub struct Progress {
     /// Distance covered, counted only through sectors in order.
     distance: f32,
     pub finish_ms: Option<u64>,
-    position: u32,
+    pub position: u32,
 }
 
 pub fn sessions(mut joined: MessageReader<Joined>, mut left: MessageReader<Left>, mut drivers: ResMut<Drivers>) {
@@ -102,7 +112,7 @@ pub fn flow(
     let ended = race.ends.is_some_and(|end| now >= end);
     match race.phase {
         Phase::Waiting if !drivers.0.is_empty() => {
-            line_up(&mut commands, &rules, &course, &ids, &drivers, &mut entity_ids, &karts);
+            line_up(&mut commands, &rules, &course, &ids, &drivers, &mut entity_ids, &karts, &mut race.races);
             race.phase = Phase::Countdown;
             race.ends = Some(now + COUNTDOWN);
         }
@@ -116,7 +126,7 @@ pub fn flow(
             // Drivers who arrive during the countdown take a bot's place.
             let seated: Vec<u64> = karts.iter().filter_map(|(_, _, owner)| owner.map(|o| o.0)).collect();
             if drivers.0.keys().any(|session| !seated.contains(session)) {
-                line_up(&mut commands, &rules, &course, &ids, &drivers, &mut entity_ids, &karts);
+                line_up(&mut commands, &rules, &course, &ids, &drivers, &mut entity_ids, &karts, &mut race.races);
             }
         }
         Phase::Racing => {
@@ -136,7 +146,7 @@ pub fn flow(
                 race.phase = Phase::Waiting;
                 race.ends = None;
             } else {
-                line_up(&mut commands, &rules, &course, &ids, &drivers, &mut entity_ids, &karts);
+                line_up(&mut commands, &rules, &course, &ids, &drivers, &mut entity_ids, &karts, &mut race.races);
                 race.phase = Phase::Countdown;
                 race.ends = Some(now + COUNTDOWN);
             }
@@ -155,11 +165,14 @@ fn line_up(
     drivers: &Drivers,
     entity_ids: &mut EntityIds,
     karts: &Query<(Entity, &Progress, Option<&Owner>)>,
+    races: &mut u32,
 ) {
     for (entity, _, _) in karts {
         commands.entity(entity).despawn();
     }
     let seats = rules.grid.max(drivers.0.len());
+    *races = races.wrapping_add(1);
+    commands.insert_resource(items_for(&course.0.track, seats, *races));
     let bots = BOTS.iter().enumerate().map(|(i, (name, temper))| {
         let controller = components::Controller {
             kind: components::ControllerKind::System.into(),
@@ -189,9 +202,10 @@ fn line_up(
         let discrete = Discrete::default()
             .with(ids.content_ref, &builtin(core_types::BUILTIN_AVATAR))
             .with(ids.controller, &controller)
-            .with(ids.racer, &racer(&progress));
+            .with(ids.racer, &racer(&progress, None));
         let volatile = Volatile::default().with(ids.state, &state(&kart, 0));
-        let parts = (entity_ids.next_id(), transform(&kart), discrete, volatile, Body(kart), pilot, progress);
+        let parts =
+            (entity_ids.next_id(), transform(&kart), discrete, volatile, Body(kart), pilot, progress, Seat(slot));
         let mut spawned = commands.spawn(parts);
         if let Some(session) = owner {
             spawned.insert(Owner(session));
@@ -252,16 +266,21 @@ pub fn publish(
     ids: Res<Ids>,
     race: Res<Race>,
     rules: Res<Rules>,
-    mut karts: Query<(&Body, &Progress, &Pilot, &mut Transform, &mut Volatile, &mut Discrete), Without<RaceBoard>>,
-    mut board: Query<&mut Discrete, With<RaceBoard>>,
+    paddock: Option<Res<Items>>,
+    mut karts: Query<
+        (&Body, &Progress, &Pilot, &Seat, &mut Transform, &mut Volatile, &mut Discrete),
+        Without<RaceBoard>,
+    >,
+    mut board: Query<(&mut Discrete, &mut Volatile), With<RaceBoard>>,
 ) {
-    for (body, progress, pilot, mut place, mut volatile, mut discrete) in &mut karts {
+    let paddock = paddock.as_deref().map(|items| &items.0);
+    for (body, progress, pilot, seat, mut place, mut volatile, mut discrete) in &mut karts {
         place.set_if_neq(transform(&body.0));
         let state = prost::Message::encode_to_vec(&state(&body.0, pilot.applied()));
         if volatile.0.get(&ids.state) != Some(&state) {
             volatile.0.insert(ids.state, state);
         }
-        let racer = prost::Message::encode_to_vec(&racer(progress));
+        let racer = prost::Message::encode_to_vec(&racer(progress, paddock.and_then(|p| p.held(seat.0))));
         if discrete.0.get(&ids.racer) != Some(&racer) {
             discrete.0.insert(ids.racer, racer);
         }
@@ -277,7 +296,13 @@ pub fn publish(
         started_us: if race.phase == Phase::Racing || race.phase == Phase::Finished { at(race.started) } else { 0 },
         order: race.order.clone(),
     };
-    if let Ok(mut board) = board.single_mut() {
+    if let Ok((mut board, mut volatile)) = board.single_mut() {
+        if let Some(paddock) = paddock {
+            let encoded = prost::Message::encode_to_vec(&to_proto(paddock));
+            if volatile.0.get(&ids.paddock) != Some(&encoded) {
+                volatile.0.insert(ids.paddock, encoded);
+            }
+        }
         // Times move with the server clock: republish only when the race itself changed.
         let current: Option<proto::Race> = board.get(ids.race);
         let same = current.is_some_and(|c| {
@@ -311,7 +336,7 @@ fn state(kart: &Kart, applied: u64) -> proto::KartState {
     }
 }
 
-fn racer(progress: &Progress) -> proto::Racer {
+fn racer(progress: &Progress, held: Option<osage_kart_items::Item>) -> proto::Racer {
     proto::Racer {
         name: progress.name.clone(),
         color: progress.color,
@@ -319,5 +344,6 @@ fn racer(progress: &Progress) -> proto::Racer {
         lap: progress.lap,
         position: progress.position,
         finish_ms: progress.finish_ms.unwrap_or(0),
+        held: item(held).into(),
     }
 }

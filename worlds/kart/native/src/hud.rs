@@ -3,7 +3,7 @@
 
 //! The race on screen: the player's place in large, the lap and the clock,
 //! a map of the circuit with every kart on it, the speed and the mini-turbo
-//! charging, the start lights' count, the results. It shows a [`RaceView`],
+//! charging, the item in hand, the start lights' count, the results. It shows a [`RaceView`],
 //! whoever fills it.
 
 use std::collections::HashMap;
@@ -14,6 +14,7 @@ use bevy::{
     render::render_resource::{Extent3d, TextureDimension, TextureFormat},
     text::FontSize,
 };
+use osage_kart_items::Item;
 use osage_kart_physics::{LONG_TURBO_CHARGE, SHORT_TURBO_CHARGE};
 
 use crate::scene::{Course, PALETTE, Stage};
@@ -37,6 +38,8 @@ pub struct RaceView {
     pub speed: f32,
     pub charge: f32,
     pub boosting: bool,
+    /// What the player's kart holds, from a crate.
+    pub held: Option<Item>,
 }
 
 #[derive(Default, Clone, Copy, PartialEq)]
@@ -86,6 +89,7 @@ enum Label {
     Speed,
     Lights,
     Status,
+    Held,
 }
 
 /// The bar that fills as the mini-turbo charges.
@@ -179,6 +183,12 @@ fn setup(mut commands: Commands) {
                 BackgroundColor(Color::WHITE),
             ));
         });
+    // Under the lap: the item in hand.
+    commands.spawn((
+        text(Label::Held, 26.0),
+        TextShadow::default(),
+        Node { position_type: PositionType::Absolute, top: px(104), left: px(20), ..default() },
+    ));
     // The start lights' count and the results, in the middle; who and where, small, at the bottom.
     commands.spawn((
         text(Label::Lights, 120.0),
@@ -249,6 +259,19 @@ fn write(
                     format!("{:>3.0} km/h{}", view.speed.abs() * 3.6, if view.boosting { "  TURBO" } else { "" })
                 }
                 None => String::new(),
+            },
+            Label::Held => match (me, view.held) {
+                (Some(_), Some(item)) => {
+                    let (name, colour) = match item {
+                        Item::Nitro => ("NITRO", Color::srgb(0.3, 0.8, 1.0)),
+                        Item::Tyre => ("TYRE", Color::srgb(0.85, 0.85, 0.85)),
+                        Item::Cone => ("CONE", Color::srgb(1.0, 0.5, 0.15)),
+                        Item::Oil => ("OIL", Color::srgb(0.75, 0.6, 1.0)),
+                    };
+                    tint = Some(colour);
+                    format!("{name}  [F]")
+                }
+                _ => String::new(),
             },
             Label::Lights => match view.stage {
                 Lights::Count(seconds) => seconds.max(1).to_string(),

@@ -255,8 +255,10 @@ impl Kart {
         (self.speed, self.slide) = (dot(v, forward), dot(v, right));
     }
 
-    /// Takes an impulse `j` (per kilogram) at `r` from its centre.
-    fn take(&mut self, j: (f32, f32), r: (f32, f32)) {
+    /// Takes an impulse `j` (per kilogram, m/s) at `r` from its centre, both
+    /// on the ground's axes: its velocity and its spin change, and a hard
+    /// enough knock ends a drift. For what a world throws at karts.
+    pub fn take(&mut self, j: (f32, f32), r: (f32, f32)) {
         let v = self.velocity();
         self.set_velocity((v.0 + j.0, v.1 + j.1));
         self.spin += dot(swept(r), j) / YAW_INERTIA;

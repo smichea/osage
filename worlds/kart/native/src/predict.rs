@@ -26,17 +26,19 @@ pub struct Predictor {
     pub kart: Option<Kart>,
     /// The state one step earlier: frames are drawn between the two.
     previous: Option<Kart>,
-    pending: VecDeque<(u64, Controls)>,
+    /// Steps not applied by the world yet: sequence, controls, use button.
+    pending: VecDeque<(u64, Controls, bool)>,
     sent: u64,
     /// What is drawn minus the prediction (x, z, heading): fades to zero.
     pub error: [f32; 3],
 }
 
 impl Predictor {
-    /// Applies one step locally.
-    pub fn step(&mut self, controls: Controls, track: &Track) {
+    /// Applies one step locally; `using` (the use button) goes to the world,
+    /// which alone decides what items do.
+    pub fn step(&mut self, controls: Controls, using: bool, track: &Track) {
         self.sent += 1;
-        self.pending.push_back((self.sent, controls));
+        self.pending.push_back((self.sent, controls, using));
         self.previous = self.kart;
         if let Some(kart) = &mut self.kart {
             step(kart, controls, track);
@@ -49,22 +51,23 @@ impl Predictor {
         let count = (fresh + REDUNDANCY).min(MAX_SENT).min(self.pending.len());
         let steps = self.pending.iter().skip(self.pending.len() - count);
         steps
-            .map(|(sequence, c)| proto::Step {
+            .map(|(sequence, c, using)| proto::Step {
                 sequence: *sequence,
                 throttle: c.throttle,
                 steer: c.steer,
                 drift: c.drift,
+                use_item: *using,
             })
             .collect()
     }
 
     /// The world's state of this kart, after it applied step `applied`.
     pub fn reconcile(&mut self, server: Kart, applied: u64, track: &Track) {
-        while self.pending.front().is_some_and(|(sequence, _)| *sequence <= applied) {
+        while self.pending.front().is_some_and(|(sequence, ..)| *sequence <= applied) {
             self.pending.pop_front();
         }
         let (mut kart, mut before) = (server, server);
-        for (_, controls) in &self.pending {
+        for (_, controls, _) in &self.pending {
             before = kart;
             step(&mut kart, *controls, track);
         }
@@ -122,7 +125,7 @@ mod tests {
         predictor.reconcile(Kart::default(), 0, &track);
         let mut server = Kart::default();
         for i in 1..=20u64 {
-            predictor.step(GO, &track);
+            predictor.step(GO, false, &track);
             if i <= 12 {
                 step(&mut server, GO, &track);
             }
@@ -141,7 +144,7 @@ mod tests {
         let mut predictor = Predictor::default();
         predictor.reconcile(Kart::default(), 0, &track);
         for _ in 0..10 {
-            predictor.step(GO, &track);
+            predictor.step(GO, false, &track);
         }
         let shown_before = predictor.shown(1.0).unwrap();
         // Another kart pushed ours half a metre aside on the world.
@@ -163,7 +166,7 @@ mod tests {
         let track = track();
         let mut predictor = Predictor::default();
         for _ in 0..8 {
-            predictor.step(GO, &track);
+            predictor.step(GO, false, &track);
         }
         let sequences = |fresh| predictor.to_send(fresh).iter().map(|s| s.sequence).collect::<Vec<_>>();
         assert_eq!(sequences(1), [5, 6, 7, 8]);

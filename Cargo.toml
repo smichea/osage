@@ -24,6 +24,7 @@ osage-kart-model = { path = "worlds/kart/components/kart-model" }
 osage-kart-crowd = { path = "worlds/kart/components/crowd" }
 osage-kart-racecraft = { path = "worlds/kart/components/racecraft" }
 osage-kart-sound = { path = "worlds/kart/components/sound" }
+osage-kart-items = { path = "worlds/kart/components/items" }
 osage-render = { path = "crates/osage-render" }
 osage-world-module-api = { path = "crates/osage-world-module-api" }
 osage-region-link = { path = "crates/osage-region-link" }
