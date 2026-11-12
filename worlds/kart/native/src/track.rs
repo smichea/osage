@@ -23,7 +23,10 @@ pub use osage_kart_land::{BARRIER, Frame, HILLS, LAND, Land, Site, WATER, frames
 
 use osage_content::{self as content, GRAIN, Kind, Surface};
 use osage_procedural::{Batch, Paint, Shape};
-use osage_render::ground::{Ground, GroundMaterial};
+use osage_render::{
+    Tier,
+    ground::{Ground, GroundMaterial, untextured},
+};
 
 use crate::scene::{Course, GRASS, Part};
 
@@ -264,6 +267,7 @@ pub fn flow(time: Res<Time>, water: Option<Res<Water>>, mut materials: ResMut<As
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn build(
     mut commands: Commands,
     course: Res<Course>,
@@ -272,6 +276,7 @@ pub fn build(
     mut materials: ResMut<Assets<StandardMaterial>>,
     mut grounds: ResMut<Assets<GroundMaterial>>,
     mut images: ResMut<Assets<Image>>,
+    tier: Res<Tier>,
 ) {
     for part in &old {
         commands.entity(part).despawn();
@@ -295,6 +300,7 @@ pub fn build(
             &frames,
             &land,
             set,
+            *tier,
         );
         commands.insert_resource(land);
         return;
@@ -652,19 +658,32 @@ fn photographed(
     frames: &[Frame],
     land: &Land,
     set: Photographed,
+    tier: Tier,
 ) {
     let track = &circuit.track;
     let (half, verge) = (track.half_width, track.verge);
     commands.insert_resource(Grains { concrete: set.concrete.clone() });
-    let road = materials.add(set.asphalt.material(5.0));
+    // Grains sampled without a tile (V1.0: nothing repeats): the road's
+    // from T2, the grass and gravel's, which fill most of the picture, from
+    // T3 (on an Iris Xe at T2: the road 1.2 ms a frame, all of them 1.7).
+    let mut grain = |material: StandardMaterial, tile: f32, ground: Ground, untiled: bool| {
+        let (base, colour) = untextured(material);
+        let extension = match colour {
+            Some(colour) => ground.with_grain(colour, tile, untiled),
+            None => ground,
+        };
+        grounds.add(GroundMaterial { base, extension })
+    };
+    let (road_untiled, ground_untiled) = (tier >= Tier::T2, tier >= Tier::T3);
+    // The road: its history along its length — paving seams, repaired
+    // patches, cracks, stains — in stretches of 40 m.
+    let road = grain(set.asphalt.material(5.0), 5.0, Ground::asphalt().paved(1.0, 40.0, 2.0 * half), road_untiled);
     // Grass varies in clumps and patches, so that its grain never reads as a carpet.
-    let grass = grounds.add(GroundMaterial { base: set.grass.material(2.6), extension: Ground::meadow() });
+    let grass = grain(set.grass.material(2.6), 2.6, Ground::meadow(), ground_untiled);
     // Mown grass varies less: clumps only, and faint patches.
-    let mown_grass = grounds.add(GroundMaterial {
-        base: set.grass.material(2.6),
-        extension: Ground { variation: Vec4::new(0.3, 0.35, 1.2, 18.0), ..Ground::meadow() },
-    });
-    let gravel = materials.add(set.gravel.material(2.4));
+    let mown = Ground { variation: Vec4::new(0.3, 0.35, 1.2, 18.0), ..Ground::meadow() };
+    let mown_grass = grain(set.grass.material(2.6), 2.6, mown, ground_untiled);
+    let gravel = grain(set.gravel.material(2.4), 2.4, Ground::none(), ground_untiled);
     let painted = materials.add(StandardMaterial { perceptual_roughness: 0.75, ..set.paint.material(2.0) });
     let concrete = materials.add(set.concrete.material(3.0));
     let mut flat = |mesh: Mesh, material: &Handle<StandardMaterial>| {
@@ -692,7 +711,7 @@ fn photographed(
         flat(strip.translated_by(Vec3::new(middle.x, -0.4, middle.y)), &fields);
     }
 
-    flat(with_tangents(road_mesh(frames, half)), &road);
+    grassed.push((with_tangents(road_mesh(frames, half)), &road));
     // Skid marks through the bends, dark and half worn away.
     let marks = materials.add(StandardMaterial {
         base_color: Color::srgba(0.02, 0.02, 0.02, 1.0),
@@ -715,7 +734,7 @@ fn photographed(
         let stripes = |i: usize| (!outer_bend(i)).then(|| mown((i / 2).is_multiple_of(2)));
         grassed.push((with_tangents(ribbon(frames, (kerb, 0.012), (wall, 0.012), (0.0, 1.0), stripes)), &mown_grass));
         let trap = |i: usize| outer_bend(i).then_some(WHITE);
-        flat(with_tangents(ribbon(frames, (kerb, 0.015), (wall, 0.015), (0.0, 1.0), trap)), &gravel);
+        grassed.push((with_tangents(ribbon(frames, (kerb, 0.015), (wall, 0.015), (0.0, 1.0), trap)), &gravel));
         let (behind, apron) = (wall + side * 0.7, wall + side * 4.0);
         let stripes = |i: usize| Some(mown(i / 2 % 2 == 1));
         grassed

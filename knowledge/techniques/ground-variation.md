@@ -1,7 +1,7 @@
 ---
 type: Technique
 title: Ground that varies
-description: A tiled ground texture multiplied in world space by clumps a metre or two across and by drier and lusher patches tens of metres across, so that grass never reads as a carpet; octaves smaller than a few pixels fade out.
+description: "A ground texture that never repeats — its grain sampled by hexagonal cells shifted and turned by where they are, multiplied in world space by clumps and by drier and lusher patches, and on a road by its history along its length (paving seams, repaired patches, cracks, stains); octaves smaller than a few pixels fade out."
 resource: https://github.com/smichea/osage/blob/main/crates/osage-render/src/ground.rs
 licence: LicenseRef-osage-AGPL-3.0-or-later-with-exceptions
 tiers: [T1, T2, T3, T4]
@@ -11,10 +11,16 @@ sources:
   - id: quilez
     resource: https://iquilezles.org/articles/texturerepetition/
     title: "Inigo Quilez, Texture repetition"
+  - id: heitz
+    resource: https://eheitz.github.io/
+    title: "Eric Heitz and Fabrice Neyret, High-Performance By-Example Noise using a Histogram-Preserving Blending Operator, HPG 2018"
+  - id: mikkelsen
+    resource: https://jcgt.org/published/0011/03/05/
+    title: "Morten S. Mikkelsen, Practical Real-Time Hex-Tiling, JCGT 2022"
   - id: own
-    resource: "osage's own design and measurements, 2026-11-11"
+    resource: "osage's own design and measurements, 2026-11-11 and 2026-11-12"
     title: osage design
-generated: { by: "claude-code/claude-opus-5-5", at: "2026-11-11T10:00:00Z" }
+generated: { by: "claude-code/claude-opus-5-5", at: "2026-11-12T16:30:00Z" }
 ---
 
 # What it does
@@ -31,25 +37,39 @@ In the fragment shader, after the standard material has computed its colour from
 
 The variation multiplies whatever the world paints: vertex colours for wide sweeps, the grain for the blades. A world chooses the strengths, sizes and colours; the engine provides the material[^own].
 
+**No tile** (`Ground::with_grain`, V1.0 of the kart programme). The grain — the surface's colour map, handed to this material instead of the standard one (`untextured`) — is sampled by cells[^heitz][^mikkelsen]:
+
+1. A triangular lattice over the texture coordinates, 1.6 cells a repeat (`HEX_CELLS`): its vertices are the centres of hexagons. A pixel lies in one triangle; its barycentric weights are its nearness to the three centres.
+2. Each centre's hash gives its cell a turn (any angle) and a shift (anywhere in a repeat); the grain is read at the pixel's coordinate turned and shifted so, with the screen gradients turned too (`textureSampleGrad`: the right mip, no seams at cell edges).
+3. The weights are raised to the 6th power and renormalised: wide blends wash a photograph's contrast out, narrow ones show the cells' edges. A cell weighing under 3 % (`SKIP`) is not read: most pixels read one cell, a few two or three.
+
+The mean and the contrast stay the grain's; no period is left anywhere ([oracle](#oracle)). The normal and roughness maps still repeat as before: rotating a normal map's vectors with its cell is the next step.
+
+**A road's history** (`Ground::paved`). On a mesh whose texture coordinates are metres across and along a road, a deterministic function of those two numbers draws what a road lives through: a paving seam along it where two passes of the paver met, sealed, wandering a little off the middle; in each stretch (40 m on the kart circuit), more often than not a repaired patch of fresher, darker asphalt with sealed edges and corners not quite square; cracks in the older stretches (the ridges of two noises, branching where they meet); rare stains, darker and smoother; and a tone that wanders over 45 m. Lines thinner than a pixel fade rather than shimmer. The racing line's rubber and the skid marks are the world's (vertex colours, decals): the material adds what time did.
+
 # Settings per tier
 
-The same at every tier: a few noise lookups a pixel on the ground.
+The variation is the same at every tier: a few noise lookups a pixel on the ground. Whether a grain is sampled untiled is the world's choice per material; the kart circuit untiles its road from T2 and its grass and gravel, which fill most of the picture, from T3; the road's history is drawn at every tier.
 
 # Cost
 
-Measured at T3 on the Iris Xe at 2560×1440, 2026-11-11, the kart circuit: the race view 127 ms per frame before and after, the wide view over the meadows 114 and 113 ms ([the render bench](/oracles/render-bench.md)) — within the noise of the measurement.
+Measured at T3 on the Iris Xe at 2560×1440, 2026-11-11, the kart circuit: the race view 127 ms per frame before and after the variation, the wide view over the meadows 114 and 113 ms ([the render bench](/oracles/render-bench.md)) — within the noise of the measurement.
+
+Untiled grains and the road's history, the kart bench at T2 (1280×720) on the Iris Xe, 2026-11-12: 16.4 ms a frame before, 18.1 with every ground untiled (+1.7 ms, about 10 %). As the kart circuit sets it: at T2, its road untiled with its history, 16.7 ms before and 17.9 after (+1.2 ms); at T3 (2560×1440), every ground untiled, 112.5 and 116.6 ms (+3.6 %). Measured on a laptop running other work: a few tenths of a millisecond are noise.
 
 # Limits
 
-It varies colour only, not the grain itself: the texture's repeats still show where a pixel covers less than a repeat, close to the ground. Sampling the texture twice at different scales and rotations, or by tiles blended at random, would hide that too. Splatting several textures (grass, earth, gravel) by masks is the next step for paths and worn ground.
+Untiled, the colour no longer repeats, but the normal and roughness maps do, close up, and a grain with a strong direction (stripes, planks) must not be turned: `tiling.z` limits the turn. A photograph's own cracks are cut into pieces at the cells' edges, where the blend is narrow. A road's history is drawn, not modelled: patches and cracks have no relief of their own. Splatting several textures (grass, earth, gravel) by masks is the next step for paths and worn ground.
 
 # Oracle
 
-[The render bench](/oracles/render-bench.md) screenshots: the wide view over the meadows, the race view.
+[The render bench](/oracles/render-bench.md) screenshots: the wide view over the meadows, the race view. The crate's tests (`ground.rs`) run the shader's tiling step by step on the CPU (`hex_tiles`, kept the same as `ground.wesl`'s `untiled`): the weights add to one; a strip 64 repeats long of a grain with a feature every repeat correlates with itself above 0.99 at every multiple of the repeat when tiled, under 0.35 untiled, and under 0.5 at any lag; the mean is kept and the contrast within 20 %.
 
 # Reuse
 
 Any renderer with a programmable fragment stage, on any tiled ground: grass, sand, earth, snow.
 
 [^quilez]: Quilez, Texture repetition
+[^heitz]: Heitz and Neyret, by-example noise
+[^mikkelsen]: Mikkelsen, hex-tiling
 [^own]: osage design

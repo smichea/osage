@@ -293,7 +293,10 @@ pub fn woods(
         let count = (std::f32::consts::PI * radius * radius / 20.0) as usize;
         for _ in 0..count {
             let at = centre + Vec2::from_angle(dice.between(0.0, std::f32::consts::TAU)) * radius * dice.roll().sqrt();
-            let (turn, kind) = (dice.between(0.0, std::f32::consts::TAU), dice.roll());
+            // The species by place: stands where pines grow, others of
+            // broadleaf trees, firs between, never quite one alone.
+            let (turn, roll) = (dice.between(0.0, std::f32::consts::TAU), dice.roll());
+            let kind = (0.65 * noise(at / 140.0 + 31.0) + 0.35 * roll).clamp(0.0, 1.0) * 1.25 - 0.12;
             let cell = (at / SPACING).floor().as_ivec2();
             if (at - land.centre()).abs().max_element() > edge
                 || land.distance_to_track(at) < from
@@ -468,6 +471,24 @@ mod tests {
             assert!((at - land.centre()).abs().max_element() <= osage_kart_land::LAND / 2.0, "{at} is off the land");
             assert!((place.translation.y - land.height(at)).abs() < 0.3, "{at} stands on the ground");
             assert!(cells.insert((at / 3.6).floor().as_ivec2()), "{at}: two trees in one spot");
+        }
+        // Species grow by place: around a pine, more pines than in the
+        // woods as a whole; around a broadleaf tree, more broadleaf trees.
+        let all: Vec<(usize, Vec2)> =
+            woods.iter().enumerate().flat_map(|(k, w)| w.places.iter().map(move |p| (k, p.translation.xz()))).collect();
+        for species in [0, 2] {
+            let share = all.iter().filter(|(k, _)| *k == species).count() as f32 / all.len() as f32;
+            let (mut same, mut near) = (0usize, 0usize);
+            for (_, at) in all.iter().filter(|(k, _)| *k == species).step_by(7) {
+                for (k, other) in &all {
+                    if other.distance(*at) < 25.0 && other != at {
+                        near += 1;
+                        same += (*k == species) as usize;
+                    }
+                }
+            }
+            let local = same as f32 / near as f32;
+            assert!(local > 1.25 * share, "species {species}: {local} near one, {share} in all");
         }
     }
 
