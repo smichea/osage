@@ -49,5 +49,7 @@ Licences
 The programs are free software: the game and the kart world under MIT or
 Apache-2.0, the server under AGPL-3.0-or-later with exceptions (see
 LICENSE, LICENSE-EXCEPTIONS.md and LICENSES/). Their source is the tag of
-this release on GitHub. The content is CC0: authors and sources are in
+this release on GitHub. dxcompiler.dll and dxil.dll are Microsoft's
+DirectX Shader Compiler (https://github.com/microsoft/DirectXShaderCompiler),
+under its own licences, in LICENSES/directx-shader-compiler/. The content is CC0: authors and sources are in
 assets/manifest.toml.

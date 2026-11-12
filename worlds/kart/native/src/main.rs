@@ -107,6 +107,17 @@ fn main() -> Result<()> {
     // The bench compiles its shaders before drawing, so that every frame is
     // complete and the same everywhere; playing, they compile in the background.
     let render = RenderPlugin { synchronous_pipeline_compilation: bench, ..Default::default() };
+    // On Windows, Direct3D 12 unless WGPU_BACKEND says otherwise: Intel's
+    // Vulkan driver for its older integrated GPUs (HD 630) crashes the game
+    // on start, where Direct3D 12 runs it.
+    #[cfg(windows)]
+    let render = if std::env::var_os("WGPU_BACKEND").is_none() {
+        use bevy::render::settings::{Backends, RenderCreation, WgpuSettings};
+        let settings = WgpuSettings { backends: Some(Backends::DX12), ..Default::default() };
+        RenderPlugin { render_creation: RenderCreation::Automatic(Box::new(settings)), ..render }
+    } else {
+        render
+    };
     // Models are loaded from the asset manifest's content, wherever it is.
     let assets = AssetPlugin {
         file_path: osage_content::root()

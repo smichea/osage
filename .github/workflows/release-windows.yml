@@ -46,10 +46,26 @@ jobs:
       - run: npm ci
       - run: npm run build -w @osage/sdk
       - run: npm run build -w @osage/kart-client
+      # Microsoft's DirectX shader compiler beside the game: without it, Direct3D
+      # 12 falls back to the old compiler (FXC), which cannot compile the
+      # renderer's shaders, and the scene stays black. Pinned and checked.
+      - name: DirectX shader compiler
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DXC_TAG: v1.9.2609
+          DXC_ZIP: dxc_2026_09_29.zip
+          DXC_SHA256: ad31b1fc8443175d204f77a611fdb3ef2ec42759bdc2f1167368de24a4a7e7f1
+        run: |
+          gh release download "$DXC_TAG" -R microsoft/DirectXShaderCompiler -p "$DXC_ZIP" -D dxc
+          echo "$DXC_SHA256  dxc/$DXC_ZIP" | sha256sum -c -
+          7z x -odxc/x "dxc/$DXC_ZIP" > /dev/null
       - name: Package
         shell: bash
         run: |
-          mkdir -p dist/osage-kart
+          mkdir -p dist/osage-kart/LICENSES/directx-shader-compiler
+          cp dxc/x/bin/x64/dxcompiler.dll dxc/x/bin/x64/dxil.dll dist/osage-kart/
+          find dxc/x -maxdepth 2 -iname 'LICENSE*' -exec cp {} dist/osage-kart/LICENSES/directx-shader-compiler/ \;
           cp target/release/kart-native.exe target/release/kart-server.exe target/release/kart-web.exe dist/osage-kart/
           cp -r worlds/kart/client/dist dist/osage-kart/web
           cp worlds/kart/release/windows/*.bat worlds/kart/release/windows/README.txt dist/osage-kart/
