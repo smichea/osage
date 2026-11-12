@@ -3,7 +3,7 @@
 
 //! Particles: sparks and smoke from a drifting kart's rear tyres, flames
 //! and smoke from its exhausts when it boosts, a rocket's fire and trail of
-//! smoke, dust when it leaves the road. On the photographed circuit
+//! smoke, a smoke canister's coloured cloud, dust when it leaves the road. On the photographed circuit
 //! ([`Photographed`]), as on a real one: no sparks, and tyre smoke a faint
 //! veil; boost flames stay (a nitro does that to a real engine).
 //!
@@ -39,6 +39,8 @@ enum Kind {
     Fire,
     /// Smoke from an exhaust or a rocket: grey, rising, spreading.
     Exhaust,
+    /// A smoke canister's: thick, of the colour given (0xRRGGBB), lingering.
+    Tinted(u32),
 }
 
 #[derive(Component, Default)]
@@ -62,6 +64,9 @@ pub struct Pool {
     veil: Handle<StandardMaterial>,
     dust: Handle<StandardMaterial>,
     flame: Handle<StandardMaterial>,
+    /// The soft dot every particle is, and the smoke colours made so far.
+    dot: Handle<Image>,
+    tinted: std::collections::HashMap<u32, Handle<StandardMaterial>>,
     /// Counts what was emitted: the source of this module's variety.
     emitted: u32,
 }
@@ -124,6 +129,8 @@ pub fn setup(
         // A racing kart's tyres barely smoke: a thin grey veil that spreads
         // and lingers, never a white puff.
         veil: material(LinearRgba::new(0.55, 0.55, 0.57, 0.09), AlphaMode::Blend),
+        dot: dot.clone(),
+        tinted: default(),
         emitted: 0,
         idle: {
             let square = meshes.add(Rectangle::new(1.0, 1.0));
@@ -145,11 +152,13 @@ pub fn setup(
 }
 
 /// What the karts throw up this frame.
+#[allow(clippy::too_many_arguments)]
 pub fn emit(
     time: Res<Time>,
     course: Option<Res<Course>>,
     photographed: Option<Res<Photographed>>,
     mut pool: ResMut<Pool>,
+    mut materials: ResMut<Assets<StandardMaterial>>,
     mut frame: Local<u32>,
     karts: Query<(&Pose, &Transform)>,
     mut particles: Query<
@@ -173,6 +182,7 @@ pub fn emit(
             Kind::Flame => (0.12 + 0.1 * pool.vary(), 0.42, -0.7, 0.0, pool.flame.clone()),
             Kind::Fire => (0.16 + 0.1 * pool.vary(), 0.6, -1.2, 0.0, pool.flame.clone()),
             Kind::Exhaust => (0.6 + 0.4 * pool.vary(), 0.25, 2.4, -0.4, pool.smoke.clone()),
+            Kind::Tinted(colour) => (1.6 + 0.8 * pool.vary(), 0.5, 4.0, -0.2, pool.tinted[&colour].clone()),
         };
         *particle = Particle { velocity, life: span, span, size, growth, gravity };
         place.translation = at;
@@ -224,6 +234,25 @@ pub fn emit(
                 // A trail of smoke that hangs where the kart was.
                 let puff = Vec3::Y * 0.4 + pool.spread(0.6);
                 launch(&mut pool, Kind::Exhaust, at - forward * 0.3, puff);
+            }
+        }
+        if let Some(colour) = pose.smoke {
+            if !pool.tinted.contains_key(&colour) {
+                let channel = |shift: u32| ((colour >> shift) & 0xff) as f32 / 255.0;
+                let tint = materials.add(StandardMaterial {
+                    base_color: Color::srgba(channel(16), channel(8), channel(0), 0.55),
+                    base_color_texture: Some(pool.dot.clone()),
+                    alpha_mode: AlphaMode::Blend,
+                    unlit: true,
+                    cull_mode: None,
+                    ..default()
+                });
+                pool.tinted.insert(colour, tint);
+            }
+            // A thick cloud poured from the back, hanging where the kart was.
+            for exhaust in EXHAUSTS {
+                let puff = Vec3::Y * 0.5 + pool.spread(0.9);
+                launch(&mut pool, Kind::Tinted(colour), place.transform_point(exhaust), forward * speed * 0.15 + puff);
             }
         }
         let off_road = course.as_ref().is_some_and(|course| {

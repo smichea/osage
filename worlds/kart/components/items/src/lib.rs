@@ -14,7 +14,9 @@
 //! - **tyre:** thrown ahead at the kart's speed and more; it rolls, slows,
 //!   bounces off the barriers and spins the first kart it meets;
 //! - **cone:** dropped behind; a kart that hits it is slowed and knocked;
-//! - **oil:** a patch left behind; a kart that drives into it spins.
+//! - **oil:** a patch left behind; a kart that drives into it spins;
+//! - **smoke:** a canister that pours smoke of a colour of its own behind
+//!   the kart for a while: a screen for those who follow.
 //!
 //! The [`Paddock`] holds the crates, what each kart holds and the things on
 //! the track, and steps with the physics. [`wants`] is when an AI driver
@@ -33,10 +35,11 @@ pub enum Item {
     Cone,
     Oil,
     Rocket,
+    Smoke,
 }
 
 impl Item {
-    pub const ALL: [Item; 5] = [Item::Nitro, Item::Tyre, Item::Cone, Item::Oil, Item::Rocket];
+    pub const ALL: [Item; 6] = [Item::Nitro, Item::Tyre, Item::Cone, Item::Oil, Item::Rocket, Item::Smoke];
 }
 
 /// A thing on the track.
@@ -63,6 +66,8 @@ impl Kind {
 pub const NITRO: f32 = 2.5;
 /// Seconds of rocket.
 pub const ROCKET: f32 = 3.5;
+/// Seconds a smoke canister pours.
+pub const SMOKE: f32 = 6.0;
 /// How much faster than the kart a tyre leaves it, m/s.
 pub const THROW: f32 = 14.0;
 /// How fast a rolling tyre slows, m/s².
@@ -157,6 +162,8 @@ pub struct Paddock {
     things: Vec<Thing>,
     held: Vec<Option<Item>>,
     pressed: Vec<bool>,
+    /// Each kart's smoke: seconds left and its colour (0xRRGGBB).
+    smoke: Vec<(f32, u32)>,
     seed: u32,
     picks: u32,
 }
@@ -176,7 +183,15 @@ impl Paddock {
                 crates.push(Crate { x: x + right.0 * lateral, z: z + right.1 * lateral, wait: 0.0 });
             }
         }
-        Self { crates, things: Vec::new(), held: vec![None; karts], pressed: vec![false; karts], seed, picks: 0 }
+        Self {
+            crates,
+            things: Vec::new(),
+            held: vec![None; karts],
+            pressed: vec![false; karts],
+            smoke: vec![(0.0, 0); karts],
+            seed,
+            picks: 0,
+        }
     }
 
     pub fn crates(&self) -> &[Crate] {
@@ -190,6 +205,11 @@ impl Paddock {
     /// What kart `kart` holds.
     pub fn held(&self, kart: usize) -> Option<Item> {
         self.held.get(kart).copied().flatten()
+    }
+
+    /// The smoke kart `kart` pours: its colour (0xRRGGBB) while it lasts.
+    pub fn smoke(&self, kart: usize) -> Option<u32> {
+        self.smoke.get(kart).filter(|(left, _)| *left > 0.0).map(|(_, colour)| *colour)
     }
 
     /// Gives kart `kart` an item, or takes its own away.
@@ -207,6 +227,10 @@ impl Paddock {
         let mut events = Vec::new();
         self.held.resize(karts.len(), None);
         self.pressed.resize(karts.len(), false);
+        self.smoke.resize(karts.len(), (0.0, 0));
+        for (left, _) in &mut self.smoke {
+            *left = (*left - DT).max(0.0);
+        }
         for c in &mut self.crates {
             c.wait = (c.wait - DT).max(0.0);
         }
@@ -296,7 +320,7 @@ impl Paddock {
     fn draw(&mut self, place: usize, karts: usize) -> Item {
         let back = if karts > 1 { (place.min(karts - 1)) as f32 / (karts - 1) as f32 } else { 0.0 };
         // The rocket goes to the back: none to the leader.
-        let weights = [1.0 + 4.0 * back, 3.0 - back, 3.0 - 2.0 * back, 2.0, 3.0 * back * back];
+        let weights = [1.0 + 4.0 * back, 3.0 - back, 3.0 - 2.0 * back, 2.0, 3.0 * back * back, 1.5];
         let total: f32 = weights.iter().sum();
         let mut u = unit(self.seed ^ self.picks.wrapping_mul(0x9e37_79b9)) * total;
         self.picks = self.picks.wrapping_add(1);
@@ -331,6 +355,12 @@ impl Paddock {
             }
             Item::Rocket => {
                 kart.rocket = kart.rocket.max(ROCKET);
+                return;
+            }
+            Item::Smoke => {
+                // A bright colour from the draw's hash: a hue, full saturation.
+                let hue = unit(self.seed ^ self.picks.wrapping_mul(0x85eb_ca6b) ^ k as u32) * 6.0;
+                self.smoke[k] = (SMOKE, bright(hue));
                 return;
             }
             Item::Tyre => {
@@ -452,11 +482,27 @@ pub fn wants(item: Item, me: usize, field: &[Spot], kart: &Kart, track: &Track) 
         Item::Tyre => {
             straight(25.0) && gaps.clone().any(|(along, across)| (4.0..30.0).contains(&along) && across < 1.5)
         }
+        Item::Smoke => gaps.clone().any(|(along, across)| (-20.0..-3.0).contains(&along) && across < 3.0),
         Item::Cone | Item::Oil => gaps.clone().any(|(along, across)| (-12.0..-2.0).contains(&along) && across < 2.0),
     }
 }
 
 /// An integer hash with good mixing (a "lowbias32" finaliser).
+/// A bright colour, 0xRRGGBB, from a hue in [0, 6).
+fn bright(hue: f32) -> u32 {
+    let x = 1.0 - fabsf(hue % 2.0 - 1.0);
+    let (r, g, b) = match hue as u32 {
+        0 => (1.0, x, 0.0),
+        1 => (x, 1.0, 0.0),
+        2 => (0.0, 1.0, x),
+        3 => (0.0, x, 1.0),
+        4 => (x, 0.0, 1.0),
+        _ => (1.0, 0.0, x),
+    };
+    let byte = |v: f32| ((0.25 + 0.75 * v) * 255.0) as u32;
+    byte(r) << 16 | byte(g) << 8 | byte(b)
+}
+
 fn hash(mut x: u32) -> u32 {
     x ^= x >> 16;
     x = x.wrapping_mul(0x7feb_352d);
@@ -629,6 +675,22 @@ mod tests {
         karts[0] = Kart { x: oil.x, z: oil.z + 3.0, speed: -8.0, ..Kart::default() };
         let events = run(&mut paddock, &mut karts, &[false], &track, 60);
         assert!(!events.iter().any(|e| matches!(e, Event::Hit { .. })), "{events:?}");
+    }
+
+    #[test]
+    fn a_smoke_canister_pours_a_colour_for_a_while() {
+        let track = track();
+        let mut paddock = Paddock::new(&track, 1, 7);
+        paddock.hold(0, Some(Item::Smoke));
+        let mut karts = [kart(30.0, 10.0)];
+        assert_eq!(paddock.smoke(0), None);
+        paddock.step(&mut karts, &[true], &[0], &track);
+        let colour = paddock.smoke(0).expect("smoking");
+        assert!(colour > 0 && colour <= 0xff_ffff);
+        for _ in 0..(SMOKE / DT) as usize + 1 {
+            paddock.step(&mut karts, &[false], &[0], &track);
+        }
+        assert_eq!(paddock.smoke(0), None);
     }
 
     #[test]

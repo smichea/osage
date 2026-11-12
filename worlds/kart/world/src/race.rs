@@ -202,7 +202,7 @@ fn line_up(
         let discrete = Discrete::default()
             .with(ids.content_ref, &builtin(core_types::BUILTIN_AVATAR))
             .with(ids.controller, &controller)
-            .with(ids.racer, &racer(&progress, None));
+            .with(ids.racer, &racer(&progress, None, None));
         let volatile = Volatile::default().with(ids.state, &state(&kart, 0));
         let parts =
             (entity_ids.next_id(), transform(&kart), discrete, volatile, Body(kart), pilot, progress, Seat(slot));
@@ -280,7 +280,8 @@ pub fn publish(
         if volatile.0.get(&ids.state) != Some(&state) {
             volatile.0.insert(ids.state, state);
         }
-        let racer = prost::Message::encode_to_vec(&racer(progress, paddock.and_then(|p| p.held(seat.0))));
+        let (held, smoke) = (paddock.and_then(|p| p.held(seat.0)), paddock.and_then(|p| p.smoke(seat.0)));
+        let racer = prost::Message::encode_to_vec(&racer(progress, held, smoke));
         if discrete.0.get(&ids.racer) != Some(&racer) {
             discrete.0.insert(ids.racer, racer);
         }
@@ -337,7 +338,7 @@ fn state(kart: &Kart, applied: u64) -> proto::KartState {
     }
 }
 
-fn racer(progress: &Progress, held: Option<osage_kart_items::Item>) -> proto::Racer {
+fn racer(progress: &Progress, held: Option<osage_kart_items::Item>, smoke: Option<u32>) -> proto::Racer {
     proto::Racer {
         name: progress.name.clone(),
         color: progress.color,
@@ -346,5 +347,6 @@ fn racer(progress: &Progress, held: Option<osage_kart_items::Item>) -> proto::Ra
         position: progress.position,
         finish_ms: progress.finish_ms.unwrap_or(0),
         held: item(held).into(),
+        smoke: smoke.unwrap_or(0),
     }
 }

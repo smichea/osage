@@ -128,6 +128,10 @@ pub struct Course(pub Circuit);
 pub struct Pose {
     pub kart: Kart,
     pub color: u32,
+    /// What the kart holds, shown on it for all to see.
+    pub held: Option<osage_kart_items::Item>,
+    /// The colour of the smoke it pours (0xRRGGBB), while it pours some.
+    pub smoke: Option<u32>,
 }
 
 /// A place the camera is held at, looking at another, instead of following a kart.

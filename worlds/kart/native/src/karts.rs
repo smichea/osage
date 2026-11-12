@@ -45,6 +45,12 @@ pub const ROCKET_NOZZLES: [Vec3; 2] = [
 ];
 /// Rockets slide out and back in this long, seconds.
 const ROCKET_SHOW: f32 = 0.25;
+/// Where the item a kart holds rides, for all to see: on the back of the
+/// kart, behind the seat.
+const CARRIED: Vec3 = Vec3::new(0.0, 0.62, -0.8);
+
+/// A model made of parts: a mesh, its material, where it sits.
+type Parts = Vec<(Handle<Mesh>, Handle<StandardMaterial>, Transform)>;
 
 /// The meshes of a part, each with its finish.
 type Meshes = Vec<(Finish, Handle<Mesh>)>;
@@ -75,7 +81,9 @@ pub struct Kit {
     /// The driver's bones at rest, inverted: every driver's skin.
     bindposes: Handle<SkinnedMeshInverseBindposes>,
     /// A rocket's parts: its tube, its nose, its fins, its nozzle.
-    rocket: Vec<(Handle<Mesh>, Handle<StandardMaterial>, Transform)>,
+    rocket: Parts,
+    /// The model of each item a kart can hold, in the order of `Item::ALL`.
+    carried: Vec<Parts>,
 }
 
 /// The moving parts of a kart and where its motion stands.
@@ -88,6 +96,8 @@ pub struct Rig {
     wheels: [(Entity, Entity); 4],
     /// The rockets, shown while the kart has rocket left.
     rockets: Entity,
+    /// The model of each item it can hold, one shown at a time.
+    carried: Vec<Entity>,
     shown: f32,
     heading: f32,
     speed: f32,
@@ -170,7 +180,57 @@ pub fn setup(
             Transform::from_translation(around * Vec3::Y * r * 1.3 + Vec3::Z * -l * 0.27).with_rotation(around),
         ));
     }
-    commands.insert_resource(Kit { finishes, models: HashMap::new(), bindposes: skins.add(rest), rocket });
+    // What a kart holds, small, on its back.
+    let mut paint = |r: f32, g: f32, b: f32, rough: f32, metal: f32| {
+        materials.add(StandardMaterial {
+            base_color: Color::srgb(r, g, b),
+            perceptual_roughness: rough,
+            metallic: metal,
+            ..default()
+        })
+    };
+    let (blue, silver, rubber, orange, black, yellow, green) = (
+        paint(0.05, 0.3, 0.85, 0.3, 0.3),
+        paint(0.8, 0.8, 0.82, 0.25, 1.0),
+        paint(0.035, 0.035, 0.04, 0.85, 0.0),
+        paint(1.0, 0.36, 0.05, 0.55, 0.0),
+        paint(0.03, 0.03, 0.035, 0.3, 0.2),
+        paint(0.95, 0.75, 0.1, 0.4, 0.0),
+        paint(0.25, 0.6, 0.3, 0.4, 0.2),
+    );
+    let at = |x: f32, y: f32, z: f32| Transform::from_xyz(x, y, z);
+    let carried: Vec<Parts> = vec![
+        // Nitro: a blue bottle, a silver valve.
+        vec![
+            (meshes.add(Capsule3d::new(0.07, 0.22)), blue, at(0.0, 0.18, 0.0)),
+            (meshes.add(Cylinder::new(0.03, 0.08)), silver.clone(), at(0.0, 0.4, 0.0)),
+        ],
+        // Tyre: a spare wheel lying on the back, tilted to be seen; standing,
+        // it hid the driver from the chase camera.
+        vec![(
+            meshes.add(Torus { minor_radius: 0.055, major_radius: 0.13 }),
+            rubber,
+            at(0.0, 0.08, -0.05).with_rotation(Quat::from_rotation_x(0.6)),
+        )],
+        // Cone.
+        vec![(meshes.add(Cone { radius: 0.12, height: 0.32 }), orange, at(0.0, 0.16, 0.0))],
+        // Oil: a black can, a yellow band.
+        vec![
+            (meshes.add(Cylinder::new(0.09, 0.22)), black, at(0.0, 0.11, 0.0)),
+            (meshes.add(Cylinder::new(0.092, 0.05)), yellow, at(0.0, 0.12, 0.0)),
+        ],
+        // Rocket: lying along the kart, nose forward.
+        rocket
+            .iter()
+            .map(|(mesh, material, place)| (mesh.clone(), material.clone(), at(0.0, 0.12, 0.0) * *place))
+            .collect(),
+        // Smoke: a green canister with a nozzle.
+        vec![
+            (meshes.add(Cylinder::new(0.075, 0.26)), green, at(0.0, 0.13, 0.0)),
+            (meshes.add(Cylinder::new(0.025, 0.07)), silver, at(0.0, 0.3, 0.0)),
+        ],
+    ];
+    commands.insert_resource(Kit { finishes, models: HashMap::new(), bindposes: skins.add(rest), rocket, carried });
 }
 
 /// A team's colours from the palette: the paint, white or black stripes
@@ -232,13 +292,15 @@ fn model_of(kit: &mut Kit, meshes: &mut Assets<Mesh>, colour: usize) {
     });
 }
 
-/// A kart's parts under `kart`: its body, its head, and each wheel's pivot and tyre.
+/// A kart's parts under `kart`: its body, its head, each wheel's pivot and
+/// tyre, its bones, its rockets and the items it can carry.
+#[allow(clippy::type_complexity)]
 fn assemble(
     commands: &mut Commands,
     kit: &Kit,
     colour: usize,
     kart: Entity,
-) -> (Entity, Entity, [(Entity, Entity); 4], Bones, Entity) {
+) -> (Entity, Entity, [(Entity, Entity); 4], Bones, Entity, Vec<Entity>) {
     let model = &kit.models[&colour];
     let body = commands.spawn((Transform::default(), Visibility::default(), ChildOf(kart))).id();
     spawn_part(commands, kit, &model.body, body);
@@ -274,7 +336,18 @@ fn assemble(
             commands.spawn((Mesh3d(mesh.clone()), MeshMaterial3d(material.clone()), *place, ChildOf(rocket)));
         }
     }
-    (body, head, wheels, Bones { steering, joints }, rockets)
+    let carried = kit
+        .carried
+        .iter()
+        .map(|parts| {
+            let item = commands.spawn((Transform::from_translation(CARRIED), Visibility::Hidden, ChildOf(body))).id();
+            for (mesh, material, place) in parts {
+                commands.spawn((Mesh3d(mesh.clone()), MeshMaterial3d(material.clone()), *place, ChildOf(item)));
+            }
+            item
+        })
+        .collect();
+    (body, head, wheels, Bones { steering, joints }, rockets, carried)
 }
 
 /// Gives every parked kart its model.
@@ -302,7 +375,7 @@ pub fn dress(
     for (kart, pose) in &karts {
         let colour = pose.color as usize % PALETTE.len();
         model_of(&mut kit, &mut meshes, colour);
-        let (body, head, wheels, bones, rockets) = assemble(&mut commands, &kit, colour, kart);
+        let (body, head, wheels, bones, rockets, carried) = assemble(&mut commands, &kit, colour, kart);
 
         commands.entity(kart).insert((
             Transform::default(),
@@ -313,6 +386,7 @@ pub fn dress(
                 bones,
                 wheels,
                 rockets,
+                carried,
                 shown: 0.0,
                 heading: pose.kart.heading,
                 speed: pose.kart.speed,
@@ -381,6 +455,12 @@ pub fn animate(
 
         if let Ok(mut place) = transforms.get_mut(entity) {
             *place = Transform::from_xyz(kart.x, hop, kart.z).with_rotation(Quat::from_rotation_y(kart.heading));
+        }
+        // What it holds, on its back.
+        for (item, model) in osage_kart_items::Item::ALL.into_iter().zip(&rig.carried) {
+            if let Ok(mut visibility) = visibilities.get_mut(*model) {
+                visibility.set_if_neq(if pose.held == Some(item) { Visibility::Inherited } else { Visibility::Hidden });
+            }
         }
         // The rockets slide out while the kart has rocket left, shaking as they burn.
         let wanted = if kart.rocket > 0.0 { 1.0 } else { 0.0 };

@@ -268,6 +268,7 @@ fn write(
                         Item::Cone => ("CONE", Color::srgb(1.0, 0.5, 0.15)),
                         Item::Oil => ("OIL", Color::srgb(0.75, 0.6, 1.0)),
                         Item::Rocket => ("ROCKET", Color::srgb(1.0, 0.3, 0.25)),
+                        Item::Smoke => ("SMOKE", Color::srgb(0.4, 1.0, 0.6)),
                     };
                     tint = Some(colour);
                     format!("{name}  [F]")

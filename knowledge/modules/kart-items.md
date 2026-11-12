@@ -18,7 +18,7 @@ Something to pick up and use during a race, in the spirit of a kart paddock rath
 - **Rack:** four crates across the road at 25 %, 55 % and 85 % of the lap. A kart whose outline comes within 0.5 m of a crate breaks it; the crate is back 4 s later.
 - **Item:** what a kart holds, one at a time. A kart with its hands full still breaks crates, for nothing.
 - **Thing:** what a used item leaves on the track: a rolling tyre (6 s), a cone (20 s), an oil patch of 1.5 m radius (15 s). At most 32 at once; the oldest goes first.
-- **Draw:** weighted by place — nitro `1 + 4·back`, tyre `3 − back`, cone `3 − 2·back`, oil `2`, rocket `3·back²` (none to the leader), where `back` is 0 for the leader and 1 for the last — from a hash of the race's seed and the number of draws so far.
+- **Draw:** weighted by place — nitro `1 + 4·back`, tyre `3 − back`, cone `3 − 2·back`, oil `2`, rocket `3·back²` (none to the leader), smoke `1.5`, where `back` is 0 for the leader and 1 for the last — from a hash of the race's seed and the number of draws so far.
 
 # Architecture
 
@@ -28,6 +28,7 @@ Something to pick up and use during a race, in the spirit of a kart paddock rath
 2. Each kart breaks the crates it touches and draws an item if its hands are free.
 3. A use button that went down (pressed now, not the step before) uses what the kart holds:
    - **nitro:** 2.5 s of boost (a long drift gives 1.2 s);
+   - **smoke:** 6 s of smoke of a bright colour of its own (a hue from the race's hash) poured behind the kart, a screen; `Paddock::smoke(kart)` gives its colour, published as `Racer.smoke`;
    - **rocket:** 3.5 s of the physics' `rocket`: up to 34 m/s against a boost's 28; a tyre's hit puts it out;
    - **tyre:** thrown from the kart's nose at its forward speed plus 14 m/s; it slows at 2 m/s², and off a barrier (the physics' wall face) it bounces with 60 % of its speed across it;
    - **cone / oil:** left just behind the kart.
@@ -38,7 +39,7 @@ Something to pick up and use during a race, in the spirit of a kart paddock rath
 
 It returns events (picked, used, hit, bounced) for sounds and pictures.
 
-`wants(item, me, field, kart, track)` is when an AI driver uses what it holds: a nitro above 60 % of top speed with 30 m of straight ahead; a rocket above 50 % with 40 m; a tyre with 25 m of straight and a kart 4 to 30 m ahead within 1.5 m of its line; a cone or oil with a kart 2 to 12 m behind within 2 m.
+`wants(item, me, field, kart, track)` is when an AI driver uses what it holds: a nitro above 60 % of top speed with 30 m of straight ahead; a rocket above 50 % with 40 m; smoke with a kart 3 to 20 m behind within 3 m; a tyre with 25 m of straight and a kart 4 to 30 m ahead within 1.5 m of its line; a cone or oil with a kart 2 to 12 m behind within 2 m.
 
 # Interfaces
 

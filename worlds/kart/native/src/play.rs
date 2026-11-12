@@ -256,7 +256,12 @@ fn receive(mut commands: Commands, inbox: Res<NetInbox>, mut replica: ResMut<Rep
                         continue;
                     };
                     let kart = kart_of(&state);
-                    karts.insert(entity, commands.spawn((Pose { kart, color: racer.color }, Remote(entity))).id());
+                    karts.insert(
+                        entity,
+                        commands
+                            .spawn((Pose { kart, color: racer.color, held: None, smoke: None }, Remote(entity)))
+                            .id(),
+                    );
                     let controller = world.get::<components::Controller>(entity, core::CONTROLLER);
                     if controller.is_some_and(|c| c.per_world_id == *me) {
                         *mine = Some(entity);
@@ -375,6 +380,9 @@ fn poses(
             heading: pose.kart.heading + wrap(server.heading - pose.kart.heading) * glide,
             ..server
         });
+        let racer = replica.racer(remote.0);
+        pose.held = racer.as_ref().and_then(|racer| item(racer.held()));
+        pose.smoke = racer.map(|racer| racer.smoke).filter(|colour| *colour != 0);
     }
 }
 

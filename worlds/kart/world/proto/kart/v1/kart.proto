@@ -79,6 +79,9 @@ message Racer {
   uint64 finish_ms = 6;
   // What the kart holds, from a crate (kart.paddock/1).
   Item held = 7;
+  // The colour of the smoke the kart pours (0xRRGGBB), while it pours
+  // some (a smoke canister); 0 otherwise.
+  uint32 smoke = 8;
 }
 
 enum Item {
@@ -94,6 +97,8 @@ enum Item {
   ITEM_OIL = 4;
   // A rocket behind the seat: faster than a nitro, and longer.
   ITEM_ROCKET = 5;
+  // A canister that pours coloured smoke behind the kart: a screen.
+  ITEM_SMOKE = 6;
 }
 
 // kart.paddock/1 — crates to pick items from, and what karts left on the

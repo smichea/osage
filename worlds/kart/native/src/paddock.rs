@@ -56,6 +56,7 @@ pub fn item(item: proto::Item) -> Option<Item> {
         proto::Item::Cone => Some(Item::Cone),
         proto::Item::Oil => Some(Item::Oil),
         proto::Item::Rocket => Some(Item::Rocket),
+        proto::Item::Smoke => Some(Item::Smoke),
     }
 }
 
@@ -125,7 +126,7 @@ fn crate_face() -> Image {
             let ring = (p.distance(centre) - 22.0).abs() - 8.0;
             let angle = (p.y - centre.y).atan2(p.x - centre.x);
             // The arc: from the left, over the top, down the right to 45°.
-            let arc = if angle <= std::f32::consts::FRAC_PI_4 && angle >= -std::f32::consts::PI * 0.95 {
+            let arc = if (-std::f32::consts::PI * 0.95..=std::f32::consts::FRAC_PI_4).contains(&angle) {
                 ring
             } else {
                 f32::MAX
