@@ -2,7 +2,8 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 //! The paddock objects as the world sends them (`kart.paddock/1`): crates
-//! standing across the road, tyres rolling, cones and oil left behind. The
+//! standing across the road, tyres rolling, cones and oil left behind,
+//! drones flying to the leader (D-052), which burst where they come down. The
 //! world decides what they do ([osage-kart-items](osage_kart_items)); this
 //! only draws them, a pool of models per kind.
 //!
@@ -23,6 +24,20 @@ use bevy::{
 use osage_kart_items::{
     CONE_LIFE, CONE_RADIUS, CRATE_REACH, Item, OIL_LIFE, OIL_RADIUS, ROLLING, TYRE_LIFE, TYRE_RADIUS, touches,
 };
+
+/// A drone: a body, four arms and four rotors, as one mesh.
+pub fn drone_mesh() -> Mesh {
+    let mut drone: Mesh = Cuboid::new(0.34, 0.12, 0.42).into();
+    for (x, z) in [(1.0f32, 1.0f32), (-1.0, 1.0), (1.0, -1.0), (-1.0, -1.0)] {
+        // An arm from the body out to the rotor, along the diagonal.
+        let arm: Mesh = Cuboid::new(0.05, 0.04, 0.5).into();
+        let arm = arm.rotated_by(Quat::from_rotation_y(x.atan2(z))).translated_by(Vec3::new(x * 0.18, 0.02, z * 0.18));
+        drone.merge(&arm).expect("the same attributes");
+        let rotor: Mesh = Cylinder::new(0.2, 0.015).into();
+        drone.merge(&rotor.translated_by(Vec3::new(x * 0.34, 0.07, z * 0.34))).expect("the same attributes");
+    }
+    drone
+}
 use osage_kart_physics::Kart;
 use osage_world_kart::proto;
 
@@ -57,6 +72,10 @@ pub fn item(item: proto::Item) -> Option<Item> {
         proto::Item::Oil => Some(Item::Oil),
         proto::Item::Rocket => Some(Item::Rocket),
         proto::Item::Smoke => Some(Item::Smoke),
+        proto::Item::Stack => Some(Item::Stack),
+        proto::Item::Drone => Some(Item::Drone),
+        proto::Item::Bumper => Some(Item::Bumper),
+        proto::Item::Push => Some(Item::Push),
     }
 }
 
@@ -66,15 +85,18 @@ enum Shape {
     Tyre,
     Cone,
     Oil,
+    Drone,
 }
 
-const SHAPES: [Shape; 4] = [Shape::Crate, Shape::Tyre, Shape::Cone, Shape::Oil];
+const SHAPES: [Shape; 5] = [Shape::Crate, Shape::Tyre, Shape::Cone, Shape::Oil, Shape::Drone];
 
 /// Each kind's model, and the models made so far.
 #[derive(Resource)]
 struct Looks {
-    looks: [(Handle<Mesh>, Handle<StandardMaterial>); 4],
-    pools: [Vec<Entity>; 4],
+    looks: [(Handle<Mesh>, Handle<StandardMaterial>); 5],
+    pools: [Vec<Entity>; 5],
+    /// Where each drone was at the last frame: one gone near the road came down on a kart.
+    drones: Vec<Vec3>,
     /// When each crate was last seen broken here (s, game time), and
     /// whether the world had it standing.
     broken: Vec<f32>,
@@ -241,10 +263,22 @@ fn setup(
                 ..default()
             },
         ),
+        // A drone: dark carbon, a red light under it to be seen coming.
+        look(
+            drone_mesh(),
+            StandardMaterial {
+                base_color: Color::srgb(0.08, 0.08, 0.09),
+                emissive: LinearRgba::rgb(0.6, 0.04, 0.02),
+                perceptual_roughness: 0.4,
+                metallic: 0.3,
+                ..default()
+            },
+        ),
     ];
     commands.insert_resource(Looks {
         looks,
         pools: default(),
+        drones: Vec::new(),
         broken: Vec::new(),
         standing: Vec::new(),
         bit,
@@ -267,7 +301,7 @@ fn show(
     let t = time.elapsed_secs();
     // The road's height under a thing: over a crest, it is raised (D-051).
     let road = |x: f32, z: f32| course.as_ref().map_or(0.0, |c| c.0.track.lift(c.0.track.locate(x, z).along).0);
-    let mut wanted: [Vec<Transform>; 4] = default();
+    let mut wanted: [Vec<Transform>; 5] = default();
     let crates = &view.paddock.crates;
     looks.broken.resize(crates.len(), f32::NEG_INFINITY);
     looks.standing.resize(crates.len(), false);
@@ -334,9 +368,31 @@ fn show(
                         .with_scale(Vec3::splat(thing.life.clamp(0.2, 1.0) * spread)),
                 )
             }
+            proto::Item::Drone => {
+                // Where it flies in `lead`, nose to where it goes, rocking a little.
+                let (x, z) = (thing.x + thing.vx * lead, thing.z + thing.vz * lead);
+                let heading = thing.vx.atan2(thing.vz);
+                let rock = 0.08 * (t * 7.0 + thing.x).sin();
+                wanted[4].push(
+                    Transform::from_xyz(x, road(x, z) + thing.height, z)
+                        .with_rotation(Quat::from_rotation_y(heading) * Quat::from_rotation_x(0.18 + rock)),
+                );
+            }
             _ => {}
         }
     }
+    // A drone gone near the road came down on a kart: a burst there.
+    let drones: Vec<Vec3> = wanted[4].iter().map(|place| place.translation).collect();
+    let landed: Vec<Vec3> = looks
+        .drones
+        .iter()
+        .filter(|was| was.y - road(was.x, was.z) < 2.0 && !drones.iter().any(|now| now.distance(**was) < 3.0))
+        .copied()
+        .collect();
+    for at in landed {
+        burst(&mut commands, &mut looks, at);
+    }
+    looks.drones = drones;
     let Looks { looks, pools, .. } = &mut *looks;
     for (k, _) in SHAPES.iter().enumerate() {
         let pool = &mut pools[k];
@@ -348,7 +404,13 @@ fn show(
                 }
                 None if n >= pool.len() => {
                     let (mesh, material) = looks[k].clone();
-                    pool.push(commands.spawn((Mesh3d(mesh), MeshMaterial3d(material), *place)).id());
+                    let model = commands.spawn((Mesh3d(mesh), MeshMaterial3d(material), *place)).id();
+                    // A drone buzzes where it flies (where the game has sound).
+                    #[cfg(feature = "sound")]
+                    if SHAPES[k] == Shape::Drone {
+                        commands.entity(model).insert(crate::sound::Drone);
+                    }
+                    pool.push(model);
                 }
                 None => {}
             }

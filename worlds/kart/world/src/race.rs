@@ -20,7 +20,9 @@ use crate::{
     driving::Pilot,
     paddock::{Items, Seat, item, items_for, to_proto},
     proto::{self, Phase},
+    records::{Timed, Times},
 };
+use osage_kart_records::Event;
 
 const COUNTDOWN: Duration = Duration::from_secs(3);
 const RESULTS: Duration = Duration::from_secs(8);
@@ -102,6 +104,15 @@ pub struct Progress {
     distance: f32,
     pub finish_ms: Option<u64>,
     pub position: u32,
+    /// When it last crossed the line, racing.
+    lap_started: Option<Duration>,
+}
+
+impl Progress {
+    /// Distance covered in the race, counted only through sectors in order, m.
+    pub fn covered(&self) -> f32 {
+        self.distance
+    }
 }
 
 impl Drivers {
@@ -266,11 +277,12 @@ fn line_up(
             distance: 0.0,
             finish_ms: None,
             position: slot as u32 + 1,
+            lap_started: None,
         };
         let discrete = Discrete::default()
             .with(ids.content_ref, &builtin(core_types::BUILTIN_AVATAR))
             .with(ids.controller, &controller)
-            .with(ids.racer, &racer(&progress, None, None));
+            .with(ids.racer, &racer(&progress, None, 0));
         let volatile = Volatile::default().with(ids.state, &state(&kart, 0));
         let parts = (
             entity_ids.next_id(),
@@ -297,6 +309,7 @@ pub fn progress(
     rules: Res<Rules>,
     course: Res<Course>,
     mut race: ResMut<Race>,
+    mut times: ResMut<Times>,
     mut karts: Query<(&Replicated, &Body, &mut Progress)>,
 ) {
     let racing = race.phase == Phase::Racing;
@@ -309,9 +322,18 @@ pub fn progress(
             progress.sector = sector;
             if sector == 0 {
                 progress.lap += 1;
+                let (name, bot) = (progress.name.clone(), progress.bot);
+                if let Some(started) = progress.lap_started.replace(now)
+                    && progress.finish_ms.is_none()
+                {
+                    let ms = (now - started).as_millis() as u64;
+                    times.0.push(Timed { name: name.clone(), bot, event: Event::Lap, ms });
+                }
                 if progress.lap > rules.laps && progress.finish_ms.is_none() {
-                    progress.finish_ms = Some((now - race.started).as_millis() as u64);
+                    let ms = (now - race.started).as_millis() as u64;
+                    progress.finish_ms = Some(ms);
                     race.first_finish.get_or_insert(now);
+                    times.0.push(Timed { name, bot, event: Event::Race { laps: rules.laps }, ms });
                 }
             }
         }
@@ -359,8 +381,7 @@ pub fn publish(
         if volatile.0.get(&ids.state) != Some(&state) {
             volatile.0.insert(ids.state, state);
         }
-        let (held, smoke) = (paddock.and_then(|p| p.held(seat.0)), paddock.and_then(|p| p.smoke(seat.0)));
-        let racer = prost::Message::encode_to_vec(&racer(progress, held, smoke));
+        let racer = prost::Message::encode_to_vec(&racer(progress, paddock, seat.0));
         if discrete.0.get(&ids.racer) != Some(&racer) {
             discrete.0.insert(ids.racer, racer);
         }
@@ -429,7 +450,8 @@ fn state(kart: &Kart, applied: u64) -> proto::KartState {
     }
 }
 
-fn racer(progress: &Progress, held: Option<osage_kart_items::Item>, smoke: Option<u32>) -> proto::Racer {
+fn racer(progress: &Progress, paddock: Option<&osage_kart_items::Paddock>, seat: usize) -> proto::Racer {
+    let (held, smoke) = (paddock.and_then(|p| p.held(seat)), paddock.and_then(|p| p.smoke(seat)));
     proto::Racer {
         name: progress.name.clone(),
         color: progress.color,
@@ -439,5 +461,9 @@ fn racer(progress: &Progress, held: Option<osage_kart_items::Item>, smoke: Optio
         finish_ms: progress.finish_ms.unwrap_or(0),
         held: item(held).into(),
         smoke: smoke.unwrap_or(0),
+        held_count: paddock.map_or(0, |p| u32::from(p.count(seat))),
+        trailing: paddock.is_some_and(|p| p.trailing(seat)),
+        // Whole hundredths: a guard that only ticks down is sent as it changes.
+        guard: paddock.map_or(0.0, |p| (p.guard(seat) * 100.0).ceil() / 100.0),
     }
 }

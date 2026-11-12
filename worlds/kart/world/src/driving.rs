@@ -7,13 +7,15 @@
 use std::collections::BTreeMap;
 
 use bevy::prelude::*;
+use osage_kart_items::Kind;
 use osage_kart_physics::{Controls, Kart, bump, launch, slipstream, step};
-use osage_kart_racecraft::{Mind, Temper, field};
+use osage_kart_racecraft::{Hazard, Mind, Temper, drive_among, field};
 use osage_world_module_api::IntentReceived;
 use prost::Message as _;
 
 use crate::{
     Body, Circuit, Course, Ids,
+    paddock::Items,
     proto::{self, Phase},
     race::{Calls, Progress, Race},
 };
@@ -128,6 +130,7 @@ pub fn drive(
     time: Res<Time>,
     race: Res<Race>,
     course: Res<Course>,
+    paddock: Option<Res<Items>>,
     mut karts: Query<(&mut Body, &mut Pilot, &Progress, &mut Launch)>,
 ) {
     let track = &course.0.track;
@@ -136,13 +139,20 @@ pub fn drive(
     // the same in both loops.
     let karts_now: Vec<Kart> = karts.iter().map(|(body, ..)| body.0).collect();
     let field = field(track, &karts_now);
+    // What lies on the road for the bots to steer round (a drone is in the air).
+    let hazards: Vec<Hazard> = paddock
+        .iter()
+        .flat_map(|p| p.0.things())
+        .filter(|t| t.kind != Kind::Drone)
+        .map(|t| Hazard { spot: track.locate(t.x, t.z), radius: t.kind.radius() })
+        .collect();
     for (me, (mut body, mut pilot, progress, mut start)) in karts.iter_mut().enumerate() {
         let mut controls = match &mut *pilot {
             Pilot::Human(steps) => next_steps(steps),
             Pilot::Agent(wanted) => vec![autopilot(&body.0, wanted, &course.0)],
             Pilot::Bot(bot) => {
                 let (temper, mind) = &mut **bot;
-                vec![osage_kart_racecraft::drive(&body.0, me, &field, temper, mind, track)]
+                vec![drive_among(&body.0, me, &field, &hazards, temper, mind, track)]
             }
         };
         // The start: a human's throttle on the grid is timed against the lights.

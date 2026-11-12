@@ -8,7 +8,7 @@ cd /d "%~dp0"
 rem First the newest version, if there is one (kart-update.exe runs this file
 rem again once updated; the whole block is read before it runs).
 if not "%OSAGE_UPDATED%"=="1" if exist kart-update.exe (kart-update.exe --then "%~f0" %* & exit /b)
-start "osage kart world" /min kart-server.exe
+start "osage kart world" /min kart-server.exe --records kart-records.txt
 timeout /t 2 /nobreak >nul
 kart-native.exe %*
 taskkill /im kart-server.exe /f >nul 2>&1

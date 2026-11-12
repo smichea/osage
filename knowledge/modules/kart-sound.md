@@ -29,6 +29,8 @@ Every kart heard as it drives: from recordings when the content has them, played
 - **Ground:** kerbs drum at the rate their blocks pass (one a metre); grass is a low rumble.
 - **Wind:** low-passed noise, rising with the square of the speed.
 - **Knocks:** a 70 Hz thump, the 330 Hz ring of plastic and a crack of band-passed noise, decaying within 0.4 s.
+- **Cues:** short sounds of the kart's own, from its items (`Voice::cue`): a bumper's air bag, a thump falling from 108 to 48 Hz and air let out, 0.4 s; a pit-crew push, air swelling and rising in pitch from 500 Hz to 3 kHz, 0.7 s.
+- **Buzz:** a drone's four rotors, apart from any kart: softened saws at 172 to 192 blade passes a second, swaying a little, and band-passed air, as loud as the gain the client sets from distance and flight.
 - **Mix:** a soft limiter (a rational curve, as smooth as `tanh` and cheaper, 1 at 3 and beyond).
 
 With recordings: the engine plays the two loops either side of the revs, crossfaded at equal power on a scale of ratios, each read faster or slower (×0.5 to ×2.5, interpolated) so that its note follows the revs; louder with the throttle. The squeal loop plays faster as the slide grows, the ground loop with the speed; a knock plays one of the knock clips, picked by a seeded hash, over the synthesised thump. Their levels are set to match the synthesised layers' (measured RMS).
@@ -37,7 +39,7 @@ Filters are a state-variable band-pass (topology preserving) and one-pole low-pa
 
 # Interfaces
 
-`Drive`, `Recordings`, `Voice::{new, with, set, knock, sample, render}`, `revs(speed, top, throttle)`, `RATE`, `IDLE_RPM`, `MAX_RPM`. The example `lap` renders twelve seconds of a kart to a WAV file.
+`Drive`, `Recordings`, `Cue`, `Buzz`, `Voice::{new, with, set, knock, cue, sample, render}`, `revs(speed, top, throttle)`, `RATE`, `IDLE_RPM`, `MAX_RPM`. The example `lap` renders twelve seconds of a kart to a WAV file.
 
 # Invariants
 
@@ -46,10 +48,11 @@ Filters are a state-variable band-pass (topology preserving) and one-pole low-pa
 - Tyres squeal only when they slide; kerbs drum at the rate their blocks pass; a knock is heard, then dies back to the engine. Tested.
 - The same voice twice is the same. Tested.
 - A recorded engine plays at the revs' speed (one loop at 100 Hz recorded at 6 000 turns a minute plays at 150 Hz at 9 000); between two loops the level holds; recorded tyres and knocks play only when the kart slides or is hit. Tested.
+- A cue sounds and ends; a drone buzzes with its gain and is silent without. Tested.
 
 # Knowledge
 
-- Used by [osage-kart-native](/modules/kart-native.md): a voice per kart, placed where the kart is and heard from the camera, its drive read from the kart's state (the throttle of other karts guessed from how they gain speed, the slide and spin from the physics, a knock from a sudden spin or stop, the ground from where the wheels are).
+- Used by [osage-kart-native](/modules/kart-native.md): a voice per kart, placed where the kart is and heard from the camera, its drive read from the kart's state (the throttle of other karts guessed from how they gain speed, the slide and spin from the physics, a knock from a sudden spin or stop, the ground from where the wheels are; a cue when a kart uses a bumper or starts a push; a buzz on every drone in the air).
 - The clips come from CC0 recordings in the [asset manifest](https://github.com/smichea/osage/blob/main/assets/manifest.toml) (Freesound originals), cut, made seamless and evened by `tools/make-sounds.py`: about 0.3 MB of Ogg Vorbis for 27 MB of originals. A swell or a dip inside a loop repeats with it, and at full speed the ear hears it once a second: the engine loops are cut from the steadiest passages and their loudness evened within the loop (80 ms windows).
 - Oracle: the crate's tests; listening to the example.
 

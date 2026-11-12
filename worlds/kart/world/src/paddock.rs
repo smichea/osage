@@ -6,7 +6,7 @@
 //! — clients only see them — and its own drivers use what they pick up.
 
 use bevy::prelude::*;
-use osage_kart_items::{Item, Kind, Paddock, wants};
+use osage_kart_items::{Item, Kind, Paddock, Standing};
 use osage_kart_physics::{Kart, Track};
 
 use crate::{
@@ -39,10 +39,15 @@ pub fn items(
     let seats = karts.iter().map(|(seat, ..)| seat.0 + 1).max().unwrap_or(0);
     // Seats left empty stay far away.
     let mut bodies = vec![Kart { x: 1e6, z: 1e6, ..Kart::default() }; seats];
-    let mut places = vec![seats; seats];
+    // Each kart's place, and how far behind the leader it is (D-052).
+    let leader = karts.iter().map(|(.., progress)| progress.covered()).fold(0.0, f32::max);
+    let mut standings = vec![Standing { place: seats, behind: 0.0 }; seats];
     for (seat, body, _, progress) in &karts {
         bodies[seat.0] = body.0;
-        places[seat.0] = progress.position.saturating_sub(1) as usize;
+        standings[seat.0] = Standing {
+            place: progress.position.saturating_sub(1) as usize,
+            behind: (leader - progress.covered()).max(0.0),
+        };
     }
     let spots: Vec<_> = bodies.iter().map(|k| track.locate(k.x, k.z)).collect();
     let mut uses = vec![false; seats];
@@ -50,10 +55,10 @@ pub fn items(
         let me = seat.0;
         uses[me] = match pilot.uses_items() {
             Some(held) => held,
-            None => paddock.0.held(me).is_some_and(|item| wants(item, me, &spots, &body.0, track)),
+            None => paddock.0.button(me, &spots, &standings, &body.0, track),
         };
     }
-    paddock.0.step(&mut bodies, &uses, &places, track);
+    paddock.0.step(&mut bodies, &uses, &standings, track);
     for (seat, mut body, _, _) in &mut karts {
         if body.0 != bodies[seat.0] {
             body.0 = bodies[seat.0];
@@ -75,6 +80,10 @@ pub fn item(item: Option<Item>) -> proto::Item {
         Some(Item::Oil) => proto::Item::Oil,
         Some(Item::Rocket) => proto::Item::Rocket,
         Some(Item::Smoke) => proto::Item::Smoke,
+        Some(Item::Stack) => proto::Item::Stack,
+        Some(Item::Drone) => proto::Item::Drone,
+        Some(Item::Bumper) => proto::Item::Bumper,
+        Some(Item::Push) => proto::Item::Push,
     }
 }
 
@@ -84,13 +93,22 @@ pub fn to_proto(paddock: &Paddock) -> proto::Paddock {
         Kind::Tyre => proto::Item::Tyre,
         Kind::Cone => proto::Item::Cone,
         Kind::Oil => proto::Item::Oil,
+        Kind::Drone => proto::Item::Drone,
     };
     proto::Paddock {
         crates: paddock.crates().iter().map(|c| proto::Crate { x: c.x, z: c.z, standing: c.stands() }).collect(),
         things: paddock
             .things()
             .iter()
-            .map(|t| proto::Thing { kind: kind(t.kind).into(), x: t.x, z: t.z, vx: t.vx, vz: t.vz, life: t.life })
+            .map(|t| proto::Thing {
+                kind: kind(t.kind).into(),
+                x: t.x,
+                z: t.z,
+                vx: t.vx,
+                vz: t.vz,
+                life: t.life,
+                height: t.height,
+            })
             .collect(),
     }
 }

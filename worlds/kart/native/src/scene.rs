@@ -132,6 +132,10 @@ pub struct Pose {
     pub held: Option<osage_kart_items::Item>,
     /// The colour of the smoke it pours (0xRRGGBB), while it pours some.
     pub smoke: Option<u32>,
+    /// It holds its item behind it, on the road (D-052).
+    pub trailing: bool,
+    /// Seconds of a pit-crew push left, when nothing touches it.
+    pub guard: f32,
 }
 
 /// A place the camera is held at, looking at another, instead of following a kart.

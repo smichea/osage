@@ -186,7 +186,8 @@ fn line_up(mut commands: Commands) {
         };
         let kart = circuit.grid_slot(slot);
         let racer = Racer { kart, temper, mind: Mind::new(slot as u32 + 1) };
-        let mut racer = commands.spawn((racer, Pose { kart, color: slot as u32, held: None, smoke: None }));
+        let mut racer = commands
+            .spawn((racer, Pose { kart, color: slot as u32, held: None, smoke: None, trailing: false, guard: 0.0 }));
         if last {
             racer.insert(Followed);
         }

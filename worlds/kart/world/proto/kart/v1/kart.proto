@@ -26,8 +26,9 @@ message Step {
   // for a mini-turbo of one to three levels, by how long the drift lasted.
   // Pressed in the air, it is a trick: a boost on landing.
   bool drift = 4;
-  // The use button is held: what the kart holds is used as it goes down
-  // (kart.paddock/1).
+  // The use button is held (kart.paddock/1): a tyre, a stack, a cone or oil
+  // goes behind the kart as it goes down — a shield — and is thrown or
+  // dropped as it comes up; anything else is used as it goes down.
   bool use_item = 5;
   // A call about the race (kart.race/1): the host starts the next one; a
   // driver racing alone ends the race.
@@ -108,6 +109,13 @@ message Racer {
   // The colour of the smoke the kart pours (0xRRGGBB), while it pours
   // some (a smoke canister); 0 otherwise.
   uint32 smoke = 8;
+  // Added with D-052. How many of what it holds the kart has left: up to
+  // three for a stack of tyres.
+  uint32 held_count = 9;
+  // It holds its item behind it: a shield against a tyre from behind.
+  bool trailing = 10;
+  // Seconds nothing on the track touches it for (a pit-crew push).
+  float guard = 11;
 }
 
 enum Item {
@@ -125,6 +133,15 @@ enum Item {
   ITEM_ROCKET = 5;
   // A canister that pours coloured smoke behind the kart: a screen.
   ITEM_SMOKE = 6;
+  // Added with D-052. Three tyres, thrown one press each.
+  ITEM_STACK = 7;
+  // Flies over the track to the leader and comes down on it.
+  ITEM_DRONE = 8;
+  // An air bag that knocks every kart within a few metres aside.
+  ITEM_BUMPER = 9;
+  // A pit-crew push: a boost, and for a while nothing on the track touches
+  // the kart.
+  ITEM_PUSH = 10;
 }
 
 // kart.paddock/1 — crates to pick items from, and what karts left on the
@@ -150,6 +167,8 @@ message Thing {
   float vz = 5;
   // Seconds before it goes.
   float life = 6;
+  // Height above the road, m: a drone flies (D-052).
+  float height = 7;
 }
 
 // kart.track/1 — the circuit: centre line, road and walls.
@@ -192,6 +211,29 @@ message Race {
   // The kart of the host: the first human driver still here, who starts
   // each race (RACE_CALL_START); 0 when the world starts races by itself.
   uint64 host = 6;
+}
+
+// kart.records/1 — the world's records on this track (D-053): the best
+// laps and the best races of the world's number of laps, one per driver
+// name, fastest first. Kept by the world across restarts.
+message Records {
+  string track = 1;
+  repeated Record laps = 2;
+  repeated Record races = 3;
+  // The laps of the races the race board keeps.
+  uint32 race_laps = 4;
+}
+
+message Record {
+  string name = 1;
+  uint32 ms = 2;
+  // When, seconds since the Unix epoch.
+  uint64 at = 3;
+  // The kart and the driver character, empty until there is a choice.
+  string kart = 4;
+  string driver = 5;
+  // Set in the race just run (or running): show it as new.
+  bool fresh = 6;
 }
 
 enum Phase {

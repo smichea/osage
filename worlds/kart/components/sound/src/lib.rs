@@ -11,7 +11,10 @@
 //!   slide;
 //! - **ground:** kerbs drum at the rate their blocks pass, grass rumbles;
 //! - **wind,** rising with the square of the speed;
-//! - **knocks:** a thump and the crack of plastic, as strong as the impulse.
+//! - **knocks:** a thump and the crack of plastic, as strong as the impulse;
+//! - **cues** of paddock objects ([`Cue`], D-052): a bumper's air bag, a
+//!   pit-crew push;
+//! - and, apart from any kart, a drone's rotors ([`Buzz`]).
 //!
 //! Used where no recording is at hand (D-044's rule for sound: recordings
 //! when the content is there, this otherwise), and for what recordings
@@ -263,6 +266,59 @@ impl Engine {
     }
 }
 
+/// A paddock object's sound, from the kart that uses it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Cue {
+    /// A bumper's air bag: a deep thump and a rush of air, 0.4 s.
+    Bumper,
+    /// A pit-crew push: air rising in pitch as the kart is shoved, 0.7 s.
+    Push,
+}
+
+impl Cue {
+    /// How long it sounds, s.
+    pub fn length(self) -> f32 {
+        match self {
+            Cue::Bumper => 0.4,
+            Cue::Push => 0.7,
+        }
+    }
+}
+
+/// A drone's four rotors, each its own pitch, and the air they move: a
+/// buzz that rises with `gain` (0 silent, 1 close and flying).
+#[derive(Clone, Debug)]
+pub struct Buzz {
+    phases: [f32; 4],
+    noise: Noise,
+    air: Band,
+    wobble: f32,
+}
+
+impl Buzz {
+    pub fn new(seed: u32) -> Self {
+        let mut air = Band::default();
+        air.tune(1_400.0, 1.2);
+        Self { phases: [0.0, 0.25, 0.5, 0.75], noise: Noise(seed.wrapping_mul(0x9e37_79b9) | 1), air, wobble: 0.0 }
+    }
+
+    /// The next sample, about −1…1, at `gain`.
+    pub fn sample(&mut self, gain: f32) -> f32 {
+        // Blade passes: two blades a rotor, a little apart in speed.
+        const RATES: [f32; 4] = [172.0, 178.5, 184.0, 191.5];
+        self.wobble = (self.wobble + DT * 3.1).fract();
+        let sway = 1.0 + 0.015 * (TAU * self.wobble).sin();
+        let mut hum = 0.0;
+        for (phase, rate) in self.phases.iter_mut().zip(RATES) {
+            *phase = (*phase + rate * sway * DT).fract();
+            // A saw with its edge softened: the blade's pulse.
+            hum += (2.0 * *phase - 1.0) * 0.6 + (TAU * 2.0 * *phase).sin() * 0.25;
+        }
+        let air = self.air.pass(self.noise.next());
+        soft((hum * 0.12 + air * 0.5) * gain.clamp(0.0, 1.0))
+    }
+}
+
 /// A knock under way.
 #[derive(Clone, Debug)]
 struct Knock {
@@ -288,6 +344,9 @@ pub struct Voice {
     crack: Band,
     kerb: f32,
     knocks: Vec<Knock>,
+    /// Cues sounding, with their age, s.
+    cues: Vec<(Cue, f32)>,
+    rush: Band,
     count: u32,
     /// Easing over a block.
     ease: f32,
@@ -353,6 +412,8 @@ impl Voice {
             crack,
             kerb: 0.0,
             knocks: Vec::new(),
+            cues: Vec::new(),
+            rush: Band::default(),
             count: 0,
             ease: 1.0 - (-(BLOCK as f32) * DT / 0.015).exp(),
             gains: Gains::default(),
@@ -375,6 +436,48 @@ impl Voice {
             let clip = (self.knocked >> 16) as usize % self.recordings.knocks.len().max(1);
             self.knocks.push(Knock { age: 0.0, strength: strength.clamp(0.0, 1.0), clip, at: 0 });
         }
+    }
+
+    /// A paddock object's cue, from this kart.
+    pub fn cue(&mut self, cue: Cue) {
+        if self.cues.len() < 4 {
+            if self.cues.is_empty() {
+                self.rush.tune(if cue == Cue::Push { 500.0 } else { 900.0 }, 1.5);
+            }
+            self.cues.push((cue, 0.0));
+        }
+    }
+
+    /// The cues sounding now, one sample.
+    fn cues(&mut self) -> f32 {
+        let mut out = 0.0;
+        let noise = self.noise.next();
+        let mut rush = 0.0;
+        for (cue, age) in &mut self.cues {
+            let t = *age;
+            match cue {
+                // A thump whose pitch falls, and air let out.
+                Cue::Bumper => {
+                    let pitch = 48.0 + 60.0 * (-t * 18.0).exp();
+                    out += (TAU * pitch * t).sin() * (-t * 9.0).exp() * 0.9;
+                    rush += noise * (-t * 12.0).exp() * 0.8;
+                }
+                // Air rising in pitch as the kart is shoved, then a fade.
+                Cue::Push => {
+                    let swell = (t / 0.12).min(1.0) * (-(t - 0.12).max(0.0) * 4.5).exp();
+                    rush += noise * swell * 1.8;
+                }
+            }
+            *age += DT;
+        }
+        self.cues.retain(|(cue, age)| *age < cue.length());
+        if let Some((cue, age)) = self.cues.first() {
+            let rising = if *cue == Cue::Push { 500.0 + 2_500.0 * (age / cue.length()) } else { 900.0 };
+            if self.count.is_multiple_of(BLOCK) {
+                self.rush.tune(rising, 1.5);
+            }
+        }
+        out + self.rush.pass(rush)
     }
 
     /// Eases towards what is wanted (over about 15 ms) and sets what
@@ -456,8 +559,10 @@ impl Voice {
         self.knocks.retain(|k| k.age < 0.4 || k.at < long);
         let crack = self.crack.pass(crack) * 1.5 + taped * TAPE_KNOCK;
 
+        let cues = if self.cues.is_empty() { 0.0 } else { self.cues() };
+
         // A soft limiter: loud moments round off instead of clipping.
-        soft(engine + squeal + drum + grass + wind + knocks * 0.7 + crack)
+        soft(engine + squeal + drum + grass + wind + knocks * 0.7 + crack + cues)
     }
 
     /// Fills `out` with the next samples.
@@ -617,5 +722,33 @@ mod tests {
         voice.knock(1.0);
         let during = rms(&run(&mut voice, Drive::default(), 0.04));
         assert!(during > before + 0.2, "{before} {during}");
+    }
+
+    #[test]
+    fn cues_sound_and_end() {
+        let mut quiet = Voice::new(3);
+        let mut cued = Voice::new(3);
+        cued.cue(Cue::Bumper);
+        let energy = |voice: &mut Voice, n: usize| (0..n).map(|_| voice.sample().powi(2)).sum::<f32>() / n as f32;
+        let n = (0.3 * RATE as f32) as usize;
+        let (base, loud) = (energy(&mut quiet, n), energy(&mut cued, n));
+        assert!(loud > base * 4.0 + 1e-4, "a bumper is heard: {loud} over {base}");
+        // Over by its length: the same as an uncued voice afterwards.
+        let rest = (0.5 * RATE as f32) as usize;
+        energy(&mut quiet, rest);
+        energy(&mut cued, rest);
+        assert!(cued.cues.is_empty());
+        let mut pushed = Voice::new(3);
+        pushed.cue(Cue::Push);
+        assert!(energy(&mut pushed, n) > base * 2.0 + 1e-5);
+    }
+
+    #[test]
+    fn a_drone_buzzes_with_its_gain_and_is_silent_without() {
+        let mut buzz = Buzz::new(1);
+        let silent: f32 = (0..4800).map(|_| buzz.sample(0.0).abs()).sum();
+        assert_eq!(silent, 0.0);
+        let loud: f32 = (0..4800).map(|_| buzz.sample(1.0).powi(2)).sum::<f32>() / 4800.0;
+        assert!(loud > 0.005 && loud < 1.0, "{loud}");
     }
 }

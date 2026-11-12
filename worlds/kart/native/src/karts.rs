@@ -15,7 +15,7 @@
 
 use std::{
     collections::HashMap,
-    f32::consts::{PI, TAU},
+    f32::consts::{FRAC_PI_2, PI, TAU},
 };
 
 use bevy::{
@@ -50,6 +50,10 @@ const ROCKET_SHOW: f32 = 0.25;
 /// Where the item a kart holds rides, for all to see: on the back of the
 /// kart, behind the seat.
 const CARRIED: Vec3 = Vec3::new(0.0, 0.62, -0.8);
+/// Where a kart's item is held behind it: on the road behind its tail.
+const TRAILED: Vec3 = Vec3::new(0.0, 0.05, -1.5);
+/// Seconds a bumper's wave takes to spread.
+const WAVE: f32 = 0.4;
 
 /// A model made of parts: a mesh, its material, where it sits.
 type Parts = Vec<(Handle<Mesh>, Handle<StandardMaterial>, Transform)>;
@@ -86,6 +90,9 @@ pub struct Kit {
     rocket: Parts,
     /// The model of each item a kart can hold, in the order of `Item::ALL`.
     carried: Vec<Parts>,
+    /// A pit-crew push's glow around the kart, and a bumper's shock wave.
+    bubble: (Handle<Mesh>, Handle<StandardMaterial>),
+    wave: (Handle<Mesh>, Handle<StandardMaterial>),
 }
 
 /// The moving parts of a kart and where its motion stands.
@@ -123,6 +130,12 @@ pub struct Rig {
     attitude: f32,
     /// How far through its roll a trick is, 0 to 1.
     trick: f32,
+    /// The glow of a pit-crew push, and a bumper's wave with its age (s;
+    /// none running when negative), and what the kart held last frame.
+    bubble: Entity,
+    wave: Entity,
+    waved: f32,
+    held: Option<osage_kart_items::Item>,
 }
 
 pub fn setup(
@@ -195,6 +208,7 @@ pub fn setup(
             ..default()
         })
     };
+    let red = paint(0.85, 0.08, 0.06, 0.5, 0.0);
     let (blue, silver, rubber, orange, black, yellow, green) = (
         paint(0.05, 0.3, 0.85, 0.3, 0.3),
         paint(0.8, 0.8, 0.82, 0.25, 1.0),
@@ -215,15 +229,15 @@ pub fn setup(
         // it hid the driver from the chase camera.
         vec![(
             meshes.add(Torus { minor_radius: 0.055, major_radius: 0.13 }),
-            rubber,
+            rubber.clone(),
             at(0.0, 0.08, -0.05).with_rotation(Quat::from_rotation_x(0.6)),
         )],
         // Cone.
         vec![(meshes.add(Cone { radius: 0.12, height: 0.32 }), orange, at(0.0, 0.16, 0.0))],
         // Oil: a black can, a yellow band.
         vec![
-            (meshes.add(Cylinder::new(0.09, 0.22)), black, at(0.0, 0.11, 0.0)),
-            (meshes.add(Cylinder::new(0.092, 0.05)), yellow, at(0.0, 0.12, 0.0)),
+            (meshes.add(Cylinder::new(0.09, 0.22)), black.clone(), at(0.0, 0.11, 0.0)),
+            (meshes.add(Cylinder::new(0.092, 0.05)), yellow.clone(), at(0.0, 0.12, 0.0)),
         ],
         // Rocket: lying along the kart, nose forward.
         rocket
@@ -233,10 +247,74 @@ pub fn setup(
         // Smoke: a green canister with a nozzle.
         vec![
             (meshes.add(Cylinder::new(0.075, 0.26)), green, at(0.0, 0.13, 0.0)),
-            (meshes.add(Cylinder::new(0.025, 0.07)), silver, at(0.0, 0.3, 0.0)),
+            (meshes.add(Cylinder::new(0.025, 0.07)), silver.clone(), at(0.0, 0.3, 0.0)),
+        ],
+        // Stack: three spare wheels, one on another.
+        (0..3)
+            .map(|level| {
+                (
+                    meshes.add(Torus { minor_radius: 0.05, major_radius: 0.12 }),
+                    rubber.clone(),
+                    at(0.0, 0.05 + 0.1 * level as f32, -0.05),
+                )
+            })
+            .collect(),
+        // Drone: a small one, folded on the back.
+        vec![(
+            meshes.add(crate::paddock::drone_mesh()),
+            black.clone(),
+            at(0.0, 0.08, 0.0).with_scale(Vec3::splat(0.55)),
+        )],
+        // Bumper: a red air bag rolled up, with a yellow tab.
+        vec![
+            (
+                meshes.add(Capsule3d::new(0.09, 0.3)),
+                red.clone(),
+                at(0.0, 0.1, 0.0).with_rotation(Quat::from_rotation_z(FRAC_PI_2)),
+            ),
+            (meshes.add(Cuboid::new(0.08, 0.05, 0.05)), yellow.clone(), at(0.0, 0.2, 0.0)),
+        ],
+        // Pit-crew push: the crew's lollipop board, yellow on a pole.
+        vec![
+            (meshes.add(Cylinder::new(0.015, 0.36)), silver, at(0.0, 0.18, 0.0)),
+            (
+                meshes.add(Cylinder::new(0.11, 0.02)),
+                yellow,
+                at(0.0, 0.38, 0.0).with_rotation(Quat::from_rotation_x(FRAC_PI_2)),
+            ),
         ],
     ];
-    commands.insert_resource(Kit { finishes, models: HashMap::new(), bindposes: skins.add(rest), rocket, carried });
+    // A pit-crew push: a golden glow about the kart, seen through.
+    let bubble = (
+        meshes.add(Sphere::new(1.0).mesh().uv(24, 12)),
+        materials.add(StandardMaterial {
+            base_color: Color::srgba(1.0, 0.82, 0.3, 0.18),
+            emissive: LinearRgba::rgb(1.2, 0.8, 0.2),
+            alpha_mode: AlphaMode::Add,
+            unlit: true,
+            ..default()
+        }),
+    );
+    // A bumper's shock wave: a ring of air that spreads and fades.
+    let wave = (
+        meshes.add(Torus { minor_radius: 0.06, major_radius: 1.0 }),
+        materials.add(StandardMaterial {
+            base_color: Color::srgba(1.0, 0.95, 0.8, 0.5),
+            emissive: LinearRgba::rgb(0.8, 0.7, 0.5),
+            alpha_mode: AlphaMode::Add,
+            unlit: true,
+            ..default()
+        }),
+    );
+    commands.insert_resource(Kit {
+        finishes,
+        models: HashMap::new(),
+        bindposes: skins.add(rest),
+        rocket,
+        carried,
+        bubble,
+        wave,
+    });
 }
 
 /// A team's colours from the palette: the paint, white or black stripes
@@ -382,6 +460,17 @@ pub fn dress(
         let colour = pose.color as usize % PALETTE.len();
         model_of(&mut kit, &mut meshes, colour);
         let (body, head, wheels, bones, rockets, carried) = assemble(&mut commands, &kit, colour, kart);
+        let glow = |(mesh, material): &(Handle<Mesh>, Handle<StandardMaterial>)| {
+            (
+                Mesh3d(mesh.clone()),
+                MeshMaterial3d(material.clone()),
+                bevy::light::NotShadowCaster,
+                Visibility::Hidden,
+                ChildOf(kart),
+            )
+        };
+        let bubble = commands.spawn((glow(&kit.bubble), Transform::from_xyz(0.0, 0.55, 0.0))).id();
+        let wave = commands.spawn((glow(&kit.wave), Transform::from_xyz(0.0, 0.35, 0.0))).id();
 
         commands.entity(kart).insert((
             Transform::default(),
@@ -409,6 +498,10 @@ pub fn dress(
                 seed: (kart.index_u32() % 97) as f32 * 0.61,
                 attitude: 0.0,
                 trick: 0.0,
+                bubble,
+                wave,
+                waved: -1.0,
+                held: None,
             },
         ));
     }
@@ -479,11 +572,52 @@ pub fn animate(
                 * Transform::from_rotation(Quat::from_rotation_z(roll))
                 * Transform::from_xyz(0.0, -0.5, 0.0);
         }
-        // What it holds, on its back.
+        // What it holds, on its back — or, held behind it, on the road
+        // behind its tail (D-052).
         for (item, model) in osage_kart_items::Item::ALL.into_iter().zip(&rig.carried) {
             if let Ok(mut visibility) = visibilities.get_mut(*model) {
                 visibility.set_if_neq(if pose.held == Some(item) { Visibility::Inherited } else { Visibility::Hidden });
             }
+            if pose.held == Some(item)
+                && let Ok(mut place) = transforms.get_mut(*model)
+            {
+                place.translation = if pose.trailing { TRAILED } else { CARRIED };
+            }
+        }
+        // A pit-crew push: a golden glow that breathes, fading at its end.
+        if let Ok(mut visibility) = visibilities.get_mut(rig.bubble) {
+            visibility.set_if_neq(if pose.guard > 0.0 { Visibility::Inherited } else { Visibility::Hidden });
+        }
+        if pose.guard > 0.0
+            && let Ok(mut place) = transforms.get_mut(rig.bubble)
+        {
+            let breath = 1.0 + 0.05 * (rig.time * 9.0).sin();
+            let size = breath * (pose.guard / 0.3).min(1.0);
+            place.scale = Vec3::new(1.05, 0.75, 1.5) * size;
+        }
+        // A bumper used: a wave of air spreads from the kart and fades.
+        if rig.held == Some(osage_kart_items::Item::Bumper) && pose.held != rig.held {
+            rig.waved = 0.0;
+        }
+        rig.held = pose.held;
+        if rig.waved >= 0.0 {
+            rig.waved += seconds;
+        }
+        let spread = rig.waved / WAVE;
+        if let Ok(mut visibility) = visibilities.get_mut(rig.wave) {
+            visibility.set_if_neq(if (0.0..1.0).contains(&spread) {
+                Visibility::Inherited
+            } else {
+                Visibility::Hidden
+            });
+        }
+        if (0.0..1.0).contains(&spread)
+            && let Ok(mut place) = transforms.get_mut(rig.wave)
+        {
+            let reach = 0.6 + (osage_kart_items::BUMPER_REACH - 0.6) * (1.0 - (1.0 - spread).powi(2));
+            place.scale = Vec3::new(reach, 1.0 + 2.0 * (1.0 - spread), reach);
+        } else if spread >= 1.0 {
+            rig.waved = -1.0;
         }
         // The rockets slide out while the kart has rocket left, shaking as they burn.
         let wanted = if kart.rocket > 0.0 { 1.0 } else { 0.0 };

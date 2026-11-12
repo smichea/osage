@@ -4884,6 +4884,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "osage-kart-records"
+version = "0.1.0"
+
+[[package]]
 name = "osage-kart-roadside"
 version = "0.1.0"
 dependencies = [
@@ -5010,6 +5014,7 @@ dependencies = [
  "osage-kart-items",
  "osage-kart-physics",
  "osage-kart-racecraft",
+ "osage-kart-records",
  "osage-sdk",
  "osage-server",
  "osage-world-module-api",
@@ -5018,6 +5023,7 @@ dependencies = [
  "protox",
  "serde_json",
  "tokio",
+ "tracing",
 ]
 
 [[package]]

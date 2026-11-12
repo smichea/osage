@@ -11,6 +11,7 @@ mod circuit;
 mod driving;
 mod paddock;
 mod race;
+mod records;
 
 use bevy::prelude::*;
 use osage_kart_physics::Kart;
@@ -59,6 +60,7 @@ pub mod types {
     pub const TRACK: &str = "kart.track/1";
     pub const RACE: &str = "kart.race/1";
     pub const PADDOCK: &str = "kart.paddock/1";
+    pub const RECORDS: &str = "kart.records/1";
 }
 
 /// The kart world; runs at 60 ticks per second, one physics step per tick.
@@ -69,18 +71,20 @@ pub struct KartWorld {
     /// The host (the first human driver) starts each race, the karts
     /// waiting on the grid until then; otherwise races follow one another.
     pub host_starts: bool,
+    /// The file the world keeps its records in (D-053); none, in memory.
+    pub records: Option<std::path::PathBuf>,
 }
 
 impl Default for KartWorld {
     fn default() -> Self {
-        Self { grid: 6, laps: 3, host_starts: true }
+        Self { grid: 6, laps: 3, host_starts: true, records: None }
     }
 }
 
 impl KartWorld {
     /// Races that start by themselves: for tests and unattended worlds.
     pub fn unattended(grid: usize, laps: u32) -> Self {
-        Self { grid, laps, host_starts: false }
+        Self { grid, laps, host_starts: false, records: None }
     }
 }
 
@@ -93,6 +97,8 @@ impl Plugin for KartWorld {
             .insert_resource(Course(Circuit::new()))
             .init_resource::<race::Race>()
             .init_resource::<race::Drivers>()
+            .init_resource::<records::Times>()
+            .insert_resource(records::Book::open(self.records.clone()))
             .add_systems(Startup, setup)
             .add_systems(
                 Update,
@@ -104,6 +110,7 @@ impl Plugin for KartWorld {
                     driving::collide,
                     paddock::items,
                     race::progress,
+                    records::keep,
                     race::publish,
                 )
                     .chain()
@@ -151,6 +158,13 @@ impl WorldModule for KartWorld {
                 "Crates across the road (break one for an item: see Racer.held, use it with Step.use_item or \
                  Autopilot.use_items) and what karts left on the track: rolling tyres, cones, oil.",
             ),
+            spec(
+                types::RECORDS,
+                "Records",
+                false,
+                "The world's records on this track: best laps and best races, one per driver name, fastest \
+                 first, with when they were set; fresh ones were set in the latest race.",
+            ),
         ]
     }
 
@@ -180,6 +194,7 @@ struct Ids {
     racer: u32,
     race: u32,
     paddock: u32,
+    records: u32,
 }
 
 /// The entity carrying `kart.race/1`.
@@ -207,6 +222,7 @@ fn setup(
         racer: id(types::RACER),
         race: id(types::RACE),
         paddock: id(types::PADDOCK),
+        records: id(types::RECORDS),
     };
     commands.insert_resource(kart);
     commands.spawn((

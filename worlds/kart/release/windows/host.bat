@@ -17,7 +17,7 @@ echo.
 echo  A phone or a tablet opens  http://THAT-ADDRESS:8080  in its browser.
 echo  If Windows asks, allow "kart-server" and "kart-web" on private networks.
 echo.
-start "osage kart world (shared)" /min kart-server.exe --listen 0.0.0.0:7878 --webtransport 0.0.0.0:7879
+start "osage kart world (shared)" /min kart-server.exe --listen 0.0.0.0:7878 --webtransport 0.0.0.0:7879 --records kart-records.txt
 start "osage kart web" /min kart-web.exe web 0.0.0.0:8080
 timeout /t 3 /nobreak >nul
 kart-native.exe %*

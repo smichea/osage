@@ -13,6 +13,8 @@
 //!   the aggressive dive for the inside of the bend into narrow gaps — or it
 //!   waits; alongside another, the polite give room, the aggressive hold
 //!   their line; with a kart close behind, a defender covers the inside;
+//! - **things on the road** ([`Hazard`]): a cone, oil or a tyre ahead on its
+//!   line, it steers round on the side with more room;
 //! - **mistakes:** at some bends, as rarely as its consistency allows, it
 //!   brakes too late and runs wide, or it hesitates;
 //! - **grudges:** a knock shakes it for a few seconds — a hothead races
@@ -96,6 +98,14 @@ pub fn field(track: &Track, karts: &[Kart]) -> Vec<Rival> {
     karts.iter().map(|k| Rival { spot: track.locate(k.x, k.z), speed: k.speed }).collect()
 }
 
+/// Something on the road a driver steers round: where it is, how wide.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Hazard {
+    pub spot: Spot,
+    /// Its radius on the ground, m.
+    pub radius: f32,
+}
+
 /// What a driver is doing about the karts around it.
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub enum Plan {
@@ -167,6 +177,8 @@ const BRAKING: f32 = 18.0;
 const EDGE: f32 = 1.1;
 /// How fast a driver moves across the road, m/s.
 const LANE_SPEED: f32 = 2.5;
+/// What a driver leaves between its kart and a thing on the road, m.
+const DODGE: f32 = 0.5;
 /// The gap beside a kart a driver needs to pass, with no aggression.
 const GAP: f32 = 2.0 * KART_RADIUS + 0.6;
 
@@ -184,8 +196,23 @@ fn ahead(track: &Track, from: f32, to: f32) -> f32 {
     (to - from).rem_euclid(track.length())
 }
 
-/// The controls of driver `me` of `field`, whose kart is `kart`.
+/// The controls of driver `me` of `field`, whose kart is `kart`, on a road
+/// with nothing on it.
 pub fn drive(kart: &Kart, me: usize, field: &[Rival], temper: &Temper, mind: &mut Mind, track: &Track) -> Controls {
+    drive_among(kart, me, field, &[], temper, mind, track)
+}
+
+/// The controls of driver `me` of `field`, whose kart is `kart`, steering
+/// round `hazards` on the road.
+pub fn drive_among(
+    kart: &Kart,
+    me: usize,
+    field: &[Rival],
+    hazards: &[Hazard],
+    temper: &Temper,
+    mind: &mut Mind,
+    track: &Track,
+) -> Controls {
     let spot = field[me].spot;
     let room = track.half_width - EDGE;
     let lateral = *mind.lateral.get_or_insert(spot.lateral);
@@ -333,8 +360,36 @@ pub fn drive(kart: &Kart, me: usize, field: &[Rival], temper: &Temper, mind: &mu
         }
     }
 
+    // Something on the road ahead, on the line: round it, on the side
+    // nearer the line that has room, moving across twice as fast.
+    let mut lane = LANE_SPEED;
+    let sight = 8.0 + kart.speed.max(0.0) * 1.2;
+    let in_the_way = hazards
+        .iter()
+        .map(|h| (h, ahead(track, spot.along, h.spot.along)))
+        .filter(|(h, d)| {
+            let line = wanted.clamp(-room, room);
+            *d < sight && fabsf(h.spot.lateral - line) < h.radius + KART_RADIUS + DODGE
+        })
+        .min_by(|a, b| a.1.total_cmp(&b.1));
+    if let Some((h, _)) = in_the_way {
+        let clear = h.radius + KART_RADIUS + DODGE;
+        let sides = [h.spot.lateral - clear, h.spot.lateral + clear];
+        let fits = |l: f32| fabsf(l) <= room;
+        let nearer = if fabsf(sides[0] - lateral) <= fabsf(sides[1] - lateral) { 0 } else { 1 };
+        wanted = if fits(sides[nearer]) {
+            sides[nearer]
+        } else if fits(sides[1 - nearer]) {
+            sides[1 - nearer]
+        } else {
+            // No room either side: the edge furthest from it.
+            if h.spot.lateral > 0.0 { -room } else { room }
+        };
+        lane = 2.0 * LANE_SPEED;
+    }
+
     let wanted = wanted.clamp(-room, room);
-    let lateral = lateral + (wanted - lateral).clamp(-LANE_SPEED * DT, LANE_SPEED * DT);
+    let lateral = lateral + (wanted - lateral).clamp(-lane * DT, lane * DT);
     mind.lateral = Some(lateral);
 
     let top = pace * MAX_SPEED + if kart.boost > 0.0 { 6.0 } else { 0.0 };
@@ -521,6 +576,38 @@ mod tests {
         // Within 10 s, the fast one is past and ahead.
         let lead = (along(&karts[1]) - along(&karts[0])).rem_euclid(track.length());
         assert!(lead > 5.0 && lead < track.length() / 2.0, "{lead}");
+    }
+
+    #[test]
+    fn a_driver_steers_round_oil_on_its_line() {
+        let track = stadium(6.0);
+        let temper = Temper { consistency: 1.0, ..Temper::STEADY };
+        // Oil 1.5 m wide on the kart's own line, 40 m ahead on the straight.
+        let mut kart = Kart { z: 10.0, speed: 20.0, ..Kart::default() };
+        let mut mind = Mind::new(1);
+        let line = {
+            let mut probe = Mind::new(1);
+            let field = field(&track, &[kart]);
+            drive(&kart, 0, &field, &temper, &mut probe, &track);
+            probe.lateral.unwrap()
+        };
+        let oil = Hazard { spot: track.locate(line, 50.0), radius: 1.5 };
+        let (mut nearest, mut plain) = (f32::INFINITY, f32::INFINITY);
+        let mut alone = kart;
+        let mut mind_alone = Mind::new(1);
+        for _ in 0..(3.0 / DT) as usize {
+            let field_now = field(&track, &[kart]);
+            let c = drive_among(&kart, 0, &field_now, &[oil], &temper, &mut mind, &track);
+            step(&mut kart, c, &track);
+            let field_alone = field(&track, &[alone]);
+            let c = drive(&alone, 0, &field_alone, &temper, &mut mind_alone, &track);
+            step(&mut alone, c, &track);
+            let gap = |k: &Kart| ((k.x - line).powi(2) + (k.z - 50.0).powi(2)).sqrt();
+            nearest = nearest.min(gap(&kart));
+            plain = plain.min(gap(&alone));
+        }
+        assert!(plain < 1.0, "without the oil it drives over that spot: {plain}");
+        assert!(nearest > oil.radius + KART_RADIUS, "it steers round: {nearest}");
     }
 
     #[test]

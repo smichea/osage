@@ -27,7 +27,7 @@ use osage_world_kart::{
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 
 use crate::{
-    hud::{Entry, HudPlugin, Lights, RaceView},
+    hud::{Best, Entry, HudPlugin, Lights, RaceView, Records},
     paddock::{PaddockPlugin, PaddockView, item},
     predict::Predictor,
     scene::{Course, Followed, Pose, Stage},
@@ -111,6 +111,11 @@ impl Replica {
         self.world.as_ref()?.get(kart, types::RACER)
     }
 
+    fn records(&self) -> Option<proto::Records> {
+        let world = self.world.as_ref()?;
+        world.entities().find_map(|entity| world.get(entity, types::RECORDS))
+    }
+
     fn paddock(&self) -> Option<proto::Paddock> {
         let world = self.world.as_ref()?;
         world.entities().find_map(|entity| world.get(entity, types::PADDOCK))
@@ -129,6 +134,21 @@ impl Replica {
             spots.push(circuit.track.locate(state.x, state.z));
         }
         (spots, me)
+    }
+
+    /// Each kart's place, in the order of [`Replica::field`]'s spots (gaps
+    /// unknown here: 0).
+    fn standings(&self, spots: &[Spot]) -> Vec<osage_kart_items::Standing> {
+        let Some(world) = &self.world else { return Vec::new() };
+        self.karts
+            .keys()
+            .filter(|&&id| world.get::<proto::KartState>(id, types::STATE).is_some())
+            .map(|&id| osage_kart_items::Standing {
+                place: self.racer(id).map_or(0, |racer| racer.position.saturating_sub(1) as usize),
+                behind: 0.0,
+            })
+            .take(spots.len())
+            .collect()
     }
 
     fn finished(&self, kart: u64) -> bool {
@@ -260,7 +280,10 @@ fn receive(mut commands: Commands, inbox: Res<NetInbox>, mut replica: ResMut<Rep
                     karts.insert(
                         entity,
                         commands
-                            .spawn((Pose { kart, color: racer.color, held: None, smoke: None }, Remote(entity)))
+                            .spawn((
+                                Pose { kart, color: racer.color, held: None, smoke: None, trailing: false, guard: 0.0 },
+                                Remote(entity),
+                            ))
                             .id(),
                     );
                     let controller = world.get::<components::Controller>(entity, core::CONTROLLER);
@@ -335,9 +358,16 @@ fn drive(
     if let (true, Some(kart)) = (driver.autodrive, driver.predictor.kart) {
         controls = autopilot(&kart, &proto::Autopilot { pace: 0.9, line: 0.0, drift: true, use_items: false }, circuit);
         // And uses what it picks up as the world's drivers do.
-        let held = replica.racer(mine).and_then(|racer| item(racer.held()));
+        let racer = replica.racer(mine);
+        let held = racer.as_ref().and_then(|racer| item(racer.held()));
+        let trailing = racer.as_ref().is_some_and(|racer| racer.trailing);
         let (spots, me) = replica.field(circuit);
-        using = held.zip(me).is_some_and(|(held, me)| wants(held, me, &spots, &kart, &circuit.track));
+        let standings = replica.standings(&spots);
+        using = held.zip(me).is_some_and(|(held, me)| {
+            let wanted = wants(held, me, &spots, &standings, &kart, &circuit.track);
+            // What trails goes behind on the way down and is used on the way up.
+            if held.trails() && trailing { !wanted } else { wanted }
+        });
     }
     // The lights hold the karts: the world ignores the throttle until the start.
     if replica.race().is_none_or(|race| race.phase() != Phase::Racing) {
@@ -409,6 +439,8 @@ fn poses(
         });
         let racer = replica.racer(remote.0);
         pose.held = racer.as_ref().and_then(|racer| item(racer.held()));
+        pose.trailing = racer.as_ref().is_some_and(|racer| racer.trailing);
+        pose.guard = racer.as_ref().map_or(0.0, |racer| racer.guard);
         pose.smoke = racer.map(|racer| racer.smoke).filter(|colour| *colour != 0);
     }
 }
@@ -457,7 +489,11 @@ fn summarise(
         paddock.lead = lead;
         paddock.me = me;
     }
-    view.held = replica.mine.and_then(|mine| replica.racer(mine)).and_then(|racer| item(racer.held()));
+    let racer = replica.mine.and_then(|mine| replica.racer(mine));
+    view.held = racer.as_ref().and_then(|racer| item(racer.held()));
+    view.count = racer.as_ref().map_or(0, |racer| racer.held_count.min(9) as u8);
+    view.trailing = racer.as_ref().is_some_and(|racer| racer.trailing);
+    view.guard = racer.as_ref().map_or(0.0, |racer| racer.guard);
     let race = replica.race();
     let now = replica.world_time();
     let seconds_left = |race: &proto::Race| ((race.phase_ends_us as i64 - now) as f32 / 1e6).ceil() as i64;
@@ -498,6 +534,22 @@ fn summarise(
     let host = race_host.and_then(|host| view.karts.iter().find(|kart| kart.id == host)).map(|kart| kart.name.clone());
     view.host = host.unwrap_or_default();
     view.alone = view.me.is_some() && view.karts.iter().filter(|kart| !kart.bot).count() == 1;
+    let my_name = racer.as_ref().map(|racer| racer.name.clone());
+    let records = replica.records().unwrap_or_default();
+    let bests = |list: &[proto::Record]| {
+        list.iter()
+            .map(|r| Best { name: r.name.clone(), ms: r.ms, fresh: r.fresh, mine: my_name.as_ref() == Some(&r.name) })
+            .collect()
+    };
+    let records = Records {
+        track: records.track.clone(),
+        race_laps: records.race_laps,
+        laps: bests(&records.laps),
+        races: bests(&records.races),
+    };
+    if view.records != records {
+        view.records = records;
+    }
     let kart = driver.predictor.kart.unwrap_or_default();
     (view.speed, view.charge, view.boosting) = (kart.speed, kart.charge, kart.boost > 0.0);
     view.stalled = kart.stall > 0.0;

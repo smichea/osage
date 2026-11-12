@@ -16,6 +16,8 @@ osage-world-module-api.workspace = true
 osage-kart-physics.workspace = true
 osage-kart-racecraft.workspace = true
 osage-kart-items.workspace = true
+osage-kart-records.workspace = true
+tracing.workspace = true
 libm.workspace = true
 bevy = { workspace = true, features = ["std", "multi_threaded", "async_executor"] }
 prost.workspace = true

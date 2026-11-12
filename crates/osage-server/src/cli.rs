@@ -26,7 +26,17 @@ use crate::{Config, WebTransportConfig, link::network, world::WorldModule};
 
 /// Serves `world` with `config` changed by the command line, until the
 /// process ends.
-pub fn run(world: impl WorldModule, mut config: Config) -> Result<()> {
+pub fn run(world: impl WorldModule, config: Config) -> Result<()> {
+    run_with(world, config, std::env::args().skip(1))
+}
+
+/// [`run`] with the arguments given (the program's name left out): for a
+/// world's binary that takes options of its own and passes the rest on.
+pub fn run_with(
+    world: impl WorldModule,
+    mut config: Config,
+    arguments: impl IntoIterator<Item = String>,
+) -> Result<()> {
     tracing_subscriber::fmt()
         .with_env_filter(EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info")))
         .init();
@@ -34,7 +44,7 @@ pub fn run(world: impl WorldModule, mut config: Config) -> Result<()> {
     let mut listen = "127.0.0.1:7878".to_owned();
     let (mut webtransport, mut certificate, mut private_key) = ("127.0.0.1:7879".to_owned(), None, None);
     let (mut region_only, mut region_at) = (None, None);
-    let mut args = std::env::args().skip(1);
+    let mut args = arguments.into_iter();
     while let Some(flag) = args.next() {
         let mut value = || args.next().with_context(|| format!("{flag} needs a value"));
         match flag.as_str() {

@@ -42,10 +42,36 @@ pub struct RaceView {
     pub stalled: bool,
     /// What the player's kart holds, from a crate.
     pub held: Option<Item>,
+    /// How many of it are left (a stack), and whether it is held behind.
+    pub count: u8,
+    pub trailing: bool,
+    /// Seconds of a pit-crew push left.
+    pub guard: f32,
     /// The host's name, who starts each race; empty when races start by themselves.
     pub host: String,
     /// The player races with no other driver (bots aside): they may end the race.
     pub alone: bool,
+    /// The world's records on this track (D-053): best laps, best races.
+    pub records: Records,
+}
+
+/// The world's records as the HUD shows them.
+#[derive(Default, Clone, PartialEq)]
+pub struct Records {
+    pub track: String,
+    pub race_laps: u32,
+    pub laps: Vec<Best>,
+    pub races: Vec<Best>,
+}
+
+#[derive(Clone, PartialEq)]
+pub struct Best {
+    pub name: String,
+    pub ms: u32,
+    /// Set in the latest race.
+    pub fresh: bool,
+    /// The player's.
+    pub mine: bool,
 }
 
 #[derive(Default, Clone, Copy, PartialEq)]
@@ -100,7 +126,13 @@ enum Label {
     Held,
     /// What to do now, under the lights: start the race, or wait for the host.
     Prompt,
+    /// The world's records, between races.
+    Records,
 }
+
+/// The panel the records are shown in, hidden while racing.
+#[derive(Component)]
+struct RecordsPanel;
 
 /// The bar that fills as the mini-turbo charges.
 #[derive(Component)]
@@ -212,6 +244,20 @@ fn setup(mut commands: Commands) {
         TextLayout::justify(Justify::Center),
         Node { position_type: PositionType::Absolute, top: percent(36), width: percent(100), ..default() },
     ));
+    // Between races, under the prompt: the world's records.
+    commands
+        .spawn((
+            Node { position_type: PositionType::Absolute, top: percent(46), width: percent(100), ..default() },
+            Visibility::Hidden,
+            RecordsPanel,
+        ))
+        .with_children(|row| {
+            row.spawn(Node { width: percent(100), justify_content: JustifyContent::Center, ..default() }).with_child((
+                rounded(Node::default()),
+                panel(),
+                children![text(Label::Records, 16.0)],
+            ));
+        });
     commands.spawn((
         text(Label::Status, 11.0),
         Node {
@@ -234,11 +280,40 @@ fn ordinal(place: u32) -> &'static str {
     }
 }
 
+/// The records as lines: the best laps, then the best races, five each;
+/// the player's marked, new ones flagged.
+pub fn records_text(records: &Records) -> String {
+    let rows = |list: &[Best]| {
+        list.iter()
+            .take(5)
+            .enumerate()
+            .map(|(i, best)| {
+                let mark = if best.mine { ">" } else { " " };
+                let new = if best.fresh { "  NEW!" } else { "" };
+                format!("{mark}{:>2} {:<14.14} {:>9}{new}", i + 1, best.name, clock(i64::from(best.ms)))
+            })
+            .collect::<Vec<_>>()
+    };
+    let mut out = vec![format!("RECORDS - {}", records.track.to_uppercase()), "Best laps".to_owned()];
+    out.extend(rows(&records.laps));
+    if !records.races.is_empty() {
+        out.push(format!("Best races ({} laps)", records.race_laps));
+        out.extend(rows(&records.races));
+    }
+    out.join("\n")
+}
+
 fn write(
     view: Res<RaceView>,
     mut texts: Query<(&Label, &mut Text, &mut TextColor)>,
     mut gauge: Query<(&mut Node, &mut BackgroundColor), With<Gauge>>,
+    mut records: Query<&mut Visibility, With<RecordsPanel>>,
 ) {
+    let between = matches!(view.stage, Lights::Waiting | Lights::Ready(_) | Lights::Results(_));
+    let shown = between && !view.records.laps.is_empty();
+    if let Ok(mut visibility) = records.single_mut() {
+        visibility.set_if_neq(if shown { Visibility::Inherited } else { Visibility::Hidden });
+    }
     let me = view.me.and_then(|me| view.karts.get(me));
     for (label, mut text, mut colour) in &mut texts {
         let mut tint = None;
@@ -285,9 +360,26 @@ fn write(
                         Item::Oil => ("OIL", Color::srgb(0.75, 0.6, 1.0)),
                         Item::Rocket => ("ROCKET", Color::srgb(1.0, 0.3, 0.25)),
                         Item::Smoke => ("SMOKE", Color::srgb(0.4, 1.0, 0.6)),
+                        Item::Stack => ("TYRES", Color::srgb(0.85, 0.85, 0.85)),
+                        Item::Drone => ("DRONE", Color::srgb(1.0, 0.35, 0.3)),
+                        Item::Bumper => ("BUMPER", Color::srgb(1.0, 0.85, 0.2)),
+                        Item::Push => ("PIT PUSH", Color::srgb(1.0, 0.82, 0.3)),
                     };
                     tint = Some(colour);
-                    format!("{name}  [F]")
+                    let count = if view.count > 1 { format!(" x{}", view.count) } else { String::new() };
+                    // What trails: hold the button to keep it behind as a shield, let go to use it.
+                    let how = if !item.trails() {
+                        "[F]"
+                    } else if view.trailing {
+                        "BEHIND - let go of F"
+                    } else {
+                        "[hold F]"
+                    };
+                    format!("{name}{count}  {how}")
+                }
+                (Some(_), None) if view.guard > 0.0 => {
+                    tint = Some(Color::srgb(1.0, 0.82, 0.3));
+                    "PIT PUSH".to_owned()
                 }
                 _ => String::new(),
             },
@@ -318,6 +410,13 @@ fn write(
                 Lights::Count(_) if me.is_some() => "Throttle as the lights go out, not before".to_owned(),
                 _ => String::new(),
             },
+            Label::Records if shown => {
+                if view.records.laps.iter().chain(&view.records.races).any(|best| best.fresh && best.mine) {
+                    tint = Some(Color::srgb(1.0, 0.85, 0.3));
+                }
+                records_text(&view.records)
+            }
+            Label::Records => String::new(),
         };
         if matches!(label, Label::Place | Label::Suffix) {
             // Gold, silver, bronze; then white.
@@ -333,7 +432,7 @@ fn write(
         }
         if let Some(tint) = tint.filter(|tint| *tint != colour.0) {
             colour.0 = tint;
-        } else if *label == Label::Lights && tint.is_none() && colour.0 != Color::WHITE {
+        } else if matches!(label, Label::Lights | Label::Records) && tint.is_none() && colour.0 != Color::WHITE {
             colour.0 = Color::WHITE;
         }
     }

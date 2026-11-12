@@ -18,6 +18,8 @@ import {
   RaceSchema,
   type Racer,
   RacerSchema,
+  type Record as KartRecord,
+  RecordsSchema,
   TrackSchema,
 } from "./gen/kart/v1/kart_pb.js";
 import { Input } from "./input.js";
@@ -31,6 +33,7 @@ const KART = {
   racer: "kart.racer/1",
   track: "kart.track/1",
   race: "kart.race/1",
+  records: "kart.records/1",
 };
 
 const $ = (id: string) => document.getElementById(id)!;
@@ -105,6 +108,25 @@ try {
     return undefined;
   };
   const racer = (entity: bigint): Racer | undefined => world.get(entity, KART.racer, RacerSchema);
+  /** The world's records (D-053), between races: best laps and races, five each. */
+  const records = (myName: string | undefined): string => {
+    let value;
+    for (const entity of world.entities()) {
+      value = world.get(entity, KART.records, RecordsSchema);
+      if (value) break;
+    }
+    if (!value || value.laps.length === 0) return "";
+    const rows = (list: KartRecord[]) =>
+      list
+        .slice(0, 5)
+        .map(
+          (r, i) =>
+            `<div class="${r.name === myName ? "me" : ""}">${i + 1}. ${escape(r.name)} · ${clock(r.ms)}${r.fresh ? " <b style='color:#ffd24d'>NEW!</b>" : ""}</div>`,
+        )
+        .join("");
+    const races = value.races.length ? `<br><small>best races (${value.raceLaps} laps)</small>${rows(value.races)}` : "";
+    return `<hr><b>Records</b><br><small>best laps</small>${rows(value.laps)}${races}`;
+  };
   const state = (entity: bigint): KartValues | undefined => world.get(entity, KART.state, KartStateSchema);
   const finished = (entity: bigint) => (racer(entity)?.finishMs ?? 0n) > 0n;
 
@@ -268,7 +290,8 @@ try {
     const banner = $("banner");
     if (now.phase === Phase.FINISHED) {
       const podium = rows.slice(0, 8).join("");
-      banner.innerHTML = `<div class="panel"><b>Results</b> · next race in ${Math.max(0, Math.ceil(remaining / 1000))} s<hr>${podium}</div>`;
+      const myName = mine !== undefined ? racer(mine)?.name : undefined;
+      banner.innerHTML = `<div class="panel"><b>Results</b> · next race in ${Math.max(0, Math.ceil(remaining / 1000))} s<hr>${podium}${records(myName)}</div>`;
     } else if (now.phase === Phase.READY) {
       const host = now.host === 0n ? undefined : racer(now.host)?.name;
       banner.innerHTML =

@@ -56,6 +56,9 @@ Each milestone ends with every oracle in AGENTS.md green, screenshots of what ch
 | G4.2 Battle | An arena; each kart has three hits; last one standing. | World test. |
 | G4.3 Split screen | Two to four players on one PC with gamepads. | Runs at T1 with two views. |
 | G4.4 Presentation | Track flyover before the start, countdown, a slow-motion finish replay, music (CC0) and menus throughout. | Screenshots; frame pacing holds. |
+| G4.5 Leaderboards | Each world keeps its records: best lap and best race per track, per driver name, with date, kart and driver; shown on the results screen, in the menus and to AI agents (a component type). A board shared between worlds is a service a world operator runs, not the engine (mechanisms, not policy). | World test: a record beaten replaces the old one and survives a restart of the world. |
+| G4.6 Profiles and progress | A player's name, colour, favourite driver and kart kept on their PC; points won in cups unlock kart colours and parts (cosmetic only: no paid content, no advantage). | Tests of the profile file and unlocks. |
+| G4.7 Replays and photos | Any race saved as inputs and replayed by the deterministic physics; a photo mode on pause (free camera, depth of field, the picture at T4). | A replay ends with the same results; screenshots. |
 
 ### M5 — People and detail
 

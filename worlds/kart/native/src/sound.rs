@@ -4,8 +4,10 @@
 //! The karts' sound: each kart a voice made from its state
 //! ([osage-kart-sound](osage_kart_sound)) — the engine following its revs,
 //! tyres squealing as it slides, kerbs and grass under its wheels, wind, a
-//! knock when it is hit — placed where the kart is and heard from the
-//! camera; and the crowd in the grandstand. A voice plays recordings where
+//! knock when it is hit, a bumper's air bag and a pit-crew push from the
+//! kart that uses them — placed where the kart is and heard from the
+//! camera; each drone's rotors where it flies; and the crowd in the
+//! grandstand. A voice plays recordings where
 //! the content has them (`freesound/kart/`, made by `tools/make-sounds.py`
 //! from the asset manifest's originals) and synthesises the rest. Not in
 //! the bench: it measures pictures.
@@ -21,7 +23,7 @@ use bevy::{
     prelude::*,
 };
 use osage_kart_physics::MAX_SPEED;
-use osage_kart_sound::{Drive, IDLE_RPM, RATE, Recordings, Voice, revs};
+use osage_kart_sound::{Buzz, Cue, Drive, IDLE_RPM, RATE, Recordings, Voice, revs};
 use osage_render::OsageCamera;
 
 use crate::scene::{Course, Pose, roughness};
@@ -38,8 +40,9 @@ impl Plugin for SoundPlugin {
     fn build(&self, app: &mut App) {
         app.add_audio_source::<Synth>()
             .add_audio_source::<Clip>()
+            .add_audio_source::<Rotors>()
             .add_systems(Startup, load)
-            .add_systems(Update, (listen, voice, drive, crowd).chain());
+            .add_systems(Update, (listen, voice, drive, crowd, rotors).chain());
     }
 }
 
@@ -48,6 +51,7 @@ impl Plugin for SoundPlugin {
 struct Shared {
     drive: Drive,
     knocks: Vec<f32>,
+    cues: Vec<Cue>,
 }
 
 /// The recordings found, shared by every voice.
@@ -198,6 +202,9 @@ impl Iterator for Stream {
             for strength in shared.knocks.drain(..) {
                 self.voice.knock(strength);
             }
+            for cue in shared.cues.drain(..) {
+                self.voice.cue(cue);
+            }
         }
         self.count = self.count.wrapping_add(1);
         Some(self.voice.sample())
@@ -229,6 +236,10 @@ struct Heard {
     speed: f32,
     spin: f32,
     throttle: f32,
+    /// What the kart held and its push, last frame: a bumper gone is a
+    /// bumper used; a push started is heard.
+    held: Option<osage_kart_items::Item>,
+    guard: f32,
 }
 
 /// The camera listens.
@@ -249,7 +260,14 @@ fn voice(
         let shared = Arc::new(Mutex::new(Shared::default()));
         let synth = synths.add(Synth { shared: shared.clone(), seed: pose.color + 1, recordings: tapes.voice.clone() });
         commands.entity(entity).insert((
-            Heard { shared, speed: pose.kart.speed, spin: pose.kart.spin, throttle: 0.0 },
+            Heard {
+                shared,
+                speed: pose.kart.speed,
+                spin: pose.kart.spin,
+                throttle: 0.0,
+                held: pose.held,
+                guard: pose.guard,
+            },
             AudioPlayer(synth),
             PlaybackSettings::LOOP.with_spatial(true),
         ));
@@ -284,11 +302,108 @@ fn drive(time: Res<Time>, course: Option<Res<Course>>, mut karts: Query<(&Pose, 
             ground,
             speed: kart.speed.abs(),
         };
+        let bumped = heard.held == Some(osage_kart_items::Item::Bumper) && pose.held != heard.held;
+        let pushed = pose.guard > heard.guard + 0.5;
+        (heard.held, heard.guard) = (pose.held, pose.guard);
         if let Ok(mut shared) = heard.shared.lock() {
             shared.drive = drive;
             if knock > 0.15 {
                 shared.knocks.push(knock.min(1.0));
             }
+            if bumped {
+                shared.cues.push(Cue::Bumper);
+            }
+            if pushed {
+                shared.cues.push(Cue::Push);
+            }
+        }
+    }
+}
+
+/// A drone's model, which buzzes while it is shown.
+#[derive(Component)]
+pub struct Drone;
+
+/// A drone's rotors as an audio source, as loud as `gain` says.
+#[derive(Asset, TypePath)]
+pub struct Rotors {
+    gain: Arc<Mutex<f32>>,
+    seed: u32,
+}
+
+impl Decodable for Rotors {
+    type Decoder = Spinning;
+
+    fn decoder(&self) -> Spinning {
+        Spinning { buzz: Buzz::new(self.seed), gain: self.gain.clone(), now: 0.0, wanted: 0.0, count: 0 }
+    }
+}
+
+/// A drone's buzz, sample by sample, easing to the gain wanted.
+pub struct Spinning {
+    buzz: Buzz,
+    gain: Arc<Mutex<f32>>,
+    now: f32,
+    wanted: f32,
+    count: u32,
+}
+
+impl Iterator for Spinning {
+    type Item = Sample;
+
+    fn next(&mut self) -> Option<Sample> {
+        if self.count.is_multiple_of(240)
+            && let Ok(gain) = self.gain.try_lock()
+        {
+            self.wanted = *gain;
+        }
+        self.count = self.count.wrapping_add(1);
+        self.now += (self.wanted - self.now) * 0.001;
+        Some(self.buzz.sample(self.now))
+    }
+}
+
+impl Source for Spinning {
+    fn current_span_len(&self) -> Option<usize> {
+        None
+    }
+
+    fn channels(&self) -> ChannelCount {
+        NonZero::<u16>::MIN
+    }
+
+    fn sample_rate(&self) -> SampleRate {
+        NonZero::new(RATE).unwrap()
+    }
+
+    fn total_duration(&self) -> Option<Duration> {
+        None
+    }
+}
+
+/// How loud a drone is, and the gain its sound follows.
+#[derive(Component)]
+struct Loudness(Arc<Mutex<f32>>);
+
+/// Every drone model gets its rotors, heard while it is shown.
+fn rotors(
+    mut commands: Commands,
+    mut sources: ResMut<Assets<Rotors>>,
+    new: Query<Entity, (With<Drone>, Without<Loudness>)>,
+    drones: Query<(&Visibility, &Loudness)>,
+) {
+    for (n, entity) in new.iter().enumerate() {
+        let gain = Arc::new(Mutex::new(0.0));
+        let source = sources.add(Rotors { gain: gain.clone(), seed: entity.index_u32() ^ n as u32 });
+        commands.entity(entity).insert((
+            Loudness(gain),
+            AudioPlayer(source),
+            PlaybackSettings::LOOP.with_spatial(true),
+        ));
+    }
+    for (visibility, loudness) in &drones {
+        if let Ok(mut gain) = loudness.0.lock() {
+            *gain = if *visibility == Visibility::Hidden { 0.0 } else { 0.8 };
         }
     }
 }

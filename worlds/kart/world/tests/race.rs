@@ -192,7 +192,7 @@ fn bots_pick_items_from_the_crates_and_use_them() {
         let board = c.world.entities().find(|&e| c.world.get::<proto::Paddock>(e, types::PADDOCK).is_some());
         board.and_then(|e| c.world.get(e, types::PADDOCK)).expect("the paddock")
     };
-    assert_eq!(paddock(&mut alice).crates.len(), 12);
+    assert_eq!(paddock(&mut alice).crates.len(), 15);
     let (mut broken, mut held, mut used) = (false, false, false);
     for _ in 0..90 * 4 {
         harness.run(SECOND / 4);
@@ -205,6 +205,43 @@ fn bots_pick_items_from_the_crates_and_use_them() {
         }
     }
     panic!("broken {broken}, held {held}, used {used}");
+}
+
+/// Bots use every kind of paddock object (D-052): over a race or two they
+/// hold many kinds, keep some behind their kart as a shield, and leave or
+/// send things on the track — drones among them.
+#[test]
+fn bots_hold_items_behind_and_use_many_kinds() {
+    let mut harness = Harness::new(KartWorld::unattended(8, 3), TICK_HZ);
+    let mut alice = Client::join(&mut harness, SessionKind::Human, Role::Player, "alice");
+    run_until(&mut harness, &mut alice, 5, |c| phase(&c.race()) == proto::Phase::Racing);
+    let mut held = std::collections::BTreeSet::new();
+    let mut things = std::collections::BTreeSet::new();
+    let mut trailing = false;
+    let mut flew = false;
+    for _ in 0..400 * 30 {
+        harness.run(SECOND / 30);
+        alice.catch_up();
+        for (_, racer, _) in alice.karts() {
+            held.insert(racer.held);
+            trailing |= racer.trailing;
+        }
+        let board = alice.world.entities().find(|&e| alice.world.get::<proto::Paddock>(e, types::PADDOCK).is_some());
+        if let Some(paddock) = board.and_then(|e| alice.world.get::<proto::Paddock>(e, types::PADDOCK)) {
+            for thing in &paddock.things {
+                things.insert(thing.kind);
+                flew |= thing.kind() == proto::Item::Drone && thing.height > 2.0;
+            }
+        }
+        if held.len() >= 9 && trailing && things.len() >= 4 && flew {
+            break;
+        }
+    }
+    held.remove(&(proto::Item::None as i32));
+    assert!(held.len() >= 8, "kinds held: {held:?}");
+    assert!(trailing, "no bot held its item behind");
+    assert!(things.len() >= 3, "kinds on the track: {things:?}");
+    assert!(flew, "no drone flew: {things:?}");
 }
 
 /// Sends one step carrying `call` for `client`'s kart.
@@ -220,7 +257,7 @@ fn call(harness: &mut Harness, client: &mut Client, name: &str, sequence: u64, c
 /// the grid with them, and whoever races alone can end the race.
 #[test]
 fn the_host_starts_the_race_and_a_driver_alone_can_end_it() {
-    let mut harness = Harness::new(KartWorld { grid: 3, laps: 3, host_starts: true }, TICK_HZ);
+    let mut harness = Harness::new(KartWorld { grid: 3, laps: 3, host_starts: true, records: None }, TICK_HZ);
     let mut alice = Client::join(&mut harness, SessionKind::Human, Role::Player, "alice");
     harness.run(SECOND);
     let mut bob = Client::join(&mut harness, SessionKind::Human, Role::Player, "bob");
@@ -404,4 +441,52 @@ fn every_kart_flies_off_the_crests_and_lands_on_the_road() {
             assert!(after > 0.7 * speed, "kart {entity} lost its speed after landing: {f:?}");
         }
     }
+}
+
+/// Records (kart.records/1, D-053): an agent's lap and race enter the
+/// boards, fresh; the world saves them, a world started again on the same
+/// file shows them, and a faster lap by the same driver replaces its own.
+#[test]
+fn records_are_kept_beaten_and_survive_a_restart() {
+    let dir = std::env::temp_dir().join(format!("osage-kart-records-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let file = dir.join("records.txt");
+    let _ = std::fs::remove_file(&file);
+    let world = || KartWorld { records: Some(file.clone()), ..KartWorld::unattended(1, 1) };
+    let records = |c: &mut Client| -> Option<proto::Records> {
+        c.catch_up();
+        let board = c.world.entities().find(|&e| c.world.get::<proto::Race>(e, types::RACE).is_some())?;
+        c.world.get(board, types::RECORDS)
+    };
+    let race_at = |pace: f32| {
+        let mut harness = Harness::new(world(), TICK_HZ);
+        let mut agent = Client::join(&mut harness, SessionKind::Agent, Role::Agent, "agent-1.alice");
+        run_until(&mut harness, &mut agent, 5, |c| phase(&c.race()) == proto::Phase::Racing);
+        let before = records(&mut agent).expect("published from the start");
+        let (entity, ..) = agent.kart_of("agent-1.alice");
+        let autopilot_type = agent.world.types().id(types::AUTOPILOT).unwrap();
+        let wanted = proto::Autopilot { pace, line: 0.0, drift: false, use_items: false };
+        harness.send(agent.session, intent(1, entity, autopilot_type, &wanted));
+        run_until(&mut harness, &mut agent, 120, |c| c.kart_of("agent-1.alice").1.finish_ms > 0);
+        harness.run(2);
+        (before, records(&mut agent).unwrap(), agent.kart_of("agent-1.alice").1.finish_ms)
+    };
+
+    let (before, first, finish) = race_at(0.7);
+    assert!(before.laps.is_empty() && before.races.is_empty(), "a new world has none: {before:?}");
+    assert_eq!((first.track.as_str(), first.race_laps), ("paddock", 1));
+    assert_eq!(first.laps.len(), 1, "{first:?}");
+    let (lap, race) = (&first.laps[0], &first.races[0]);
+    assert!(lap.name == "agent-1.alice" && lap.fresh && race.fresh && lap.at > 1_700_000_000, "{first:?}");
+    assert_eq!(u64::from(race.ms), finish);
+    assert!(lap.ms > 10_000 && lap.ms < race.ms, "the lap is from line to line, the race from the lights");
+    assert!(std::fs::read_to_string(&file).unwrap().starts_with("kart-records/1\n"));
+
+    let (kept, second, _) = race_at(0.95);
+    assert_eq!(kept.laps.len(), 1, "the restarted world shows the saved records");
+    assert_eq!(kept.laps[0].ms, lap.ms);
+    assert!(!kept.laps[0].fresh, "not set in this race");
+    assert_eq!(second.laps.len(), 1, "one entry per driver: {second:?}");
+    assert!(second.laps[0].ms < lap.ms && second.laps[0].fresh, "beaten: {second:?}");
+    std::fs::remove_dir_all(&dir).unwrap();
 }

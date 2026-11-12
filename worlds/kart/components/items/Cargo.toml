@@ -3,7 +3,7 @@
 
 [package]
 name = "osage-kart-items"
-description = "Paddock objects karts collect from racks of crates and use: a nitro canister, a tyre thrown ahead that rolls and bounces off the barriers, a cone or an oil patch left behind; deterministic"
+description = "Paddock objects karts collect from racks of crates and use: ten items drawn by place and gap to the leader, some held behind the kart as a shield; deterministic"
 license = "MIT OR Apache-2.0"
 publish = false
 version.workspace = true

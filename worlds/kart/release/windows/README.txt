@@ -38,6 +38,18 @@ Driving well pays:
     early and the engine stalls;
   - stay right behind another kart for a moment: its wake slings you past.
 
+Items come from the glass crates across the road. The further back you
+are, the stronger they get: a drone that flies to the leader, a push from
+the pit crew (a boost nothing can touch), rockets. Tyres, a stack of three
+tyres, cones and oil can be held behind your kart: keep F down and they
+shield you from a tyre thrown from behind; let go of F to throw or drop
+them. A bumper knocks aside the karts right beside you.
+
+The world keeps its records: the ten best laps and races, one per driver,
+shown between races (NEW! when you just set one). They are kept in
+kart-records.txt in this folder, on the computer that hosts; updates leave
+the file alone.
+
 Racing friends on the same Wi-Fi
 --------------------------------
 1. One computer hosts: double-click host.bat. It shows this computer's
