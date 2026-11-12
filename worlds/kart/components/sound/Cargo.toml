@@ -1,0 +1,12 @@
+# SPDX-FileCopyrightText: The osage contributors
+# SPDX-License-Identifier: MIT OR Apache-2.0
+
+[package]
+name = "osage-kart-sound"
+description = "A kart's sound synthesised from its state: a two-stroke engine following the revs and the throttle, tyres squealing as they slide, kerbs and grass under the wheels, wind, knocks"
+license = "MIT OR Apache-2.0"
+publish = false
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+repository.workspace = true

@@ -30,6 +30,7 @@ mod play;
 mod predict;
 mod scene;
 mod scenery;
+mod sound;
 mod track;
 
 use std::{
@@ -43,6 +44,7 @@ use bevy::{
     DefaultPlugins,
     app::{App, PluginGroup, ScheduleRunnerPlugin},
     asset::AssetPlugin,
+    audio::AudioPlugin,
     render::RenderPlugin,
     window::{ExitCondition, PresentMode, Window, WindowPlugin, WindowResolution},
     winit::WinitPlugin,
@@ -113,15 +115,21 @@ fn main() -> Result<()> {
         // off-screen picture only, as fast as the machine can.
         let windowless =
             WindowPlugin { primary_window: None, exit_condition: ExitCondition::DontExit, ..Default::default() };
-        app.add_plugins(DefaultPlugins.set(windowless).set(render).set(assets).disable::<WinitPlugin>())
-            .add_plugins(ScheduleRunnerPlugin::run_loop(Duration::ZERO));
-    } else {
         app.add_plugins(
-            DefaultPlugins
-                .set(WindowPlugin { primary_window: Some(window), ..Default::default() })
-                .set(render)
-                .set(assets),
-        );
+            DefaultPlugins.set(windowless).set(render).set(assets).disable::<WinitPlugin>().disable::<AudioPlugin>(),
+        )
+        .add_plugins(ScheduleRunnerPlugin::run_loop(Duration::ZERO));
+    } else {
+        let plugins = DefaultPlugins
+            .set(WindowPlugin { primary_window: Some(window), ..Default::default() })
+            .set(render)
+            .set(assets);
+        // The bench measures pictures: no sound.
+        if bench {
+            app.add_plugins(plugins.disable::<AudioPlugin>());
+        } else {
+            app.add_plugins(plugins).add_plugins(sound::SoundPlugin);
+        }
     }
     app.insert_resource(scene::look(sky));
     // Before the rendering plugin, which draws the sky from it when it is there.

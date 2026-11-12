@@ -1,6 +1,7 @@
 # Knowledge Update Log
 
 ## 2026-11-12
+* **Creation**: Added the module [osage-kart-sound](/modules/kart-sound.md): the karts of [osage-kart-native](/modules/kart-native.md) are heard, their sound synthesised from their state.
 * **Creation**: Added the module [osage-kart-racecraft](/modules/kart-racecraft.md): the world's bots race with temperaments; the [timedemo bench](/algorithms/timedemo-bench.md) races them too and becomes `kart-lap/3` ([render bench](/oracles/render-bench.md)).
 * **Creation**: Added the algorithm [capsule contacts with impulses](/algorithms/capsule-contacts.md) to [osage-kart-physics](/modules/kart-physics.md): karts knock, spin and scrape the barriers with momentum (D-045); each wheel feels road, kerb or grass ([arcade kart physics](/algorithms/arcade-kart-physics.md), [physics golden file](/oracles/physics-golden.md)).
 * **Update**: [osage-kart-model](/modules/kart-model.md)'s drivers bend at the waist: a spine bone carries the trunk, the shoulders and the head; [osage-kart-native](/modules/kart-native.md) throws the trunk out of bends and forward under braking, on a spring.
