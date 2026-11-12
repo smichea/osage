@@ -12,7 +12,7 @@ executor:
   receipt: [bench, tier, camera, without, commit, machine, resolution, rendered, assets, frames, frame_ms, budget_ms, over_budget_percent, screenshots]
 attester:
   resource: https://github.com/smichea/osage/blob/main/tools/attest-bench.py
-generated: { by: "claude-code/claude-fable-5-2", at: "2026-11-10T06:45:00Z" }
+generated: { by: "claude-code/claude-opus-5-5", at: "2026-11-12T02:00:00Z" }
 ---
 
 # Computation
@@ -27,7 +27,7 @@ Tiers T3 and T4 also run on a cloud GPU for the changes merged into `main`, at m
 
 A claim such as "T2 holds 60 frames a second on an integrated GPU" is accepted with a receipt, not on a statement. The attester reads the receipt and answers **pass** only if:
 
-- it comes from the sanctioned bench (`bench` is `kart-lap/2`: version 2 lets karts overtake instead of running into each other, so its frames differ from version 1) run for the claimed tier;
+- it comes from the sanctioned bench (`bench` is `kart-lap/3`: version 3 races AI drivers with temperaments and contacts with momentum; version 2 let karts overtake instead of running into each other; frames differ between versions) run for the claimed tier;
 - the camera followed the race (`camera` is `race`), not held at a place;
 - no technique was left out and at least 2000 frames were timed;
 - it was run from a committed state of the code (`commit` does not end in `-dirty`);

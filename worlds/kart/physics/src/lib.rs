@@ -30,9 +30,10 @@ const REVERSE_SPEED: f32 = 7.0;
 const ROLLING: f32 = 4.0;
 /// Top speed off the road.
 const OFF_ROAD_SPEED: f32 = 9.0;
-const TURN_RATE: f32 = 2.0;
+/// How fast a kart turns at full lock above [`FULL_STEER_SPEED`], rad/s.
+pub const TURN_RATE: f32 = 2.0;
 /// Speed under which steering weakens, m/s.
-const FULL_STEER_SPEED: f32 = 8.0;
+pub const FULL_STEER_SPEED: f32 = 8.0;
 const GRIP: f32 = 10.0;
 const DRIFT_MIN_SPEED: f32 = 10.0;
 /// A drift turns tighter than plain steering: that is what it is for.

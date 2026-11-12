@@ -23,6 +23,7 @@ What osage knows about its own modules: their architecture, the algorithms and t
 * [osage-kart-roadside](modules/kart-roadside.md) - What stands along the kart circuit when the asset manifest's models are there — tyre walls, grass, wild plants, rocks and pines — placed the same way on every machine.
 * [osage-kart-model](modules/kart-model.md) - A racing kart and its driver modelled to scale from simple shapes, in a team's colours, each finish — varnish, satin, rubber, steel, alloy, chrome, cloth, visor — its own material.
 * [osage-kart-crowd](modules/kart-crowd.md) - Spectators sitting in a grandstand, sculpted as whole figures in a few poses and shared, for a world to dress in its own clothes.
+* [osage-kart-racecraft](modules/kart-racecraft.md) - How the kart world's AI drivers race — a temperament each, braking for bends, a racing line, overtaking or waiting, defending, mistakes and grudges after a knock — deterministic, for the server's bots and the bench.
 * [osage-region-link](modules/region-link.md) - The message contract between the replication gateway and a region server, the same in one process and across machines.
 
 ## Rendering techniques

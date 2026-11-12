@@ -8,6 +8,7 @@ use std::{collections::BTreeMap, time::Duration};
 
 use bevy::prelude::*;
 use osage_kart_physics::Kart;
+use osage_kart_racecraft::Temper;
 use osage_world_module_api::{
     Discrete, EntityIds, Joined, Left, Owner, Replicated, SessionKind, Volatile, builtin,
     osage_proto::{components, types as core_types, v0::Role},
@@ -26,7 +27,18 @@ const RESULTS: Duration = Duration::from_secs(8);
 const FINISH_WINDOW: Duration = Duration::from_secs(30);
 /// A race never lasts longer.
 const LONGEST_RACE: Duration = Duration::from_secs(360);
-const BOTS: &[&str] = &["Comet", "Pixel", "Bolt", "Nova", "Zippy", "Echo", "Flash", "Juno"];
+/// The world's drivers, each with a temperament: the presets, and three
+/// drawn from their place.
+const BOTS: &[(&str, Option<Temper>)] = &[
+    ("Comet", Some(Temper::VETERAN)),
+    ("Pixel", Some(Temper::ROOKIE)),
+    ("Bolt", Some(Temper::HOTHEAD)),
+    ("Nova", Some(Temper::STEADY)),
+    ("Zippy", None),
+    ("Echo", Some(Temper::CAUTIOUS)),
+    ("Flash", None),
+    ("Juno", None),
+];
 
 /// Connected humans and agents who drive, by session.
 #[derive(Resource, Default)]
@@ -148,18 +160,13 @@ fn line_up(
         commands.entity(entity).despawn();
     }
     let seats = rules.grid.max(drivers.0.len());
-    let bots = BOTS.iter().enumerate().map(|(i, name)| {
+    let bots = BOTS.iter().enumerate().map(|(i, (name, temper))| {
         let controller = components::Controller {
             kind: components::ControllerKind::System.into(),
             per_world_id: format!("bot-{}", name.to_lowercase()),
             ..default()
         };
-        (
-            None,
-            name.to_string(),
-            controller,
-            Pilot::bot(0.84 + 0.025 * (i % 5) as f32, if i % 2 == 0 { -0.3 } else { 0.3 }),
-        )
+        (None, name.to_string(), controller, Pilot::bot(temper.unwrap_or(Temper::of(i as u32)), i as u32 + 1))
     });
     let people = drivers.0.iter().map(|(session, controller)| {
         let pilot =

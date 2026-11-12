@@ -4825,6 +4825,7 @@ dependencies = [
  "osage-kart-land",
  "osage-kart-model",
  "osage-kart-physics",
+ "osage-kart-racecraft",
  "osage-kart-roadside",
  "osage-procedural",
  "osage-props",
@@ -4840,6 +4841,14 @@ name = "osage-kart-physics"
 version = "0.1.0"
 dependencies = [
  "libm",
+]
+
+[[package]]
+name = "osage-kart-racecraft"
+version = "0.1.0"
+dependencies = [
+ "libm",
+ "osage-kart-physics",
 ]
 
 [[package]]
@@ -4953,6 +4962,7 @@ dependencies = [
  "osage-agent",
  "osage-credentials",
  "osage-kart-physics",
+ "osage-kart-racecraft",
  "osage-sdk",
  "osage-server",
  "osage-world-module-api",

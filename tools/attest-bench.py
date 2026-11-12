@@ -15,7 +15,7 @@ within the tier's budget. Deterministic; standard library only.
 import json
 import sys
 
-SANCTIONED = "kart-lap/2"
+SANCTIONED = "kart-lap/3"
 FEWEST_FRAMES = 2000
 
 

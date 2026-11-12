@@ -1,0 +1,16 @@
+# SPDX-FileCopyrightText: The osage contributors
+# SPDX-License-Identifier: MIT OR Apache-2.0
+
+[package]
+name = "osage-kart-racecraft"
+description = "How the kart world's AI drivers race: a temperament each, braking for bends, a racing line, overtaking, defending, mistakes and grudges; deterministic"
+license = "MIT OR Apache-2.0"
+publish = false
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+
+[dependencies]
+osage-kart-physics.workspace = true
+libm.workspace = true

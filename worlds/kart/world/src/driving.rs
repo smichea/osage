@@ -7,8 +7,8 @@
 use std::collections::BTreeMap;
 
 use bevy::prelude::*;
-use libm::{atan2f, cosf, fabsf, sinf};
-use osage_kart_physics::{Controls, Kart, MAX_SPEED, bump, step, wrap};
+use osage_kart_physics::{Controls, Kart, bump, step};
+use osage_kart_racecraft::{Mind, Temper, field};
 use osage_world_module_api::IntentReceived;
 use prost::Message as _;
 
@@ -31,7 +31,9 @@ const PATIENCE: u32 = 8;
 pub enum Pilot {
     Human(Steps),
     Agent(proto::Autopilot),
-    Bot(proto::Autopilot),
+    /// The world's own drivers race with a temperament
+    /// ([osage-kart-racecraft](osage_kart_racecraft)).
+    Bot(Box<(Temper, Mind)>),
 }
 
 /// A human's controls, applied in sequence order and only those: the world
@@ -55,8 +57,8 @@ impl Pilot {
         Self::Agent(proto::Autopilot::default())
     }
 
-    pub fn bot(pace: f32, line: f32) -> Self {
-        Self::Bot(proto::Autopilot { pace, line, drift: true })
+    pub fn bot(temper: Temper, seed: u32) -> Self {
+        Self::Bot(Box::new((temper, Mind::new(seed))))
     }
 
     /// The last human step applied: what the driver's client predicts from.
@@ -98,10 +100,18 @@ pub fn intents(ids: Res<Ids>, mut intents: MessageReader<IntentReceived>, mut pi
 
 pub fn drive(race: Res<Race>, course: Res<Course>, mut karts: Query<(&mut Body, &mut Pilot, &Progress)>) {
     let track = &course.0.track;
-    for (mut body, mut pilot, progress) in &mut karts {
+    // Where every kart is, for the bots to see the field: the query's order,
+    // the same in both loops.
+    let karts_now: Vec<Kart> = karts.iter().map(|(body, ..)| body.0).collect();
+    let field = field(track, &karts_now);
+    for (me, (mut body, mut pilot, progress)) in karts.iter_mut().enumerate() {
         let mut controls = match &mut *pilot {
             Pilot::Human(steps) => next_steps(steps),
-            Pilot::Agent(wanted) | Pilot::Bot(wanted) => vec![autopilot(&body.0, wanted, &course.0)],
+            Pilot::Agent(wanted) => vec![autopilot(&body.0, wanted, &course.0)],
+            Pilot::Bot(bot) => {
+                let (temper, mind) = &mut **bot;
+                vec![osage_kart_racecraft::drive(&body.0, me, &field, temper, mind, track)]
+            }
         };
         // Past the line, the autopilot brings the kart round gently.
         if progress.finish_ms.is_some() {
@@ -140,34 +150,15 @@ fn next_steps(steps: &mut Steps) -> Vec<Controls> {
     taken
 }
 
-/// The world's autopilot, which drives bots and AI agents' karts: it aims at
-/// a point ahead on its line, holds its pace, slows for sharp bends and
-/// drifts through them if allowed. Same bits on every platform (`libm`), so
-/// that a local simulation — a benchmark, a replay — is reproducible.
+/// The world's autopilot, for AI agents' karts: a pace, a line and drifts
+/// as the agent asks; it brakes for bends and knows nothing of the others
+/// ([`osage_kart_racecraft::follow`]). Same bits on every platform, so that
+/// a local simulation — a benchmark, a replay — is reproducible.
 pub fn autopilot(kart: &Kart, wanted: &proto::Autopilot, circuit: &Circuit) -> Controls {
-    let track = &circuit.track;
-    let spot = track.locate(kart.x, kart.z);
-    let (centre, road) = track.at(spot.along + 6.0 + kart.speed.max(0.0) * 0.55);
-    let offset = wanted.line.clamp(-1.0, 1.0) * (track.half_width - 1.5);
-    let target = [centre[0] - cosf(road) * offset, centre[1] + sinf(road) * offset];
-    let error = wrap(atan2f(target[0] - kart.x, target[1] - kart.z) - kart.heading);
-    let bend = fabsf(error);
-    let pace = wanted.pace.clamp(0.0, 1.0) * if bend > 0.5 { 0.75 } else { 1.0 };
-    let throttle = if pace <= 0.0 {
-        if kart.speed > 0.5 { -1.0 } else { 0.0 }
-    } else if kart.speed < pace * MAX_SPEED {
-        1.0
-    } else {
-        0.0
-    };
-    Controls {
-        throttle,
-        steer: (-error * 2.2).clamp(-1.0, 1.0),
-        drift: wanted.drift && bend > 0.18 && kart.speed > 14.0,
-    }
+    osage_kart_racecraft::follow(kart, wanted.pace, wanted.line, wanted.drift, &circuit.track)
 }
 
-/// Karts bump: overlapping karts are pushed apart and lose a little speed.
+/// Karts collide (D-045).
 pub fn collide(mut karts: Query<&mut Body>) {
     let mut pairs = karts.iter_combinations_mut();
     while let Some([mut a, mut b]) = pairs.fetch_next() {
