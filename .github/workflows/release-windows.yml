@@ -1,6 +1,7 @@
 # Builds the kart game for Windows and attaches it to a GitHub release:
 # kart-native.exe (the game), kart-server.exe (the world), play.bat (race
-# the bots), host.bat and join.bat (race on the same network) and a README.
+# the bots), host.bat and join.bat (race on the same network), kart-web.exe
+# and the browser client (phones and tablets on that network) and a README.
 # The content (textures, sound clips) is attached to the release
 # separately, from a machine that has it.
 name: release-windows
@@ -30,14 +31,24 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ env.TAG }}
-      - run: rustup toolchain install stable --profile minimal && rustup default stable
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+          cache: npm
+      # The browser client runs the world's physics compiled to WebAssembly.
+      - run: rustup toolchain install stable --profile minimal --target wasm32-unknown-unknown && rustup default stable
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
       - run: cargo build --release -p osage-kart-native -p osage-kart-server
+      # The browser client, for phones and tablets on the host's network (kart-web).
+      - run: npm ci
+      - run: npm run build -w @osage/sdk
+      - run: npm run build -w @osage/kart-client
       - name: Package
         shell: bash
         run: |
           mkdir -p dist/osage-kart
-          cp target/release/kart-native.exe target/release/kart-server.exe dist/osage-kart/
+          cp target/release/kart-native.exe target/release/kart-server.exe target/release/kart-web.exe dist/osage-kart/
+          cp -r worlds/kart/client/dist dist/osage-kart/web
           cp worlds/kart/release/windows/*.bat worlds/kart/release/windows/README.txt dist/osage-kart/
           cp -r LICENSE LICENSE-EXCEPTIONS.md LICENSES dist/osage-kart/
           cd dist && 7z a -tzip osage-kart-windows-x64.zip osage-kart
