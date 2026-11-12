@@ -45,6 +45,14 @@ const BOTS: &[(&str, Option<Temper>)] = &[
 #[derive(Resource, Default)]
 pub struct Drivers(BTreeMap<u64, components::Controller>);
 
+/// Calls about the race heard this tick: (session, call).
+#[derive(Resource, Default)]
+pub struct Calls(pub Vec<(u64, proto::RaceCall)>);
+
+/// Seconds the karts wait on the grid for the host before the world starts
+/// the race itself: a host gone quiet does not hold everyone.
+const LONGEST_WAIT: Duration = Duration::from_secs(300);
+
 #[derive(Resource)]
 pub struct Race {
     pub phase: Phase,
@@ -84,6 +92,18 @@ pub struct Progress {
     pub position: u32,
 }
 
+impl Drivers {
+    /// The host: the first human driver still here (sessions count up).
+    fn host(&self) -> Option<u64> {
+        self.0.iter().find(|(_, c)| c.kind() == components::ControllerKind::Human).map(|(session, _)| *session)
+    }
+
+    /// Drivers who race: humans and agents.
+    fn count(&self) -> usize {
+        self.0.len()
+    }
+}
+
 pub fn sessions(mut joined: MessageReader<Joined>, mut left: MessageReader<Left>, mut drivers: ResMut<Drivers>) {
     for joined in joined.read() {
         let human = joined.kind == SessionKind::Human && joined.role == Role::Player;
@@ -104,17 +124,50 @@ pub fn flow(
     course: Res<Course>,
     ids: Res<Ids>,
     drivers: Res<Drivers>,
+    mut calls: ResMut<Calls>,
     mut race: ResMut<Race>,
     mut entity_ids: ResMut<EntityIds>,
     karts: Query<(Entity, &Progress, Option<&Owner>)>,
 ) {
     let now = time.elapsed();
     let ended = race.ends.is_some_and(|end| now >= end);
+    let calls = std::mem::take(&mut calls.0);
+    let host = drivers.host().filter(|_| rules.host_starts);
+    let called = |wanted: proto::RaceCall, by: Option<u64>| {
+        calls.iter().any(|(session, call)| *call == wanted && by.is_some_and(|by| by == *session))
+    };
+    // Lined up, the karts wait for the host, unless there is none.
+    let ready = |race: &mut Race| {
+        if host.is_some() {
+            race.phase = Phase::Ready;
+            race.ends = Some(now + LONGEST_WAIT);
+        } else {
+            race.phase = Phase::Countdown;
+            race.ends = Some(now + COUNTDOWN);
+        }
+    };
     match race.phase {
         Phase::Waiting if !drivers.0.is_empty() => {
             line_up(&mut commands, &rules, &course, &ids, &drivers, &mut entity_ids, &karts, &mut race.races);
+            ready(&mut race);
+        }
+        Phase::Ready if drivers.0.is_empty() => {
+            for (entity, _, _) in &karts {
+                commands.entity(entity).despawn();
+            }
+            race.phase = Phase::Waiting;
+            race.ends = None;
+        }
+        Phase::Ready if ended || host.is_none() || called(proto::RaceCall::Start, host) => {
             race.phase = Phase::Countdown;
             race.ends = Some(now + COUNTDOWN);
+        }
+        Phase::Ready => {
+            // Drivers who arrive take a bot's place.
+            let seated: Vec<u64> = karts.iter().filter_map(|(_, _, owner)| owner.map(|o| o.0)).collect();
+            if drivers.0.keys().any(|session| !seated.contains(session)) {
+                line_up(&mut commands, &rules, &course, &ids, &drivers, &mut entity_ids, &karts, &mut race.races);
+            }
         }
         Phase::Countdown if ended => {
             race.phase = Phase::Racing;
@@ -133,7 +186,11 @@ pub fn flow(
             let humans: Vec<_> = karts.iter().filter(|(_, p, _)| !p.bot).collect();
             let all_finished = !humans.is_empty() && humans.iter().all(|(_, p, _)| p.finish_ms.is_some());
             let window_closed = race.first_finish.is_some_and(|first| now >= first + FINISH_WINDOW);
-            if drivers.0.is_empty() || all_finished || window_closed || now >= race.started + LONGEST_RACE {
+            // A driver racing alone may end the race.
+            let alone = drivers.count() == 1;
+            let stopped = alone && calls.iter().any(|(_, call)| *call == proto::RaceCall::Stop);
+            let over = all_finished || window_closed || now >= race.started + LONGEST_RACE;
+            if drivers.0.is_empty() || stopped || over {
                 race.phase = Phase::Finished;
                 race.ends = Some(now + RESULTS);
             }
@@ -147,8 +204,7 @@ pub fn flow(
                 race.ends = None;
             } else {
                 line_up(&mut commands, &rules, &course, &ids, &drivers, &mut entity_ids, &karts, &mut race.races);
-                race.phase = Phase::Countdown;
-                race.ends = Some(now + COUNTDOWN);
+                ready(&mut race);
             }
         }
         _ => {}
@@ -260,13 +316,15 @@ pub fn progress(
 }
 
 /// Copies the race into what clients see, changing only what changed.
-#[allow(clippy::type_complexity)]
+#[allow(clippy::type_complexity, clippy::too_many_arguments)]
 pub fn publish(
     time: Res<Time>,
     ids: Res<Ids>,
     race: Res<Race>,
     rules: Res<Rules>,
+    drivers: Res<Drivers>,
     paddock: Option<Res<Items>>,
+    owners: Query<(&Replicated, &Owner)>,
     mut karts: Query<
         (&Body, &Progress, &Pilot, &Seat, &mut Transform, &mut Volatile, &mut Discrete),
         Without<RaceBoard>,
@@ -296,6 +354,11 @@ pub fn publish(
         laps: rules.laps,
         started_us: if race.phase == Phase::Racing || race.phase == Phase::Finished { at(race.started) } else { 0 },
         order: race.order.clone(),
+        host: drivers
+            .host()
+            .filter(|_| rules.host_starts)
+            .and_then(|host| owners.iter().find(|(_, owner)| owner.0 == host))
+            .map_or(0, |(id, _)| id.0),
     };
     if let Ok((mut board, mut volatile)) = board.single_mut() {
         if let Some(paddock) = paddock {
@@ -309,6 +372,7 @@ pub fn publish(
         let same = current.is_some_and(|c| {
             c.phase == summary.phase
                 && c.order == summary.order
+                && c.host == summary.host
                 && c.phase_ends_us.abs_diff(summary.phase_ends_us) < 50_000
                 && c.started_us.abs_diff(summary.started_us) < 50_000
         });

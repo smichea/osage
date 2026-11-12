@@ -63,6 +63,7 @@ impl Predictor {
                 steer: c.steer,
                 drift: c.drift,
                 use_item: *using,
+                ..Default::default()
             })
             .collect()
     }

@@ -6,7 +6,10 @@
 //! `osage/kart-settings.txt` under the system's settings folder (`%APPDATA%`
 //! on Windows, `~/.config` elsewhere).
 //!
-//! For now one setting: the frame rate wanted. The engine then lowers the
+//! A player racing alone (bots aside) can also end the race from here
+//! (Enter).
+//!
+//! One setting for now: the frame rate wanted. The engine then lowers the
 //! picture until frames come at that rate, and raises it when there is
 //! room (osage-render's `pace`); "off" keeps the tier's picture whatever
 //! the rate.
@@ -15,6 +18,12 @@ use std::path::PathBuf;
 
 use bevy::{prelude::*, text::FontSize};
 use osage_render::pace::{FrameTarget, LADDER, Pace};
+use osage_world_kart::proto;
+
+use crate::{
+    hud::{Lights, RaceView},
+    play::CallWanted,
+};
 
 /// The rates offered; `None` is off.
 const CHOICES: [Option<u32>; 8] = [None, Some(30), Some(45), Some(60), Some(75), Some(90), Some(120), Some(144)];
@@ -137,14 +146,31 @@ fn toggle(
     }
 }
 
+/// Whether the player may end the race now: racing, alone.
+fn may_end(view: &RaceView) -> bool {
+    view.alone && matches!(view.stage, Lights::Go | Lights::Racing)
+}
+
+#[allow(clippy::too_many_arguments)]
 fn choose(
     keys: Res<ButtonInput<KeyCode>>,
     gamepads: Query<&Gamepad>,
-    menu: Res<Menu>,
+    view: Res<RaceView>,
+    mut menu: ResMut<Menu>,
+    mut call: ResMut<CallWanted>,
+    mut panels: Query<&mut Node, With<Panel>>,
     mut settings: ResMut<Settings>,
     mut target: ResMut<FrameTarget>,
 ) {
     if !menu.0 {
+        return;
+    }
+    if keys.just_pressed(KeyCode::Enter) && may_end(&view) {
+        call.0 = Some(proto::RaceCall::Stop);
+        menu.0 = false;
+        for mut node in &mut panels {
+            node.display = Display::None;
+        }
         return;
     }
     let pad = |button| gamepads.iter().any(|pad| pad.just_pressed(button));
@@ -175,7 +201,13 @@ fn next(now: Option<u32>, step: i32) -> Option<u32> {
     CHOICES[(at as i32 + step).clamp(0, last) as usize]
 }
 
-fn show(menu: Res<Menu>, settings: Res<Settings>, pace: Res<Pace>, mut lines: Query<&mut Text, With<Lines>>) {
+fn show(
+    menu: Res<Menu>,
+    settings: Res<Settings>,
+    pace: Res<Pace>,
+    view: Res<RaceView>,
+    mut lines: Query<&mut Text, With<Lines>>,
+) {
     if !menu.0 {
         return;
     }
@@ -199,8 +231,9 @@ fn show(menu: Res<Menu>, settings: Res<Settings>, pace: Res<Pace>, mut lines: Qu
             parts.join(" · ")
         }
     };
+    let end = if may_end(&view) { "\nEnter  end this race (you race alone)" } else { "" };
     let content = format!(
-        "SETTINGS\n\nFrame rate wanted   <  {wanted}  >\n\nNow {:.0} fps\nPicture: {picture}\n\n← → change    Esc close",
+        "SETTINGS\n\nFrame rate wanted   <  {wanted}  >\n\nNow {:.0} fps\nPicture: {picture}\n{end}\n← → change    Esc close",
         pace.fps
     );
     for mut text in &mut lines {

@@ -14,6 +14,7 @@ import {
   KartStateSchema,
   Phase,
   type Race,
+  RaceCall,
   RaceSchema,
   type Racer,
   RacerSchema,
@@ -154,10 +155,24 @@ try {
     return true;
   }
 
+  /** A call about the race (the host starts it), carried by a few messages: one may be lost. */
+  let call = RaceCall.NONE;
+  let callsLeft = 0;
+  const startRace = () => {
+    const now = race();
+    if (mine !== undefined && now?.phase === Phase.READY && now.host === mine) [call, callsLeft] = [RaceCall.START, 6];
+  };
+  addEventListener("keydown", (event) => event.key === "Enter" && startRace());
+  $("banner").addEventListener("click", (event) => (event.target as HTMLElement).id === "start" && startRace());
+
   /** The frame's steps to the world, in one message. */
   function send(fresh: number) {
     if (mine === undefined || !predictor || controlsType === undefined || fresh === 0) return;
-    const steps = predictor.toSend(fresh);
+    const steps = predictor.toSend(fresh).map((step) => ({ ...step }));
+    if (callsLeft > 0) {
+      callsLeft -= 1;
+      Object.assign(steps[steps.length - 1], { call });
+    }
     const controls = toBinary(ControlsSchema, create(ControlsSchema, { steps }));
     session.sendIntent(steps[steps.length - 1].sequence, mine, controlsType, controls);
   }
@@ -251,6 +266,12 @@ try {
     if (now.phase === Phase.FINISHED) {
       const podium = rows.slice(0, 8).join("");
       banner.innerHTML = `<div class="panel"><b>Results</b> · next race in ${Math.max(0, Math.ceil(remaining / 1000))} s<hr>${podium}</div>`;
+    } else if (now.phase === Phase.READY) {
+      const host = now.host === 0n ? undefined : racer(now.host)?.name;
+      banner.innerHTML =
+        mine !== undefined && now.host === mine
+          ? `<div class="panel"><b>Ready</b> · others can still join<br><button id="start">Start the race</button></div>`
+          : `<div class="panel">waiting for ${host ?? "the host"} to start the race…</div>`;
     } else if (now.phase === Phase.WAITING) {
       banner.innerHTML = `<div class="panel">waiting for drivers…</div>`;
     } else {

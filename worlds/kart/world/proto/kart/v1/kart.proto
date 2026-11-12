@@ -28,6 +28,17 @@ message Step {
   // The use button is held: what the kart holds is used as it goes down
   // (kart.paddock/1).
   bool use_item = 5;
+  // A call about the race (kart.race/1): the host starts the next one; a
+  // driver racing alone ends the race.
+  RaceCall call = 6;
+}
+
+enum RaceCall {
+  RACE_CALL_NONE = 0;
+  // From the host, while the karts wait on the grid (PHASE_READY).
+  RACE_CALL_START = 1;
+  // From a driver who races alone (no other human or agent), while racing.
+  RACE_CALL_STOP = 2;
 }
 
 // kart.autopilot/1 — intent for AI agents: how the world's autopilot drives
@@ -150,6 +161,9 @@ message Race {
   uint64 started_us = 4;
   // Kart entities in race order.
   repeated uint64 order = 5;
+  // The kart of the host: the first human driver still here, who starts
+  // each race (RACE_CALL_START); 0 when the world starts races by itself.
+  uint64 host = 6;
 }
 
 enum Phase {
@@ -161,4 +175,7 @@ enum Phase {
   PHASE_RACING = 3;
   // Results; the next race follows.
   PHASE_FINISHED = 4;
+  // Karts on the grid, frozen, until the host starts the race: time for
+  // others to join.
+  PHASE_READY = 5;
 }

@@ -78,7 +78,7 @@ fn run_until(harness: &mut Harness, client: &mut Client, seconds: usize, done: i
 
 #[test]
 fn bots_race_and_laps_count_through_every_sector() {
-    let mut harness = Harness::new(KartWorld { grid: 4, laps: 1 }, TICK_HZ);
+    let mut harness = Harness::new(KartWorld::unattended(4, 1), TICK_HZ);
     let mut alice = Client::join(&mut harness, SessionKind::Human, Role::Player, "alice");
     harness.run(2);
     assert_eq!(phase(&alice.race()), proto::Phase::Countdown);
@@ -107,7 +107,7 @@ fn bots_race_and_laps_count_through_every_sector() {
 /// exactly the state the server sends back.
 #[test]
 fn a_client_predicts_its_kart_exactly() {
-    let mut harness = Harness::new(KartWorld { grid: 1, laps: 3 }, TICK_HZ);
+    let mut harness = Harness::new(KartWorld::unattended(1, 3), TICK_HZ);
     let mut alice = Client::join(&mut harness, SessionKind::Human, Role::Player, "alice");
     run_until(&mut harness, &mut alice, 5, |c| phase(&c.race()) == proto::Phase::Racing);
     let track = alice.track();
@@ -122,7 +122,7 @@ fn a_client_predicts_its_kart_exactly() {
             201..=250 => (0.3, true), // a drift…
             _ => (0.0, false),        // …then straight on, into the wall: walls are predicted too
         };
-        let step_controls = proto::Step { sequence, throttle: 1.0, steer, drift, use_item: false };
+        let step_controls = proto::Step { sequence, throttle: 1.0, steer, drift, ..Default::default() };
         let message = proto::Controls { steps: vec![step_controls] };
         harness.send(alice.session, intent(sequence, entity, controls_type, &message));
         harness.run(1);
@@ -151,7 +151,7 @@ fn a_client_predicts_its_kart_exactly() {
 
 #[test]
 fn an_agent_drives_through_the_autopilot() {
-    let mut harness = Harness::new(KartWorld { grid: 1, laps: 3 }, TICK_HZ);
+    let mut harness = Harness::new(KartWorld::unattended(1, 3), TICK_HZ);
     let mut agent = Client::join(&mut harness, SessionKind::Agent, Role::Agent, "agent-1.alice");
     run_until(&mut harness, &mut agent, 5, |c| phase(&c.race()) == proto::Phase::Racing);
     harness.run(2 * SECOND);
@@ -169,7 +169,7 @@ fn an_agent_drives_through_the_autopilot() {
 
 #[test]
 fn a_late_driver_takes_a_bots_place_and_an_empty_world_stops() {
-    let mut harness = Harness::new(KartWorld { grid: 3, laps: 1 }, TICK_HZ);
+    let mut harness = Harness::new(KartWorld::unattended(3, 1), TICK_HZ);
     let mut alice = Client::join(&mut harness, SessionKind::Human, Role::Player, "alice");
     harness.run(SECOND);
     let bob = Client::join(&mut harness, SessionKind::Human, Role::Player, "bob");
@@ -194,7 +194,7 @@ fn a_late_driver_takes_a_bots_place_and_an_empty_world_stops() {
 /// — the world says so in their Racer — and use it on the track.
 #[test]
 fn bots_pick_items_from_the_crates_and_use_them() {
-    let mut harness = Harness::new(KartWorld { grid: 6, laps: 3 }, TICK_HZ);
+    let mut harness = Harness::new(KartWorld::unattended(6, 3), TICK_HZ);
     let mut alice = Client::join(&mut harness, SessionKind::Human, Role::Player, "alice");
     run_until(&mut harness, &mut alice, 5, |c| phase(&c.race()) == proto::Phase::Racing);
     let paddock = |c: &mut Client| -> proto::Paddock {
@@ -215,4 +215,41 @@ fn bots_pick_items_from_the_crates_and_use_them() {
         }
     }
     panic!("broken {broken}, held {held}, used {used}");
+}
+
+/// Sends one step carrying `call` for `client`'s kart.
+fn call(harness: &mut Harness, client: &mut Client, name: &str, sequence: u64, call: proto::RaceCall) {
+    let (entity, _, _) = client.kart_of(name);
+    let controls_type = client.world.types().id(types::CONTROLS).unwrap();
+    let step = proto::Step { sequence, call: call.into(), ..Default::default() };
+    harness.send(client.session, intent(sequence, entity, controls_type, &proto::Controls { steps: vec![step] }));
+    harness.run(2);
+}
+
+/// The host (the first human driver) starts each race; the others wait on
+/// the grid with them, and whoever races alone can end the race.
+#[test]
+fn the_host_starts_the_race_and_a_driver_alone_can_end_it() {
+    let mut harness = Harness::new(KartWorld { grid: 3, laps: 3, host_starts: true }, TICK_HZ);
+    let mut alice = Client::join(&mut harness, SessionKind::Human, Role::Player, "alice");
+    harness.run(SECOND);
+    let mut bob = Client::join(&mut harness, SessionKind::Human, Role::Player, "bob");
+    harness.run(5 * SECOND);
+    let race = alice.race();
+    assert_eq!(phase(&race), proto::Phase::Ready, "waiting for the host");
+    assert_eq!(race.host, alice.kart_of("alice").0, "alice came first");
+
+    call(&mut harness, &mut bob, "bob", 1, proto::RaceCall::Start);
+    assert_eq!(phase(&alice.race()), proto::Phase::Ready, "bob is not the host");
+    call(&mut harness, &mut alice, "alice", 1, proto::RaceCall::Start);
+    assert_eq!(phase(&alice.race()), proto::Phase::Countdown);
+    run_until(&mut harness, &mut alice, 5, |c| phase(&c.race()) == proto::Phase::Racing);
+
+    call(&mut harness, &mut alice, "alice", 2, proto::RaceCall::Stop);
+    assert_eq!(phase(&alice.race()), proto::Phase::Racing, "bob races too");
+    harness.leave(bob.session);
+    harness.run(2);
+    call(&mut harness, &mut alice, "alice", 3, proto::RaceCall::Stop);
+    assert_eq!(phase(&alice.race()), proto::Phase::Finished, "alone, alice ends it");
+    run_until(&mut harness, &mut alice, 10, |c| phase(&c.race()) == proto::Phase::Ready);
 }

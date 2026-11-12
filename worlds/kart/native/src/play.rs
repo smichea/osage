@@ -63,6 +63,7 @@ impl Plugin for PlayPlugin {
             .insert_resource(Replica { status: format!("connecting to {}…", self.url), ..default() })
             .insert_resource(Driver { autodrive: self.autodrive, ..default() })
             .insert_resource(Shots { after: self.screenshot_after })
+            .init_resource::<CallWanted>()
             .add_plugins((HudPlugin, PaddockPlugin))
             .add_systems(FixedUpdate, drive)
             .add_systems(Update, (receive, send, poses, follow_someone, summarise).chain().in_set(Stage::Simulate))
@@ -148,7 +149,18 @@ struct Driver {
     fresh: usize,
     steer: f32,
     autodrive: bool,
+    /// A call about the race to send, and how many more messages carry it
+    /// (a message may be lost).
+    call: proto::RaceCall,
+    calls_left: u8,
 }
+
+/// A call about the race the player asked for elsewhere (the settings).
+#[derive(Resource, Default)]
+pub struct CallWanted(pub Option<proto::RaceCall>);
+
+/// Messages that carry a call.
+const CALL_SENDS: u8 = 6;
 
 #[derive(Resource)]
 struct Shots {
@@ -348,10 +360,35 @@ fn drive(
 }
 
 /// The frame's steps to the world, in one message.
-fn send(replica: Res<Replica>, outbox: Res<NetOutbox>, mut driver: ResMut<Driver>) {
+fn send(
+    replica: Res<Replica>,
+    outbox: Res<NetOutbox>,
+    keys: Res<ButtonInput<KeyCode>>,
+    gamepads: Query<&Gamepad>,
+    menu: Res<Menu>,
+    mut wanted: ResMut<CallWanted>,
+    mut driver: ResMut<Driver>,
+) {
     let fresh = std::mem::take(&mut driver.fresh);
     let (Some(mine), Some(controls_type)) = (replica.mine, replica.controls_type) else { return };
-    let steps = driver.predictor.to_send(fresh);
+    // On the grid, the host starts the race: Enter, or a gamepad's North.
+    let race = replica.race();
+    let hosting = race.as_ref().is_some_and(|race| race.phase() == Phase::Ready && race.host == mine);
+    let pressed =
+        keys.just_pressed(KeyCode::Enter) || gamepads.iter().any(|pad| pad.just_pressed(GamepadButton::North));
+    if hosting && pressed && !menu.0 {
+        wanted.0 = Some(proto::RaceCall::Start);
+    }
+    if let Some(call) = wanted.0.take() {
+        (driver.call, driver.calls_left) = (call, CALL_SENDS);
+    }
+    let mut steps = driver.predictor.to_send(fresh);
+    if driver.calls_left > 0 && fresh > 0 {
+        driver.calls_left -= 1;
+        if let Some(last) = steps.last_mut() {
+            last.call = driver.call.into();
+        }
+    }
     if let (true, Some(last)) = (fresh > 0, steps.last()) {
         let _ = outbox.0.send(intent(last.sequence, mine, controls_type, &proto::Controls { steps: steps.clone() }));
     }
@@ -441,12 +478,14 @@ fn summarise(
         None => Lights::Off,
         Some(race) => match race.phase() {
             Phase::Waiting | Phase::Unspecified => Lights::Waiting,
+            Phase::Ready => Lights::Ready(replica.mine.is_some_and(|mine| mine == race.host)),
             Phase::Countdown => Lights::Count(seconds_left(race)),
             Phase::Racing if view.clock_ms < 1000 => Lights::Go,
             Phase::Racing => Lights::Racing,
             Phase::Finished => Lights::Results(seconds_left(race)),
         },
     };
+    let race_host = race.as_ref().map(|race| race.host).filter(|host| *host != 0);
     let order = race.map(|race| race.order).unwrap_or_default();
     view.karts = order
         .iter()
@@ -466,6 +505,9 @@ fn summarise(
         })
         .collect();
     view.me = replica.mine.and_then(|mine| view.karts.iter().position(|kart| kart.id == mine));
+    let host = race_host.and_then(|host| view.karts.iter().find(|kart| kart.id == host)).map(|kart| kart.name.clone());
+    view.host = host.unwrap_or_default();
+    view.alone = view.me.is_some() && view.karts.iter().filter(|kart| !kart.bot).count() == 1;
     let kart = driver.predictor.kart.unwrap_or_default();
     (view.speed, view.charge, view.boosting) = (kart.speed, kart.charge, kart.boost > 0.0);
 }

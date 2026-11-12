@@ -475,3 +475,11 @@ Date: 2026-11-12 · Amends [D-045](#d-045--kart-contacts-with-momentum-and-wheel
 - **Decision:** a paddock object, the rocket, gives 3.5 s during which the kart's top speed is 34 m/s (a boost's is 28); a nitro gives 2.5 s of boost instead of 1.2. The rocket goes mostly to the back of the field.
 - **How:** the kart's state gains `rocket`, seconds left, stepped by the physics like `boost`, so that a client predicts it exactly. It travels in `kart.state/1` as field 11 — an added field: an older reader predicts a plain kart and is corrected — and through the WebAssembly interface (`kart_step` takes it after `spin`; `kart_get(9)` reads it). `ITEM_ROCKET = 5` is added to the item enum.
 - **Kept:** the golden files do not change: no rocket in them.
+
+## D-049 — The host starts each race of the kart world
+
+Date: 2026-11-12 · With the maintainer, who asked that the host decide when the next race starts (leaving time for others to join) and that a player alone can end a race.
+
+- **Decision:** lined up, the karts wait on the grid (`PHASE_READY`) until the host starts the race; the host is the first human driver still in the world, named in `Race.host` (its kart). A driver racing alone — no other human or agent — can end the race; the results follow. A world without a human (agents only) starts its races by itself, and so does one whose host stays silent five minutes.
+- **How:** `Step.call` (`RaceCall`: start, stop) rides on the controls a human already sends, a few messages in a row against loss; no new type. `KartWorld::host_starts` (on by default) keeps the old flow for tests and unattended worlds (`KartWorld::unattended`).
+- **Why:** friends joining on the same network arrived mid-race and waited a whole race; the one who hosts knows when everyone is there.

@@ -40,6 +40,10 @@ pub struct RaceView {
     pub boosting: bool,
     /// What the player's kart holds, from a crate.
     pub held: Option<Item>,
+    /// The host's name, who starts each race; empty when races start by themselves.
+    pub host: String,
+    /// The player races with no other driver (bots aside): they may end the race.
+    pub alone: bool,
 }
 
 #[derive(Default, Clone, Copy, PartialEq)]
@@ -48,6 +52,8 @@ pub enum Lights {
     #[default]
     Off,
     Waiting,
+    /// On the grid until the host starts the race; `true` if the player is the host.
+    Ready(bool),
     /// Seconds to the start.
     Count(i64),
     /// The first second of the race.
@@ -90,6 +96,8 @@ enum Label {
     Lights,
     Status,
     Held,
+    /// What to do now, under the lights: start the race, or wait for the host.
+    Prompt,
 }
 
 /// The bar that fills as the mini-turbo charges.
@@ -197,6 +205,12 @@ fn setup(mut commands: Commands) {
         Node { position_type: PositionType::Absolute, top: percent(16), width: percent(100), ..default() },
     ));
     commands.spawn((
+        text(Label::Prompt, 26.0),
+        TextShadow::default(),
+        TextLayout::justify(Justify::Center),
+        Node { position_type: PositionType::Absolute, top: percent(36), width: percent(100), ..default() },
+    ));
+    commands.spawn((
         text(Label::Status, 11.0),
         Node {
             position_type: PositionType::Absolute,
@@ -282,6 +296,15 @@ fn write(
                     "GO!".to_owned()
                 }
                 Lights::Results(_) if me.is_some_and(|me| me.finish_ms > 0) => "FINISH!".to_owned(),
+                Lights::Ready(_) => "READY".to_owned(),
+                _ => String::new(),
+            },
+            Label::Prompt => match view.stage {
+                Lights::Ready(true) => {
+                    tint = Some(Color::srgb(1.0, 0.85, 0.3));
+                    "Press Enter to start the race\n(others can still join)".to_owned()
+                }
+                Lights::Ready(false) => format!("Waiting for {} to start the race", view.host),
                 _ => String::new(),
             },
         };

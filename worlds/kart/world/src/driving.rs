@@ -15,7 +15,7 @@ use prost::Message as _;
 use crate::{
     Body, Circuit, Course, Ids,
     proto::{self, Phase},
-    race::{Progress, Race},
+    race::{Calls, Progress, Race},
 };
 
 /// With more steps than this waiting, a kart catches up two steps a tick.
@@ -83,12 +83,24 @@ impl Pilot {
     }
 }
 
-pub fn intents(ids: Res<Ids>, mut intents: MessageReader<IntentReceived>, mut pilots: Query<&mut Pilot>) {
+pub fn intents(
+    ids: Res<Ids>,
+    mut intents: MessageReader<IntentReceived>,
+    mut calls: ResMut<Calls>,
+    mut pilots: Query<(&mut Pilot, Option<&osage_world_module_api::Owner>)>,
+) {
     for intent in intents.read() {
-        let Ok(mut pilot) = pilots.get_mut(intent.entity) else { continue };
+        let Ok((mut pilot, owner)) = pilots.get_mut(intent.entity) else { continue };
         match &mut *pilot {
             Pilot::Human(steps) if intent.type_id == ids.controls => {
                 let Ok(controls) = proto::Controls::decode(intent.value.as_slice()) else { continue };
+                for step in &controls.steps {
+                    if let (Some(owner), Ok(call)) = (owner, proto::RaceCall::try_from(step.call))
+                        && call != proto::RaceCall::None
+                    {
+                        calls.0.push((owner.0, call));
+                    }
+                }
                 for step in controls.steps.into_iter().filter(|s| s.sequence > steps.applied) {
                     let controls = Controls { throttle: step.throttle, steer: step.steer, drift: step.drift };
                     steps.waiting.insert(step.sequence, (controls.sanitized(), step.use_item));

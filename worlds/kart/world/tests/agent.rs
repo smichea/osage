@@ -35,7 +35,7 @@ async fn an_ai_agent_races_through_mcp() {
         trusted_issuers: vec![TestIssuer::insecure_dev().trusted()],
         ..Default::default()
     };
-    thread::spawn(move || osage_server::serve(listener, config, KartWorld { grid: 2, laps: 3 }));
+    thread::spawn(move || osage_server::serve(listener, config, KartWorld::unattended(2, 3)));
 
     let human =
         TestIssuer::insecure_dev().issue("osage-kart", "alice@demo", Level::A2, Duration::from_secs(600)).unwrap();

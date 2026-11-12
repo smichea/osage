@@ -43,11 +43,21 @@ pub struct KartWorld {
     /// Karts per race; bots fill the places drivers leave free.
     pub grid: usize,
     pub laps: u32,
+    /// The host (the first human driver) starts each race, the karts
+    /// waiting on the grid until then; otherwise races follow one another.
+    pub host_starts: bool,
 }
 
 impl Default for KartWorld {
     fn default() -> Self {
-        Self { grid: 6, laps: 3 }
+        Self { grid: 6, laps: 3, host_starts: true }
+    }
+}
+
+impl KartWorld {
+    /// Races that start by themselves: for tests and unattended worlds.
+    pub fn unattended(grid: usize, laps: u32) -> Self {
+        Self { grid, laps, host_starts: false }
     }
 }
 
@@ -55,7 +65,8 @@ pub const TICK_HZ: u32 = 60;
 
 impl Plugin for KartWorld {
     fn build(&self, app: &mut App) {
-        app.insert_resource(Rules { grid: self.grid, laps: self.laps })
+        app.insert_resource(Rules { grid: self.grid, laps: self.laps, host_starts: self.host_starts })
+            .init_resource::<race::Calls>()
             .insert_resource(Course(Circuit::new()))
             .init_resource::<race::Race>()
             .init_resource::<race::Drivers>()
@@ -107,7 +118,8 @@ impl WorldModule for KartWorld {
                 types::RACE,
                 "Race",
                 false,
-                "The race: phase (waiting, countdown, racing, finished), when it ends, laps, order.",
+                "The race: phase (waiting, ready, countdown, racing, finished), when it ends, laps, order, host. \
+                 The host starts each race with Step.call; a driver alone can end one.",
             ),
             spec(
                 types::PADDOCK,
@@ -128,6 +140,7 @@ impl WorldModule for KartWorld {
 struct Rules {
     grid: usize,
     laps: u32,
+    host_starts: bool,
 }
 
 #[derive(Resource)]
