@@ -1,7 +1,7 @@
 ---
 type: Module
 title: osage-kart-records
-description: "A kart world's records — best laps and best races per track, one per driver name, the fastest ten — kept by the world in a plain text file that survives a restart, published to clients and agents as kart.records/1."
+description: "A kart world's records — best laps, best races and best time trials per track, one per driver name, the fastest ten — kept by the world in a plain text file that survives a restart, published to clients and agents as kart.records/1."
 resource: https://github.com/smichea/osage/tree/main/worlds/kart/components/records
 licence: MIT OR Apache-2.0
 status: draft
@@ -15,7 +15,7 @@ Something to come back for: the best laps and races ever driven in a world, with
 
 # Concepts
 
-- **Event:** what a time is of — a lap (line to line) or a race of a number of laps (lights to flag).
+- **Event:** what a time is of — a lap (line to line), a race of a number of laps (lights to flag), or a time trial of a number of laps (alone on the track, D-062).
 - **Board:** the times of one event on one track, fastest first, at most `KEPT` (10), one per driver name: that driver's best. A tie keeps the earlier time.
 - **Record:** a name, a time in milliseconds, when (seconds since 1970), the kart body and the driver chosen ([osage-kart-roster](/modules/kart-roster.md), D-055).
 - **Fresh:** set in the race just run; the world forgets which are fresh when the next race lines up.
@@ -24,9 +24,9 @@ Something to come back for: the best laps and races ever driven in a world, with
 
 `Records::offer(track, event, record)` puts a time on its board if it beats the driver's own best and makes the top ten, and says where (`Entered::At(place)`, 0 the record) or not (`Entered::No`). Names are kept on one line, without tabs or control characters, trimmed to 40 characters; an empty name sets nothing.
 
-The file is text: the line `kart-records/1`, then a record a line, tab-separated: track, event (`lap` or `race:N`), ms, when, name, kart, driver. `save` writes it to `FILE.new` and renames it over `FILE`, so the file is always whole; `load` gives no records when there is no file, and skips any line that does not read (a file edited by hand keeps what it can); a file of another format reads as none.
+The file is text: the line `kart-records/1`, then a record a line, tab-separated: track, event (`lap`, `race:N` or `trial:N`), ms, when, name, kart, driver. `save` writes it to `FILE.new` and renames it over `FILE`, so the file is always whole; `load` gives no records when there is no file, and skips any line that does not read (a file edited by hand keeps what it can); a file of another format reads as none.
 
-In the world (`osage-world-kart`, `records.rs`): each lap and each race a human or an agent finishes is offered (bots set none), read from the race's progress — a lap from one crossing of the line to the next while racing, the race from the lights. What enters is saved at once and the race board's `kart.records/1` republished: the track, the best laps, the best races of the world's number of laps, each with `fresh`. `kart-server --records FILE` names the file; without it, records live as long as the process. The Windows launchers keep them in `kart-records.txt` beside the game, which updates leave alone.
+In the world (`osage-world-kart`, `records.rs`): each lap and each race a human or an agent finishes is offered (bots set none), read from the race's progress — a lap from one crossing of the line to the next while racing, the race from the lights. What enters is saved at once and the race board's `kart.records/1` republished: the track, the best laps, the best races and the best time trials ([osage-kart-ghost](/modules/kart-ghost.md)) of the world's number of laps, each with `fresh`. A trial's times are counted in ticks of the world, a race's by its clock. `kart-server --records FILE` names the file; without it, records live as long as the process. The Windows launchers keep them in `kart-records.txt` beside the game, which updates leave alone.
 
 # Interfaces
 
@@ -34,7 +34,7 @@ In the world (`osage-world-kart`, `records.rs`): each lap and each race a human 
 
 # Invariants
 
-- A driver's slower time leaves its best; a faster one replaces it; a board keeps the ten fastest, the earlier of a tie first; laps, races of different lengths and tracks are separate boards. Tested.
+- A driver's slower time leaves its best; a faster one replaces it; a board keeps the ten fastest, the earlier of a tie first; laps, races and trials of different lengths and tracks are separate boards. Tested.
 - What is written reads back the same; odd names are cleaned; damaged lines and other formats are skipped. Tested.
 - Saved and loaded again, the records are the same, and no `.new` file is left behind. Tested.
 - In the world: an agent's lap and race enter fresh, are saved; a world started again on the file shows them, not fresh; a faster lap by the same driver replaces its own (the world's `tests/race.rs`).
@@ -42,7 +42,7 @@ In the world (`osage-world-kart`, `records.rs`): each lap and each race a human 
 # Knowledge
 
 - Times come from the world's race (laps counted through every sector in order); the physics is deterministic, so a time is the same wherever it is replayed — the ground for checking a record against a replay later (G4.7).
-- Shown by [osage-kart-native](/modules/kart-native.md) between races: the best five laps and races, the player's marked, new ones flagged.
+- Shown by [osage-kart-native](/modules/kart-native.md) between races: the best five laps, races and time trials, the player's marked, new ones flagged.
 - Shown by the browser client on its results the same way.
 
 # Reuse

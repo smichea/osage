@@ -32,7 +32,8 @@ pub fn items(
     mut karts: Query<(&Seat, &mut Body, &Pilot, &Progress)>,
 ) {
     let Some(mut paddock) = paddock else { return };
-    if race.phase != Phase::Racing {
+    // A time trial has no crates and nothing on the road (D-062).
+    if race.phase != Phase::Racing || paddock.0.crates().is_empty() && paddock.0.things().is_empty() {
         return;
     }
     let track = &course.0.track;

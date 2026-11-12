@@ -603,3 +603,98 @@ fn the_host_chooses_the_event_and_the_others_vote() {
     assert_eq!(track.length(), harbour.length(), "the grid is on the harbour");
     assert_eq!(alice.karts().len(), 3);
 }
+
+/// Time trials (G4.1, D-062): alone on the track, no bots and no crates; the
+/// run is kept as a ghost, which the next trial drives again to the same
+/// time, to the millisecond; a slower run leaves it, a faster one replaces
+/// it, and a world started again on the same folder still has it.
+#[test]
+fn a_time_trial_keeps_a_ghost_that_drives_the_run_again() {
+    let dir = std::env::temp_dir().join(format!("osage-kart-trial-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    let world =
+        || KartWorld { ghosts: Some(dir.clone()), event: Some("trial:paddock".into()), ..KartWorld::unattended(4, 1) };
+    const ME: &str = "agent-1.alice";
+    let drive = |harness: &mut Harness, agent: &mut Client, pace: f32| {
+        run_until(harness, agent, 12, |c| phase(&c.race()) == proto::Phase::Racing);
+        let (entity, ..) = agent.kart_of(ME);
+        let autopilot_type = agent.world.types().id(types::AUTOPILOT).unwrap();
+        let wanted = proto::Autopilot { pace, line: 0.0, drift: false, use_items: false };
+        harness.send(agent.session, intent(1, entity, autopilot_type, &wanted));
+    };
+    let ghost_of = |c: &mut Client| c.karts().into_iter().find(|(_, racer, _)| racer.ghost);
+    let mine = |c: &mut Client| c.karts().into_iter().find(|(_, racer, _)| !racer.ghost).expect("the agent's kart");
+    let records = |c: &mut Client| -> proto::Records {
+        c.catch_up();
+        let board = c.world.entities().find(|&e| c.world.get::<proto::Race>(e, types::RACE).is_some()).unwrap();
+        c.world.get(board, types::RECORDS).unwrap()
+    };
+
+    // The first trial: alone, nothing on the road.
+    let mut harness = Harness::new(world(), TICK_HZ);
+    let mut agent = Client::join(&mut harness, SessionKind::Agent, Role::Agent, ME);
+    drive(&mut harness, &mut agent, 0.8);
+    let race = agent.race();
+    assert!(race.trial && race.event == "trial:paddock" && race.events.contains(&"trial:coast".to_owned()), "{race:?}");
+    assert_eq!(agent.karts().len(), 1, "no bots in a trial");
+    let board = agent.world.entities().find(|&e| agent.world.get::<proto::Race>(e, types::RACE).is_some()).unwrap();
+    let paddock: proto::Paddock = agent.world.get(board, types::PADDOCK).unwrap();
+    assert!(paddock.crates.is_empty(), "no crates in a trial");
+    run_until(&mut harness, &mut agent, 120, |c| c.kart_of(ME).1.finish_ms > 0);
+    harness.run(2);
+    let first = mine(&mut agent).1.finish_ms;
+    let kept = records(&mut agent);
+    assert!(kept.races.is_empty(), "a trial is no race: {kept:?}");
+    assert_eq!(kept.trials.iter().map(|r| (r.name.as_str(), u64::from(r.ms))).collect::<Vec<_>>(), [(ME, first)]);
+    assert_eq!(kept.laps.len(), 1, "a lap is a lap");
+
+    // The next one: the ghost is on the grid, on the same place, and drives
+    // the run again while the agent takes its time.
+    run_until(&mut harness, &mut agent, 12, |c| phase(&c.race()) == proto::Phase::Countdown);
+    harness.run(2);
+    let (_, ghost, at) = ghost_of(&mut agent).expect("the ghost of the first run");
+    assert!(ghost.bot && ghost.name == ME && ghost.finish_ms == 0, "{ghost:?}");
+    let (_, _, me) = mine(&mut agent);
+    assert_eq!((at.x, at.z), (me.x, me.z), "everyone starts from the same place");
+    drive(&mut harness, &mut agent, 0.6);
+    run_until(&mut harness, &mut agent, 120, |c| ghost_of(c).is_some_and(|(_, racer, _)| racer.finish_ms > 0));
+    assert_eq!(ghost_of(&mut agent).unwrap().1.finish_ms, first, "the same run, to the millisecond");
+    assert_eq!(mine(&mut agent).1.finish_ms, 0, "the agent is still out");
+    assert_eq!(mine(&mut agent).1.position, 2, "behind its ghost");
+    run_until(&mut harness, &mut agent, 120, |c| mine(c).1.finish_ms > 0);
+    let second = mine(&mut agent).1.finish_ms;
+    assert!(second > first, "{second} against {first}");
+    let on_shelf = |dir: &std::path::Path| -> Vec<(String, u64)> {
+        osage_kart_ghost::Shelf::open(Some(dir.to_owned()))
+            .all("paddock", 1)
+            .iter()
+            .map(|g| (g.name.clone(), g.ms))
+            .collect()
+    };
+    assert_eq!(on_shelf(&dir), [(ME.to_owned(), first)], "a slower run leaves the ghost");
+
+    // A world started again on the same folder has the ghost; a faster run
+    // replaces it.
+    let mut harness = Harness::new(world(), TICK_HZ);
+    let mut agent = Client::join(&mut harness, SessionKind::Agent, Role::Agent, ME);
+    drive(&mut harness, &mut agent, 0.95);
+    assert!(ghost_of(&mut agent).is_some(), "kept across the restart");
+    run_until(&mut harness, &mut agent, 120, |c| mine(c).1.finish_ms > 0);
+    harness.run(2);
+    let third = mine(&mut agent).1.finish_ms;
+    assert!(third < first, "{third} against {first}");
+    assert_eq!(on_shelf(&dir), [(ME.to_owned(), third)]);
+
+    // A ghost of another shape of the track is left out, not driven into a wall.
+    let file = std::fs::read_dir(dir.join("paddock.1")).unwrap().next().unwrap().unwrap().path();
+    let text = std::fs::read_to_string(&file).unwrap();
+    let (head, ticks) = text.split_once("\nticks ").unwrap();
+    let (count, runs) = ticks.split_once('\n').unwrap();
+    let count: usize = count.parse().unwrap();
+    std::fs::write(&file, format!("{head}\nticks {}\n40 1 0 0 0\n{runs}", count + 40)).unwrap();
+    let mut harness = Harness::new(world(), TICK_HZ);
+    let mut agent = Client::join(&mut harness, SessionKind::Agent, Role::Agent, ME);
+    run_until(&mut harness, &mut agent, 12, |c| phase(&c.race()) == proto::Phase::Racing);
+    assert!(ghost_of(&mut agent).is_none(), "it no longer finishes when it says");
+    std::fs::remove_dir_all(&dir).unwrap();
+}

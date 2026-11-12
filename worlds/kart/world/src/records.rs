@@ -121,5 +121,6 @@ fn to_proto(book: &Book, track: &str, laps: u32) -> proto::Records {
         laps: list(Event::Lap),
         races: list(Event::Race { laps }),
         race_laps: laps,
+        trials: list(Event::Trial { laps }),
     }
 }

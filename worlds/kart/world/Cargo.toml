@@ -20,6 +20,7 @@ osage-kart-records.workspace = true
 osage-kart-roster.workspace = true
 osage-kart-tracks.workspace = true
 osage-kart-cup.workspace = true
+osage-kart-ghost.workspace = true
 tracing.workspace = true
 libm.workspace = true
 bevy = { workspace = true, features = ["std", "multi_threaded", "async_executor"] }
@@ -31,6 +32,7 @@ protox.workspace = true
 
 [dev-dependencies]
 osage-agent = { path = "../../../crates/osage-agent" }
+osage-kart-ghost.workspace = true
 osage-credentials.workspace = true
 osage-sdk.workspace = true
 osage-server.workspace = true

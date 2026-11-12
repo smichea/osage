@@ -20,7 +20,7 @@ echo.
 rem The host's music, shared with the others, when there is a "music" folder.
 set MUSIC=
 if exist music\ (set MUSIC=--music music& echo  Sharing the music in the "music" folder on port 7880.& echo.)
-start "osage kart world (shared)" /min kart-server.exe --listen 0.0.0.0:7878 --webtransport 0.0.0.0:7879 --records kart-records.txt %MUSIC%
+start "osage kart world (shared)" /min kart-server.exe --listen 0.0.0.0:7878 --webtransport 0.0.0.0:7879 --records kart-records.txt --ghosts kart-ghosts %MUSIC%
 start "osage kart web" /min kart-web.exe web 0.0.0.0:8080
 timeout /t 3 /nobreak >nul
 kart-native.exe %*

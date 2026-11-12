@@ -1,0 +1,18 @@
+# SPDX-FileCopyrightText: The osage contributors
+# SPDX-License-Identifier: MIT OR Apache-2.0
+
+[package]
+name = "osage-kart-ghost"
+description = "A kart's run kept to race against: what it did tick by tick, replayed by the deterministic physics, kept in a plain text file per track and driver"
+license = "MIT OR Apache-2.0"
+publish = false
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+
+[dependencies]
+osage-kart-physics.workspace = true
+
+[dev-dependencies]
+osage-kart-racecraft.workspace = true

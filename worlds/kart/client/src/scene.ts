@@ -220,19 +220,25 @@ const shared = {
   dark: new THREE.MeshStandardMaterial({ color: "#22272e", roughness: 0.5 }),
 };
 
-/** A kart facing +Z, its origin on the ground. */
-export function buildKart(colour: number): KartView {
-  const paint = new THREE.MeshStandardMaterial({ color: PALETTE[colour % PALETTE.length], roughness: 0.35, metalness: 0.2 });
+/** What a ghost is made of (D-062): pale, seen through. */
+const ghostly = new THREE.MeshStandardMaterial({ color: "#b8dcff", roughness: 0.6, transparent: true, opacity: 0.35, depthWrite: false });
+
+/** A kart facing +Z, its origin on the ground; a ghost's is the same all over, seen through. */
+export function buildKart(colour: number, ghost = false): KartView {
+  const paint = ghost
+    ? ghostly
+    : new THREE.MeshStandardMaterial({ color: PALETTE[colour % PALETTE.length], roughness: 0.35, metalness: 0.2 });
+  const [dark, helmet, rubber] = ghost ? [ghostly, ghostly, ghostly] : [shared.dark, shared.helmet, shared.rubber];
   const body = new THREE.Group();
   body.add(
     new THREE.Mesh(shared.chassis, paint).translateY(0.4),
     new THREE.Mesh(shared.nose, paint).translateY(0.35).translateZ(1.25),
-    new THREE.Mesh(shared.wing, shared.dark).translateY(0.85).translateZ(-1.0),
-    new THREE.Mesh(shared.head, shared.helmet).translateY(1.0).translateZ(-0.2),
+    new THREE.Mesh(shared.wing, dark).translateY(0.85).translateZ(-1.0),
+    new THREE.Mesh(shared.head, helmet).translateY(1.0).translateZ(-0.2),
   );
   const wheels = [-1, 1].flatMap((side) =>
     [-1, 1].map((end) => {
-      const wheel = new THREE.Mesh(shared.wheel, shared.rubber);
+      const wheel = new THREE.Mesh(shared.wheel, rubber);
       wheel.position.set(0.75 * side, 0.32, 0.72 * end);
       return wheel;
     }),

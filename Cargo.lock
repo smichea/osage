@@ -4854,6 +4854,14 @@ name = "osage-kart-cup"
 version = "0.1.0"
 
 [[package]]
+name = "osage-kart-ghost"
+version = "0.1.0"
+dependencies = [
+ "osage-kart-physics",
+ "osage-kart-racecraft",
+]
+
+[[package]]
 name = "osage-kart-items"
 version = "0.1.0"
 dependencies = [
@@ -5090,6 +5098,7 @@ dependencies = [
  "osage-agent",
  "osage-credentials",
  "osage-kart-cup",
+ "osage-kart-ghost",
  "osage-kart-items",
  "osage-kart-physics",
  "osage-kart-racecraft",

@@ -183,6 +183,9 @@ pub struct Pose {
     pub trailing: bool,
     /// Seconds of a pit-crew push left, when nothing touches it.
     pub guard: f32,
+    /// A ghost (D-062): a run from an earlier time trial, driven again;
+    /// drawn seen through, and silent.
+    pub ghost: bool,
 }
 
 /// A place the camera is held at, looking at another, instead of following a kart.

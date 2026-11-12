@@ -276,6 +276,23 @@ impl Paddock {
         }
     }
 
+    /// A paddock with no crates, for `karts` karts: a time trial's (D-062).
+    pub fn empty(karts: usize) -> Self {
+        assert!(karts <= 64, "at most 64 karts");
+        Self {
+            crates: Vec::new(),
+            things: Vec::new(),
+            held: vec![None; karts],
+            count: vec![0; karts],
+            trailing: vec![false; karts],
+            guard: vec![0.0; karts],
+            pressed: vec![false; karts],
+            smoke: vec![(0.0, 0); karts],
+            seed: 0,
+            picks: 0,
+        }
+    }
+
     pub fn crates(&self) -> &[Crate] {
         &self.crates
     }

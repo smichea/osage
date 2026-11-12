@@ -131,7 +131,10 @@ try {
         )
         .join("");
     const races = value.races.length ? `<br><small>best races (${value.raceLaps} laps)</small>${rows(value.races)}` : "";
-    return `<hr><b>Records</b><br><small>best laps</small>${rows(value.laps)}${races}`;
+    const trials = value.trials.length
+      ? `<br><small>best time trials (${value.raceLaps} laps)</small>${rows(value.trials)}`
+      : "";
+    return `<hr><b>Records</b><br><small>best laps</small>${rows(value.laps)}${races}${trials}`;
   };
   const state = (entity: bigint): KartValues | undefined => world.get(entity, KART.state, KartStateSchema);
   // The kart as its own driver built it (D-055): what the predictor steps.
@@ -163,7 +166,7 @@ try {
         const who = racer(event.entity);
         const kart = state(event.entity);
         if (who && kart) {
-          const shown = { view: buildKart(who.color), color: who.color, x: kart.x, z: kart.z, heading: kart.heading };
+          const shown = { view: buildKart(who.color, who.ghost), color: who.color, x: kart.x, z: kart.z, heading: kart.heading };
           karts.set(event.entity, shown);
           scene.add(shown.view.root);
           if (world.get(event.entity, types.controller, components.ControllerSchema)?.perWorldId === me) {
@@ -237,7 +240,11 @@ try {
   };
   const trackName = (id: string) => TRACK_NAMES[id] ?? id;
   const eventName = (event: string, cup?: string) =>
-    event.startsWith("cup:") ? `${cup ?? event.slice(4)} (cup)` : `${trackName(event.slice(6))} (one track)`;
+    event.startsWith("cup:")
+      ? `${cup ?? event.slice(4)} (cup)`
+      : event.startsWith("trial:")
+        ? `${trackName(event.slice(6))} (time trial)`
+        : `${trackName(event.slice(6))} (one track)`;
   /** The cup and its standings, and what is raced next with a button to change it. */
   const cupPanel = () => {
     const now = race();
@@ -340,10 +347,11 @@ try {
       const server = state(entity);
       if (!server) continue;
       // Another driver, another colour: the kart is built again in it.
-      const color = racer(entity)?.color;
+      const who = racer(entity);
+      const color = who?.color;
       if (color !== undefined && color !== shown.color) {
         scene.remove(shown.view.root);
-        [shown.view, shown.color] = [buildKart(color), color];
+        [shown.view, shown.color] = [buildKart(color, who?.ghost), color];
         scene.add(shown.view.root);
       }
       let target = { x: server.x, z: server.z, heading: server.heading };
@@ -395,7 +403,7 @@ try {
       .filter((row): row is readonly [bigint, Racer] => row[1] !== undefined)
       .map(([entity, r]) => {
         const status = r.finishMs > 0n ? clock(Number(r.finishMs)) : `lap ${Math.min(Math.max(r.lap, 1), now.laps)}`;
-        const kind = r.bot ? " <small>bot</small>" : "";
+        const kind = r.ghost ? " <small>ghost</small>" : r.bot ? " <small>bot</small>" : "";
         return `<div class="${entity === mine ? "me" : ""}">${r.position}. <span class="dot" style="background:${PALETTE[r.color % PALETTE.length]}"></span>${escape(r.name)}${kind} · ${status}</div>`;
       });
     $("board").innerHTML = rows.join("") || "";

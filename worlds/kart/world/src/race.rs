@@ -23,6 +23,7 @@ use crate::{
     proto::{self, Phase},
     records::{Timed, Times},
     roster::{Choices, Pair, build_proto},
+    trial::{Ghosts, chosen, clock, enters},
 };
 use osage_kart_records::Event;
 
@@ -32,6 +33,9 @@ const RESULTS: Duration = Duration::from_secs(8);
 const PODIUM: Duration = Duration::from_secs(16);
 /// After the first kart finishes, the others have this long.
 const FINISH_WINDOW: Duration = Duration::from_secs(30);
+/// In a time trial, where each drives their own run, after the first
+/// driver finishes: time to finish a slow run, not to wait for one given up.
+const TRIAL_WINDOW: Duration = Duration::from_secs(90);
 /// A race never lasts longer.
 const LONGEST_RACE: Duration = Duration::from_secs(360);
 /// The world's drivers, each with a temperament: the presets, and three
@@ -64,6 +68,8 @@ pub struct Race {
     pub phase: Phase,
     ends: Option<Duration>,
     started: Duration,
+    /// Ticks raced so far: a time trial's clock (D-062).
+    ticks: u64,
     first_finish: Option<Duration>,
     order: Vec<u64>,
     /// Races lined up so far: each draws its items differently.
@@ -88,6 +94,7 @@ impl Default for Race {
             phase: Phase::Waiting,
             ends: None,
             started: Duration::ZERO,
+            ticks: 0,
             first_finish: None,
             order: Vec::new(),
             races: 0,
@@ -98,9 +105,11 @@ impl Default for Race {
 /// How a kart's race goes.
 #[derive(Component)]
 pub struct Progress {
-    name: String,
+    pub(crate) name: String,
     color: u32,
     bot: bool,
+    /// A run kept from an earlier time trial, driven again (D-062).
+    ghost: bool,
     /// 0 on the grid, 1 on the first lap … laps + 1 once finished.
     lap: u32,
     sector: u32,
@@ -170,6 +179,7 @@ pub fn flow(
     mut entity_ids: ResMut<EntityIds>,
     choices: Res<Choices>,
     mut cups: ResMut<Cups>,
+    mut ghosts: ResMut<Ghosts>,
     mut track_board: Query<&mut Discrete, With<TrackBoard>>,
     karts: Query<(Entity, &Progress, Option<&Owner>)>,
 ) {
@@ -205,7 +215,19 @@ pub fn flow(
             if cups.next(host).is_some() {
                 race_on(&mut course, &mut cups);
             }
-            line_up(&mut commands, &rules, &course, &ids, &drivers, &choices, &mut entity_ids, &karts, &mut race.races);
+            line_up(
+                &mut commands,
+                &rules,
+                &course,
+                &ids,
+                &drivers,
+                &choices,
+                &mut entity_ids,
+                &karts,
+                &mut race.races,
+                &cups,
+                &mut ghosts,
+            );
             ready(&mut race);
         }
         Phase::Ready if drivers.0.is_empty() => {
@@ -218,7 +240,19 @@ pub fn flow(
         // The host chose another event on the grid: it is raced at once.
         Phase::Ready if cups.next(host).is_some() => {
             race_on(&mut course, &mut cups);
-            line_up(&mut commands, &rules, &course, &ids, &drivers, &choices, &mut entity_ids, &karts, &mut race.races);
+            line_up(
+                &mut commands,
+                &rules,
+                &course,
+                &ids,
+                &drivers,
+                &choices,
+                &mut entity_ids,
+                &karts,
+                &mut race.races,
+                &cups,
+                &mut ghosts,
+            );
             ready(&mut race);
         }
         Phase::Ready if ended || host.is_none() || called(proto::RaceCall::Start, host) => {
@@ -239,12 +273,15 @@ pub fn flow(
                     &mut entity_ids,
                     &karts,
                     &mut race.races,
+                    &cups,
+                    &mut ghosts,
                 );
             }
         }
         Phase::Countdown if ended => {
             race.phase = Phase::Racing;
             race.started = now;
+            race.ticks = 0;
             race.first_finish = None;
             race.ends = None;
         }
@@ -262,13 +299,17 @@ pub fn flow(
                     &mut entity_ids,
                     &karts,
                     &mut race.races,
+                    &cups,
+                    &mut ghosts,
                 );
             }
         }
         Phase::Racing => {
             let humans: Vec<_> = karts.iter().filter(|(_, p, _)| !p.bot).collect();
             let all_finished = !humans.is_empty() && humans.iter().all(|(_, p, _)| p.finish_ms.is_some());
-            let window_closed = race.first_finish.is_some_and(|first| now >= first + FINISH_WINDOW);
+            // A ghost's finish hurries nobody (it sets no `first_finish`).
+            let window = if cups.trial() { TRIAL_WINDOW } else { FINISH_WINDOW };
+            let window_closed = race.first_finish.is_some_and(|first| now >= first + window);
             // A driver racing alone may end the race.
             let alone = drivers.count() == 1;
             let stopped = alone && calls.iter().any(|(_, call)| *call == proto::RaceCall::Stop);
@@ -302,6 +343,8 @@ pub fn flow(
                     &mut entity_ids,
                     &karts,
                     &mut race.races,
+                    &cups,
+                    &mut ghosts,
                 );
                 ready(&mut race);
             }
@@ -310,7 +353,9 @@ pub fn flow(
     }
 }
 
-/// Clears the circuit and puts every driver, then bots, on the grid.
+/// Clears the circuit and puts every driver, then bots, on the grid. In a
+/// time trial (D-062): the drivers alone, all on the same place, with the
+/// ghosts of their best runs and of the track's fastest, and no crates.
 #[allow(clippy::too_many_arguments)]
 fn line_up(
     commands: &mut Commands,
@@ -322,14 +367,39 @@ fn line_up(
     entity_ids: &mut EntityIds,
     karts: &Query<(Entity, &Progress, Option<&Owner>)>,
     races: &mut u32,
+    cups: &Cups,
+    ghosts: &mut Ghosts,
 ) {
     for (entity, _, _) in karts {
         commands.entity(entity).despawn();
     }
-    let seats = rules.grid.max(drivers.0.len());
+    let trial = cups.trial();
+    let shown = if trial {
+        let names: Vec<String> = drivers.0.values().map(|c| c.per_world_id.clone()).collect();
+        chosen(&mut ghosts.0, &course.0, rules.laps, &names)
+    } else {
+        Vec::new()
+    };
+    let seats = if trial { drivers.0.len() + shown.len() } else { rules.grid.max(drivers.0.len()) };
     *races = races.wrapping_add(1);
-    commands.insert_resource(items_for(&course.0.track, seats, *races));
-    let bots = BOTS.iter().enumerate().map(|(i, (name, temper))| {
+    commands.insert_resource(if trial {
+        Items(osage_kart_items::Paddock::empty(seats))
+    } else {
+        items_for(&course.0.track, seats, *races)
+    });
+    let ghosts = shown.into_iter().map(|ghost| {
+        let controller = components::Controller {
+            kind: components::ControllerKind::System.into(),
+            per_world_id: format!("ghost-{}", ghost.name),
+            ..default()
+        };
+        let pair = (
+            osage_kart_roster::driver(&ghost.driver).unwrap_or(&osage_kart_roster::DRIVERS[0]),
+            osage_kart_roster::body(&ghost.kart).unwrap_or(&osage_kart_roster::BODIES[0]),
+        );
+        (None, ghost.name.clone(), controller, Pilot::Ghost(osage_kart_ghost::Replay::new(ghost)), pair)
+    });
+    let bots = BOTS.iter().enumerate().filter(|_| !trial).map(|(i, (name, temper))| {
         let controller = components::Controller {
             kind: components::ControllerKind::System.into(),
             per_world_id: format!("bot-{}", name.to_lowercase()),
@@ -343,13 +413,16 @@ fn line_up(
             if controller.kind() == components::ControllerKind::Agent { Pilot::agent() } else { Pilot::human() };
         (Some(*session), controller.per_world_id.clone(), controller.clone(), pilot, choices.of(*session))
     });
-    for (slot, (owner, name, controller, pilot, pair)) in people.chain(bots).take(seats).enumerate() {
-        let kart = Kart { build: osage_kart_roster::build(pair.0, pair.1), ..course.0.grid_slot(slot) };
+    for (slot, (owner, name, controller, pilot, pair)) in people.chain(bots).chain(ghosts).take(seats).enumerate() {
+        // In a trial everyone starts from the same place: the runs compare.
+        let place = if trial { 0 } else { slot };
+        let kart = Kart { build: osage_kart_roster::build(pair.0, pair.1), ..course.0.grid_slot(place) };
         let bot = owner.is_none();
         let progress = Progress {
             name,
             color: pair.0.colour,
             bot,
+            ghost: matches!(pilot, Pilot::Ghost(_)),
             lap: 0,
             sector: crate::circuit::SECTORS - 1,
             distance: 0.0,
@@ -389,17 +462,22 @@ pub fn progress(
     course: Res<Course>,
     mut race: ResMut<Race>,
     mut times: ResMut<Times>,
+    cups: Res<Cups>,
     mut karts: Query<(&Replicated, &Body, &mut Progress)>,
 ) {
     let racing = race.phase == Phase::Racing;
-    let now = time.elapsed();
+    // A time trial is timed in ticks of the world (D-062): a run driven
+    // again takes the same time, however busy the world's machine is.
+    let now = if cups.trial() { race.started + clock(race.ticks) } else { time.elapsed() };
+    race.ticks += u64::from(racing);
     let (sectors, sector_length) = (crate::circuit::SECTORS, course.0.sector_length());
     for (_, body, mut progress) in &mut karts {
         let from_start = course.0.from_start(course.0.track.locate(body.0.x, body.0.z).along);
-        let sector = ((from_start / sector_length) as u32).min(sectors - 1);
-        if racing && sector == (progress.sector + 1) % sectors {
+        let mut sector = progress.sector;
+        let crossed = racing && enters(from_start, sector_length, &mut sector);
+        if racing && sector != progress.sector {
             progress.sector = sector;
-            if sector == 0 {
+            if crossed {
                 progress.lap += 1;
                 let (name, bot, pair) = (progress.name.clone(), progress.bot, progress.pair);
                 if let Some(started) = progress.lap_started.replace(now)
@@ -411,8 +489,12 @@ pub fn progress(
                 if progress.lap > rules.laps && progress.finish_ms.is_none() {
                     let ms = (now - race.started).as_millis() as u64;
                     progress.finish_ms = Some(ms);
-                    race.first_finish.get_or_insert(now);
-                    times.0.push(Timed { name, bot, pair, event: Event::Race { laps: rules.laps }, ms });
+                    if !progress.ghost {
+                        race.first_finish.get_or_insert(time.elapsed());
+                    }
+                    let event =
+                        if cups.trial() { Event::Trial { laps: rules.laps } } else { Event::Race { laps: rules.laps } };
+                    times.0.push(Timed { name, bot, pair, event, ms });
                 }
             }
         }
@@ -488,6 +570,7 @@ pub fn publish(
         events: crate::cup::events(),
         music_port: u32::from(beside.music),
         voice_port: u32::from(beside.voice),
+        trial: cups.trial(),
     };
     if let Ok((mut board, mut volatile)) = board.single_mut() {
         if let Some(paddock) = paddock {
@@ -507,6 +590,7 @@ pub fn publish(
                 && c.votes == summary.votes
                 && c.music_port == summary.music_port
                 && c.voice_port == summary.voice_port
+                && c.trial == summary.trial
                 && c.phase_ends_us.abs_diff(summary.phase_ends_us) < 50_000
                 && c.started_us.abs_diff(summary.started_us) < 50_000
         });
@@ -560,5 +644,6 @@ fn racer(progress: &Progress, paddock: Option<&osage_kart_items::Paddock>, seat:
         driver: progress.pair.0.id.to_owned(),
         kart: progress.pair.1.id.to_owned(),
         build: Some(build_proto(osage_kart_roster::build(progress.pair.0, progress.pair.1))),
+        ghost: progress.ghost,
     }
 }

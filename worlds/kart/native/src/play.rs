@@ -305,7 +305,15 @@ fn receive(
                         entity,
                         commands
                             .spawn((
-                                Pose { kart, color: racer.color, held: None, smoke: None, trailing: false, guard: 0.0 },
+                                Pose {
+                                    kart,
+                                    color: racer.color,
+                                    held: None,
+                                    smoke: None,
+                                    trailing: false,
+                                    guard: 0.0,
+                                    ghost: racer.ghost,
+                                },
                                 Remote(entity),
                             ))
                             .id(),
@@ -501,11 +509,14 @@ fn track_name(id: &str) -> String {
     osage_kart_tracks::by_id(id).map_or_else(|| id.to_owned(), |track| track.name)
 }
 
-/// An event as the HUD names it: a cup by its name, a track alone by its.
+/// An event as the HUD names it: a cup by its name, a track alone by its,
+/// a time trial by its track's.
 fn event_name(event: &str) -> String {
     if let Some(id) = event.strip_prefix("cup:") {
         let name = osage_kart_cup::built_in().into_iter().find(|c| c.id == id).map_or(id.to_owned(), |c| c.name);
         format!("{name} (cup)")
+    } else if let Some(id) = event.strip_prefix("trial:") {
+        format!("{} (time trial)", track_name(id))
     } else {
         format!("{} (one track)", track_name(event.strip_prefix("track:").unwrap_or(event)))
     }
@@ -735,6 +746,7 @@ fn summarise(
     let seconds_left = |race: &proto::Race| ((race.phase_ends_us as i64 - now) as f32 / 1e6).ceil() as i64;
     view.status.clone_from(&replica.status);
     view.laps = race.as_ref().map_or(0, |race| race.laps);
+    view.trial = race.as_ref().is_some_and(|race| race.trial);
     view.clock_ms = race.as_ref().map_or(0, |race| (now - race.started_us as i64) / 1000);
     view.stage = match &race {
         None => Lights::Off,
@@ -758,6 +770,7 @@ fn summarise(
                 id: *id,
                 name: racer.name,
                 bot: racer.bot,
+                ghost: racer.ghost,
                 color: racer.color,
                 position: racer.position,
                 lap: racer.lap,
@@ -782,6 +795,7 @@ fn summarise(
         race_laps: records.race_laps,
         laps: bests(&records.laps),
         races: bests(&records.races),
+        trials: bests(&records.trials),
     };
     if view.records != records {
         view.records = records;

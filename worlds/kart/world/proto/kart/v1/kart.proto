@@ -122,6 +122,9 @@ message Racer {
   string driver = 12;
   string kart = 13;
   Build build = 14;
+  // Added with D-062. A ghost: a run kept from an earlier time trial,
+  // driven again by the world. `name` is who drove it; nothing touches it.
+  bool ghost = 15;
 }
 
 // How a kart is built (D-055): top speed, acceleration, handling, grip and
@@ -288,6 +291,10 @@ message Race {
   // The port on the world's machine of its voice relay (osage-voice: UDP),
   // where the players talk to one another; 0 when there is none.
   uint32 voice_port = 12;
+  // Added with D-062. A time trial (the event `trial:TRACK`): every driver
+  // alone against the clock — no bots, no crates, karts pass through one
+  // another — with the ghosts of the best runs kept on this track.
+  bool trial = 13;
 }
 
 message Cup {
@@ -325,6 +332,8 @@ message Records {
   repeated Record races = 3;
   // The laps of the races the race board keeps.
   uint32 race_laps = 4;
+  // Added with D-062. The best time trials of race_laps laps.
+  repeated Record trials = 5;
 }
 
 message Record {

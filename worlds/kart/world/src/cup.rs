@@ -3,8 +3,9 @@
 
 //! What the world races (D-057): a cup — its tracks one after the other,
 //! points for each place, standings between the races, a podium — or one
-//! track, race after race. The host chooses; the others' choices are votes,
-//! and with no host the most wanted event is raced next.
+//! track, race after race, or a time trial on one track (D-062). The host
+//! chooses; the others' choices are votes, and with no host the most wanted
+//! event is raced next.
 
 use std::collections::BTreeMap;
 
@@ -15,12 +16,14 @@ use osage_kart_tracks::TrackDef;
 use crate::proto;
 
 /// Every event there is to race, as `Choice.event` names them: the cups,
-/// then each track alone.
+/// then each track alone, then a time trial on each.
 pub fn events() -> Vec<String> {
+    let tracks = osage_kart_tracks::built_in();
     osage_kart_cup::built_in()
         .iter()
         .map(|cup| format!("cup:{}", cup.id))
-        .chain(osage_kart_tracks::built_in().iter().map(|track| format!("track:{}", track.id)))
+        .chain(tracks.iter().map(|track| format!("track:{}", track.id)))
+        .chain(tracks.iter().map(|track| format!("trial:{}", track.id)))
         .collect()
 }
 
@@ -52,7 +55,8 @@ impl Cups {
     /// Starts `event` from its first race; the track it is on.
     fn start(&mut self, event: &str) -> TrackDef {
         let cup = event.strip_prefix("cup:").and_then(|id| osage_kart_cup::built_in().into_iter().find(|c| c.id == id));
-        let single = event.strip_prefix("track:").and_then(osage_kart_tracks::by_id);
+        let single =
+            event.strip_prefix("track:").or_else(|| event.strip_prefix("trial:")).and_then(osage_kart_tracks::by_id);
         let (event, series, track) = match (cup, single) {
             (Some(cup), _) => {
                 let first = cup.tracks.first().and_then(|id| osage_kart_tracks::by_id(id));
@@ -64,6 +68,11 @@ impl Cups {
         self.event = event;
         self.series = series;
         track.unwrap_or_else(|| osage_kart_tracks::by_id("paddock").expect("the paddock is built in"))
+    }
+
+    /// Whether the event being raced is a time trial (D-062).
+    pub fn trial(&self) -> bool {
+        self.event.starts_with("trial:")
     }
 
     /// A driver's choice of what to race next; empty or unknown, none.

@@ -50,7 +50,14 @@ Point along the cliffs, Pinewood through the forest at dusk and Harbour
 Town round the houses - and gives points for each place (10, 8, 6, 5, 4,
 3, 2, 1). The standings show between races, the podium after the last.
 Between races the host presses T to choose what to race next: the cup,
-or one track over and over. The others' T is a vote, which everyone sees.
+one track over and over, or a time trial on a track. The others' T is a
+vote, which everyone sees.
+
+Time trials: everyone alone against the clock - no bots, no items, and
+the karts pass through one another. Your best run comes back as a ghost
+(a pale kart you can see through) in the next trials, with the fastest
+runs of the others: beat it and it is replaced. Ghosts are kept in the
+kart-ghosts folder, on the computer that hosts; updates leave it alone.
 
 Who drives, and in what: between races (on the grid, or on the results),
 left and right choose the driver, up and down the kart. Light drivers
@@ -60,7 +67,7 @@ its speed, the Drifter slides. No pair is faster than the others: pick
 the one you like to drive. On the grid your kart changes at once; after
 a race, from the next one.
 
-The world keeps its records on each track: the ten best laps and races, one per driver,
+The world keeps its records on each track: the ten best laps, races and time trials, one per driver,
 shown between races (NEW! when you just set one). They are kept in
 kart-records.txt in this folder, on the computer that hosts; updates leave
 the file alone.

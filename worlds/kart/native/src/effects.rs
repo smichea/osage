@@ -202,7 +202,8 @@ pub fn emit(
         material.0 = look;
     };
 
-    for (pose, place) in &karts {
+    // A ghost leaves nothing behind it (D-062).
+    for (pose, place) in karts.iter().filter(|(pose, _)| !pose.ghost) {
         let kart = &pose.kart;
         let (forward, speed) = (place.rotation * Vec3::Z, kart.speed);
         let behind = -forward * speed;

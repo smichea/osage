@@ -50,7 +50,7 @@ It returns events (picked, trailing, used, hit, blocked, bumped, bounced) for so
 
 # Interfaces
 
-`Item` (`ALL`, `trails`), `Kind`, `Standing`, `Crate`, `Thing`, `Event`, `Paddock::{new, step, button, crates, things, held, count, trailing, guard, smoke, hold}`, `wants`, `touches`, and the constants of the design (`NITRO`, `ROCKET`, `SMOKE`, `STACK`, `THROW`, `ROLLING`, `TYRE_BOUNCE`, `DRONE_*`, `BUMPER_REACH`, `BUMPER_KNOCK`, `PUSH`, `GUARD`, `FAR_BEHIND`, radii and lives, `RACKS`, `RACK`, `CRATE_BACK`, `MOST`).
+`Item` (`ALL`, `trails`), `Kind`, `Standing`, `Crate`, `Thing`, `Event`, `Paddock::{new, empty (no crates: a time trial's, D-062), step, button, crates, things, held, count, trailing, guard, smoke, hold}`, `wants`, `touches`, and the constants of the design (`NITRO`, `ROCKET`, `SMOKE`, `STACK`, `THROW`, `ROLLING`, `TYRE_BOUNCE`, `DRONE_*`, `BUMPER_REACH`, `BUMPER_KNOCK`, `PUSH`, `GUARD`, `FAR_BEHIND`, radii and lives, `RACKS`, `RACK`, `CRATE_BACK`, `MOST`).
 
 The world server (`osage-world-kart`) carries it in its protocol: `Step.use_item` (the button, for humans), `Autopilot.use_items` (agents let the world's rule decide), `Racer.held`, `held_count`, `trailing` and `guard`, and `kart.paddock/1` (crates standing or not; things with their velocity, life and height) on the race board, sent when it changes. The world gives each kart's standing from its race: place, and the distance it has covered against the leader's.
 

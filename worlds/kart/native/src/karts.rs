@@ -93,6 +93,8 @@ pub struct Kit {
     /// A pit-crew push's glow around the kart, and a bumper's shock wave.
     bubble: (Handle<Mesh>, Handle<StandardMaterial>),
     wave: (Handle<Mesh>, Handle<StandardMaterial>),
+    /// What a ghost is made of (D-062): pale, seen through.
+    ghost: Handle<StandardMaterial>,
 }
 
 /// The moving parts of a kart and where its motion stands.
@@ -306,7 +308,15 @@ pub fn setup(
             ..default()
         }),
     );
+    let ghost = materials.add(StandardMaterial {
+        base_color: Color::srgba(0.7, 0.88, 1.0, 0.3),
+        emissive: LinearRgba::rgb(0.12, 0.2, 0.3),
+        perceptual_roughness: 0.6,
+        alpha_mode: AlphaMode::Blend,
+        ..default()
+    });
     commands.insert_resource(Kit {
+        ghost,
         finishes,
         models: HashMap::new(),
         bindposes: skins.add(rest),
@@ -339,15 +349,24 @@ fn livery(colour: usize) -> Livery {
     Livery { main, second, frame, suit, number }
 }
 
-/// Children with the meshes of `part`, each in its finish's material.
-fn spawn_part(commands: &mut Commands, kit: &Kit, part: &Meshes, parent: Entity) {
+/// The material of a finish on a kart: a ghost's is the same all over.
+fn finish_of(kit: &Kit, finish: &Finish, ghost: bool) -> Handle<StandardMaterial> {
+    if ghost { kit.ghost.clone() } else { kit.finishes[finish].clone() }
+}
+
+/// Children with the meshes of `part`, each in its finish's material; a
+/// ghost's cast no shadow.
+fn spawn_part(commands: &mut Commands, kit: &Kit, part: &Meshes, parent: Entity, ghost: bool) {
     for (finish, mesh) in part {
-        commands.spawn((
+        let mut spawned = commands.spawn((
             Mesh3d(mesh.clone()),
-            MeshMaterial3d(kit.finishes[finish].clone()),
+            MeshMaterial3d(finish_of(kit, finish, ghost)),
             Transform::default(),
             ChildOf(parent),
         ));
+        if ghost {
+            spawned.insert(bevy::light::NotShadowCaster);
+        }
     }
 }
 
@@ -384,33 +403,37 @@ fn assemble(
     kit: &Kit,
     colour: usize,
     kart: Entity,
+    ghost: bool,
 ) -> (Entity, Entity, [(Entity, Entity); 4], Bones, Entity, Vec<Entity>) {
     let model = &kit.models[&colour];
     let body = commands.spawn((Transform::default(), Visibility::default(), ChildOf(kart))).id();
-    spawn_part(commands, kit, &model.body, body);
+    spawn_part(commands, kit, &model.body, body, ghost);
     // The steering wheel turns about its column; the driver's bones follow it.
     let steering = commands.spawn((steering_column(), Visibility::default(), ChildOf(body))).id();
-    spawn_part(commands, kit, &model.steering, steering);
+    spawn_part(commands, kit, &model.steering, steering, ghost);
     let joints = driver_rest().map(|rest| commands.spawn((rest, ChildOf(body))).id());
     for (finish, mesh) in &model.driver {
-        commands.spawn((
+        let mut spawned = commands.spawn((
             Mesh3d(mesh.clone()),
-            MeshMaterial3d(kit.finishes[finish].clone()),
+            MeshMaterial3d(finish_of(kit, finish, ghost)),
             SkinnedMesh { inverse_bindposes: kit.bindposes.clone(), joints: joints.to_vec() },
             // Its bounds move with its bones: never culled by stale ones.
             NoFrustumCulling,
             Transform::default(),
             ChildOf(body),
         ));
+        if ghost {
+            spawned.insert(bevy::light::NotShadowCaster);
+        }
     }
     let head = commands.spawn((Transform::from_translation(NECK), Visibility::default(), ChildOf(body))).id();
-    spawn_part(commands, kit, &model.helmet, head);
+    spawn_part(commands, kit, &model.helmet, head, ghost);
     let wheels = [0, 1, 2, 3].map(|i| {
         let pivot = commands.spawn((Transform::from_translation(AXLES[i]), Visibility::default(), ChildOf(body))).id();
         // Wheels on the right are the left ones turned round.
         let facing = if AXLES[i].x < 0.0 { Quat::from_rotation_y(PI) } else { Quat::IDENTITY };
         let tyre = commands.spawn((Transform::from_rotation(facing), Visibility::default(), ChildOf(pivot))).id();
-        spawn_part(commands, kit, &model.wheels[i / 2], tyre);
+        spawn_part(commands, kit, &model.wheels[i / 2], tyre, ghost);
         (pivot, tyre)
     });
     let rockets = commands.spawn((Transform::from_scale(Vec3::ZERO), Visibility::Hidden, ChildOf(body))).id();
@@ -444,7 +467,7 @@ pub fn park(
     for (kart, parked) in &parked {
         let colour = parked.colour % PALETTE.len();
         model_of(&mut kit, &mut meshes, colour);
-        assemble(&mut commands, &kit, colour, kart);
+        assemble(&mut commands, &kit, colour, kart, false);
         commands.entity(kart).insert(Visibility::default());
     }
 }
@@ -459,7 +482,7 @@ pub fn dress(
     for (kart, pose) in &karts {
         let colour = pose.color as usize % PALETTE.len();
         model_of(&mut kit, &mut meshes, colour);
-        let (body, head, wheels, bones, rockets, carried) = assemble(&mut commands, &kit, colour, kart);
+        let (body, head, wheels, bones, rockets, carried) = assemble(&mut commands, &kit, colour, kart, pose.ghost);
         let glow = |(mesh, material): &(Handle<Mesh>, Handle<StandardMaterial>)| {
             (
                 Mesh3d(mesh.clone()),

@@ -2,11 +2,13 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 //! Who drives each kart, one physics step per tick: a human's controls in
-//! order, or the world's autopilot for bots and AI agents.
+//! order, the world's autopilot for bots and AI agents, or a run kept from
+//! an earlier time trial, driven again (D-062).
 
 use std::collections::BTreeMap;
 
 use bevy::prelude::*;
+use osage_kart_ghost::{Recorder, Replay};
 use osage_kart_items::Kind;
 use osage_kart_physics::{Controls, Kart, bump, launch, slipstream, step};
 use osage_kart_racecraft::{Hazard, Mind, Temper, drive_among, field};
@@ -37,6 +39,8 @@ pub enum Pilot {
     /// The world's own drivers race with a temperament
     /// ([osage-kart-racecraft](osage_kart_racecraft)).
     Bot(Box<(Temper, Mind)>),
+    /// A run driven again, tick for tick ([osage-kart-ghost](osage_kart_ghost)).
+    Ghost(Replay),
 }
 
 /// A human's controls, applied in sequence order and only those: the world
@@ -80,7 +84,7 @@ impl Pilot {
         match self {
             Self::Human(steps) => Some(steps.using),
             Self::Agent(autopilot) if autopilot.use_items => None,
-            Self::Agent(_) => Some(false),
+            Self::Agent(_) | Self::Ghost(_) => Some(false),
             Self::Bot(_) => None,
         }
     }
@@ -150,10 +154,12 @@ pub fn drive(
     time: Res<Time>,
     race: Res<Race>,
     course: Res<Course>,
+    cups: Res<crate::cup::Cups>,
     paddock: Option<Res<Items>>,
     mut karts: Query<(&mut Body, &mut Pilot, &Progress, &mut Launch)>,
 ) {
     let track = &course.0.track;
+    let (racing, trial) = (race.phase == Phase::Racing, cups.trial());
     let left = race.countdown_left(time.elapsed());
     // Where every kart is, for the bots to see the field: the query's order,
     // the same in both loops.
@@ -167,6 +173,24 @@ pub fn drive(
         .map(|t| Hazard { spot: track.locate(t.x, t.z), radius: t.kind.radius() })
         .collect();
     for (me, (mut body, mut pilot, progress, mut start)) in karts.iter_mut().enumerate() {
+        // A ghost drives its run again from the lights, then is brought
+        // round like any kart past the line; it waits and coasts as they do.
+        if let Pilot::Ghost(replay) = &mut *pilot {
+            if racing && !start.judged {
+                start.judged = true;
+                body.0 = replay.start();
+            }
+            let round = proto::Autopilot { pace: 0.5, ..default() };
+            match racing.then(|| replay.next_tick()) {
+                Some(Some(tick)) => tick.steps().iter().for_each(|controls| step(&mut body.0, *controls, track)),
+                Some(None) => {
+                    let controls = autopilot(&body.0, &round, &course.0);
+                    step(&mut body.0, controls, track);
+                }
+                None => step(&mut body.0, Controls::default(), track),
+            }
+            continue;
+        }
         let mut controls = match &mut *pilot {
             Pilot::Human(steps) => next_steps(steps),
             Pilot::Agent(wanted) => vec![autopilot(&body.0, wanted, &course.0)],
@@ -174,6 +198,7 @@ pub fn drive(
                 let (temper, mind) = &mut **bot;
                 vec![drive_among(&body.0, me, &field, &hazards, temper, mind, track)]
             }
+            Pilot::Ghost(_) => Vec::new(),
         };
         // The start: a human's throttle on the grid is timed against the lights.
         let human = matches!(*pilot, Pilot::Human(_));
@@ -187,13 +212,19 @@ pub fn drive(
                 Pilot::Human(_) => start.pressed,
                 Pilot::Bot(_) => bot_start(me, race.races()),
                 // An agent's kart waits for the agent: it presses nothing.
-                Pilot::Agent(_) => None,
+                Pilot::Agent(_) | Pilot::Ghost(_) => None,
             };
             launch(&mut body.0, pressed);
+            // A time trial is recorded from here, to be driven again (D-062).
+            if trial && !matches!(*pilot, Pilot::Bot(_)) {
+                start.run = Some(Recorder::new(body.0));
+            }
         }
         // Past the line, the autopilot brings the kart round gently.
         if progress.finish_ms.is_some() {
             controls = vec![autopilot(&body.0, &proto::Autopilot { pace: 0.5, line: 0.0, ..default() }, &course.0)];
+        } else if racing && let Some(run) = &mut start.run {
+            run.tick(&controls);
         }
         for mut controls in controls {
             // The lights hold the karts; after the race, they coast.
@@ -235,6 +266,8 @@ fn next_steps(steps: &mut Steps) -> Vec<Controls> {
 pub struct Launch {
     pressed: Option<f32>,
     judged: bool,
+    /// The run so far, in a time trial (D-062).
+    pub run: Option<Recorder>,
 }
 
 /// The start of the world's own drivers, which press no throttle: a good
@@ -256,8 +289,12 @@ pub fn autopilot(kart: &Kart, wanted: &proto::Autopilot, circuit: &Circuit) -> C
     osage_kart_racecraft::follow(kart, wanted.pace, wanted.line, wanted.drift, &circuit.track)
 }
 
-/// Karts collide (D-045), and those in another's wake charge a slipstream (D-050).
-pub fn collide(mut karts: Query<&mut Body>) {
+/// Karts collide (D-045), and those in another's wake charge a slipstream
+/// (D-050) — but in a time trial, where each drives alone (D-062).
+pub fn collide(cups: Res<crate::cup::Cups>, mut karts: Query<&mut Body>) {
+    if cups.trial() {
+        return;
+    }
     let mut pairs = karts.iter_combinations_mut();
     while let Some([mut a, mut b]) = pairs.fetch_next() {
         bump(&mut a.0, &mut b.0);

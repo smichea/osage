@@ -29,6 +29,8 @@ pub struct RaceView {
     pub status: String,
     pub stage: Lights,
     pub laps: u32,
+    /// A time trial (D-062): alone against the clock and the ghosts.
+    pub trial: bool,
     /// Race time, milliseconds.
     pub clock_ms: i64,
     /// Every kart, in race order.
@@ -68,6 +70,8 @@ pub struct Records {
     pub race_laps: u32,
     pub laps: Vec<Best>,
     pub races: Vec<Best>,
+    /// The best time trials of `race_laps` laps (D-062).
+    pub trials: Vec<Best>,
 }
 
 #[derive(Clone, PartialEq)]
@@ -101,6 +105,8 @@ pub struct Entry {
     pub id: u64,
     pub name: String,
     pub bot: bool,
+    /// A run from an earlier time trial, driven again (D-062).
+    pub ghost: bool,
     pub color: u32,
     pub position: u32,
     pub lap: u32,
@@ -286,8 +292,8 @@ fn ordinal(place: u32) -> &'static str {
     }
 }
 
-/// The records as lines: the best laps, then the best races, five each;
-/// the player's marked, new ones flagged.
+/// The records as lines: the best laps, then the best races and the best
+/// time trials, five each; the player's marked, new ones flagged.
 pub fn records_text(records: &Records) -> String {
     let rows = |list: &[Best]| {
         list.iter()
@@ -305,6 +311,10 @@ pub fn records_text(records: &Records) -> String {
     if !records.races.is_empty() {
         out.push(format!("Best races ({} laps)", records.race_laps));
         out.extend(rows(&records.races));
+    }
+    if !records.trials.is_empty() {
+        out.push(format!("Best time trials ({} laps)", records.race_laps));
+        out.extend(rows(&records.trials));
     }
     out.join("\n")
 }
@@ -328,6 +338,7 @@ fn write(
             Label::Place => me.map_or(String::new(), |me| me.position.to_string()),
             Label::Suffix => me.map_or(String::new(), |me| ordinal(me.position).to_owned()),
             Label::Lap => match me {
+                Some(me) if view.trial => format!("TRIAL {}/{}", me.lap.clamp(1, view.laps.max(1)), view.laps),
                 Some(me) => format!("LAP {}/{}", me.lap.clamp(1, view.laps.max(1)), view.laps),
                 None if view.stage == Lights::Off => String::new(),
                 None => "WATCHING".to_owned(),
@@ -340,14 +351,22 @@ fn write(
             },
             Label::Board => {
                 let rows = view.karts.iter().enumerate().map(|(i, kart)| {
+                    // A ghost shows the time it drives to: its driver's best trial.
+                    let best = view.records.trials.iter().find(|best| kart.ghost && best.name == kart.name);
                     let status = if kart.finish_ms > 0 {
                         clock(kart.finish_ms as i64)
+                    } else if let Some(best) = best {
+                        clock(i64::from(best.ms))
                     } else {
                         format!("lap {}", kart.lap.max(1))
                     };
                     let mark = if view.me == Some(i) { ">" } else { " " };
-                    let kind = if kart.bot { "bot" } else { "   " };
-                    format!("{mark}{:>2} {:<10.10} {kind} {status}", kart.position, kart.name)
+                    let kind = match (kart.ghost, kart.bot) {
+                        (true, _) => "ghost",
+                        (false, true) => "bot",
+                        (false, false) => "   ",
+                    };
+                    format!("{mark}{:>2} {:<10.10} {kind:<5} {status}", kart.position, kart.name)
                 });
                 rows.collect::<Vec<_>>().join("\n")
             }
@@ -417,7 +436,8 @@ fn write(
                 _ => String::new(),
             },
             Label::Records if shown => {
-                if view.records.laps.iter().chain(&view.records.races).any(|best| best.fresh && best.mine) {
+                let records = &view.records;
+                if records.laps.iter().chain(&records.races).chain(&records.trials).any(|b| b.fresh && b.mine) {
                     tint = Some(Color::srgb(1.0, 0.85, 0.3));
                 }
                 let records = (!view.records.laps.is_empty()).then(|| records_text(&view.records));

@@ -297,7 +297,8 @@ fn voice(
     mut synths: ResMut<Assets<Synth>>,
     karts: Query<(Entity, &Pose), Without<Heard>>,
 ) {
-    for (entity, pose) in &karts {
+    // A ghost makes no sound (D-062).
+    for (entity, pose) in karts.iter().filter(|(_, pose)| !pose.ghost) {
         let shared = Arc::new(Mutex::new(Shared::default()));
         let synth = synths.add(Synth { shared: shared.clone(), seed: pose.color + 1, recordings: tapes.voice.clone() });
         commands.entity(entity).insert((

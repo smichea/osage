@@ -34,6 +34,9 @@ pub enum Event {
     Lap,
     /// A whole race of this many laps, from the lights to the flag.
     Race { laps: u32 },
+    /// A time trial of this many laps (D-062): alone on the track, from the
+    /// lights to the flag.
+    Trial { laps: u32 },
 }
 
 impl Event {
@@ -41,6 +44,7 @@ impl Event {
         match self {
             Event::Lap => "lap".to_owned(),
             Event::Race { laps } => format!("race:{laps}"),
+            Event::Trial { laps } => format!("trial:{laps}"),
         }
     }
 
@@ -48,6 +52,7 @@ impl Event {
         match label.split_once(':') {
             None if label == "lap" => Some(Event::Lap),
             Some(("race", laps)) => laps.parse().ok().filter(|l| *l > 0).map(|laps| Event::Race { laps }),
+            Some(("trial", laps)) => laps.parse().ok().filter(|l| *l > 0).map(|laps| Event::Trial { laps }),
             _ => None,
         }
     }
@@ -236,6 +241,7 @@ mod tests {
             Record { kart: "Sprint".into(), ..time("bob\tthe\nfast", 95_000) },
         );
         records.offer("harbour", Event::Race { laps: 5 }, time("Zoë ✨", 180_000));
+        records.offer("harbour", Event::Trial { laps: 3 }, time("Zoë ✨", 91_000));
         let text = records.to_text();
         assert!(text.starts_with("kart-records/1\n"));
         assert_eq!(Records::from_text(&text), records);

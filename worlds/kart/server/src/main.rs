@@ -2,12 +2,14 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 //! `kart-server`: the kart world. `[--records FILE]` keeps the world's
-//! records in that file across restarts (D-053); `[--track ID|FILE]` races
+//! records in that file across restarts (D-053), `[--ghosts DIR]` its time
+//! trials' ghosts in that folder (D-062); `[--track ID|FILE]` races
 //! on a built-in track (paddock, coast, forest, harbour) or one read from a
 //! track file (D-056), race after race; without it the world races the
-//! Grand Tour cup (D-057), and the host may choose another event in the
-//! game; `[--music DIR [--music-listen ADDR]]` shares the host's music
-//! files in DIR with the players on the network (osage-music's share, on
+//! Grand Tour cup (D-057) — or `[--event cup:ID|track:ID|trial:ID]`, a
+//! time trial say (D-062) — and the host may choose another event in the
+//! game; `[--laps N]` laps a race (3); `[--music DIR [--music-listen
+//! ADDR]]` shares the host's music files in DIR with the players on the network (osage-music's share, on
 //! 0.0.0.0:7880 unless told otherwise), each hearing the same piece at the
 //! same point; the players talk to one another through a voice relay
 //! (osage-voice, UDP 0.0.0.0:7881; `--voice-listen ADDR` to move it,
@@ -27,6 +29,16 @@ fn main() -> anyhow::Result<()> {
     while let Some(arg) = args.next() {
         if arg == "--records" {
             world.records = Some(args.next().context("--records needs a file")?.into());
+        } else if arg == "--event" {
+            let event = args.next().context("--event needs an event: cup:ID, track:ID or trial:ID")?;
+            let known = osage_world_kart::events();
+            anyhow::ensure!(known.contains(&event), "no event {event}: there are {}", known.join(", "));
+            world.event = Some(event);
+        } else if arg == "--laps" {
+            let laps = args.next().and_then(|laps| laps.parse().ok()).filter(|laps| (1..=20).contains(laps));
+            world.laps = laps.context("--laps needs a number of laps, 1 to 20")?;
+        } else if arg == "--ghosts" {
+            world.ghosts = Some(args.next().context("--ghosts needs a folder")?.into());
         } else if arg == "--track" {
             let wanted = args.next().context("--track needs a track id or file")?;
             world.track = match osage_kart_tracks::by_id(&wanted) {

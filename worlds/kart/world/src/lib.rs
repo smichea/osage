@@ -14,12 +14,14 @@ mod paddock;
 mod race;
 mod records;
 mod roster;
+mod trial;
 
 use bevy::prelude::*;
 use osage_kart_physics::Kart;
 use osage_world_module_api::{Discrete, EntityIds, RegionSet, Schema, TypeSpec, Volatile, WorldModule};
 
 pub use circuit::Circuit;
+pub use cup::events;
 pub use driving::autopilot;
 
 /// Generated from `proto/kart/v1/kart.proto`.
@@ -91,10 +93,13 @@ pub struct KartWorld {
     pub host_starts: bool,
     /// The file the world keeps its records in (D-053); none, in memory.
     pub records: Option<std::path::PathBuf>,
+    /// The folder the world keeps its time trials' ghosts in (D-062);
+    /// none, in memory.
+    pub ghosts: Option<std::path::PathBuf>,
     /// The track it races on (D-056), when it races no cup.
     pub track: osage_kart_tracks::TrackDef,
-    /// What it races (D-057): a cup (`cup:ID`) or a track (`track:ID`);
-    /// none, `track` race after race.
+    /// What it races (D-057): a cup (`cup:ID`), a track (`track:ID`) or a
+    /// time trial on one (`trial:ID`, D-062); none, `track` race after race.
     pub event: Option<String>,
     /// The port where the host shares their music, announced to the
     /// players; none when nothing is shared.
@@ -119,6 +124,7 @@ impl Default for KartWorld {
             laps: 3,
             host_starts: true,
             records: None,
+            ghosts: None,
             track: paddock(),
             event: None,
             music_port: None,
@@ -135,6 +141,7 @@ impl KartWorld {
             laps,
             host_starts: false,
             records: None,
+            ghosts: None,
             track: paddock(),
             event: None,
             music_port: None,
@@ -165,6 +172,7 @@ impl Plugin for KartWorld {
             .init_resource::<records::Times>()
             .init_resource::<roster::Choices>()
             .insert_resource(records::Book::open(self.records.clone()))
+            .insert_resource(trial::Ghosts(osage_kart_ghost::Shelf::open(self.ghosts.clone())))
             .add_systems(Startup, setup)
             .add_systems(
                 Update,
@@ -176,6 +184,7 @@ impl Plugin for KartWorld {
                     driving::collide,
                     paddock::items,
                     race::progress,
+                    trial::keep,
                     records::keep,
                     race::publish,
                 )
@@ -208,7 +217,13 @@ impl WorldModule for KartWorld {
                  Your kart waits on the grid until you send one; resend it to change how you drive.",
             ),
             spec(types::STATE, "KartState", true, "A kart's physics state, every step."),
-            spec(types::RACER, "Racer", false, "Who drives a kart: name, lap, position, finish time."),
+            spec(
+                types::RACER,
+                "Racer",
+                false,
+                "Who drives a kart: name, lap, position, finish time; ghost: a run kept from an earlier time \
+                 trial, driven again (name is who drove it).",
+            ),
             spec(
                 types::TRACK,
                 "Track",
@@ -221,7 +236,9 @@ impl WorldModule for KartWorld {
                 "Race",
                 false,
                 "The race: phase (waiting, ready, countdown, racing, finished), when it ends, laps, order, host; \
-                 the cup being raced with its standings, the event chosen next, votes and the events there are. \
+                 the cup being raced with its standings, the event chosen next, votes and the events there are \
+                 (cup:ID, track:ID, or trial:ID — a time trial: alone against the clock and the ghosts of the \
+                 best runs, see Racer.ghost). \
                  The host starts each race with Step.call and chooses the event with Choice.event; a driver \
                  alone can end a race.",
             ),
@@ -250,8 +267,8 @@ impl WorldModule for KartWorld {
                 types::RECORDS,
                 "Records",
                 false,
-                "The world's records on this track: best laps and best races, one per driver name, fastest \
-                 first, with when they were set; fresh ones were set in the latest race.",
+                "The world's records on this track: best laps, best races and best time trials, one per \
+                 driver name, fastest first, with when they were set; fresh ones were set in the latest race.",
             ),
         ]
     }
