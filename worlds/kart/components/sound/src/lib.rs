@@ -17,7 +17,10 @@
 //! when the content is there, this otherwise), and for what recordings
 //! cannot follow, the revs. Deterministic: a seeded noise, no clock.
 
-use std::f32::consts::{PI, TAU};
+use std::{
+    f32::consts::{PI, TAU},
+    sync::Arc,
+};
 
 /// Samples a second.
 pub const RATE: u32 = 48_000;
@@ -69,21 +72,36 @@ impl Noise {
     }
 }
 
+/// Samples between two updates of what changes slowly: eased controls,
+/// filter coefficients, gains. Computing them every sample cost most of a
+/// voice's time, in the audio callback.
+const BLOCK: u32 = 32;
+
+/// A soft limiter, cheaper than `tanh` and as smooth: odd, 1 at 3 and beyond.
+fn soft(x: f32) -> f32 {
+    let x = x.clamp(-3.0, 3.0);
+    x * (27.0 + x * x) / (27.0 + 9.0 * x * x)
+}
+
 /// A resonant band-pass: a state-variable filter (topology preserving).
 #[derive(Clone, Debug, Default)]
 struct Band {
     ic1: f32,
     ic2: f32,
+    g: f32,
+    a1: f32,
 }
 
 impl Band {
-    fn pass(&mut self, x: f32, frequency: f32, q: f32) -> f32 {
-        let g = (PI * frequency.clamp(20.0, RATE as f32 * 0.45) * DT).tan();
-        let k = 1.0 / q;
-        let a1 = 1.0 / (1.0 + g * (g + k));
+    fn tune(&mut self, frequency: f32, q: f32) {
+        self.g = (PI * frequency.clamp(20.0, RATE as f32 * 0.45) * DT).tan();
+        self.a1 = 1.0 / (1.0 + self.g * (self.g + 1.0 / q));
+    }
+
+    fn pass(&mut self, x: f32) -> f32 {
         let v3 = x - self.ic2;
-        let v1 = a1 * self.ic1 + g * a1 * v3;
-        let v2 = self.ic2 + g * v1;
+        let v1 = self.a1 * (self.ic1 + self.g * v3);
+        let v2 = self.ic2 + self.g * v1;
         self.ic1 = 2.0 * v1 - self.ic1;
         self.ic2 = 2.0 * v2 - self.ic2;
         v1
@@ -92,15 +110,81 @@ impl Band {
 
 /// A one-pole low-pass.
 #[derive(Clone, Debug, Default)]
-struct Low(f32);
+struct Low {
+    y: f32,
+    a: f32,
+}
 
 impl Low {
-    fn pass(&mut self, x: f32, frequency: f32) -> f32 {
-        let a = 1.0 - (-TAU * frequency * DT).exp();
-        self.0 += (x - self.0) * a;
-        self.0
+    fn tune(&mut self, frequency: f32) {
+        self.a = 1.0 - (-TAU * frequency * DT).exp();
+    }
+
+    fn pass(&mut self, x: f32) -> f32 {
+        self.y += (x - self.y) * self.a;
+        self.y
     }
 }
+
+/// Recorded sounds a voice plays instead of synthesising them, mono at
+/// [`RATE`], loops seamless. Whatever is missing is synthesised.
+#[derive(Clone, Default)]
+pub struct Recordings {
+    /// Engine loops and the engine speed each was recorded at, turns a
+    /// minute, slowest first: the voice crossfades between the two nearest
+    /// and plays them faster or slower to follow the revs.
+    pub engine: Vec<(Arc<[f32]>, f32)>,
+    /// Tyres sliding, a loop.
+    pub squeal: Option<Arc<[f32]>>,
+    /// Wheels on grass and gravel, a loop.
+    pub ground: Option<Arc<[f32]>>,
+    /// Knocks, each played once; a knock picks one.
+    pub knocks: Vec<Arc<[f32]>>,
+}
+
+impl std::fmt::Debug for Recordings {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let rpm: Vec<f32> = self.engine.iter().map(|(_, rpm)| *rpm).collect();
+        f.debug_struct("Recordings")
+            .field("engine_rpm", &rpm)
+            .field("squeal", &self.squeal.is_some())
+            .field("ground", &self.ground.is_some())
+            .field("knocks", &self.knocks.len())
+            .finish()
+    }
+}
+
+/// A loop played at a varying speed.
+#[derive(Clone, Debug, Default)]
+struct Tape {
+    at: f32,
+}
+
+impl Tape {
+    /// The next sample of `clip` at `rate` times its speed, interpolated.
+    fn play(&mut self, clip: &[f32], rate: f32) -> f32 {
+        let n = clip.len();
+        if n < 2 {
+            return 0.0;
+        }
+        let i = self.at as usize;
+        let f = self.at - i as f32;
+        let s = clip[i % n] * (1.0 - f) + clip[(i + 1) % n] * f;
+        self.at += rate;
+        if self.at >= n as f32 {
+            self.at -= n as f32;
+        }
+        s
+    }
+}
+
+/// Loudness of the recorded layers, to match the synthesised ones (measured):
+/// the clips are made at one loudness, loops at an RMS of 0.1, knocks at a
+/// peak of 0.8 (tools/make-sounds.py).
+const TAPE_ENGINE: f32 = 3.0;
+const TAPE_SQUEAL: f32 = 5.0;
+const TAPE_GROUND: f32 = 0.7;
+const TAPE_KNOCK: f32 = 0.9;
 
 /// The engine.
 #[derive(Clone, Debug)]
@@ -109,32 +193,73 @@ struct Engine {
     jitter: f32,
     /// What is left of the last firing.
     fire: f32,
+    /// How much of a firing is left after a sample.
+    decay: f32,
     noise: Noise,
     pipe: Band,
     bark: Band,
     body: Low,
+    // Set every block.
+    step: f32,
+    load: f32,
+    misfire: f32,
+    /// Recorded: the loops' tapes, and the two playing — which, how loud,
+    /// how fast.
+    tapes: Vec<Tape>,
+    playing: [(usize, f32, f32); 2],
 }
 
 impl Engine {
-    fn sample(&mut self, d: &Drive) -> f32 {
+    fn control(&mut self, d: &Drive, recorded: &[(Arc<[f32]>, f32)]) {
         let rpm = IDLE_RPM + (MAX_RPM - IDLE_RPM) * d.revs;
-        self.phase += rpm / 60.0 * DT * (1.0 + self.jitter);
+        self.step = rpm / 60.0 * DT;
+        self.load = 0.35 + 0.65 * d.throttle;
+        self.misfire = (1.0 - d.throttle) * 0.3 * (0.3 + d.revs);
+        self.pipe.tune(380.0 + 260.0 * d.revs, 3.5);
+        self.bark.tune(1_400.0 + 900.0 * d.revs, 2.5);
+        if recorded.is_empty() {
+            return;
+        }
+        // The two loops either side of the revs, crossfaded at equal power
+        // on a scale of ratios.
+        let i = recorded.iter().rposition(|(_, at)| *at <= rpm).unwrap_or(0);
+        let j = (i + 1).min(recorded.len() - 1);
+        let t = if i == j || recorded[i].1 > rpm {
+            0.0
+        } else {
+            ((rpm / recorded[i].1).ln() / (recorded[j].1 / recorded[i].1).ln()).clamp(0.0, 1.0)
+        };
+        let rate = |k: usize| (rpm / recorded[k].1).clamp(0.5, 2.5);
+        let (a, b) = ((t * PI / 2.0).cos(), (t * PI / 2.0).sin());
+        self.playing = [(i, a, rate(i)), (j, if i == j { 0.0 } else { b }, rate(j))];
+    }
+
+    fn sample(&mut self, recorded: &[(Arc<[f32]>, f32)]) -> f32 {
+        if !recorded.is_empty() {
+            let mut s = 0.0;
+            for (k, gain, rate) in self.playing {
+                // Keep both tapes turning, so that a loop fades in where it should be.
+                let x = self.tapes[k].play(&recorded[k].0, rate);
+                s += x * gain;
+            }
+            return s * TAPE_ENGINE * (0.4 + 0.6 * self.load);
+        }
+        self.phase += self.step * (1.0 + self.jitter);
         if self.phase >= 1.0 {
             self.phase -= 1.0;
             self.jitter = self.noise.next() * 0.025;
             // Off the throttle a two-stroke skips firings.
-            let misfire = self.noise.next() * 0.5 + 0.5 < (1.0 - d.throttle) * 0.3 * (0.3 + d.revs);
-            if !misfire {
+            if self.noise.next() * 0.5 + 0.5 >= self.misfire {
                 self.fire = 1.0;
             }
         }
-        self.fire *= (-DT * 700.0).exp();
-        let load = 0.35 + 0.65 * d.throttle;
+        self.fire *= self.decay;
+        let load = self.load;
         let burst = self.fire * (0.7 + 0.3 * load) + self.noise.next() * self.fire * (0.2 + 0.5 * load);
-        let pipe = self.pipe.pass(burst, 380.0 + 260.0 * d.revs, 3.5);
-        let bark = self.bark.pass(burst, 1_400.0 + 900.0 * d.revs, 2.5) * (0.25 + 0.5 * load);
-        let body = self.body.pass(burst, 900.0);
-        ((pipe * 1.6 + bark + body * 1.2) * (1.2 + 1.8 * load)).tanh() * (0.32 + 0.2 * load)
+        let pipe = self.pipe.pass(burst);
+        let bark = self.bark.pass(burst) * (0.25 + 0.5 * load);
+        let body = self.body.pass(burst);
+        soft((pipe * 1.6 + bark + body * 1.2) * (1.2 + 1.8 * load)) * (0.32 + 0.2 * load)
     }
 }
 
@@ -143,6 +268,9 @@ impl Engine {
 struct Knock {
     age: f32,
     strength: f32,
+    /// Recorded: which clip, and how far into it.
+    clip: usize,
+    at: usize,
 }
 
 /// One kart's sound.
@@ -160,21 +288,60 @@ pub struct Voice {
     crack: Band,
     kerb: f32,
     knocks: Vec<Knock>,
+    count: u32,
+    /// Easing over a block.
+    ease: f32,
+    // Set every block.
+    gains: Gains,
+    recordings: Arc<Recordings>,
+    squeal_tape: Tape,
+    ground_tape: Tape,
+    knocked: u32,
+}
+
+/// Gains and rates, set every block.
+#[derive(Clone, Debug, Default)]
+struct Gains {
+    squeal: f32,
+    squeal_rate: f32,
+    drum: f32,
+    grass: f32,
+    ground_rate: f32,
+    wind: f32,
+    kerb_step: f32,
 }
 
 impl Voice {
     /// A voice; `seed` keeps karts from sounding alike.
     pub fn new(seed: u32) -> Self {
+        Self::with(seed, Arc::default())
+    }
+
+    /// A voice that plays `recordings` where it has them.
+    pub fn with(seed: u32, recordings: Arc<Recordings>) -> Self {
         let seed = seed.wrapping_mul(0x9e37_79b9) | 1;
+        let mut body = Low::default();
+        body.tune(900.0);
+        let mut crack = Band::default();
+        crack.tune(1_100.0, 2.0);
+        // Karts start their loops at different places.
+        let start = |clip: &[f32], salt: u32| Tape { at: ((seed ^ salt) % clip.len().max(1) as u32) as f32 };
+        let tapes = recordings.engine.iter().enumerate().map(|(k, (clip, _))| start(clip, k as u32)).collect();
         Self {
             engine: Engine {
                 phase: 0.0,
                 jitter: 0.0,
                 fire: 0.0,
+                decay: (-DT * 700.0).exp(),
                 noise: Noise(seed),
                 pipe: Band::default(),
                 bark: Band::default(),
-                body: Low::default(),
+                body,
+                step: 0.0,
+                load: 0.0,
+                misfire: 0.0,
+                tapes,
+                playing: [(0, 0.0, 1.0); 2],
             },
             wanted: Drive::default(),
             now: Drive::default(),
@@ -183,9 +350,16 @@ impl Voice {
             drum: Low::default(),
             grass: Low::default(),
             wind: Low::default(),
-            crack: Band::default(),
+            crack,
             kerb: 0.0,
             knocks: Vec::new(),
+            count: 0,
+            ease: 1.0 - (-(BLOCK as f32) * DT / 0.015).exp(),
+            gains: Gains::default(),
+            squeal_tape: recordings.squeal.as_deref().map_or(Tape::default(), |c| start(c, 0x51)),
+            ground_tape: recordings.ground.as_deref().map_or(Tape::default(), |c| start(c, 0x9a)),
+            recordings,
+            knocked: seed,
         }
     }
 
@@ -197,55 +371,93 @@ impl Voice {
     /// A knock, `strength` 0…1.
     pub fn knock(&mut self, strength: f32) {
         if self.knocks.len() < 8 {
-            self.knocks.push(Knock { age: 0.0, strength: strength.clamp(0.0, 1.0) });
+            self.knocked = self.knocked.wrapping_mul(0x2c1b_3c6d).wrapping_add(0x297a_2d39);
+            let clip = (self.knocked >> 16) as usize % self.recordings.knocks.len().max(1);
+            self.knocks.push(Knock { age: 0.0, strength: strength.clamp(0.0, 1.0), clip, at: 0 });
         }
     }
 
-    /// The next sample, about −1…1.
-    pub fn sample(&mut self) -> f32 {
-        // Ease towards what is wanted over about 15 ms.
-        let a = 1.0 - (-DT / 0.015f32).exp();
-        let (w, n) = (self.wanted, &mut self.now);
+    /// Eases towards what is wanted (over about 15 ms) and sets what
+    /// changes slowly, once a block.
+    fn control(&mut self) {
+        let (w, n, a) = (self.wanted, &mut self.now, self.ease);
         n.revs += (w.revs - n.revs) * a;
         n.throttle += (w.throttle - n.throttle) * a;
         n.slip += (w.slip - n.slip) * a;
         n.ground += (w.ground - n.ground) * a;
         n.speed += (w.speed - n.speed) * a;
         let d = self.now;
-
-        let engine = self.engine.sample(&d);
-
+        self.engine.control(&d, &self.recordings.engine);
         let moving = (d.speed / 8.0).min(1.0);
-        let squeal = self.squeal.pass(self.noise.next(), 850.0 + 700.0 * d.slip + 10.0 * d.speed, 14.0)
-            * d.slip.powf(1.5)
-            * moving
-            * 0.55;
-
-        // Kerbs drum as their blocks pass; grass rumbles.
-        self.kerb = (self.kerb + d.speed / KERB_BLOCK * DT).fract();
+        self.squeal.tune(850.0 + 700.0 * d.slip + 10.0 * d.speed, 14.0);
         let on_kerb = (1.0 - (d.ground - 0.6).abs() / 0.4).clamp(0.0, 1.0);
         let on_grass = ((d.ground - 0.6) / 0.4).clamp(0.0, 1.0);
-        let block = if self.kerb < 0.5 { 1.0 } else { -1.0 };
-        let drum = self.drum.pass(block, 140.0) * on_kerb * moving * 0.35;
-        let grass = self.grass.pass(self.noise.next(), 180.0) * on_grass * moving * 0.9;
+        self.drum.tune(140.0);
+        self.grass.tune(180.0);
+        self.wind.tune(300.0 + 25.0 * d.speed);
+        self.gains = Gains {
+            squeal: d.slip.powf(1.5) * moving * 0.55,
+            squeal_rate: 0.9 + 0.25 * d.slip,
+            drum: on_kerb * moving * 0.35,
+            grass: on_grass * moving * 0.9,
+            ground_rate: 0.6 + d.speed / 30.0,
+            wind: (d.speed / 25.0).powi(2) * 0.5,
+            kerb_step: d.speed / KERB_BLOCK * DT,
+        };
+    }
 
-        let wind = self.wind.pass(self.noise.next(), 300.0 + 25.0 * d.speed) * (d.speed / 25.0).powi(2) * 0.5;
+    /// The next sample, about −1…1.
+    pub fn sample(&mut self) -> f32 {
+        if self.count.is_multiple_of(BLOCK) {
+            self.control();
+        }
+        self.count = self.count.wrapping_add(1);
+        let g = &self.gains;
+        let tapes = &*self.recordings;
+
+        let engine = self.engine.sample(&tapes.engine);
+
+        let squeal = match &tapes.squeal {
+            Some(clip) if g.squeal > 0.0 => self.squeal_tape.play(clip, g.squeal_rate) * g.squeal * TAPE_SQUEAL,
+            Some(_) => 0.0,
+            None => self.squeal.pass(self.noise.next()) * g.squeal,
+        };
+
+        // Kerbs drum as their blocks pass; grass rumbles.
+        self.kerb = (self.kerb + g.kerb_step).fract();
+        let block = if self.kerb < 0.5 { 1.0 } else { -1.0 };
+        let drum = self.drum.pass(block) * g.drum;
+        let grass = match &tapes.ground {
+            Some(clip) if g.grass > 0.0 => self.ground_tape.play(clip, g.ground_rate) * g.grass * TAPE_GROUND,
+            Some(_) => 0.0,
+            None => self.grass.pass(self.noise.next()) * g.grass,
+        };
+
+        let wind = self.wind.pass(self.noise.next()) * g.wind;
 
         let mut knocks = 0.0;
         let noise = self.noise.next();
         let mut crack = 0.0;
+        let mut taped = 0.0;
         for k in &mut self.knocks {
             let t = k.age;
             knocks += k.strength
                 * ((TAU * 70.0 * t).sin() * (-t * 22.0).exp() + (TAU * 330.0 * t).sin() * (-t * 30.0).exp() * 0.5);
-            crack += k.strength * noise * (-t * 45.0).exp();
+            match tapes.knocks.get(k.clip) {
+                Some(clip) => {
+                    taped += clip.get(k.at).copied().unwrap_or(0.0) * k.strength;
+                    k.at += 1;
+                }
+                None => crack += k.strength * noise * (-t * 45.0).exp(),
+            }
             k.age += DT;
         }
-        self.knocks.retain(|k| k.age < 0.4);
-        let crack = self.crack.pass(crack, 1_100.0, 2.0) * 1.5;
+        let long = tapes.knocks.iter().map(|c| c.len()).max().unwrap_or(0);
+        self.knocks.retain(|k| k.age < 0.4 || k.at < long);
+        let crack = self.crack.pass(crack) * 1.5 + taped * TAPE_KNOCK;
 
         // A soft limiter: loud moments round off instead of clipping.
-        (engine + squeal + drum + grass + wind + knocks * 0.7 + crack).tanh()
+        soft(engine + squeal + drum + grass + wind + knocks * 0.7 + crack)
     }
 
     /// Fills `out` with the next samples.
@@ -347,5 +559,63 @@ mod tests {
     fn the_same_voice_twice_is_the_same() {
         let drive = Drive { revs: 0.5, throttle: 0.7, slip: 0.3, ground: 0.6, speed: 12.0 };
         assert_eq!(run(&mut Voice::new(9), drive, 0.2), run(&mut Voice::new(9), drive, 0.2));
+    }
+
+    /// A loop of a sine at `hz`.
+    fn tone(hz: f32) -> Arc<[f32]> {
+        // A whole number of periods: seamless.
+        let n = (RATE as f32 / hz * 20.0).round() as usize;
+        (0..n).map(|i| (TAU * 20.0 * i as f32 / n as f32).sin() * 0.14).collect()
+    }
+
+    #[test]
+    fn a_recorded_engine_follows_the_revs() {
+        // One loop at 100 Hz, recorded at 6 000 turns a minute: at 9 000 it
+        // plays half as fast again.
+        let tapes = Arc::new(Recordings { engine: vec![(tone(100.0), 6_000.0)], ..Recordings::default() });
+        let mut voice = Voice::with(1, tapes);
+        let revs = (9_000.0 - IDLE_RPM) / (MAX_RPM - IDLE_RPM);
+        let s = run(&mut voice, Drive { revs, throttle: 1.0, ..Drive::default() }, 0.5);
+        let found = period(&s[RATE as usize / 10..], 200, 450);
+        assert!((found as f32 - 320.0).abs() < 4.0, "{found}");
+    }
+
+    #[test]
+    fn recorded_engine_loops_crossfade_between_their_speeds() {
+        let tapes = Arc::new(Recordings {
+            engine: vec![(tone(100.0), 4_000.0), (tone(100.0), 8_000.0)],
+            ..Recordings::default()
+        });
+        let level = |rpm: f32| {
+            let mut voice = Voice::with(2, tapes.clone());
+            let revs = (rpm - IDLE_RPM) / (MAX_RPM - IDLE_RPM);
+            rms(&run(&mut voice, Drive { revs, throttle: 1.0, ..Drive::default() }, 0.3)[RATE as usize / 10..])
+        };
+        // At equal power the level holds through the crossfade, within the
+        // beating of the two loops.
+        let (low, middle, high) = (level(4_000.0), level(5_657.0), level(8_000.0));
+        assert!(
+            low > 0.1 && (middle / low - 1.0).abs() < 0.5 && (high / low - 1.0).abs() < 0.1,
+            "{low} {middle} {high}"
+        );
+    }
+
+    #[test]
+    fn recorded_tyres_and_knocks_play_only_when_they_should() {
+        let tapes = Arc::new(Recordings {
+            squeal: Some(tone(1_000.0)),
+            knocks: vec![(0..4_800).map(|i| if i < 2_400 { 0.5 } else { 0.0 }).collect()],
+            ..Recordings::default()
+        });
+        let still = Drive { speed: 15.0, ..Drive::default() };
+        let mut voice = Voice::with(3, tapes.clone());
+        let rolling = rms(&run(&mut voice, still, 0.3));
+        let sliding = rms(&run(&mut voice, Drive { slip: 0.8, ..still }, 0.3));
+        assert!(sliding > rolling + 0.1, "{rolling} {sliding}");
+        let mut voice = Voice::with(3, tapes);
+        let before = rms(&run(&mut voice, Drive::default(), 0.05));
+        voice.knock(1.0);
+        let during = rms(&run(&mut voice, Drive::default(), 0.04));
+        assert!(during > before + 0.2, "{before} {during}");
     }
 }

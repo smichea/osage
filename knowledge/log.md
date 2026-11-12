@@ -1,6 +1,7 @@
 # Knowledge Update Log
 
 ## 2026-11-12
+* **Update**: [osage-kart-sound](/modules/kart-sound.md) plays CC0 recordings when the content has them (engine loops following the revs, squeal, gravel, knocks; the crowd in [osage-kart-native](/modules/kart-native.md)'s grandstand) and synthesises the rest; it computes its slow controls once every 32 samples, which stopped most of the audio callback's underruns.
 * **Creation**: Added the module [osage-kart-items](/modules/kart-items.md): paddock objects — crates, a nitro, a tyre to throw, a cone and oil — in the world's races (D-046); [osage-kart-native](/modules/kart-native.md) draws them and shows the item in hand.
 * **Creation**: Added the module [osage-kart-sound](/modules/kart-sound.md): the karts of [osage-kart-native](/modules/kart-native.md) are heard, their sound synthesised from their state.
 * **Creation**: Added the module [osage-kart-racecraft](/modules/kart-racecraft.md): the world's bots race with temperaments; the [timedemo bench](/algorithms/timedemo-bench.md) races them too and becomes `kart-lap/3` ([render bench](/oracles/render-bench.md)).

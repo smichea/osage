@@ -1,11 +1,14 @@
 // SPDX-FileCopyrightText: The osage contributors
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-//! The karts' sound: each kart a voice synthesised from its state
+//! The karts' sound: each kart a voice made from its state
 //! ([osage-kart-sound](osage_kart_sound)) — the engine following its revs,
 //! tyres squealing as it slides, kerbs and grass under its wheels, wind, a
 //! knock when it is hit — placed where the kart is and heard from the
-//! camera. Not in the bench: it measures pictures.
+//! camera; and the crowd in the grandstand. A voice plays recordings where
+//! the content has them (`freesound/kart/`, made by `tools/make-sounds.py`
+//! from the asset manifest's originals) and synthesises the rest. Not in
+//! the bench: it measures pictures.
 
 use std::{
     num::NonZero,
@@ -18,16 +21,25 @@ use bevy::{
     prelude::*,
 };
 use osage_kart_physics::MAX_SPEED;
-use osage_kart_sound::{Drive, RATE, Voice, revs};
+use osage_kart_sound::{Drive, IDLE_RPM, RATE, Recordings, Voice, revs};
 use osage_render::OsageCamera;
 
 use crate::scene::{Course, Pose, roughness};
+
+/// The engine loops and the engine speed each sounds at, turns a minute:
+/// the idle as it is, the others by the pitch measured in their passage.
+const ENGINE_LOOPS: [(&str, f32); 3] = [("engine-idle", IDLE_RPM), ("engine-mid", 7_000.0), ("engine-high", 9_900.0)];
+/// How loud the crowd is.
+const CROWD: f32 = 0.9;
 
 pub struct SoundPlugin;
 
 impl Plugin for SoundPlugin {
     fn build(&self, app: &mut App) {
-        app.add_audio_source::<Synth>().add_systems(Update, (listen, voice, drive).chain());
+        app.add_audio_source::<Synth>()
+            .add_audio_source::<Clip>()
+            .add_systems(Startup, load)
+            .add_systems(Update, (listen, voice, drive, crowd).chain());
     }
 }
 
@@ -38,19 +50,133 @@ struct Shared {
     knocks: Vec<f32>,
 }
 
+/// The recordings found, shared by every voice.
+#[derive(Resource, Default)]
+struct Tapes {
+    voice: Arc<Recordings>,
+    crowd: Option<Arc<[f32]>>,
+}
+
+/// Decodes the clips there are: mono Ogg Vorbis at the voices' rate.
+fn load(mut commands: Commands) {
+    let Some(dir) = osage_content::root().map(|root| root.join("freesound/kart")) else {
+        commands.init_resource::<Tapes>();
+        return;
+    };
+    let clip = |name: &str| decode(&dir.join(format!("{name}.ogg")));
+    let engine: Vec<_> = ENGINE_LOOPS.iter().filter_map(|(name, rpm)| Some((clip(name)?, *rpm))).collect();
+    let voice = Recordings {
+        // All three or none: one loop stretched over every speed sounds wrong.
+        engine: if engine.len() == ENGINE_LOOPS.len() { engine } else { Vec::new() },
+        squeal: clip("squeal"),
+        ground: clip("gravel"),
+        knocks: (1..=3).filter_map(|i| clip(&format!("knock-{i}"))).collect(),
+    };
+    info!(recordings = ?voice, "kart sound");
+    commands.insert_resource(Tapes { voice: Arc::new(voice), crowd: clip("crowd") });
+}
+
+fn decode(path: &std::path::Path) -> Option<Arc<[f32]>> {
+    let file = std::fs::File::open(path).ok()?;
+    let mut reader = lewton::inside_ogg::OggStreamReader::new(std::io::BufReader::new(file)).ok()?;
+    if reader.ident_hdr.audio_sample_rate != RATE || reader.ident_hdr.audio_channels != 1 {
+        warn!(?path, "not mono at {RATE} Hz: synthesised instead");
+        return None;
+    }
+    let mut samples = Vec::new();
+    while let Ok(Some(packet)) = reader.read_dec_packet_itl() {
+        samples.extend(packet.iter().map(|&s| f32::from(s) / 32_768.0));
+    }
+    (!samples.is_empty()).then(|| samples.into())
+}
+
 /// A kart's voice as an audio source.
 #[derive(Asset, TypePath)]
 pub struct Synth {
     shared: Arc<Mutex<Shared>>,
     seed: u32,
+    recordings: Arc<Recordings>,
 }
 
 impl Decodable for Synth {
     type Decoder = Stream;
 
     fn decoder(&self) -> Stream {
-        Stream { voice: Voice::new(self.seed), shared: self.shared.clone(), count: 0 }
+        Stream { voice: Voice::with(self.seed, self.recordings.clone()), shared: self.shared.clone(), count: 0 }
     }
+}
+
+/// A recording played in a loop, as an audio source.
+#[derive(Asset, TypePath)]
+pub struct Clip {
+    samples: Arc<[f32]>,
+    gain: f32,
+}
+
+impl Decodable for Clip {
+    type Decoder = Looped;
+
+    fn decoder(&self) -> Looped {
+        Looped { samples: self.samples.clone(), gain: self.gain, at: 0 }
+    }
+}
+
+/// The samples of a clip, over and over.
+pub struct Looped {
+    samples: Arc<[f32]>,
+    gain: f32,
+    at: usize,
+}
+
+impl Iterator for Looped {
+    type Item = Sample;
+
+    fn next(&mut self) -> Option<Sample> {
+        let s = *self.samples.get(self.at)?;
+        self.at = (self.at + 1) % self.samples.len();
+        Some(s * self.gain)
+    }
+}
+
+impl Source for Looped {
+    fn current_span_len(&self) -> Option<usize> {
+        None
+    }
+
+    fn channels(&self) -> ChannelCount {
+        NonZero::<u16>::MIN
+    }
+
+    fn sample_rate(&self) -> SampleRate {
+        NonZero::new(RATE).unwrap()
+    }
+
+    fn total_duration(&self) -> Option<Duration> {
+        None
+    }
+}
+
+/// The crowd in the grandstand, once the circuit is known.
+fn crowd(
+    mut commands: Commands,
+    tapes: Res<Tapes>,
+    course: Option<Res<Course>>,
+    mut clips: ResMut<Assets<Clip>>,
+    mut placed: Local<bool>,
+) {
+    let (Some(course), Some(samples), false) = (course, tapes.crowd.clone(), *placed) else { return };
+    *placed = true;
+    // In the middle of the stands, as the landmarks build them: beside the
+    // grid, set back from the road.
+    let circuit = &course.0;
+    let ([x, z], heading) = circuit.track.at(circuit.start - 16.0);
+    let back = -(circuit.track.half_width + circuit.track.verge + 8.0);
+    let at = Transform::from_xyz(x, 0.0, z).with_rotation(Quat::from_rotation_y(heading)) * Vec3::new(back, 3.0, 0.0);
+    commands.spawn((
+        Transform::from_translation(at),
+        AudioPlayer(clips.add(Clip { samples, gain: CROWD })),
+        PlaybackSettings::LOOP.with_spatial(true),
+    ));
 }
 
 /// The samples of a voice, endless.
@@ -113,10 +239,15 @@ fn listen(mut commands: Commands, cameras: Query<Entity, (With<OsageCamera>, Wit
 }
 
 /// Every kart gets its voice.
-fn voice(mut commands: Commands, mut synths: ResMut<Assets<Synth>>, karts: Query<(Entity, &Pose), Without<Heard>>) {
+fn voice(
+    mut commands: Commands,
+    tapes: Res<Tapes>,
+    mut synths: ResMut<Assets<Synth>>,
+    karts: Query<(Entity, &Pose), Without<Heard>>,
+) {
     for (entity, pose) in &karts {
         let shared = Arc::new(Mutex::new(Shared::default()));
-        let synth = synths.add(Synth { shared: shared.clone(), seed: pose.color + 1 });
+        let synth = synths.add(Synth { shared: shared.clone(), seed: pose.color + 1, recordings: tapes.voice.clone() });
         commands.entity(entity).insert((
             Heard { shared, speed: pose.kart.speed, spin: pose.kart.spin, throttle: 0.0 },
             AudioPlayer(synth),

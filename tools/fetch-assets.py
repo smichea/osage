@@ -8,8 +8,9 @@
     python3 tools/fetch-assets.py --check    # check only, download nothing
 
 Files with a `url` are downloaded; files marked `manual` are downloaded by a
-person, as their publisher asks, and only checked here. Every file present is
-checked against its `sha256`. Standard library only (Python 3.11 or later).
+person, as their publisher asks, and only checked here; files with `made_by`
+are derived from others by that tool. Every other file present is checked
+against its `sha256`. Standard library only (Python 3.11 or later).
 """
 
 import hashlib
@@ -37,6 +38,11 @@ def main() -> int:
     missing, wrong = [], []
     for asset in manifest.get("asset", []):
         path = ROOT / asset["path"]
+        if "made_by" in asset:
+            # Derived here from other assets: present or not, nothing to check.
+            if not path.exists():
+                missing.append(f"{asset['path']}: run {asset['made_by']}")
+            continue
         if not path.exists():
             if "url" not in asset or check_only:
                 how = asset.get("manual", "run tools/fetch-assets.py")

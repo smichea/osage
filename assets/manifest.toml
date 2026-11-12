@@ -8,7 +8,8 @@
 #
 # downloads those with a `url` and checks every file present against its
 # `sha256`; those marked `manual` are downloaded by a person, as their
-# publisher asks. The game runs without any of them, in procedural form.
+# publisher asks; those with `made_by` are derived from others by that tool.
+# The game runs without any of them, in procedural form.
 #
 # Only content under a free licence with a known author and source enters
 # here (CC0 preferred). Nothing taken from commercial games (CONTRIBUTING,
@@ -1021,3 +1022,142 @@ licence = "CC0-1.0"
 author = "Rob Tuytel, Rico Cilliers (Poly Haven)"
 source = "https://polyhaven.com/a/fir_sapling_medium"
 used_by = "worlds/kart/native: firs (R7); model data"
+
+# Freesound — https://freesound.org, CC0 1.0 (checked on each sound's page on
+# 2026-11-12). Downloading needs a Freesound account: a person logs in and
+# downloads the originals; tools/make-sounds.py derives the game's clips.
+
+[[asset]]
+path = "assets/freesound/originals/175964__kristian321__motocross-bike-starting-and-ticking-over.wav"
+manual = "log in to freesound.org, download the original from https://freesound.org/people/kristian321/sounds/175964/, put it here"
+sha256 = "f22229a829c34d82a78c77aff16e520d2d042ea63743902c47ae805cf8a5e874"
+licence = "CC0-1.0"
+author = "kristian321 (Freesound)"
+source = "https://freesound.org/people/kristian321/sounds/175964/"
+used_by = "worlds/kart/native: engine idle loop (tools/make-sounds.py)"
+
+[[asset]]
+path = "assets/freesound/originals/675214__craigsmith__s22-11-2-stroke-dirt-bike-small-motorcycle.wav"
+manual = "log in to freesound.org, download the original from https://freesound.org/people/craigsmith/sounds/675214/, put it here"
+sha256 = "206ed411700091f98e61a8ff8b125e619dbfd00f1597c025d527d0a4d23ed53d"
+licence = "CC0-1.0"
+author = "craigsmith (Freesound)"
+source = "https://freesound.org/people/craigsmith/sounds/675214/"
+used_by = "worlds/kart/native: engine mid and high loops (tools/make-sounds.py)"
+
+[[asset]]
+path = "assets/freesound/originals/76804__audible-edge__ae0090-volvo-740-gle-handbrake-turn-01.flac"
+manual = "log in to freesound.org, download the original from https://freesound.org/people/audible-edge/sounds/76804/, put it here"
+sha256 = "a5f82b8df0bbba04bb330865f333646a1a04c726a4f1691aabfbce4fdee4d884"
+licence = "CC0-1.0"
+author = "audible-edge (Freesound)"
+source = "https://freesound.org/people/audible-edge/sounds/76804/"
+used_by = "worlds/kart/native: tyre squeal loop (tools/make-sounds.py)"
+
+[[asset]]
+path = "assets/freesound/originals/545828__erwil__car-turning-on-gravel-with-a-bit-of-birds-megan-renault.flac"
+manual = "log in to freesound.org, download the original from https://freesound.org/people/erwil/sounds/545828/, put it here"
+sha256 = "53b3096e71942eefaccc979ea59f8a7fa0399161c83d25b3b04bd81d54e4db6f"
+licence = "CC0-1.0"
+author = "erwil (Freesound)"
+source = "https://freesound.org/people/erwil/sounds/545828/"
+used_by = "worlds/kart/native: grass and gravel loop (tools/make-sounds.py)"
+
+[[asset]]
+path = "assets/freesound/originals/151470__bellick__plastic-hit-1.wav"
+manual = "log in to freesound.org, download the original from https://freesound.org/people/bellick/sounds/151470/, put it here"
+sha256 = "801445dbff0770942f98b86628eebd5d6598730138189981f18aa65a3421fa22"
+licence = "CC0-1.0"
+author = "bellick (Freesound)"
+source = "https://freesound.org/people/bellick/sounds/151470/"
+used_by = "worlds/kart/native: knocks (tools/make-sounds.py)"
+
+[[asset]]
+path = "assets/freesound/originals/486215__craigsmith__r07-32-crowd-egging-on-team.wav"
+manual = "log in to freesound.org, download the original from https://freesound.org/people/craigsmith/sounds/486215/, put it here"
+sha256 = "d9ab1c77b14bfabd3f0f274d50eaea138246666a09b679132bf05d161a181b20"
+licence = "CC0-1.0"
+author = "craigsmith (Freesound)"
+source = "https://freesound.org/people/craigsmith/sounds/486215/"
+used_by = "worlds/kart/native: grandstand crowd loop (tools/make-sounds.py)"
+
+[[asset]]
+path = "assets/freesound/kart/engine-idle.ogg"
+made_by = "tools/make-sounds.py"
+made_from = "assets/freesound/originals/175964__kristian321__motocross-bike-starting-and-ticking-over.wav"
+licence = "CC0-1.0"
+author = "kristian321 (Freesound)"
+source = "https://freesound.org/people/kristian321/sounds/175964/"
+used_by = "worlds/kart/native: kart sound, engine-idle"
+
+[[asset]]
+path = "assets/freesound/kart/engine-mid.ogg"
+made_by = "tools/make-sounds.py"
+made_from = "assets/freesound/originals/675214__craigsmith__s22-11-2-stroke-dirt-bike-small-motorcycle.wav"
+licence = "CC0-1.0"
+author = "craigsmith (Freesound)"
+source = "https://freesound.org/people/craigsmith/sounds/675214/"
+used_by = "worlds/kart/native: kart sound, engine-mid"
+
+[[asset]]
+path = "assets/freesound/kart/engine-high.ogg"
+made_by = "tools/make-sounds.py"
+made_from = "assets/freesound/originals/675214__craigsmith__s22-11-2-stroke-dirt-bike-small-motorcycle.wav"
+licence = "CC0-1.0"
+author = "craigsmith (Freesound)"
+source = "https://freesound.org/people/craigsmith/sounds/675214/"
+used_by = "worlds/kart/native: kart sound, engine-high"
+
+[[asset]]
+path = "assets/freesound/kart/squeal.ogg"
+made_by = "tools/make-sounds.py"
+made_from = "assets/freesound/originals/76804__audible-edge__ae0090-volvo-740-gle-handbrake-turn-01.flac"
+licence = "CC0-1.0"
+author = "audible-edge (Freesound)"
+source = "https://freesound.org/people/audible-edge/sounds/76804/"
+used_by = "worlds/kart/native: kart sound, squeal"
+
+[[asset]]
+path = "assets/freesound/kart/gravel.ogg"
+made_by = "tools/make-sounds.py"
+made_from = "assets/freesound/originals/545828__erwil__car-turning-on-gravel-with-a-bit-of-birds-megan-renault.flac"
+licence = "CC0-1.0"
+author = "erwil (Freesound)"
+source = "https://freesound.org/people/erwil/sounds/545828/"
+used_by = "worlds/kart/native: kart sound, gravel"
+
+[[asset]]
+path = "assets/freesound/kart/crowd.ogg"
+made_by = "tools/make-sounds.py"
+made_from = "assets/freesound/originals/486215__craigsmith__r07-32-crowd-egging-on-team.wav"
+licence = "CC0-1.0"
+author = "craigsmith (Freesound)"
+source = "https://freesound.org/people/craigsmith/sounds/486215/"
+used_by = "worlds/kart/native: kart sound, crowd"
+
+[[asset]]
+path = "assets/freesound/kart/knock-1.ogg"
+made_by = "tools/make-sounds.py"
+made_from = "assets/freesound/originals/151470__bellick__plastic-hit-1.wav"
+licence = "CC0-1.0"
+author = "bellick (Freesound)"
+source = "https://freesound.org/people/bellick/sounds/151470/"
+used_by = "worlds/kart/native: kart sound, knock-1"
+
+[[asset]]
+path = "assets/freesound/kart/knock-2.ogg"
+made_by = "tools/make-sounds.py"
+made_from = "assets/freesound/originals/151470__bellick__plastic-hit-1.wav"
+licence = "CC0-1.0"
+author = "bellick (Freesound)"
+source = "https://freesound.org/people/bellick/sounds/151470/"
+used_by = "worlds/kart/native: kart sound, knock-2"
+
+[[asset]]
+path = "assets/freesound/kart/knock-3.ogg"
+made_by = "tools/make-sounds.py"
+made_from = "assets/freesound/originals/151470__bellick__plastic-hit-1.wav"
+licence = "CC0-1.0"
+author = "bellick (Freesound)"
+source = "https://freesound.org/people/bellick/sounds/151470/"
+used_by = "worlds/kart/native: kart sound, knock-3"

@@ -4855,6 +4855,7 @@ dependencies = [
  "anyhow",
  "bevy",
  "crossbeam-channel",
+ "lewton",
  "osage-content",
  "osage-kart-crowd",
  "osage-kart-items",
