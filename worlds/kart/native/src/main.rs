@@ -5,7 +5,8 @@
 //! rendering programme (design/03).
 //!
 //! - `kart-native [ws://host:port] [--tier T1|T2|T3|T4]` joins a kart world
-//!   (default `ws://127.0.0.1:7878`, tier T2). Drive with the arrows or WASD,
+//!   (default `ws://127.0.0.1:7878`, tier T2). Escape opens the settings.
+//!   `--fps N|off` sets the frame rate wanted for this game (settings). Drive with the arrows or WASD,
 //!   drift with Space or Shift; a gamepad works too. F12 saves a screenshot.
 //!   `--autodrive` lets the world's autopilot hold the wheel;
 //!   `--screenshot-after SECONDS` saves a screenshot by itself.
@@ -31,6 +32,7 @@ mod play;
 mod predict;
 mod scene;
 mod scenery;
+mod settings;
 #[cfg(feature = "sound")]
 mod sound;
 mod track;
@@ -60,6 +62,7 @@ fn main() -> Result<()> {
     let (mut frames, mut resolution, mut out, mut without) = (2400u32, None, None, Vec::new());
     let (mut autodrive, mut screenshot_after, mut viewpoint, mut headless) = (false, None, None, false);
     let mut sky = scene::Sky::Noon;
+    let mut fps = None;
     let mut args = std::env::args().skip(1);
     while let Some(arg) = args.next() {
         let mut value = || args.next().with_context(|| format!("{arg} needs a value"));
@@ -70,6 +73,7 @@ fn main() -> Result<()> {
             "--screenshot-after" => screenshot_after = Some(value()?.parse().context("--screenshot-after")?),
             "--tier" => tier = value()?.parse().map_err(anyhow::Error::msg)?,
             "--sky" => sky = value()?.parse().map_err(anyhow::Error::msg)?,
+            "--fps" => fps = Some(settings::parse_fps(&value()?).map_err(anyhow::Error::msg)?),
             "--frames" => frames = value()?.parse().context("--frames")?,
             "--out" => out = Some(PathBuf::from(value()?)),
             "--without" => without.push(value()?.parse().map_err(anyhow::Error::msg)?),
@@ -184,7 +188,8 @@ fn main() -> Result<()> {
             Tier::T3 => v0::Tier::T3High,
             Tier::T4 => v0::Tier::T4Ultra,
         };
-        app.add_plugins(play::PlayPlugin { url, tier, autodrive, screenshot_after });
+        app.add_plugins(play::PlayPlugin { url, tier, autodrive, screenshot_after })
+            .add_plugins(settings::SettingsPlugin { fps });
     }
     app.run();
     Ok(())

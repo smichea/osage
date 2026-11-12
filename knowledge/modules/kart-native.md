@@ -27,7 +27,9 @@ With the asset manifest's content ([osage-content](/modules/osage-content.md)) t
 
 # Interfaces
 
-Command line: a world's address to play, `--bench` to measure, `--tier`, `--sky noon|evening`, `--without TECHNIQUE`, `--autodrive`, `--screenshot-after`, `--camera X,Y,Z,TX,TY,TZ` to hold the camera at a place (pictures of the landmarks; a bench run with it is not the sanctioned bench). `OSAGE_ASSETS` names the content directory, or `none`.
+Command line: a world's address to play, `--bench` to measure, `--tier`, `--sky noon|evening`, `--without TECHNIQUE`, `--autodrive`, `--screenshot-after`, `--camera X,Y,Z,TX,TY,TZ` to hold the camera at a place (pictures of the landmarks; a bench run with it is not the sanctioned bench). `--fps N|off` the frame rate wanted for this game. `OSAGE_ASSETS` names the content directory, or `none`.
+
+Settings: Escape (or a gamepad's Start) opens them; the frame rate wanted (off, 30 to 144; 60 by default) is kept in `osage/kart-settings.txt` under `%APPDATA%` or `~/.config`, and the engine [holds that rate](/techniques/frame-pacing.md). While they are open, the keys do not drive.
 
 # Invariants
 

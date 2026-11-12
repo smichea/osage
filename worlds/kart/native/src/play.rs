@@ -31,6 +31,7 @@ use crate::{
     paddock::{PaddockPlugin, PaddockView, item},
     predict::Predictor,
     scene::{Course, Followed, Pose, Stage},
+    settings::Menu,
 };
 
 /// How fast keyboard steering swings from one side to the other, per second.
@@ -291,9 +292,12 @@ fn drive(
     keys: Res<ButtonInput<KeyCode>>,
     gamepads: Query<&Gamepad>,
     replica: Res<Replica>,
+    menu: Res<Menu>,
     mut driver: ResMut<Driver>,
 ) {
     let (Some(mine), Some(circuit)) = (replica.mine, &replica.circuit) else { return };
+    // While the settings are open, the keys are theirs.
+    let keys = if menu.0 { &ButtonInput::default() } else { &*keys };
     if replica.finished(mine) {
         return;
     }
@@ -305,7 +309,7 @@ fn drive(
     let swing = STEER_RATE * time.delta_secs();
     driver.steer += (wanted - driver.steer).clamp(-swing, swing);
 
-    if let Some(pad) = gamepads.iter().next() {
+    if let Some(pad) = gamepads.iter().next().filter(|_| !menu.0) {
         let stick = pad.get(GamepadAxis::LeftStickX).unwrap_or(0.0);
         if stick.abs() > 0.15 {
             driver.steer = stick.clamp(-1.0, 1.0);

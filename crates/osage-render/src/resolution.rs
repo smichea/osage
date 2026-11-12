@@ -12,6 +12,7 @@
 //! - T2 draws at 85 % of that in each direction: on the Iris Xe reference
 //!   the scene is bound by the number of pixels, and this is what brings a
 //!   1080p output within 16.7 ms.
+//! - Holding a frame rate ([`crate::pace`]) draws a share of that again.
 //! - Stretching is bilinear for now; sharper upscalers are this
 //!   workstream's next milestones.
 
@@ -20,7 +21,7 @@ use bevy::{
     window::PrimaryWindow,
 };
 
-use crate::{LeftOut, OsageCamera, Technique, Tier};
+use crate::{LeftOut, OsageCamera, Technique, Tier, pace::Pace};
 
 /// The size the picture is shown at: the window's (`None`), or a fixed one,
 /// as the bench asks.
@@ -83,6 +84,7 @@ fn resize(
     tier: Res<Tier>,
     left_out: Res<LeftOut>,
     output: Res<Output>,
+    pace: Option<Res<Pace>>,
     window: Query<&Window, With<PrimaryWindow>>,
     mut picture: ResMut<Picture>,
     mut images: ResMut<Assets<Image>>,
@@ -96,6 +98,8 @@ fn resize(
         return;
     }
     let scale = if left_out.0.contains(&Technique::Upscaling) { 1.0 } else { tier.render_scale() };
+    // And what holding the frame rate gives up (pace).
+    let scale = scale * pace.map_or(1.0, |pace| pace.rung().scale);
     // Never more lines than the tier draws, then the tier's share of that.
     let fit = (tier.max_height() as f32 / shown.y as f32).min(1.0) * scale;
     let wanted = (shown.as_vec2() * fit).round().as_uvec2().max(UVec2::splat(8));

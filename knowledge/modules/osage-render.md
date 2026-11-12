@@ -28,6 +28,7 @@ Let many people improve rendering in parallel: one technique is one plugin, and 
 # Interfaces
 
 - `OsageRenderPlugin`, `Tier`, `Technique`, `Look`, `OsageCamera`, `Sun`.
+- `pace::{FrameTarget, Pace, LADDER, Governor}`: the frame rate wanted, and where the picture is on the ladder.
 - `resolution::Output` (follow the window, or a fixed size) and `resolution::Picture` (the image and its size).
 - `Tier::budget_ms`, `Tier::bench_resolution`, `Tier::max_height`, `Tier::render_scale`.
 - `ground::{GroundMaterial, Ground}`: a standard material extended for ground that varies, registered at every tier for worlds to use.
@@ -40,7 +41,7 @@ Let many people improve rendering in parallel: one technique is one plugin, and 
 
 # Knowledge
 
-- Techniques: [sky and sun](/techniques/sky-and-sun.md), [a photographed sky](/techniques/panorama.md), [light from the sky](/techniques/sky-light.md), [sun shadows](/techniques/sun-shadows.md), [ambient occlusion](/techniques/ambient-occlusion.md), [post-processing](/techniques/post-processing.md), [resolution and upscaling](/techniques/resolution-and-upscaling.md), [ground that varies](/techniques/ground-variation.md).
+- Techniques: [sky and sun](/techniques/sky-and-sun.md), [a photographed sky](/techniques/panorama.md), [light from the sky](/techniques/sky-light.md), [sun shadows](/techniques/sun-shadows.md), [ambient occlusion](/techniques/ambient-occlusion.md), [post-processing](/techniques/post-processing.md), [resolution and upscaling](/techniques/resolution-and-upscaling.md), [holding a frame rate](/techniques/frame-pacing.md), [ground that varies](/techniques/ground-variation.md).
 - Oracle: [the render bench](/oracles/render-bench.md).
 
 # Reuse

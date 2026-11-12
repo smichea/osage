@@ -38,6 +38,7 @@ What osage knows about its own modules: their architecture, the algorithms and t
 * [Ambient occlusion](techniques/ambient-occlusion.md) - Screen-space ambient occlusion from T3, kept out of T2 by its measured cost and by a defect on integrated graphics.
 * [Post-processing and anti-aliasing](techniques/post-processing.md) - HDR, exposure, the world's look, anti-aliasing and bloom, chosen per tier so that the lower tiers need no depth prepass.
 * [Resolution and upscaling](techniques/resolution-and-upscaling.md) - The scene is drawn into a picture whose size the tier decides, then stretched to the window under a sharp interface.
+* [Holding a frame rate](techniques/frame-pacing.md) - Given the frame rate a person wants, the picture climbs down a ladder of cheaper pictures until frames come at that rate, and back up when there is room.
 
 ## Algorithms
 
