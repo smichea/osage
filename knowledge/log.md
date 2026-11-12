@@ -1,6 +1,7 @@
 # Knowledge Update Log
 
 ## 2026-11-13
+* **Creation**: Added the module [osage-kart-profile](/modules/kart-profile.md): the player's profile on their computer, paints won in cups (D-064); [osage-kart-native](/modules/kart-native.md) keeps it and paints with P; the world carries `Choice.paint`.
 * **Update**: [osage-kart-native](/modules/kart-native.md) presents the race (D-063): a flyover of the circuit on the grid, the player's finish again in slow motion.
 
 ## 2026-11-12

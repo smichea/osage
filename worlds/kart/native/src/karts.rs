@@ -29,7 +29,7 @@ use osage_kart_model::{
 pub use osage_kart_model::{EXHAUSTS, REAR_CONTACTS};
 use osage_kart_physics::{MAX_SPEED, wrap};
 
-use crate::scene::{Course, PALETTE, Pose, roughness, wobble};
+use crate::scene::{Course, PAINTS, Pose, roughness, wobble};
 
 /// A hop into a drift lasts this long, seconds.
 const HOP: f32 = 0.28;
@@ -330,7 +330,7 @@ pub fn setup(
 /// A team's colours from the palette: the paint, white or black stripes
 /// against it, a frame in silver or in the paint's darker shade.
 fn livery(colour: usize) -> Livery {
-    let (r, g, b) = PALETTE[colour];
+    let (r, g, b) = PAINTS[colour];
     // Racing paint is deeper than the browser client's palette: more saturated, a little darker.
     let base = Vec3::new(r, g, b);
     let grey = base.dot(Vec3::new(0.2126, 0.7152, 0.0722));
@@ -465,7 +465,7 @@ pub fn park(
     parked: Query<(Entity, &Parked), Added<Parked>>,
 ) {
     for (kart, parked) in &parked {
-        let colour = parked.colour % PALETTE.len();
+        let colour = parked.colour % PAINTS.len();
         model_of(&mut kit, &mut meshes, colour);
         assemble(&mut commands, &kit, colour, kart, false);
         commands.entity(kart).insert(Visibility::default());
@@ -480,7 +480,7 @@ pub fn dress(
     karts: Query<(Entity, &Pose), Added<Pose>>,
 ) {
     for (kart, pose) in &karts {
-        let colour = pose.color as usize % PALETTE.len();
+        let colour = pose.color as usize % PAINTS.len();
         model_of(&mut kit, &mut meshes, colour);
         let (body, head, wheels, bones, rockets, carried) = assemble(&mut commands, &kit, colour, kart, pose.ghost);
         let glow = |(mesh, material): &(Handle<Mesh>, Handle<StandardMaterial>)| {

@@ -65,7 +65,12 @@ are quick off the line but pushed around; heavy ones are slow to get
 going and hard to shift. The Sprint leaps out of bends, the Cruiser holds
 its speed, the Drifter slides. No pair is faster than the others: pick
 the one you like to drive. On the grid your kart changes at once; after
-a race, from the next one.
+a race, from the next one. The game remembers your driver and kart.
+
+P paints your kart. The eight team colours are yours from the start;
+points won in cups unlock silver (20 points), pearl (50), midnight (90)
+and gold (140). Paints only change how a kart looks, never how it
+drives. Your points and paints are kept in %APPDATA%\osage\kart-profile.txt.
 
 The world keeps its records on each track: the ten best laps, races and time trials, one per driver,
 shown between races (NEW! when you just set one). They are kept in

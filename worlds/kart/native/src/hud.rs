@@ -17,7 +17,7 @@ use bevy::{
 use osage_kart_items::Item;
 use osage_kart_physics::{TURBO_CHARGES, turbo_level};
 
-use crate::scene::{Course, PALETTE, Stage};
+use crate::scene::{Course, PAINTS, Stage};
 
 /// Side of the circuit map, pixels.
 const MAP: f32 = 190.0;
@@ -570,7 +570,7 @@ fn place_dots(
                 }
             }
             None => {
-                let (r, g, b) = PALETTE[kart.color as usize % PALETTE.len()];
+                let (r, g, b) = PAINTS[kart.color as usize % PAINTS.len()];
                 let node = Node {
                     position_type: PositionType::Absolute,
                     left: px(at.x),

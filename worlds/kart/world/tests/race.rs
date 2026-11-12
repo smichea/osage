@@ -698,3 +698,35 @@ fn a_time_trial_keeps_a_ghost_that_drives_the_run_again() {
     assert!(ghost_of(&mut agent).is_none(), "it no longer finishes when it says");
     std::fs::remove_dir_all(&dir).unwrap();
 }
+
+/// Paints (kart.choice/1's paint, D-064): a paint colours the kart and
+/// stays through a change of driver and into the next race; 0 gives back
+/// the driver's colour; a paint there is not, or none sent, changes nothing.
+#[test]
+fn a_driver_paints_their_kart() {
+    let mut harness = Harness::new(KartWorld { grid: 2, laps: 1, host_starts: true, ..KartWorld::default() }, TICK_HZ);
+    let mut alice = Client::join(&mut harness, SessionKind::Human, Role::Player, "alice");
+    run_until(&mut harness, &mut alice, 5, |c| phase(&c.race()) == proto::Phase::Ready);
+    let (entity, before, _) = alice.kart_of("alice");
+    let choice_type = alice.world.types().id(types::CHOICE).unwrap();
+    let session = alice.session;
+    let send = |harness: &mut Harness, sequence: u64, choice: proto::Choice| {
+        harness.send(session, intent(sequence, entity, choice_type, &choice));
+        harness.run(2);
+    };
+    let colour = |c: &mut Client| c.kart_of("alice").1.color;
+    send(&mut harness, 1, proto::Choice { paint: Some(12), ..Default::default() });
+    assert_eq!(colour(&mut alice), 11, "the palette's colour 11: gold");
+    send(&mut harness, 2, proto::Choice { driver: "bolt".into(), ..Default::default() });
+    assert_eq!(colour(&mut alice), 11, "the paint stays with another driver");
+    send(&mut harness, 3, proto::Choice { paint: Some(40), ..Default::default() });
+    assert_eq!(colour(&mut alice), 11, "no such paint: no change");
+    send(&mut harness, 4, proto::Choice { paint: Some(0), ..Default::default() });
+    let bolt = alice.kart_of("alice").1;
+    assert!(bolt.color != 11 && bolt.color != before.color, "Bolt's own colour again: {}", bolt.color);
+    send(&mut harness, 5, proto::Choice { paint: Some(9), ..Default::default() });
+    // The race: the same paint.
+    call(&mut harness, &mut alice, "alice", 1, proto::RaceCall::Start);
+    run_until(&mut harness, &mut alice, 6, |c| phase(&c.race()) == proto::Phase::Racing);
+    assert_eq!(colour(&mut alice), 8, "silver, into the race");
+}

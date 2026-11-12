@@ -13,7 +13,21 @@ export function sparkColour(charge: number): string {
   return ["#fff6d5", "#3fa9ff", "#ff8c1a", "#bf4dff"][level];
 }
 
-export const PALETTE = ["#e5534b", "#539bf5", "#57ab5a", "#c69026", "#b083f0", "#39c5cf", "#e0823d", "#f778ba"];
+/** The team colours, then the special paints won in cups (D-064): silver, pearl, midnight, gold. */
+export const PALETTE = [
+  "#e5534b",
+  "#539bf5",
+  "#57ab5a",
+  "#c69026",
+  "#b083f0",
+  "#39c5cf",
+  "#e0823d",
+  "#f778ba",
+  "#c2c4c9",
+  "#edebe0",
+  "#171c3d",
+  "#dba833",
+];
 
 /** A point of the centre line with its unit direction and right vector, and its distance along. */
 interface Frame {

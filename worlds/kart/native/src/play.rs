@@ -67,6 +67,7 @@ impl Plugin for PlayPlugin {
             .init_resource::<CallWanted>()
             .init_resource::<Chosen>()
             .init_resource::<ChosenEvent>()
+            .insert_resource(Kept::load())
             .add_plugins((HudPlugin, PaddockPlugin, crate::show::ShowPlugin))
             .add_systems(FixedUpdate, drive)
             .add_systems(
@@ -109,6 +110,8 @@ struct Replica {
     followed: Option<Entity>,
     controls_type: Option<u32>,
     choice_type: Option<u32>,
+    /// Connections so far: the profile's choice is sent once in each.
+    connections: u32,
     /// The world's clock minus ours, microseconds.
     clock_offset: i64,
     status: String,
@@ -281,6 +284,7 @@ fn receive(
                     source.unwrap_or_default()
                 );
                 replica.world = Some(world);
+                replica.connections += 1;
                 continue;
             }
             Net::Closed(reason) => {
@@ -439,6 +443,77 @@ fn drive(
     driver.fresh += 1;
 }
 
+/// The player's profile (D-064, [`osage_kart_profile`]), kept in
+/// `osage/kart-profile.txt` beside the settings.
+#[derive(Resource, Default)]
+struct Kept {
+    profile: osage_kart_profile::Profile,
+    /// The connection the profile's choice was sent in.
+    sent: u32,
+    /// The cup whose end was counted: (cup, standings), so it counts once.
+    counted: Option<(String, Vec<proto::Standing>)>,
+    /// What the last cup unlocked, to say.
+    news: String,
+}
+
+impl Kept {
+    fn file() -> Option<std::path::PathBuf> {
+        Some(crate::settings::folder()?.join("kart-profile.txt"))
+    }
+
+    fn load() -> Self {
+        let text = Self::file().and_then(|path| std::fs::read_to_string(path).ok()).unwrap_or_default();
+        Self { profile: osage_kart_profile::Profile::from_text(&text), ..default() }
+    }
+
+    fn save(&self) {
+        let Some(path) = Self::file() else { return };
+        let written = path
+            .parent()
+            .map_or(Ok(()), std::fs::create_dir_all)
+            .and_then(|()| std::fs::write(&path, self.profile.to_text()));
+        if let Err(error) = written {
+            warn!("profile not kept in {}: {error}", path.display());
+        }
+    }
+
+    /// What the profile asks of the world: its driver, kart and paint.
+    fn choice(&self) -> proto::Choice {
+        proto::Choice {
+            driver: self.profile.driver.clone(),
+            kart: self.profile.kart.clone(),
+            paint: Some(self.profile.paint.map_or(0, |p| p + 1)),
+            ..default()
+        }
+    }
+
+    /// A cup over, with `me` in its standings: its points counted, once.
+    fn count_cup(&mut self, race: Option<&proto::Race>, me: &str) {
+        let Some(cup) = race.and_then(|race| race.cup.as_ref()) else { return };
+        let over = cup.race as usize > cup.tracks.len();
+        let key = (cup.id.clone(), cup.standings.clone());
+        if !over || me.is_empty() || self.counted.as_ref() == Some(&key) {
+            return;
+        }
+        self.counted = Some(key);
+        let Some(place) = cup.standings.iter().position(|s| s.name == me) else { return };
+        let unlocked = self.profile.count_cup(cup.standings[place].points, place);
+        let names: Vec<&str> = unlocked.iter().filter_map(|u| osage_kart_profile::paint_name(u.0)).collect();
+        self.news = if names.is_empty() { String::new() } else { format!("NEW PAINT: {}  ", names.join(", ")) };
+        self.save();
+    }
+
+    /// The profile as the HUD says it, with how to change the paint.
+    fn line(&self) -> String {
+        let p = &self.profile;
+        let paint = p.paint.and_then(osage_kart_profile::paint_name).unwrap_or("the driver's colour");
+        let next = p.next().map_or_else(String::new, |(paint, needs)| {
+            format!("  -  {} at {needs} pts", osage_kart_profile::paint_name(paint).unwrap_or("?"))
+        });
+        format!("P  paint: {paint}   {}{} pts, {} cups, {} won{next}", self.news, p.points, p.cups, p.wins)
+    }
+}
+
 /// The driver and kart this player picked (D-055), as indices into the
 /// world's roster; none until they pick.
 #[derive(Resource, Default)]
@@ -452,6 +527,7 @@ struct ChosenEvent(Option<usize>);
 /// Between races, the player picks who drives and in what: left and right
 /// (or a pad's d-pad) the driver, up and down the kart. On the grid the world
 /// changes the kart at once; after a race, from the next one.
+#[allow(clippy::too_many_arguments)]
 fn choose(
     replica: Res<Replica>,
     outbox: Res<NetOutbox>,
@@ -460,10 +536,17 @@ fn choose(
     menu: Res<Menu>,
     mut chosen: ResMut<Chosen>,
     mut chosen_event: ResMut<ChosenEvent>,
+    mut kept: ResMut<Kept>,
 ) {
     let (Some(mine), Some(choice_type), Some(roster)) = (replica.mine, replica.choice_type, replica.roster()) else {
         return;
     };
+    // Once a connection: the driver, kart and paint the player raced with
+    // last (D-064).
+    if kept.sent != replica.connections {
+        kept.sent = replica.connections;
+        let _ = outbox.0.send(intent(0, mine, choice_type, &kept.choice()));
+    }
     let race = replica.race().unwrap_or_default();
     let between = matches!(race.phase(), Phase::Waiting | Phase::Ready | Phase::Finished);
     if !between || menu.0 || roster.drivers.is_empty() || roster.karts.is_empty() {
@@ -481,6 +564,13 @@ fn choose(
     let pressed = |key: KeyCode, button: GamepadButton| {
         keys.just_pressed(key) || gamepads.iter().any(|pad| pad.just_pressed(button))
     };
+    // P: the next paint the player has won (D-064).
+    if pressed(KeyCode::KeyP, GamepadButton::West) {
+        kept.profile.paint = kept.profile.next_paint();
+        kept.save();
+        let choice = proto::Choice { paint: Some(kept.choice().paint.unwrap_or(0)), ..default() };
+        let _ = outbox.0.send(intent(0, mine, choice_type, &choice));
+    }
     let by = |forward: bool, back: bool| i64::from(forward) - i64::from(back);
     let driver = by(
         pressed(KeyCode::ArrowRight, GamepadButton::DPadRight),
@@ -507,6 +597,8 @@ fn choose(
         kart: roster.karts[picked.1].id.clone(),
         ..default()
     };
+    (kept.profile.driver, kept.profile.kart) = (choice.driver.clone(), choice.kart.clone());
+    kept.save();
     let _ = outbox.0.send(intent(0, mine, choice_type, &choice));
 }
 
@@ -718,6 +810,7 @@ fn summarise(
     driver: Res<Driver>,
     chosen: Res<Chosen>,
     chosen_event: Res<ChosenEvent>,
+    mut kept: ResMut<Kept>,
     karts: Query<(&Remote, &Pose)>,
     mut view: ResMut<RaceView>,
     mut paddock: ResMut<PaddockView>,
@@ -742,7 +835,12 @@ fn summarise(
     view.count = racer.as_ref().map_or(0, |racer| racer.held_count.min(9) as u8);
     view.trailing = racer.as_ref().is_some_and(|racer| racer.trailing);
     view.guard = racer.as_ref().map_or(0.0, |racer| racer.guard);
+    kept.count_cup(replica.race().as_ref(), me);
     view.pick = pick(replica.roster(), racer.as_ref(), chosen.0);
+    if !view.pick.is_empty() {
+        view.pick.push('\n');
+        view.pick.push_str(&kept.line());
+    }
     let (cup, event) = cup_lines(replica.race(), racer.as_ref().map(|r| r.name.clone()), chosen_event.0, replica.mine);
     if view.cup != cup || view.event != event {
         (view.cup, view.event) = (cup, event);

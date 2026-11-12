@@ -129,10 +129,10 @@ impl Progress {
         self.distance
     }
 
-    /// Another driver and kart, chosen on the grid: the colour follows.
-    pub fn set_pair(&mut self, pair: Pair) {
+    /// Another driver and kart, chosen on the grid, painted `colour`.
+    pub fn set_pair(&mut self, pair: Pair, colour: u32) {
         self.pair = pair;
-        self.color = pair.0.colour;
+        self.color = colour;
     }
 }
 
@@ -420,7 +420,7 @@ fn line_up(
         let bot = owner.is_none();
         let progress = Progress {
             name,
-            color: pair.0.colour,
+            color: owner.map_or(pair.0.colour, |session| choices.colour(session, pair)),
             bot,
             ghost: matches!(pilot, Pilot::Ghost(_)),
             lap: 0,

@@ -18,22 +18,44 @@ use crate::proto;
 /// A driver in a body.
 pub type Pair = (&'static Driver, &'static Body);
 
-/// What each session chose, kept while the world runs.
+/// Paints there are (D-064): the eight team colours, then four special ones.
+pub const PAINTS: u32 = 12;
+
+/// What each session chose, kept while the world runs: the pair, and the
+/// paint when it is not the driver's own colour.
 #[derive(Resource, Default)]
-pub struct Choices(pub BTreeMap<u64, Pair>);
+pub struct Choices {
+    pairs: BTreeMap<u64, Pair>,
+    paints: BTreeMap<u64, u32>,
+}
 
 impl Choices {
     /// The pair `session` races with: its choice, or the default.
     pub fn of(&self, session: u64) -> Pair {
-        self.0.get(&session).copied().unwrap_or((&DRIVERS[0], &BODIES[0]))
+        self.pairs.get(&session).copied().unwrap_or((&DRIVERS[0], &BODIES[0]))
+    }
+
+    /// The colour `session`'s kart is painted with in `pair` (D-064).
+    pub fn colour(&self, session: u64, pair: Pair) -> u32 {
+        self.paints.get(&session).copied().unwrap_or(pair.0.colour)
     }
 
     /// Takes `choice` for `session` on top of what it had; ids it does not
-    /// know leave that half as it was. The pair now chosen.
+    /// know leave that half as it was, a paint there is not leaves the
+    /// paint. The pair now chosen.
     pub fn take(&mut self, session: u64, choice: &proto::Choice) -> Pair {
         let (had_driver, had_body) = self.of(session);
         let pair = (driver(&choice.driver).unwrap_or(had_driver), body(&choice.kart).unwrap_or(had_body));
-        self.0.insert(session, pair);
+        self.pairs.insert(session, pair);
+        match choice.paint {
+            Some(0) => {
+                self.paints.remove(&session);
+            }
+            Some(paint) if paint <= PAINTS => {
+                self.paints.insert(session, paint - 1);
+            }
+            _ => {}
+        }
         pair
     }
 }

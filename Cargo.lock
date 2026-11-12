@@ -4901,6 +4901,7 @@ dependencies = [
  "osage-kart-land",
  "osage-kart-model",
  "osage-kart-physics",
+ "osage-kart-profile",
  "osage-kart-racecraft",
  "osage-kart-roadside",
  "osage-kart-sound",
@@ -4922,6 +4923,10 @@ version = "0.1.0"
 dependencies = [
  "libm",
 ]
+
+[[package]]
+name = "osage-kart-profile"
+version = "0.1.0"
 
 [[package]]
 name = "osage-kart-racecraft"

@@ -113,7 +113,7 @@ pub fn intents(
             }
             if matches!(race.phase, Phase::Ready | Phase::Countdown | Phase::Waiting) {
                 body.0.build = osage_kart_roster::build(pair.0, pair.1);
-                progress.set_pair(pair);
+                progress.set_pair(pair, choices.colour(owner.0, pair));
             }
             continue;
         }

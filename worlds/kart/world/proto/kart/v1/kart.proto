@@ -147,6 +147,11 @@ message Choice {
   // What to race next (D-057), from Race.events: the host's choice is
   // raced, the others' are votes. Empty: no change.
   string event = 3;
+  // Added with D-064. The kart's paint (Racer.color): 0 the driver's own
+  // colour, N the palette's colour N-1 (0-7 the team colours, 8-11 the
+  // special ones players win in cups); unset, no change. A paint is how a
+  // kart looks, never how it drives.
+  optional uint32 paint = 4;
 }
 
 // kart.roster/1 — on the race board: the drivers and kart bodies there are,

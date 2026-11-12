@@ -31,6 +31,23 @@ pub const PALETTE: [(f32, f32, f32); 8] = [
     (0.969, 0.471, 0.729),
 ];
 
+/// What a kart can be painted (D-064): the team colours, then the special
+/// paints players win in cups — silver, pearl, midnight, gold.
+pub const PAINTS: [(f32, f32, f32); 12] = [
+    PALETTE[0],
+    PALETTE[1],
+    PALETTE[2],
+    PALETTE[3],
+    PALETTE[4],
+    PALETTE[5],
+    PALETTE[6],
+    PALETTE[7],
+    (0.76, 0.77, 0.79),
+    (0.93, 0.92, 0.88),
+    (0.09, 0.11, 0.24),
+    (0.86, 0.66, 0.2),
+];
+
 /// The colour of the meadows, which the light from below takes: the albedo
 /// of mown grass, about a fifth of the light.
 pub const GRASS: Color = Color::srgb(0.30, 0.40, 0.17);
