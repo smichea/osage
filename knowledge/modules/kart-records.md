@@ -51,4 +51,4 @@ Any game with timed events and named players: the boards, the one-best-per-name 
 
 # Limits
 
-Names are what the world knows a driver by (its identity's per-world id): nobody proves a time was driven fairly beyond the world's own authority (trust by default, D-038). One track for now; no per-kart or per-character boards; times in whole milliseconds as the world's clock gives them (a tick is 16.7 ms).
+Names are what the world knows a driver by (its identity's per-world id): nobody proves a time was driven fairly beyond the world's own authority (trust by default, D-038). Boards are per track (the track's id, D-056); no per-kart or per-character boards; times in whole milliseconds as the world's clock gives them (a tick is 16.7 ms).

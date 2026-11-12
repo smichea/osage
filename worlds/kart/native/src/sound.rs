@@ -19,14 +19,20 @@ use std::{
 };
 
 use bevy::{
-    audio::{AddAudioSource, ChannelCount, Decodable, PlaybackSettings, Sample, SampleRate, Source, SpatialListener},
+    audio::{
+        AddAudioSource, AudioSink, AudioSinkPlayback, ChannelCount, Decodable, PlaybackSettings, Sample, SampleRate,
+        Source, SpatialAudioSink, SpatialListener,
+    },
     prelude::*,
 };
 use osage_kart_physics::MAX_SPEED;
 use osage_kart_sound::{Buzz, Cue, Drive, IDLE_RPM, RATE, Recordings, Voice, revs};
 use osage_render::OsageCamera;
 
-use crate::scene::{Course, Pose, roughness};
+use crate::{
+    scene::{Course, Pose, roughness},
+    settings::Audio,
+};
 
 /// The engine loops and the engine speed each sounds at, turns a minute:
 /// the idle as it is, the others by the pitch measured in their passage.
@@ -42,7 +48,37 @@ impl Plugin for SoundPlugin {
             .add_audio_source::<Clip>()
             .add_audio_source::<Rotors>()
             .add_systems(Startup, load)
-            .add_systems(Update, (listen, voice, drive, crowd, rotors).chain());
+            .add_systems(Update, (listen, voice, drive, crowd, rotors, hush.run_if(resource_exists::<Audio>)).chain());
+    }
+}
+
+/// A sink that plays music, not the game's sounds: the music setting
+/// mutes it, the sound setting does not.
+#[derive(Component)]
+pub struct Music;
+
+/// Sound off: every sound of the game is muted, new ones as they start;
+/// on, they are heard again (settings, N).
+fn hush(
+    audio: Res<Audio>,
+    mut sinks: Query<&mut SpatialAudioSink, Without<Music>>,
+    mut flat: Query<&mut AudioSink, Without<Music>>,
+) {
+    let changed = audio.is_changed();
+    let set = |sink: &mut dyn AudioSinkPlayback| {
+        if sink.is_muted() == audio.sound {
+            if audio.sound { sink.unmute() } else { sink.mute() }
+        }
+    };
+    for mut sink in &mut sinks {
+        if changed || sink.is_added() {
+            set(&mut *sink);
+        }
+    }
+    for mut sink in &mut flat {
+        if changed || sink.is_added() {
+            set(&mut *sink);
+        }
     }
 }
 

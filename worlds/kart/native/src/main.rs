@@ -16,6 +16,9 @@
 //! - `--without TECHNIQUE` (sky, sky-light, shadows, ambient-occlusion, post,
 //!   upscaling; repeatable) leaves a rendering technique out, to measure its
 //!   cost or to find the cause of a defect.
+//! - `--track ID|FILE` (with `--bench`) races the bench on a built-in track
+//!   (paddock, coast, forest, harbour) or a track file (D-056), under its
+//!   sky unless `--sky` says otherwise.
 //! - `--headless` (with `--bench`) opens no window and needs no display: for
 //!   machines without a screen, such as cloud GPUs (D-042).
 //! - `--camera X,Y,Z,TX,TY,TZ` holds the camera at a place, looking at
@@ -61,7 +64,7 @@ fn main() -> Result<()> {
     let (mut url, mut tier, mut bench) = ("ws://127.0.0.1:7878".to_owned(), Tier::T2, false);
     let (mut frames, mut resolution, mut out, mut without) = (2400u32, None, None, Vec::new());
     let (mut autodrive, mut screenshot_after, mut viewpoint, mut headless) = (false, Vec::new(), None, false);
-    let mut sky = scene::Sky::Noon;
+    let (mut sky, mut track) = (None, None);
     let mut fps = None;
     let mut args = std::env::args().skip(1);
     while let Some(arg) = args.next() {
@@ -78,7 +81,18 @@ fn main() -> Result<()> {
                     .context("--screenshot-after takes seconds, comma-separated")?
             }
             "--tier" => tier = value()?.parse().map_err(anyhow::Error::msg)?,
-            "--sky" => sky = value()?.parse().map_err(anyhow::Error::msg)?,
+            "--sky" => sky = Some(value()?.parse::<scene::Sky>().map_err(anyhow::Error::msg)?),
+            "--track" => {
+                let wanted = value()?;
+                let def = match osage_kart_tracks::by_id(&wanted) {
+                    Some(def) => def,
+                    None => {
+                        let text = std::fs::read_to_string(&wanted).with_context(|| format!("no track {wanted}"))?;
+                        osage_kart_tracks::TrackDef::parse(&text).with_context(|| format!("track {wanted}"))?
+                    }
+                };
+                track = Some(def);
+            }
             "--fps" => fps = Some(settings::parse_fps(&value()?).map_err(anyhow::Error::msg)?),
             "--frames" => frames = value()?.parse().context("--frames")?,
             "--out" => out = Some(PathBuf::from(value()?)),
@@ -159,7 +173,13 @@ fn main() -> Result<()> {
         #[cfg(not(feature = "sound"))]
         app.add_plugins(plugins);
     }
-    app.insert_resource(scene::look(sky));
+    let track = track.unwrap_or_else(|| osage_kart_tracks::by_id("paddock").expect("the paddock is built in"));
+    // A bench is raced under its track's sky, unless asked otherwise.
+    // In a game, the sky follows the track's unless `--sky` chose one.
+    let follows = !bench && sky.is_none();
+    let sky =
+        sky.unwrap_or_else(|| if bench { track.sky.parse().unwrap_or(scene::Sky::Noon) } else { scene::Sky::Noon });
+    app.insert_resource(scene::look(sky)).insert_resource(scene::SkyShown { sky, follows });
     // Before the rendering plugin, which draws the sky from it when it is there.
     if let Some(panorama) = scene::panorama(sky) {
         app.insert_resource(panorama);
@@ -186,6 +206,7 @@ fn main() -> Result<()> {
             held,
             sky,
             headless,
+            track,
         });
     } else {
         let tier = match tier {

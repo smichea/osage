@@ -51,7 +51,7 @@ The work is done once, at start-up, on the processor: decoding a 4k photograph a
 
 # Limits
 
-An HDRI clipped at the sun (a sun no brighter than the clouds) cannot calibrate itself: its sky comes out too bright. The sky does not move — clouds stand still, the time of day is the photograph's; a world chooses among its photographs, it cannot blend them. The land below the horizon is the world's ground colour, not the photograph's. A panorama of 4k is soft when looked at closely; 8k is sharper and four times the memory.
+An HDRI clipped at the sun (a sun no brighter than the clouds) cannot calibrate itself: its sky comes out too bright. The sky does not move — clouds stand still, the time of day is the photograph's; a world chooses among its photographs, it cannot blend them; it may change the photograph while it runs (`Panorama` replaced: the sun, the light, the skybox and the fog are worked out again, a fraction of a second, between races), and the cameras take a changed `Look`'s exposure. The land below the horizon is the world's ground colour, not the photograph's. A panorama of 4k is soft when looked at closely; 8k is sharper and four times the memory.
 
 # Oracle
 

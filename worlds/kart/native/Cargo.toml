@@ -31,6 +31,8 @@ osage-content.workspace = true
 osage-props.workspace = true
 osage-sdk.workspace = true
 osage-world-kart.workspace = true
+osage-kart-tracks.workspace = true
+osage-kart-cup.workspace = true
 anyhow.workspace = true
 bevy = { workspace = true, features = ["3d", "ui"] }
 crossbeam-channel.workspace = true

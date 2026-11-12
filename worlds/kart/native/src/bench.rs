@@ -63,6 +63,8 @@ pub struct BenchPlugin {
     pub sky: String,
     /// No window: nothing paces the frames but the bench itself.
     pub headless: bool,
+    /// The track it races on (`--track`, D-056).
+    pub track: osage_kart_tracks::TrackDef,
 }
 
 impl Plugin for BenchPlugin {
@@ -79,6 +81,7 @@ impl Plugin for BenchPlugin {
                 without: self.without.clone(),
                 held: self.held,
                 sky: self.sky.clone(),
+                track: self.track.clone(),
                 shots,
                 frame: 0,
                 last: None,
@@ -115,6 +118,7 @@ struct Bench {
     without: Vec<String>,
     held: bool,
     sky: String,
+    track: osage_kart_tracks::TrackDef,
     shots: Vec<u32>,
     frame: u32,
     last: Option<Instant>,
@@ -172,8 +176,8 @@ struct Racer {
     mind: Mind,
 }
 
-fn line_up(mut commands: Commands) {
-    let circuit = Circuit::new();
+fn line_up(mut commands: Commands, bench: Res<Bench>) {
+    let circuit = Circuit::of(&bench.track);
     for slot in 0..KARTS {
         // The followed kart starts last and is the fastest: it works its way
         // through the field, which keeps karts in view. The others have
@@ -278,6 +282,7 @@ fn report(bench: &Bench, rendered: UVec2, adapter: &RenderAdapterInfo) -> anyhow
         "without": bench.without,
         "camera": if bench.held { "held" } else { "race" },
         "sky": bench.sky,
+        "track": bench.track.id,
         "commit": commit(),
         "unix_time": SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).map_or(0, |d| d.as_secs()),
         "machine": {

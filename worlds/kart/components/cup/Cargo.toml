@@ -1,0 +1,14 @@
+# SPDX-FileCopyrightText: The osage contributors
+# SPDX-License-Identifier: MIT OR Apache-2.0
+
+[package]
+name = "osage-kart-cup"
+description = "Cups of kart races: points by finishing place, standings between races with their tie-breaks, the podium"
+license = "MIT OR Apache-2.0"
+publish = false
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+
+[dependencies]

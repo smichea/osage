@@ -8,6 +8,7 @@
 //! the world's autopilot; bots fill the grid.
 
 mod circuit;
+mod cup;
 mod driving;
 mod paddock;
 mod race;
@@ -90,28 +91,42 @@ pub struct KartWorld {
     pub host_starts: bool,
     /// The file the world keeps its records in (D-053); none, in memory.
     pub records: Option<std::path::PathBuf>,
+    /// The track it races on (D-056), when it races no cup.
+    pub track: osage_kart_tracks::TrackDef,
+    /// What it races (D-057): a cup (`cup:ID`) or a track (`track:ID`);
+    /// none, `track` race after race.
+    pub event: Option<String>,
 }
 
 impl Default for KartWorld {
     fn default() -> Self {
-        Self { grid: 6, laps: 3, host_starts: true, records: None }
+        Self { grid: 6, laps: 3, host_starts: true, records: None, track: paddock(), event: None }
     }
 }
 
 impl KartWorld {
     /// Races that start by themselves: for tests and unattended worlds.
     pub fn unattended(grid: usize, laps: u32) -> Self {
-        Self { grid, laps, host_starts: false, records: None }
+        Self { grid, laps, host_starts: false, records: None, track: paddock(), event: None }
     }
+}
+
+fn paddock() -> osage_kart_tracks::TrackDef {
+    osage_kart_tracks::by_id("paddock").expect("the paddock is built in")
 }
 
 pub const TICK_HZ: u32 = 60;
 
 impl Plugin for KartWorld {
     fn build(&self, app: &mut App) {
+        let (cups, track) = match &self.event {
+            Some(event) => cup::Cups::new(event),
+            None => (cup::Cups::single(&self.track), self.track.clone()),
+        };
         app.insert_resource(Rules { grid: self.grid, laps: self.laps, host_starts: self.host_starts })
+            .insert_resource(cups)
             .init_resource::<race::Calls>()
-            .insert_resource(Course(Circuit::new()))
+            .insert_resource(Course(Circuit::of(&track)))
             .init_resource::<race::Race>()
             .init_resource::<race::Drivers>()
             .init_resource::<records::Times>()
@@ -161,13 +176,21 @@ impl WorldModule for KartWorld {
             ),
             spec(types::STATE, "KartState", true, "A kart's physics state, every step."),
             spec(types::RACER, "Racer", false, "Who drives a kart: name, lap, position, finish time."),
-            spec(types::TRACK, "Track", false, "The circuit: centre line, road half width, start line, sectors."),
+            spec(
+                types::TRACK,
+                "Track",
+                false,
+                "The circuit: which track (id, name, about, sky, scenery), centre line, road half width, start line, \
+                 sectors, crests.",
+            ),
             spec(
                 types::RACE,
                 "Race",
                 false,
-                "The race: phase (waiting, ready, countdown, racing, finished), when it ends, laps, order, host. \
-                 The host starts each race with Step.call; a driver alone can end one.",
+                "The race: phase (waiting, ready, countdown, racing, finished), when it ends, laps, order, host; \
+                 the cup being raced with its standings, the event chosen next, votes and the events there are. \
+                 The host starts each race with Step.call and chooses the event with Choice.event; a driver \
+                 alone can end a race.",
             ),
             spec(
                 types::PADDOCK,
@@ -228,7 +251,12 @@ struct Ids {
     paddock: u32,
     records: u32,
     choice: u32,
+    track: u32,
 }
+
+/// The entity carrying `kart.track/1`.
+#[derive(Component)]
+struct TrackBoard;
 
 /// The entity carrying `kart.race/1`.
 #[derive(Component)]
@@ -257,12 +285,14 @@ fn setup(
         paddock: id(types::PADDOCK),
         records: id(types::RECORDS),
         choice: id(types::CHOICE),
+        track: id(types::TRACK),
     };
     commands.insert_resource(kart);
     commands.spawn((
         ids.next_id(),
         Transform::default(),
-        Discrete::default().with(id(types::TRACK), &course.0.to_proto()),
+        Discrete::default().with(kart.track, &course.0.to_proto()),
+        TrackBoard,
     ));
     let board = proto::Race { phase: proto::Phase::Waiting.into(), laps: rules.laps, ..default() };
     commands.spawn((

@@ -33,7 +33,7 @@ pub struct PostPlugin;
 
 impl Plugin for PostPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(Update, (camera, steady_blur));
+        app.add_systems(Update, (camera, regrade.run_if(resource_changed::<Look>), steady_blur));
     }
 }
 
@@ -51,6 +51,15 @@ fn steady_blur(time: Res<Time>, mut blurs: Query<&mut MotionBlur>) {
     }
     for mut blur in &mut blurs {
         blur.shutter_angle = (EXPOSURE / frame).clamp(0.0, 0.5);
+    }
+}
+
+/// Another look (a world raced under another sky, exposed for its light):
+/// cameras take its exposure and saturation.
+fn regrade(look: Res<Look>, mut gradings: Query<&mut ColorGrading, With<OsageCamera>>) {
+    for mut grading in &mut gradings {
+        grading.global.exposure = look.exposure;
+        grading.global.post_saturation = look.saturation;
     }
 }
 

@@ -16,7 +16,8 @@ use osage_world_module_api::{
 };
 
 use crate::{
-    Body, Course, Ids, RaceBoard, Rules,
+    Body, Circuit, Course, Ids, RaceBoard, Rules, TrackBoard,
+    cup::Cups,
     driving::Pilot,
     paddock::{Items, Seat, item, items_for, to_proto},
     proto::{self, Phase},
@@ -27,6 +28,8 @@ use osage_kart_records::Event;
 
 const COUNTDOWN: Duration = Duration::from_secs(3);
 const RESULTS: Duration = Duration::from_secs(8);
+/// The results of a cup's last race, with its podium.
+const PODIUM: Duration = Duration::from_secs(16);
 /// After the first kart finishes, the others have this long.
 const FINISH_WINDOW: Duration = Duration::from_secs(30);
 /// A race never lasts longer.
@@ -126,7 +129,7 @@ impl Progress {
 
 impl Drivers {
     /// The host: the first human driver still here (sessions count up).
-    fn host(&self) -> Option<u64> {
+    pub(crate) fn host(&self) -> Option<u64> {
         self.0.iter().find(|(_, c)| c.kind() == components::ControllerKind::Human).map(|(session, _)| *session)
     }
 
@@ -136,7 +139,12 @@ impl Drivers {
     }
 }
 
-pub fn sessions(mut joined: MessageReader<Joined>, mut left: MessageReader<Left>, mut drivers: ResMut<Drivers>) {
+pub fn sessions(
+    mut joined: MessageReader<Joined>,
+    mut left: MessageReader<Left>,
+    mut drivers: ResMut<Drivers>,
+    mut cups: ResMut<Cups>,
+) {
     for joined in joined.read() {
         let human = joined.kind == SessionKind::Human && joined.role == Role::Player;
         if human || joined.kind == SessionKind::Agent {
@@ -145,6 +153,7 @@ pub fn sessions(mut joined: MessageReader<Joined>, mut left: MessageReader<Left>
     }
     for left in left.read() {
         drivers.0.remove(&left.session);
+        cups.forget(left.session);
     }
 }
 
@@ -153,13 +162,15 @@ pub fn flow(
     mut commands: Commands,
     time: Res<Time>,
     rules: Res<Rules>,
-    course: Res<Course>,
+    mut course: ResMut<Course>,
     ids: Res<Ids>,
     drivers: Res<Drivers>,
     mut calls: ResMut<Calls>,
     mut race: ResMut<Race>,
     mut entity_ids: ResMut<EntityIds>,
     choices: Res<Choices>,
+    mut cups: ResMut<Cups>,
+    mut track_board: Query<&mut Discrete, With<TrackBoard>>,
     karts: Query<(Entity, &Progress, Option<&Owner>)>,
 ) {
     let now = time.elapsed();
@@ -179,8 +190,21 @@ pub fn flow(
             race.ends = Some(now + COUNTDOWN);
         }
     };
+    // The next race on another track (a cup's next, or another event
+    // chosen): the circuit changes before the karts line up on it.
+    let mut race_on = |course: &mut Course, cups: &mut Cups| {
+        if let Some(def) = cups.advance(host).filter(|def| def.id != course.0.about.id) {
+            course.0 = Circuit::of(&def);
+            if let Ok(mut board) = track_board.single_mut() {
+                board.set(ids.track, &course.0.to_proto());
+            }
+        }
+    };
     match race.phase {
         Phase::Waiting if !drivers.0.is_empty() => {
+            if cups.next(host).is_some() {
+                race_on(&mut course, &mut cups);
+            }
             line_up(&mut commands, &rules, &course, &ids, &drivers, &choices, &mut entity_ids, &karts, &mut race.races);
             ready(&mut race);
         }
@@ -190,6 +214,12 @@ pub fn flow(
             }
             race.phase = Phase::Waiting;
             race.ends = None;
+        }
+        // The host chose another event on the grid: it is raced at once.
+        Phase::Ready if cups.next(host).is_some() => {
+            race_on(&mut course, &mut cups);
+            line_up(&mut commands, &rules, &course, &ids, &drivers, &choices, &mut entity_ids, &karts, &mut race.races);
+            ready(&mut race);
         }
         Phase::Ready if ended || host.is_none() || called(proto::RaceCall::Start, host) => {
             race.phase = Phase::Countdown;
@@ -244,8 +274,13 @@ pub fn flow(
             let stopped = alone && calls.iter().any(|(_, call)| *call == proto::RaceCall::Stop);
             let over = all_finished || window_closed || now >= race.started + LONGEST_RACE;
             if drivers.0.is_empty() || stopped || over {
+                // Points for the cup, by place (D-057).
+                let mut order: Vec<_> =
+                    karts.iter().map(|(_, p, _)| (p.position.max(1), p.name.clone(), p.bot)).collect();
+                order.sort_by_key(|(position, ..)| *position);
+                cups.score(&order.into_iter().map(|(_, name, bot)| (name, bot)).collect::<Vec<_>>());
                 race.phase = Phase::Finished;
-                race.ends = Some(now + RESULTS);
+                race.ends = Some(now + if cups.just_over() { PODIUM } else { RESULTS });
             }
         }
         Phase::Finished if ended => {
@@ -256,6 +291,7 @@ pub fn flow(
                 race.phase = Phase::Waiting;
                 race.ends = None;
             } else {
+                race_on(&mut course, &mut cups);
                 line_up(
                     &mut commands,
                     &rules,
@@ -409,6 +445,7 @@ pub fn publish(
     race: Res<Race>,
     rules: Res<Rules>,
     drivers: Res<Drivers>,
+    cups: Res<Cups>,
     paddock: Option<Res<Items>>,
     owners: Query<(&Replicated, &Owner)>,
     mut karts: Query<
@@ -444,6 +481,10 @@ pub fn publish(
             .filter(|_| rules.host_starts)
             .and_then(|host| owners.iter().find(|(_, owner)| owner.0 == host))
             .map_or(0, |(id, _)| id.0),
+        cup: cups.to_proto(),
+        event: cups.next(drivers.host().filter(|_| rules.host_starts)).unwrap_or_else(|| cups.event.clone()),
+        votes: cups.votes(),
+        events: crate::cup::events(),
     };
     if let Ok((mut board, mut volatile)) = board.single_mut() {
         if let Some(paddock) = paddock {
@@ -458,6 +499,9 @@ pub fn publish(
             c.phase == summary.phase
                 && c.order == summary.order
                 && c.host == summary.host
+                && c.cup == summary.cup
+                && c.event == summary.event
+                && c.votes == summary.votes
                 && c.phase_ends_us.abs_diff(summary.phase_ends_us) < 50_000
                 && c.started_us.abs_diff(summary.started_us) < 50_000
         });

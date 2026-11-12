@@ -92,6 +92,7 @@ pub fn intents(
     mut intents: MessageReader<IntentReceived>,
     mut calls: ResMut<Calls>,
     mut choices: ResMut<Choices>,
+    mut cups: ResMut<crate::cup::Cups>,
     mut pilots: Query<(&mut Pilot, Option<&osage_world_module_api::Owner>, &mut Body, &mut Progress)>,
 ) {
     for intent in intents.read() {
@@ -103,6 +104,9 @@ pub fn intents(
         {
             let Ok(choice) = proto::Choice::decode(intent.value.as_slice()) else { continue };
             let pair = choices.take(owner.0, &choice);
+            if !choice.event.is_empty() {
+                cups.choose(owner.0, &choice.event);
+            }
             if matches!(race.phase, Phase::Ready | Phase::Countdown | Phase::Waiting) {
                 body.0.build = osage_kart_roster::build(pair.0, pair.1);
                 progress.set_pair(pair);

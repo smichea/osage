@@ -4818,6 +4818,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "osage-kart-cup"
+version = "0.1.0"
+
+[[package]]
 name = "osage-kart-items"
 version = "0.1.0"
 dependencies = [
@@ -4852,6 +4856,7 @@ dependencies = [
  "lewton",
  "osage-content",
  "osage-kart-crowd",
+ "osage-kart-cup",
  "osage-kart-items",
  "osage-kart-land",
  "osage-kart-model",
@@ -4859,6 +4864,7 @@ dependencies = [
  "osage-kart-racecraft",
  "osage-kart-roadside",
  "osage-kart-sound",
+ "osage-kart-tracks",
  "osage-procedural",
  "osage-props",
  "osage-render",
@@ -4911,6 +4917,7 @@ name = "osage-kart-server"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "osage-kart-tracks",
  "osage-server",
  "osage-update",
  "osage-world-kart",
@@ -4919,6 +4926,14 @@ dependencies = [
 [[package]]
 name = "osage-kart-sound"
 version = "0.1.0"
+
+[[package]]
+name = "osage-kart-tracks"
+version = "0.1.0"
+dependencies = [
+ "libm",
+ "osage-kart-physics",
+]
 
 [[package]]
 name = "osage-procedural"
@@ -5018,11 +5033,13 @@ dependencies = [
  "libm",
  "osage-agent",
  "osage-credentials",
+ "osage-kart-cup",
  "osage-kart-items",
  "osage-kart-physics",
  "osage-kart-racecraft",
  "osage-kart-records",
  "osage-kart-roster",
+ "osage-kart-tracks",
  "osage-sdk",
  "osage-server",
  "osage-world-module-api",

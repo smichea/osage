@@ -141,6 +141,9 @@ message Build {
 message Choice {
   string driver = 1;
   string kart = 2;
+  // What to race next (D-057), from Race.events: the host's choice is
+  // raced, the others' are votes. Empty: no change.
+  string event = 3;
 }
 
 // kart.roster/1 — on the race board: the drivers and kart bodies there are,
@@ -235,6 +238,14 @@ message Track {
   // Crests across the road, verges and barriers (D-051): taken fast, a kart
   // leaves the road near the top and lands further on.
   repeated Crest crests = 6;
+  // Which track it is (D-056): an id, a name and a line about it.
+  string id = 7;
+  string name = 8;
+  string about = 9;
+  // The sky it is raced under (noon, evening) and what surrounds it
+  // (meadow, coast, forest, town): how clients dress it.
+  string sky = 10;
+  string scenery = 11;
 }
 
 message Crest {
@@ -261,6 +272,41 @@ message Race {
   // The kart of the host: the first human driver still here, who starts
   // each race (RACE_CALL_START); 0 when the world starts races by itself.
   uint64 host = 6;
+  // The cup being raced (D-057); none when races follow one another on one
+  // track.
+  Cup cup = 7;
+  // What the host has chosen to race next, and what the others would like
+  // (Choice.event): "cup:ID" or "track:ID".
+  string event = 8;
+  repeated Vote votes = 9;
+  // The events there are to choose from, as Choice.event names them.
+  repeated string events = 10;
+}
+
+message Cup {
+  string id = 1;
+  string name = 2;
+  // The track ids, in the order they are raced.
+  repeated string tracks = 3;
+  // The race being run or lined up, from 1; races + 1 once the cup is over.
+  uint32 race = 4;
+  // Points for first, second, …
+  repeated uint32 points = 5;
+  // Standings after the races run so far, first first.
+  repeated Standing standings = 6;
+}
+
+message Standing {
+  string name = 1;
+  bool bot = 2;
+  uint32 points = 3;
+  // Place in each race run (1 the winner), 0 for a race the driver missed.
+  repeated uint32 places = 4;
+}
+
+message Vote {
+  string event = 1;
+  uint32 drivers = 2;
 }
 
 // kart.records/1 — the world's records on this track (D-053): the best

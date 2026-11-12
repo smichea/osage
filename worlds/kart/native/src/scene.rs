@@ -103,6 +103,53 @@ pub fn look(sky: Sky) -> Look {
 /// below: asphalt as much as grass.
 const GROUND: Color = Color::srgb(0.3, 0.32, 0.25);
 
+/// The sky shown, and whether it follows the track's (D-056): in a game,
+/// unless `--sky` chose one; a bench keeps its own.
+#[derive(Resource, Clone, Copy)]
+pub struct SkyShown {
+    pub sky: Sky,
+    pub follows: bool,
+}
+
+/// A track raced under another sky: its photograph is decoded on a thread
+/// of its own (seconds, for a 4k panorama), then it and its exposure
+/// replace the shown ones and the rendering works the light out again.
+fn follow_the_sky(mut commands: Commands, course: Res<Course>, mut shown: ResMut<SkyShown>) {
+    let Ok(wanted) = course.0.about.sky.parse::<Sky>() else { return };
+    if !shown.follows || wanted == shown.sky {
+        return;
+    }
+    shown.sky = wanted;
+    let (tx, rx) = crossbeam_channel::bounded(1);
+    let spawned = std::thread::Builder::new().name("osage-sky".to_owned()).spawn(move || {
+        let _ = tx.send(panorama(wanted));
+    });
+    if spawned.is_ok() {
+        commands.insert_resource(SkyLoading { sky: wanted, photo: rx });
+    }
+}
+
+/// A sky's photograph being decoded.
+#[derive(Resource)]
+pub struct SkyLoading {
+    sky: Sky,
+    photo: crossbeam_channel::Receiver<Option<Panorama>>,
+}
+
+/// The photograph decoded, the sky changes; if the track changed again
+/// meanwhile, only the latest is shown.
+fn sky_loaded(mut commands: Commands, loading: Res<SkyLoading>, shown: Res<SkyShown>) {
+    let Ok(photo) = loading.photo.try_recv() else { return };
+    commands.remove_resource::<SkyLoading>();
+    if loading.sky != shown.sky {
+        return;
+    }
+    commands.insert_resource(look(loading.sky));
+    if let Some(photo) = photo {
+        commands.insert_resource(photo);
+    }
+}
+
 /// The photograph of the sky, when the asset manifest's content is there.
 pub fn panorama(sky: Sky) -> Option<Panorama> {
     let (id, turn) = sky.panorama();
@@ -159,7 +206,9 @@ pub struct Part;
 
 impl Plugin for ScenePlugin {
     fn build(&self, app: &mut App) {
-        let circuit = (track::build, scenery::build).chain().run_if(resource_exists_and_changed::<Course>);
+        let circuit = (follow_the_sky.run_if(resource_exists::<SkyShown>), track::build, scenery::build)
+            .chain()
+            .run_if(resource_exists_and_changed::<Course>);
         app.configure_sets(Update, (Stage::Simulate, Stage::Draw).chain())
             .init_resource::<View>()
             .init_resource::<Glance>()
@@ -179,6 +228,7 @@ impl Plugin for ScenePlugin {
                     track::flow,
                     choose_view,
                     follow,
+                    sky_loaded.run_if(resource_exists::<SkyLoading>),
                 )
                     .chain()
                     .in_set(Stage::Draw),

@@ -1,0 +1,29 @@
+# SPDX-FileCopyrightText: The osage contributors
+# SPDX-License-Identifier: MIT OR Apache-2.0
+kart-track/1
+id coast
+name Gull Point
+about A fast road along the cliffs of a headland: a long straight over a rise, a sweeper by the sea, a hairpin under the lighthouse and esses back inland.
+sky noon
+scenery coast
+half-width 7.5
+verge 4
+point 0 -120
+point 0 -40 start
+point 5 40
+point 20 110
+point 50 160
+point 95 185
+point 140 180
+point 165 150
+point 160 115
+point 130 95
+point 110 60
+point 125 20
+point 150 -20
+point 150 -70
+point 125 -110
+point 85 -140
+point 40 -150
+point 12 -140
+crest 30 14 7 1.2

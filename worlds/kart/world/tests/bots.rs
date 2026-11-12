@@ -10,7 +10,20 @@ use osage_world_kart::Circuit;
 
 #[test]
 fn eight_drivers_race_the_circuit_and_keep_to_the_road() {
-    let circuit = Circuit::new();
+    race_and_keep_to_the_road(&Circuit::new());
+}
+
+/// G3.3: the field laps every track that comes with the game and keeps to
+/// its road (D-056).
+#[test]
+fn eight_drivers_race_every_track_and_keep_to_the_road() {
+    for def in osage_kart_tracks::built_in().iter().filter(|def| def.id != "paddock") {
+        eprintln!("{}:", def.id);
+        race_and_keep_to_the_road(&Circuit::of(def));
+    }
+}
+
+fn race_and_keep_to_the_road(circuit: &Circuit) {
     let track = &circuit.track;
     let tempers: Vec<Temper> = [Temper::VETERAN, Temper::ROOKIE, Temper::HOTHEAD, Temper::STEADY, Temper::CAUTIOUS]
         .into_iter()

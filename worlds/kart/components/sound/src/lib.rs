@@ -34,6 +34,13 @@ pub const IDLE_RPM: f32 = 2_800.0;
 pub const MAX_RPM: f32 = 14_500.0;
 /// A kart's centrifugal clutch bites at about this engine speed.
 const CLUTCH_RPM: f32 = 4_500.0;
+/// The engine speed at the kart's top speed: below the limiter, where a
+/// two-stroke still sounds full rather than strained. A boost takes it on
+/// towards [`MAX_RPM`].
+pub const CRUISE_RPM: f32 = 11_800.0;
+/// The fastest a recorded loop is played, times its own speed: faster, a
+/// recording no longer sounds like an engine but a tape sped up.
+const FASTEST_TAPE: f32 = 1.25;
 /// Kerb blocks pass the wheel every this many metres.
 const KERB_BLOCK: f32 = 1.0;
 
@@ -53,10 +60,16 @@ pub struct Drive {
 }
 
 /// Engine speed, 0…1, of a kart at `speed` whose top speed is `top`: no
-/// gearbox, so the engine turns with the wheels above the clutch's speed;
-/// below, it revs with the throttle.
+/// gearbox, so the engine turns with the wheels above the clutch's speed —
+/// [`CRUISE_RPM`] at top speed, on towards the limiter in a boost; below
+/// the clutch, it revs with the throttle.
 pub fn revs(speed: f32, top: f32, throttle: f32) -> f32 {
-    let geared = CLUTCH_RPM + (MAX_RPM - CLUTCH_RPM) * (speed.abs() / top.max(1.0)).min(1.05);
+    let ratio = speed.abs() / top.max(1.0);
+    let geared = if ratio <= 1.0 {
+        CLUTCH_RPM + (CRUISE_RPM - CLUTCH_RPM) * ratio
+    } else {
+        CRUISE_RPM + (MAX_RPM - CRUISE_RPM) * ((ratio - 1.0) / 0.3).min(1.0)
+    };
     let free = IDLE_RPM + (CLUTCH_RPM + 1_500.0 - IDLE_RPM) * throttle.clamp(0.0, 1.0);
     let rpm = if speed.abs() < 3.0 { free.max(geared * speed.abs() / 3.0) } else { geared };
     ((rpm - IDLE_RPM) / (MAX_RPM - IDLE_RPM)).clamp(0.0, 1.0)
@@ -210,11 +223,22 @@ struct Engine {
     /// how fast.
     tapes: Vec<Tape>,
     playing: [(usize, f32, f32); 2],
+    /// Takes off the brightness a loop gains when played faster, so that
+    /// its timbre stays an engine's.
+    tone: Low,
+    /// A slow sway of the revs, as a real engine never holds a speed
+    /// exactly: its phase, turns.
+    sway: f32,
 }
 
 impl Engine {
     fn control(&mut self, d: &Drive, recorded: &[(Arc<[f32]>, f32)]) {
-        let rpm = IDLE_RPM + (MAX_RPM - IDLE_RPM) * d.revs;
+        // Under way, the revs sway by up to 1 % (two slow waves that never
+        // line up): a held note is what tires the ear.
+        self.sway = (self.sway + BLOCK as f32 * DT).fract();
+        let under_way = (d.speed / 10.0).clamp(0.0, 1.0);
+        let wave = (TAU * 0.7 * self.sway).sin() * 0.6 + (TAU * 1.9 * self.sway + 1.3).sin() * 0.4;
+        let rpm = (IDLE_RPM + (MAX_RPM - IDLE_RPM) * d.revs) * (1.0 + 0.01 * under_way * wave);
         self.step = rpm / 60.0 * DT;
         self.load = 0.35 + 0.65 * d.throttle;
         self.misfire = (1.0 - d.throttle) * 0.3 * (0.3 + d.revs);
@@ -232,9 +256,13 @@ impl Engine {
         } else {
             ((rpm / recorded[i].1).ln() / (recorded[j].1 / recorded[i].1).ln()).clamp(0.0, 1.0)
         };
-        let rate = |k: usize| (rpm / recorded[k].1).clamp(0.5, 2.5);
+        let rate = |k: usize| (rpm / recorded[k].1).clamp(0.5, FASTEST_TAPE);
         let (a, b) = ((t * PI / 2.0).cos(), (t * PI / 2.0).sin());
         self.playing = [(i, a, rate(i)), (j, if i == j { 0.0 } else { b }, rate(j))];
+        // Played faster, a loop's spectrum moves up with it: a low-pass that
+        // moves down as much keeps it from turning into a whine.
+        let fastest = rate(i).max(if i == j { 0.0 } else { rate(j) });
+        self.tone.tune((7_000.0 / fastest.max(1.0).powi(2)).clamp(2_500.0, 12_000.0));
     }
 
     fn sample(&mut self, recorded: &[(Arc<[f32]>, f32)]) -> f32 {
@@ -245,7 +273,7 @@ impl Engine {
                 let x = self.tapes[k].play(&recorded[k].0, rate);
                 s += x * gain;
             }
-            return s * TAPE_ENGINE * (0.4 + 0.6 * self.load);
+            return self.tone.pass(s) * TAPE_ENGINE * (0.4 + 0.6 * self.load);
         }
         self.phase += self.step * (1.0 + self.jitter);
         if self.phase >= 1.0 {
@@ -356,11 +384,17 @@ pub struct Voice {
     squeal_tape: Tape,
     ground_tape: Tape,
     knocked: u32,
+    /// The revs, slowly followed: what the engine has held.
+    held_revs: f32,
+    /// How long it has held them, 0…1.
+    calm: f32,
 }
 
 /// Gains and rates, set every block.
 #[derive(Clone, Debug, Default)]
 struct Gains {
+    /// The engine's level: a little lower when its note has held a while.
+    engine: f32,
     squeal: f32,
     squeal_rate: f32,
     drum: f32,
@@ -401,6 +435,8 @@ impl Voice {
                 misfire: 0.0,
                 tapes,
                 playing: [(0, 0.0, 1.0); 2],
+                tone: Low { y: 0.0, a: 1.0 },
+                sway: (seed % 97) as f32 / 97.0,
             },
             wanted: Drive::default(),
             now: Drive::default(),
@@ -421,6 +457,8 @@ impl Voice {
             ground_tape: recordings.ground.as_deref().map_or(Tape::default(), |c| start(c, 0x9a)),
             recordings,
             knocked: seed,
+            held_revs: 0.0,
+            calm: 0.0,
         }
     }
 
@@ -498,7 +536,19 @@ impl Voice {
         self.drum.tune(140.0);
         self.grass.tune(180.0);
         self.wind.tune(300.0 + 25.0 * d.speed);
+        // The ear tires of a held note, and so the engine, flat out and
+        // steady for a few seconds, eases down by a quarter; any change of
+        // revs brings it back at once (habituation, as a mix engineer
+        // rides a fader).
+        let block = BLOCK as f32 * DT;
+        self.held_revs += (d.revs - self.held_revs) * (block / 0.5).min(1.0);
+        let steady = (d.revs - self.held_revs).abs() < 0.03 && d.throttle > 0.5 && d.speed > 8.0;
+        let (target, time) = if steady { (1.0, 3.0) } else { (0.0, 0.25) };
+        self.calm += (target - self.calm) * (block / time).min(1.0);
         self.gains = Gains {
+            // High in the revs, the engine is mixed lower: flat out, it
+            // would cover the tyres, the others and the music.
+            engine: (1.0 - 0.3 * ((d.revs - 0.55) / 0.25).clamp(0.0, 1.0)) * (1.0 - 0.25 * self.calm),
             squeal: d.slip.powf(1.5) * moving * 0.55,
             squeal_rate: 0.9 + 0.25 * d.slip,
             drum: on_kerb * moving * 0.35,
@@ -518,7 +568,7 @@ impl Voice {
         let g = &self.gains;
         let tapes = &*self.recordings;
 
-        let engine = self.engine.sample(&tapes.engine);
+        let engine = self.engine.sample(&tapes.engine) * g.engine;
 
         let squeal = match &tapes.squeal {
             Some(clip) if g.squeal > 0.0 => self.squeal_tape.play(clip, g.squeal_rate) * g.squeal * TAPE_SQUEAL,
@@ -656,7 +706,9 @@ mod tests {
     fn the_engine_turns_with_the_wheels_above_the_clutch() {
         assert!(revs(0.0, 22.0, 0.0) < 0.01, "idling");
         assert!(revs(0.0, 22.0, 1.0) > 0.1, "revving on the spot");
-        assert!((revs(22.0, 22.0, 1.0) - 1.0).abs() < 1e-3);
+        let cruise = (CRUISE_RPM - IDLE_RPM) / (MAX_RPM - IDLE_RPM);
+        assert!((revs(22.0, 22.0, 1.0) - cruise).abs() < 1e-3, "top speed is cruising, not the limiter");
+        assert!((revs(22.0 * 1.3, 22.0, 1.0) - 1.0).abs() < 1e-3, "a boost takes it to the limiter");
         assert!(revs(11.0, 22.0, 0.0) > revs(5.0, 22.0, 0.0), "faster, higher");
     }
 
@@ -675,14 +727,14 @@ mod tests {
 
     #[test]
     fn a_recorded_engine_follows_the_revs() {
-        // One loop at 100 Hz, recorded at 6 000 turns a minute: at 9 000 it
-        // plays half as fast again.
+        // One loop at 100 Hz, recorded at 6 000 turns a minute: at 7 200 it
+        // plays a fifth faster.
         let tapes = Arc::new(Recordings { engine: vec![(tone(100.0), 6_000.0)], ..Recordings::default() });
         let mut voice = Voice::with(1, tapes);
-        let revs = (9_000.0 - IDLE_RPM) / (MAX_RPM - IDLE_RPM);
+        let revs = (7_200.0 - IDLE_RPM) / (MAX_RPM - IDLE_RPM);
         let s = run(&mut voice, Drive { revs, throttle: 1.0, ..Drive::default() }, 0.5);
-        let found = period(&s[RATE as usize / 10..], 200, 450);
-        assert!((found as f32 - 320.0).abs() < 4.0, "{found}");
+        let found = period(&s[RATE as usize / 10..], 250, 550);
+        assert!((found as f32 - 400.0).abs() < 5.0, "{found}");
     }
 
     #[test]
@@ -750,5 +802,30 @@ mod tests {
         assert_eq!(silent, 0.0);
         let loud: f32 = (0..4800).map(|_| buzz.sample(1.0).powi(2)).sum::<f32>() / 4800.0;
         assert!(loud > 0.005 && loud < 1.0, "{loud}");
+    }
+
+    #[test]
+    fn a_loop_is_never_played_much_faster_than_it_was_recorded() {
+        // Recorded at 6 000: at the limiter it would play 2.4 times as fast.
+        let tapes = Arc::new(Recordings { engine: vec![(tone(100.0), 6_000.0)], ..Recordings::default() });
+        let mut voice = Voice::with(3, tapes);
+        let s = run(&mut voice, Drive { revs: 1.0, throttle: 1.0, ..Drive::default() }, 0.5);
+        let found = period(&s[RATE as usize / 10..], 250, 550);
+        assert!((found as f32 - 480.0 / FASTEST_TAPE).abs() < 6.0, "{found}");
+    }
+
+    #[test]
+    fn flat_out_and_steady_the_engine_eases_down_and_comes_back_on_a_change() {
+        let tapes = Arc::new(Recordings { engine: vec![(tone(100.0), 9_000.0)], ..Recordings::default() });
+        let flat_out = Drive { revs: 0.77, throttle: 1.0, speed: 22.0, ..Drive::default() };
+        let mut voice = Voice::with(4, tapes.clone());
+        let first = rms(&run(&mut voice, flat_out, 1.0)[RATE as usize / 2..]);
+        let later = rms(&run(&mut voice, flat_out, 8.0)[RATE as usize * 7..]);
+        assert!(later < 0.85 * first && later > 0.6 * first, "held: {first} then {later}");
+        let lifted = rms(&run(&mut voice, Drive { revs: 0.6, ..flat_out }, 1.0)[RATE as usize / 2..]);
+        assert!(lifted > later, "a change of revs brings it back: {later} then {lifted}");
+        // High in the revs it is mixed lower than in the middle.
+        let middle = rms(&run(&mut Voice::with(4, tapes), Drive { revs: 0.45, ..flat_out }, 1.0)[RATE as usize / 2..]);
+        assert!(first < middle, "{first} {middle}");
     }
 }

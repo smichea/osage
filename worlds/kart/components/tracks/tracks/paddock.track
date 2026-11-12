@@ -1,0 +1,30 @@
+# SPDX-FileCopyrightText: The osage contributors
+# SPDX-License-Identifier: MIT OR Apache-2.0
+kart-track/1
+id paddock
+name The Paddock
+about A club circuit in the hills: a long straight over a crest, a sweeping right-hander, an S, a chicane and a hairpin.
+sky noon
+scenery meadow
+half-width 7
+verge 4
+point 0 -90
+point 0 -20 start
+point 0 45
+point -10 80
+point -38 100
+point -75 95
+point -95 65
+point -88 30
+point -62 12
+point -58 -14
+point -82 -34
+point -112 -42
+point -132 -68
+point -124 -104
+point -92 -124
+point -52 -128
+point -18 -118
+# Over the brow of a hill: 12 m up to 1.4 m, 6 m down; flat out a kart is
+# half a second in the air (D-051).
+crest 42 12 6 1.4

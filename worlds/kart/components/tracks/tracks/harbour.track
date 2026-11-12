@@ -1,0 +1,33 @@
+# SPDX-FileCopyrightText: The osage contributors
+# SPDX-License-Identifier: MIT OR Apache-2.0
+kart-track/1
+id harbour
+name Harbour Town
+about A street circuit round the blocks of a harbour town: along the quay, up between the houses and down the market square, corner after corner.
+sky noon
+scenery town
+half-width 6.5
+verge 2
+point -60 0
+point 0 0 start
+point 60 0
+point 100 0
+point 118 12
+point 120 40
+point 120 80
+point 108 98
+point 80 100
+point 55 100
+point 42 88
+point 40 65
+point 28 52
+point 0 50
+point -30 50
+point -45 62
+point -48 90
+point -60 105
+point -90 105
+point -108 90
+point -110 40
+point -108 12
+point -90 0

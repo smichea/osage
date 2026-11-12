@@ -55,6 +55,10 @@ pub struct RaceView {
     pub records: Records,
     /// Who drives the player's kart and in what, and how to change it (D-055).
     pub pick: String,
+    /// The cup being raced and its standings, as lines (D-057).
+    pub cup: String,
+    /// What is raced next and how to choose it, with the votes.
+    pub event: String,
 }
 
 /// The world's records as the HUD shows them.
@@ -312,7 +316,7 @@ fn write(
     mut records: Query<&mut Visibility, With<RecordsPanel>>,
 ) {
     let between = matches!(view.stage, Lights::Waiting | Lights::Ready(_) | Lights::Results(_));
-    let shown = between && !view.records.laps.is_empty();
+    let shown = between && !(view.records.laps.is_empty() && view.cup.is_empty() && view.pick.is_empty());
     if let Ok(mut visibility) = records.single_mut() {
         visibility.set_if_neq(if shown { Visibility::Inherited } else { Visibility::Hidden });
     }
@@ -406,10 +410,9 @@ fn write(
             Label::Prompt => match view.stage {
                 Lights::Ready(true) => {
                     tint = Some(Color::srgb(1.0, 0.85, 0.3));
-                    format!("Press Enter to start the race\n(others can still join)\n\n{}", view.pick)
+                    "Press Enter to start the race\n(others can still join)".to_owned()
                 }
-                Lights::Ready(false) => format!("Waiting for {} to start the race\n\n{}", view.host, view.pick),
-                Lights::Waiting | Lights::Results(_) => view.pick.clone(),
+                Lights::Ready(false) => format!("Waiting for {} to start the race", view.host),
                 Lights::Count(_) if me.is_some() => "Throttle as the lights go out, not before".to_owned(),
                 _ => String::new(),
             },
@@ -417,7 +420,9 @@ fn write(
                 if view.records.laps.iter().chain(&view.records.races).any(|best| best.fresh && best.mine) {
                     tint = Some(Color::srgb(1.0, 0.85, 0.3));
                 }
-                records_text(&view.records)
+                let records = (!view.records.laps.is_empty()).then(|| records_text(&view.records));
+                let parts = [Some(view.cup.clone()), Some(view.event.clone()), Some(view.pick.clone()), records];
+                parts.into_iter().flatten().filter(|part| !part.is_empty()).collect::<Vec<_>>().join("\n\n")
             }
             Label::Records => String::new(),
         };

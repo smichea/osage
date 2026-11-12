@@ -26,5 +26,6 @@ path = "src/update.rs"
 [dependencies]
 osage-server.workspace = true
 osage-world-kart.workspace = true
+osage-kart-tracks.workspace = true
 anyhow.workspace = true
 osage-update.workspace = true

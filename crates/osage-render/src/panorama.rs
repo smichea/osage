@@ -49,7 +49,8 @@ pub struct Panorama {
     pub turn: f32,
 }
 
-/// What the techniques use of the panorama, computed once.
+/// What the techniques use of the panorama, computed again when the
+/// photograph changes.
 #[derive(Resource)]
 pub struct Prepared {
     /// The sky as seen.
@@ -70,7 +71,11 @@ pub struct PanoramaPlugin;
 
 impl Plugin for PanoramaPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(PreStartup, (prepare_once, ambient).chain()).add_systems(Update, (camera, sun));
+        app.add_systems(PreStartup, (prepare_once, ambient).chain()).add_systems(
+            Update,
+            (again.run_if(resource_changed::<Panorama>), ambient.run_if(resource_changed::<Prepared>), camera, sun)
+                .chain(),
+        );
     }
 }
 
@@ -81,8 +86,29 @@ fn prepare_once(
     look: Res<Look>,
     mut images: ResMut<Assets<Image>>,
 ) {
-    let face = if *tier >= Tier::T3 { 1024 } else { 512 };
-    let analysis = Analysis::of(&panorama, look.ground.to_linear().to_vec3());
+    commands.insert_resource(prepare(&panorama, *tier, &look, &mut images));
+}
+
+/// Another photograph of the sky (a world raced under another sky): its
+/// sun, light and skybox are worked out again, and cameras and the sun
+/// take them. The first run is the photograph `prepare_once` prepared.
+fn again(
+    mut commands: Commands,
+    panorama: Res<Panorama>,
+    tier: Res<Tier>,
+    look: Res<Look>,
+    mut images: ResMut<Assets<Image>>,
+    mut first: Local<bool>,
+) {
+    if !std::mem::replace(&mut *first, true) {
+        return;
+    }
+    commands.insert_resource(prepare(&panorama, *tier, &look, &mut images));
+}
+
+fn prepare(panorama: &Panorama, tier: Tier, look: &Look, images: &mut Assets<Image>) -> Prepared {
+    let face = if tier >= Tier::T3 { 1024 } else { 512 };
+    let analysis = Analysis::of(panorama, look.ground.to_linear().to_vec3());
     let skybox = images.add(analysis.skybox(face));
     let (matte, glossy) = sky_light::cubemaps(|d| analysis.light(d));
     let scale = analysis.scale;
@@ -96,7 +122,7 @@ fn prepare_once(
     );
     let ambient = analysis.ambient();
     let haze = analysis.haze() * scale * Exposure::SUNLIGHT.exposure();
-    commands.insert_resource(Prepared {
+    Prepared {
         skybox,
         light: (images.add(matte), images.add(glossy)),
         scale,
@@ -111,7 +137,7 @@ fn prepare_once(
             ..default()
         },
         haze: Color::linear_rgb(haze.x, haze.y, haze.z),
-    });
+    }
 }
 
 /// Below T3, the panorama's colour as a constant light ([`crate::sky_light`]).
@@ -121,8 +147,8 @@ fn ambient(mut commands: Commands, tier: Res<Tier>, prepared: Res<Prepared>) {
     }
 }
 
-fn camera(mut commands: Commands, prepared: Res<Prepared>, cameras: Query<Entity, Added<OsageCamera>>) {
-    for camera in &cameras {
+fn camera(mut commands: Commands, prepared: Res<Prepared>, cameras: Query<(Entity, Ref<OsageCamera>)>) {
+    for (camera, _) in cameras.iter().filter(|(_, c)| c.is_added() || prepared.is_changed()) {
         commands.entity(camera).insert((
             Skybox { image: Some(prepared.skybox.clone()), brightness: prepared.scale, ..default() },
             DistanceFog {
@@ -134,8 +160,8 @@ fn camera(mut commands: Commands, prepared: Res<Prepared>, cameras: Query<Entity
     }
 }
 
-fn sun(prepared: Res<Prepared>, mut suns: Query<(&mut Transform, &mut DirectionalLight), Added<Sun>>) {
-    for (mut transform, mut light) in &mut suns {
+fn sun(prepared: Res<Prepared>, mut suns: Query<(&mut Transform, &mut DirectionalLight, Ref<Sun>)>) {
+    for (mut transform, mut light, _) in suns.iter_mut().filter(|(.., s)| s.is_added() || prepared.is_changed()) {
         *transform = Transform::default().looking_to(-prepared.to_sun, Vec3::Y);
         light.illuminance = SUN;
         light.color = prepared.sun_colour;

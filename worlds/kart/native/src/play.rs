@@ -65,6 +65,7 @@ impl Plugin for PlayPlugin {
             .insert_resource(Shots { after: self.screenshot_after.clone() })
             .init_resource::<CallWanted>()
             .init_resource::<Chosen>()
+            .init_resource::<ChosenEvent>()
             .add_plugins((HudPlugin, PaddockPlugin))
             .add_systems(FixedUpdate, drive)
             .add_systems(
@@ -333,6 +334,16 @@ fn receive(
                         driver.predictor.reconcile(built(&state, racer.as_ref()), state.applied, &circuit.track);
                     }
                 }
+                // Another track (a cup's next race, D-056): the scene is
+                // built again round it, and the player's kart restarts from
+                // the world's.
+                WorldEvent::Changed { entity, type_name } if type_name == types::TRACK => {
+                    if let Some(track) = world.get::<proto::Track>(entity, types::TRACK) {
+                        commands.insert_resource(Course(Circuit::from_proto(&track)));
+                        *circuit = Some(Circuit::from_proto(&track));
+                        driver.predictor = Predictor::default();
+                    }
+                }
                 // Another driver, another colour (D-055): the kart's model
                 // is built again in it.
                 WorldEvent::Changed { entity, type_name } if type_name == types::RACER => {
@@ -418,6 +429,11 @@ fn drive(
 #[derive(Resource, Default)]
 struct Chosen(Option<(usize, usize)>);
 
+/// The event this player picked to race next (D-057), as an index into the
+/// race's events; none until they pick.
+#[derive(Resource, Default)]
+struct ChosenEvent(Option<usize>);
+
 /// Between races, the player picks who drives and in what: left and right
 /// (or a pad's d-pad) the driver, up and down the kart. On the grid the world
 /// changes the kart at once; after a race, from the next one.
@@ -428,14 +444,24 @@ fn choose(
     gamepads: Query<&Gamepad>,
     menu: Res<Menu>,
     mut chosen: ResMut<Chosen>,
+    mut chosen_event: ResMut<ChosenEvent>,
 ) {
     let (Some(mine), Some(choice_type), Some(roster)) = (replica.mine, replica.choice_type, replica.roster()) else {
         return;
     };
-    let between =
-        replica.race().is_some_and(|race| matches!(race.phase(), Phase::Waiting | Phase::Ready | Phase::Finished));
+    let race = replica.race().unwrap_or_default();
+    let between = matches!(race.phase(), Phase::Waiting | Phase::Ready | Phase::Finished);
     if !between || menu.0 || roster.drivers.is_empty() || roster.karts.is_empty() {
         return;
+    }
+    // T: the next event, a cup or a track alone; the host's is raced, the
+    // others' are votes.
+    if keys.just_pressed(KeyCode::KeyT) && !race.events.is_empty() {
+        let now = chosen_event.0.unwrap_or_else(|| race.events.iter().position(|e| *e == race.event).unwrap_or(0));
+        let next = (now + 1) % race.events.len();
+        chosen_event.0 = Some(next);
+        let choice = proto::Choice { event: race.events[next].clone(), ..default() };
+        let _ = outbox.0.send(intent(0, mine, choice_type, &choice));
     }
     let pressed = |key: KeyCode, button: GamepadButton| {
         keys.just_pressed(key) || gamepads.iter().any(|pad| pad.just_pressed(button))
@@ -461,8 +487,74 @@ fn choose(
     let turn = |at: usize, by: i64, of: usize| (at as i64 + by).rem_euclid(of as i64) as usize;
     let picked = (turn(now_driver, driver, roster.drivers.len()), turn(now_kart, kart, roster.karts.len()));
     chosen.0 = Some(picked);
-    let choice = proto::Choice { driver: roster.drivers[picked.0].id.clone(), kart: roster.karts[picked.1].id.clone() };
+    let choice = proto::Choice {
+        driver: roster.drivers[picked.0].id.clone(),
+        kart: roster.karts[picked.1].id.clone(),
+        ..default()
+    };
     let _ = outbox.0.send(intent(0, mine, choice_type, &choice));
+}
+
+/// A track's name from its id; the id when it is not built in.
+fn track_name(id: &str) -> String {
+    osage_kart_tracks::by_id(id).map_or_else(|| id.to_owned(), |track| track.name)
+}
+
+/// An event as the HUD names it: a cup by its name, a track alone by its.
+fn event_name(event: &str) -> String {
+    if let Some(id) = event.strip_prefix("cup:") {
+        let name = osage_kart_cup::built_in().into_iter().find(|c| c.id == id).map_or(id.to_owned(), |c| c.name);
+        format!("{name} (cup)")
+    } else {
+        format!("{} (one track)", track_name(event.strip_prefix("track:").unwrap_or(event)))
+    }
+}
+
+/// The cup and its standings, and what is raced next, as the HUD says them
+/// between races (D-057).
+fn cup_lines(
+    race: Option<proto::Race>,
+    me: Option<String>,
+    picked: Option<usize>,
+    mine: Option<u64>,
+) -> (String, String) {
+    let Some(race) = race else { return (String::new(), String::new()) };
+    let cup = race.cup.as_ref().map_or_else(String::new, |cup| {
+        let races = cup.tracks.len();
+        let over = cup.race as usize > races;
+        let head = if over {
+            format!("{} - FINAL STANDINGS", cup.name.to_uppercase())
+        } else {
+            let track = cup.tracks.get(cup.race as usize - 1).map(|id| track_name(id)).unwrap_or_default();
+            format!("{} - race {} of {races}: {track}", cup.name.to_uppercase(), cup.race)
+        };
+        let rows = cup.standings.iter().take(8).enumerate().map(|(i, s)| {
+            let mark = if me.as_ref() == Some(&s.name) { ">" } else { " " };
+            let places: Vec<String> =
+                s.places.iter().map(|p| if *p == 0 { "-".to_owned() } else { p.to_string() }).collect();
+            let podium = match (over, i) {
+                (true, 0) => "  WINNER",
+                (true, 1 | 2) => "  podium",
+                _ => "",
+            };
+            format!("{mark}{:>2} {:<14.14} {:>3} pts  {}{podium}", i + 1, s.name, s.points, places.join(" "))
+        });
+        std::iter::once(head).chain(rows).collect::<Vec<_>>().join("\n")
+    });
+    let hosting = mine.is_some_and(|mine| mine == race.host);
+    let shown = picked.and_then(|i| race.events.get(i)).unwrap_or(&race.event);
+    let votes: Vec<String> = race.votes.iter().map(|v| format!("{} {}", event_name(&v.event), v.drivers)).collect();
+    let mut event = if race.events.is_empty() {
+        String::new()
+    } else if hosting || race.host == 0 {
+        format!("T  next: {}", event_name(shown))
+    } else {
+        format!("Next: {}   T  your vote: {}", event_name(&race.event), event_name(shown))
+    };
+    if !votes.is_empty() && !event.is_empty() {
+        event.push_str(&format!("\nvotes: {}", votes.join(", ")));
+    }
+    (cup, event)
 }
 
 /// Who drives the player's kart and in what, as the HUD says it.
@@ -580,6 +672,7 @@ fn summarise(
     replica: Res<Replica>,
     driver: Res<Driver>,
     chosen: Res<Chosen>,
+    chosen_event: Res<ChosenEvent>,
     karts: Query<(&Remote, &Pose)>,
     mut view: ResMut<RaceView>,
     mut paddock: ResMut<PaddockView>,
@@ -598,6 +691,10 @@ fn summarise(
     view.trailing = racer.as_ref().is_some_and(|racer| racer.trailing);
     view.guard = racer.as_ref().map_or(0.0, |racer| racer.guard);
     view.pick = pick(replica.roster(), racer.as_ref(), chosen.0);
+    let (cup, event) = cup_lines(replica.race(), racer.as_ref().map(|r| r.name.clone()), chosen_event.0, replica.mine);
+    if view.cup != cup || view.event != event {
+        (view.cup, view.event) = (cup, event);
+    }
     let race = replica.race();
     let now = replica.world_time();
     let seconds_left = |race: &proto::Race| ((race.phase_ends_us as i64 - now) as f32 / 1e6).ceil() as i64;

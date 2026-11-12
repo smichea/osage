@@ -1,0 +1,30 @@
+# SPDX-FileCopyrightText: The osage contributors
+# SPDX-License-Identifier: MIT OR Apache-2.0
+kart-track/1
+id forest
+name Pinewood
+about A narrow lane through a pine forest at dusk: bend after bend, a dip and a brow, never a long straight.
+sky evening
+scenery forest
+half-width 6
+verge 3
+point 0 -60
+point 0 0 start
+point 0 60
+point -15 95
+point -50 110
+point -80 90
+point -85 55
+point -65 30
+point -70 0
+point -102 -22
+point -138 -12
+point -153 -40
+point -135 -75
+point -95 -90
+point -64 -88
+point -45 -108
+point -30 -121
+point -9 -119
+point 2 -96
+crest 25 10 6 1.0

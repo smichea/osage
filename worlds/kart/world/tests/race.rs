@@ -257,7 +257,7 @@ fn call(harness: &mut Harness, client: &mut Client, name: &str, sequence: u64, c
 /// the grid with them, and whoever races alone can end the race.
 #[test]
 fn the_host_starts_the_race_and_a_driver_alone_can_end_it() {
-    let mut harness = Harness::new(KartWorld { grid: 3, laps: 3, host_starts: true, records: None }, TICK_HZ);
+    let mut harness = Harness::new(KartWorld { grid: 3, laps: 3, host_starts: true, ..KartWorld::default() }, TICK_HZ);
     let mut alice = Client::join(&mut harness, SessionKind::Human, Role::Player, "alice");
     harness.run(SECOND);
     let mut bob = Client::join(&mut harness, SessionKind::Human, Role::Player, "bob");
@@ -497,7 +497,7 @@ fn records_are_kept_beaten_and_survive_a_restart() {
 /// race; the roster lists everyone.
 #[test]
 fn a_driver_chooses_who_drives_and_in_what() {
-    let mut harness = Harness::new(KartWorld { grid: 3, laps: 1, host_starts: true, records: None }, TICK_HZ);
+    let mut harness = Harness::new(KartWorld { grid: 3, laps: 1, host_starts: true, ..KartWorld::default() }, TICK_HZ);
     let mut alice = Client::join(&mut harness, SessionKind::Human, Role::Player, "alice");
     run_until(&mut harness, &mut alice, 5, |c| phase(&c.race()) == proto::Phase::Ready);
     let (entity, before, _) = alice.kart_of("alice");
@@ -507,7 +507,7 @@ fn a_driver_chooses_who_drives_and_in_what() {
     assert_eq!((roster.drivers.len(), roster.karts.len()), (8, 4));
 
     let choice_type = alice.world.types().id(types::CHOICE).unwrap();
-    let chosen = proto::Choice { driver: "bolt".into(), kart: "cruiser".into() };
+    let chosen = proto::Choice { driver: "bolt".into(), kart: "cruiser".into(), ..Default::default() };
     harness.send(alice.session, intent(1, entity, choice_type, &chosen));
     harness.run(2);
     let (_, after, _) = alice.kart_of("alice");
@@ -517,11 +517,89 @@ fn a_driver_chooses_who_drives_and_in_what() {
     assert_ne!(after.color, before.color, "Bolt's colour");
 
     // An unknown driver keeps Bolt; the kart changes.
-    let half = proto::Choice { driver: "nobody".into(), kart: "sprint".into() };
+    let half = proto::Choice { driver: "nobody".into(), kart: "sprint".into(), ..Default::default() };
     harness.send(alice.session, intent(2, entity, choice_type, &half));
     harness.run(2);
     let (_, now, _) = alice.kart_of("alice");
     assert_eq!((now.driver.as_str(), now.kart.as_str()), ("bolt", "sprint"));
     // The bots race as the roster's drivers.
     assert!(alice.karts().iter().filter(|(_, r, _)| r.bot).all(|(_, r, _)| !r.driver.is_empty() && r.build.is_some()));
+}
+
+/// G3.4 (D-057): a whole cup — four tracks one after the other, points by
+/// place, standings between the races, a podium — then the cup again.
+#[test]
+fn a_whole_cup_is_raced_track_by_track_with_standings() {
+    let world = KartWorld { event: Some("cup:grand-tour".into()), ..KartWorld::unattended(4, 1) };
+    let mut harness = Harness::new(world, TICK_HZ);
+    let mut ada = Client::join(&mut harness, SessionKind::Agent, Role::Agent, "agent-1.ada");
+    let autopilot_type = ada.world.types().id(types::AUTOPILOT).unwrap();
+    let track_id = |c: &mut Client| {
+        c.catch_up();
+        let entity = c.world.entities().find(|&e| c.world.get::<proto::Track>(e, types::TRACK).is_some()).unwrap();
+        c.world.get::<proto::Track>(entity, types::TRACK).unwrap().id
+    };
+    let mut raced = Vec::new();
+    for race in 1..=4u32 {
+        run_until(&mut harness, &mut ada, 15, |c| phase(&c.race()) == proto::Phase::Racing);
+        let cup = ada.race().cup.expect("a cup");
+        assert_eq!((cup.name.as_str(), cup.race), ("Grand Tour", race));
+        raced.push(track_id(&mut ada));
+        // The agent drives; the tracks differ, the karts are on this one.
+        let (entity, _, _) = ada.kart_of("agent-1.ada");
+        let pace = proto::Autopilot { pace: 0.9, line: 0.0, drift: true, use_items: true };
+        harness.send(ada.session, intent(race as u64, entity, autopilot_type, &pace));
+        run_until(&mut harness, &mut ada, 120, |c| phase(&c.race()) == proto::Phase::Finished);
+        let standings = ada.race().cup.unwrap().standings;
+        assert_eq!(standings.len(), 4, "every driver scores");
+        assert!(standings.iter().all(|s| s.places.len() == race as usize), "{standings:?}");
+        let points: u32 = standings.iter().map(|s| s.points).sum();
+        assert_eq!(points, race * (10 + 8 + 6 + 5), "the points of four places, each race");
+        assert!(standings.windows(2).all(|w| w[0].points >= w[1].points), "first first");
+    }
+    assert_eq!(raced, ["paddock", "coast", "forest", "harbour"]);
+    // The podium stays up longer, then the cup starts again.
+    let race = ada.race();
+    assert_eq!(race.cup.as_ref().unwrap().race, 5, "over");
+    assert!(race.events.contains(&"track:forest".to_owned()) && race.events.contains(&"cup:grand-tour".to_owned()));
+    harness.run(10 * SECOND);
+    assert_eq!(phase(&ada.race()), proto::Phase::Finished, "the podium is still up");
+    run_until(&mut harness, &mut ada, 15, |c| phase(&c.race()) == proto::Phase::Countdown);
+    assert_eq!(track_id(&mut ada), "paddock");
+    let cup = ada.race().cup.unwrap();
+    assert_eq!((cup.race, cup.standings.len()), (1, 0), "a fresh cup");
+}
+
+/// D-057: the host chooses what is raced next; on the grid it changes at
+/// once, and the others' choices are counted as votes.
+#[test]
+fn the_host_chooses_the_event_and_the_others_vote() {
+    let world =
+        KartWorld { grid: 3, laps: 1, host_starts: true, event: Some("cup:grand-tour".into()), ..KartWorld::default() };
+    let mut harness = Harness::new(world, TICK_HZ);
+    let mut alice = Client::join(&mut harness, SessionKind::Human, Role::Player, "alice");
+    let mut bob = Client::join(&mut harness, SessionKind::Human, Role::Player, "bob");
+    run_until(&mut harness, &mut alice, 5, |c| phase(&c.race()) == proto::Phase::Ready);
+    harness.run(2);
+    let choice_type = alice.world.types().id(types::CHOICE).unwrap();
+    let (bobs, _, _) = bob.kart_of("bob");
+    let vote = proto::Choice { event: "track:coast".into(), ..Default::default() };
+    harness.send(bob.session, intent(1, bobs, choice_type, &vote));
+    harness.run(2);
+    let race = alice.race();
+    assert_eq!(race.votes, [proto::Vote { event: "track:coast".into(), drivers: 1 }]);
+    assert_eq!(race.cup.as_ref().map(|c| c.race), Some(1), "bob is not the host: the cup goes on");
+
+    let (alices, _, _) = alice.kart_of("alice");
+    let choice = proto::Choice { event: "track:harbour".into(), ..Default::default() };
+    harness.send(alice.session, intent(1, alices, choice_type, &choice));
+    harness.run(3);
+    let race = alice.race();
+    assert_eq!(phase(&race), proto::Phase::Ready);
+    assert!(race.cup.is_none(), "one track now");
+    assert_eq!(race.event, "track:harbour");
+    let track = alice.track();
+    let harbour = osage_kart_tracks::by_id("harbour").unwrap().build().0;
+    assert_eq!(track.length(), harbour.length(), "the grid is on the harbour");
+    assert_eq!(alice.karts().len(), 3);
 }

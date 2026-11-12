@@ -144,7 +144,9 @@ try {
   session.onMessage((message) => {
     if (message.message.case === "state") serverOffset = Number(message.message.value.serverTimeUs) / 1000 - Date.now();
     for (const event of world.apply(message)) {
-      if (event.kind === "entered") {
+      // A track arrives, or the next of a cup (D-056): the circuit is built again.
+      const newTrack = event.kind === "entered" || (event.kind === "changed" && event.typeName === KART.track);
+      if (newTrack) {
         const track = world.get(event.entity, KART.track, TrackSchema);
         if (track) {
           physics.setTrack(track.points, track.halfWidth, track.verge, track.crests);
@@ -154,7 +156,10 @@ try {
             physics.roadHeight(along),
           );
           scene.add(circuit.group);
+          if (event.kind === "changed") predictor = mine !== undefined ? new Predictor(physics) : undefined;
         }
+      }
+      if (event.kind === "entered") {
         const who = racer(event.entity);
         const kart = state(event.entity);
         if (who && kart) {
@@ -209,7 +214,63 @@ try {
       "kart-on": [0, 1],
     };
     if (turns[id]) choose(...turns[id]);
+    if (id === "event-on") chooseEvent();
   });
+
+  /** The event picked here to race next (D-057), an index into the race's events. */
+  let chosenEvent: number | undefined;
+  /** The next event, a cup or a track alone: the host's is raced, the others' are votes. */
+  function chooseEvent() {
+    const now = race();
+    const choiceType = world.typeId(KART.choice);
+    if (mine === undefined || !now || !now.events.length || choiceType === undefined || !between()) return;
+    const at = chosenEvent ?? Math.max(0, now.events.indexOf(now.event));
+    chosenEvent = (at + 1) % now.events.length;
+    const choice = create(ChoiceSchema, { event: now.events[chosenEvent] });
+    session.sendIntent(0n, mine, choiceType, toBinary(ChoiceSchema, choice));
+  }
+  const TRACK_NAMES: Record<string, string> = {
+    paddock: "The Paddock",
+    coast: "Gull Point",
+    forest: "Pinewood",
+    harbour: "Harbour Town",
+  };
+  const trackName = (id: string) => TRACK_NAMES[id] ?? id;
+  const eventName = (event: string, cup?: string) =>
+    event.startsWith("cup:") ? `${cup ?? event.slice(4)} (cup)` : `${trackName(event.slice(6))} (one track)`;
+  /** The cup and its standings, and what is raced next with a button to change it. */
+  const cupPanel = () => {
+    const now = race();
+    if (!now) return "";
+    const myName = mine !== undefined ? racer(mine)?.name : undefined;
+    let html = "";
+    const cup = now.cup;
+    if (cup) {
+      const over = cup.race > cup.tracks.length;
+      const head = over
+        ? `<b>${escape(cup.name)}</b> · final standings`
+        : `<b>${escape(cup.name)}</b> · race ${cup.race} of ${cup.tracks.length}: ${escape(trackName(cup.tracks[cup.race - 1]))}`;
+      const rows = cup.standings
+        .slice(0, 8)
+        .map((s, i) => {
+          const places = s.places.map((p) => (p === 0 ? "–" : p)).join(" ");
+          const podium = over && i < 3 ? [" 🏆", " 🥈", " 🥉"][i] : "";
+          return `<div class="${s.name === myName ? "me" : ""}">${i + 1}. ${escape(s.name)} · ${s.points} pts <small>${places}</small>${podium}</div>`;
+        })
+        .join("");
+      html += `<hr>${head}${rows}`;
+    }
+    if (now.events.length && mine !== undefined) {
+      const hosting = now.host === mine || now.host === 0n;
+      const shown = chosenEvent !== undefined ? now.events[chosenEvent] : now.event;
+      const votes = now.votes.map((v) => `${escape(eventName(v.event, cup?.name))} ${v.drivers}`).join(", ");
+      html += hosting
+        ? `<hr>next: <b>${escape(eventName(shown, cup?.name))}</b> <button id="event-on">change (T)</button>`
+        : `<hr>next: <b>${escape(eventName(now.event, cup?.name))}</b> · your vote: ${escape(eventName(shown, cup?.name))} <button id="event-on">change (T)</button>`;
+      if (votes) html += `<br><small>votes: ${votes}</small>`;
+    }
+    return html;
+  };
 
   /** The driver and kart picked here (D-055), as indices into the world's roster. */
   let chosen: [number, number] | undefined;
@@ -242,6 +303,7 @@ try {
       ArrowDown: [0, 1],
     };
     if (turns[event.key]) choose(...turns[event.key]);
+    if (event.key === "t" || event.key === "T") chooseEvent();
   });
   /** Who drives my kart and in what, with buttons to change it. */
   const pick = () => {
@@ -370,14 +432,14 @@ try {
     if (now.phase === Phase.FINISHED) {
       const podium = rows.slice(0, 8).join("");
       const myName = mine !== undefined ? racer(mine)?.name : undefined;
-      show(`<div class="panel"><b>Results</b> · next race in ${Math.max(0, Math.ceil(remaining / 1000))} s<hr>${podium}${records(myName)}${pick()}</div>`);
+      show(`<div class="panel"><b>Results</b> · next race in ${Math.max(0, Math.ceil(remaining / 1000))} s<hr>${podium}${cupPanel()}${pick()}${records(myName)}</div>`);
     } else if (now.phase === Phase.READY) {
       const host = now.host === 0n ? undefined : racer(now.host)?.name;
       show(mine !== undefined && now.host === mine
-          ? `<div class="panel"><b>Ready</b> · others can still join<br><button id="start">Start the race</button>${pick()}</div>`
-          : `<div class="panel">waiting for ${host ?? "the host"} to start the race…${pick()}</div>`);
+          ? `<div class="panel"><b>Ready</b> · others can still join<br><button id="start">Start the race</button>${cupPanel()}${pick()}</div>`
+          : `<div class="panel">waiting for ${host ?? "the host"} to start the race…${cupPanel()}${pick()}</div>`);
     } else if (now.phase === Phase.WAITING) {
-      show(`<div class="panel">waiting for drivers…${pick()}</div>`);
+      show(`<div class="panel">waiting for drivers…${cupPanel()}${pick()}</div>`);
     } else {
       show("");
     }

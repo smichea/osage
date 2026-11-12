@@ -17,10 +17,7 @@ use osage_kart_records::{Entered, Event, Record, Records};
 use osage_world_module_api::Discrete;
 use tracing::warn;
 
-use crate::{Ids, RaceBoard, Rules, proto, race::Race};
-
-/// The track the world races on, as its records name it.
-pub const TRACK: &str = "paddock";
+use crate::{Course, Ids, RaceBoard, Rules, proto, race::Race};
 
 /// A time set this tick: who, a bot or not, a lap or a race, ms.
 pub struct Timed {
@@ -45,7 +42,8 @@ pub struct Book {
     fresh: BTreeSet<(Event, String)>,
     /// The race they were set in.
     race: u32,
-    published: bool,
+    /// The track they were last published for.
+    published: Option<String>,
 }
 
 impl Book {
@@ -58,7 +56,7 @@ impl Book {
             }),
             None => Records::default(),
         };
-        Self { records, path, fresh: BTreeSet::new(), race: 0, published: false }
+        Self { records, path, fresh: BTreeSet::new(), race: 0, published: None }
     }
 }
 
@@ -66,11 +64,14 @@ pub fn keep(
     rules: Res<Rules>,
     ids: Res<Ids>,
     race: Res<Race>,
+    course: Res<Course>,
     mut times: ResMut<Times>,
     mut book: ResMut<Book>,
     mut board: Query<&mut Discrete, With<RaceBoard>>,
 ) {
-    let mut changed = !book.published;
+    // The track the world races on, as its records name it (D-056).
+    let track = course.0.about.id.as_str();
+    let mut changed = book.published.as_deref() != Some(track);
     if book.race != race.races() {
         book.race = race.races();
         changed |= !book.fresh.is_empty();
@@ -81,7 +82,7 @@ pub fn keep(
     for time in times.0.drain(..).filter(|t| !t.bot) {
         let (kart, driver) = (time.pair.1.name.to_owned(), time.pair.0.name.to_owned());
         let record = Record { name: time.name.clone(), ms: time.ms, at, kart, driver };
-        if let Entered::At(_) = book.records.offer(TRACK, time.event, record) {
+        if let Entered::At(_) = book.records.offer(track, time.event, record) {
             book.fresh.insert((time.event, time.name));
             entered = true;
         }
@@ -95,15 +96,15 @@ pub fn keep(
     if (changed || entered)
         && let Ok(mut board) = board.single_mut()
     {
-        board.set(ids.records, &to_proto(&book, rules.laps));
-        book.published = true;
+        board.set(ids.records, &to_proto(&book, track, rules.laps));
+        book.published = Some(track.to_owned());
     }
 }
 
-fn to_proto(book: &Book, laps: u32) -> proto::Records {
+fn to_proto(book: &Book, track: &str, laps: u32) -> proto::Records {
     let list = |event: Event| {
         book.records
-            .board(TRACK, event)
+            .board(track, event)
             .iter()
             .map(|r| proto::Record {
                 name: r.name.clone(),
@@ -116,7 +117,7 @@ fn to_proto(book: &Book, laps: u32) -> proto::Records {
             .collect()
     };
     proto::Records {
-        track: TRACK.to_owned(),
+        track: track.to_owned(),
         laps: list(Event::Lap),
         races: list(Event::Race { laps }),
         race_laps: laps,

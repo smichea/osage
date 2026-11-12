@@ -72,7 +72,7 @@ fn light(
     // The world's photograph of the sky, where it gave one.
     if let Some(panorama) = panorama {
         for (camera, lit, _) in &cameras {
-            if !lit {
+            if !lit || panorama.is_changed() {
                 commands.entity(camera).insert(EnvironmentMapLight {
                     diffuse_map: panorama.light.0.clone(),
                     specular_map: panorama.light.1.clone(),
