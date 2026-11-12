@@ -1,6 +1,7 @@
 # Knowledge Update Log
 
 ## 2026-11-12
+* **Update**: [Holding a frame rate](/techniques/frame-pacing.md) can also trade the light from the sky for a constant light, the atmosphere for a sky of one colour and a haze, and leave out detail textures; the sun's shadows come back before Bevy works out its cascades, which it otherwise did not survive.
 * **Update**: [osage-kart-native](/modules/kart-native.md): the host starts each race from the grid, a player alone can end one (D-049).
 * **Update**: [osage-kart-items](/modules/kart-items.md) gains a smoke canister (coloured smoke, `Racer.smoke`); [osage-kart-native](/modules/kart-native.md) shows on every kart the item it holds.
 * **Update**: [osage-kart-physics](/modules/kart-physics.md) gains a rocket (D-048); [osage-kart-items](/modules/kart-items.md) a rocket item and a 2.5 s nitro; [osage-kart-native](/modules/kart-native.md) glass crates with question marks, broken at once with confetti, rockets and boost flames and smoke.

@@ -24,7 +24,11 @@ use bevy::{
 
 use crate::{OsageCamera, Sun, Tier, panorama};
 
-const SKY_BLUE: Color = Color::srgb(0.53, 0.71, 0.88);
+pub(crate) const SKY_BLUE: Color = Color::srgb(0.53, 0.71, 0.88);
+/// Where the atmosphere is not computed (at a lower rung of
+/// [`crate::pace`]), distance at which the land has faded halfway into the
+/// sky's colour, metres.
+pub(crate) const VISIBILITY: f32 = 3000.0;
 
 pub struct SkyPlugin;
 

@@ -12,7 +12,12 @@
 //! 2. the costly screen effects off (ambient occlusion, contact shadows,
 //!    motion blur, bloom);
 //! 3. fewer pixels again (70 %), then the sun's shadows off;
-//! 4. fewer pixels still, down to a third.
+//! 4. the light from the sky (an environment map) traded for a constant
+//!    light of its colour;
+//! 5. the computed atmosphere traded for a sky of one colour and a haze;
+//! 6. the detail textures of materials (normal, roughness, occlusion and
+//!    depth maps) left out, their base colour kept;
+//! 7. fewer pixels still, down to a third.
 //!
 //! The rate is read as the median of the last frames, so that a single
 //! slow frame (a shader compiled, a texture uploaded) moves nothing. Going
@@ -26,13 +31,14 @@
 use std::collections::VecDeque;
 
 use bevy::{
-    pbr::{ContactShadows, ScreenSpaceAmbientOcclusion},
+    light::{AtmosphereEnvironmentMapLight, EnvironmentMapLight, light_consts::lux},
+    pbr::{AtmosphereSettings, ContactShadows, DistanceFog, FogFalloff, ScreenSpaceAmbientOcclusion},
     post_process::{bloom::Bloom, motion_blur::MotionBlur},
     prelude::*,
     window::{Monitor, PrimaryMonitor},
 };
 
-use crate::{OsageCamera, Sun};
+use crate::{OsageCamera, Sun, panorama::Prepared, sky, sky_light};
 
 /// Frames a second wanted; `None` keeps the tier's picture whatever the rate.
 #[derive(Resource, Clone, Copy, Debug, Default, PartialEq)]
@@ -47,23 +53,41 @@ pub struct Rung {
     pub effects: bool,
     /// The sun casts shadows.
     pub shadows: bool,
+    /// The sky lights the scene through an environment map.
+    pub sky_light: bool,
+    /// The atmosphere is computed.
+    pub atmosphere: bool,
+    /// Materials keep their detail textures.
+    pub textures: bool,
 }
 
-const fn rung(scale: f32, effects: bool, shadows: bool) -> Rung {
-    Rung { scale, effects, shadows }
+/// A rung that has given up the first `given` of: effects, shadows, sky
+/// light, atmosphere, textures.
+const fn rung(scale: f32, given: u8) -> Rung {
+    Rung {
+        scale,
+        effects: given < 1,
+        shadows: given < 2,
+        sky_light: given < 3,
+        atmosphere: given < 4,
+        textures: given < 5,
+    }
 }
 
 /// From the tier's own picture down to the cheapest one.
-pub const LADDER: [Rung; 9] = [
-    rung(1.0, true, true),
-    rung(0.9, true, true),
-    rung(0.8, true, true),
-    rung(0.8, false, true),
-    rung(0.7, false, true),
-    rung(0.7, false, false),
-    rung(0.55, false, false),
-    rung(0.45, false, false),
-    rung(0.33, false, false),
+pub const LADDER: [Rung; 12] = [
+    rung(1.0, 0),
+    rung(0.9, 0),
+    rung(0.8, 0),
+    rung(0.8, 1),
+    rung(0.7, 1),
+    rung(0.7, 2),
+    rung(0.7, 3),
+    rung(0.7, 4),
+    rung(0.7, 5),
+    rung(0.55, 5),
+    rung(0.45, 5),
+    rung(0.33, 5),
 ];
 
 /// Where the picture is on the ladder, and the rate it gets: for the
@@ -188,7 +212,12 @@ impl Plugin for PacePlugin {
         app.init_resource::<FrameTarget>()
             .init_resource::<Pace>()
             .init_resource::<Driver>()
-            .add_systems(Last, (govern, effects, shadows).chain());
+            .add_systems(Last, (govern, effects, sky_light, atmosphere, textures).chain())
+            // Before the frame's shadow cascades and what each sees are
+            // worked out (`PostUpdate`): a sun whose shadows come back in
+            // `Last` would reach the renderer with cascades but nothing
+            // seen in them, which Bevy does not survive.
+            .add_systems(Update, shadows);
     }
 }
 
@@ -230,14 +259,19 @@ fn govern(
     if *pace != next {
         if pace.rung != next.rung {
             let rung = LADDER[next.rung];
+            let on = |on: bool| if on { "on" } else { "off" };
             info!(
-                "pace: {:.0} fps for {:.0} wanted: rung {} ({:.0} % size, effects {}, shadows {})",
+                "pace: {:.0} fps for {:.0} wanted: rung {} ({:.0} % size, effects {}, shadows {}, \
+                 sky light {}, atmosphere {}, textures {})",
                 next.fps,
                 aim.unwrap_or(0.0),
                 next.rung,
                 rung.scale * 100.0,
-                if rung.effects { "on" } else { "off" },
-                if rung.shadows { "on" } else { "off" },
+                on(rung.effects),
+                on(rung.shadows),
+                on(rung.sky_light),
+                on(rung.atmosphere),
+                on(rung.textures),
             );
         }
         *pace = next;
@@ -317,6 +351,211 @@ fn shadows(
     }
 }
 
+/// What a camera gave up while the sky does not light the scene.
+#[derive(Component)]
+enum SkyStash {
+    Map(EnvironmentMapLight),
+    Atmosphere(AtmosphereEnvironmentMapLight),
+}
+
+/// The constant light that stood before the sky's was traded for one.
+#[derive(Resource)]
+struct AmbientStash(GlobalAmbientLight);
+
+#[allow(clippy::type_complexity)]
+fn sky_light(
+    mut commands: Commands,
+    pace: Res<Pace>,
+    ambient: Option<Res<GlobalAmbientLight>>,
+    stashed: Option<Res<AmbientStash>>,
+    panorama: Option<Res<Prepared>>,
+    cameras: Query<
+        (Entity, Option<&EnvironmentMapLight>, Option<&AtmosphereEnvironmentMapLight>, Option<&SkyStash>),
+        With<OsageCamera>,
+    >,
+) {
+    let on = pace.rung().sky_light;
+    let mut traded = false;
+    for (entity, map, atmosphere, stash) in &cameras {
+        let mut camera = commands.entity(entity);
+        match (on, stash) {
+            (false, None) => {
+                let stash = match (map, atmosphere) {
+                    (Some(map), _) => SkyStash::Map(map.clone()),
+                    (None, Some(atmosphere)) => SkyStash::Atmosphere(atmosphere.clone()),
+                    (None, None) => continue,
+                };
+                camera.remove::<(EnvironmentMapLight, AtmosphereEnvironmentMapLight)>().insert(stash);
+                traded = true;
+            }
+            (true, Some(stash)) => {
+                camera.remove::<SkyStash>();
+                match stash {
+                    SkyStash::Map(map) => camera.insert(map.clone()),
+                    SkyStash::Atmosphere(atmosphere) => camera.insert(atmosphere.clone()),
+                };
+            }
+            _ => {}
+        }
+    }
+    // The scene keeps a light from the sky: a constant one, of its colour.
+    if traded && stashed.is_none() {
+        let before = ambient.map_or(GlobalAmbientLight::NONE, |a| a.clone());
+        commands.insert_resource(AmbientStash(before));
+        commands.insert_resource(panorama.map_or_else(sky_light::constant_ambient, |p| p.ambient.clone()));
+    } else if on && let Some(stashed) = stashed {
+        commands.insert_resource(stashed.0.clone());
+        commands.remove_resource::<AmbientStash>();
+    }
+}
+
+/// What a camera gave up while the atmosphere is not computed.
+#[derive(Component)]
+struct AirStash {
+    settings: AtmosphereSettings,
+    fog: Option<DistanceFog>,
+}
+
+/// What the scene gave up with the atmosphere: the colour behind
+/// everything, and the sun's light before the air took its share.
+#[derive(Resource)]
+struct ClearStash {
+    clear: Option<ClearColor>,
+    suns: Vec<(Entity, f32)>,
+}
+
+#[allow(clippy::type_complexity)]
+fn atmosphere(
+    mut commands: Commands,
+    pace: Res<Pace>,
+    clear: Option<Res<ClearColor>>,
+    stashed: Option<Res<ClearStash>>,
+    cameras: Query<(Entity, Option<&AtmosphereSettings>, Option<&DistanceFog>, Option<&AirStash>), With<OsageCamera>>,
+    mut suns: Query<(Entity, &mut DirectionalLight), With<Sun>>,
+) {
+    let on = pace.rung().atmosphere;
+    let mut traded = false;
+    for (entity, settings, fog, stash) in &cameras {
+        let mut camera = commands.entity(entity);
+        match (on, settings, stash) {
+            (false, Some(settings), None) => {
+                camera.insert(AirStash { settings: settings.clone(), fog: fog.cloned() });
+                camera.remove::<AtmosphereSettings>().insert(DistanceFog {
+                    color: sky::SKY_BLUE,
+                    falloff: FogFalloff::from_visibility_colors(sky::VISIBILITY, sky::SKY_BLUE, sky::SKY_BLUE),
+                    ..default()
+                });
+                traded = true;
+            }
+            (true, _, Some(stash)) => {
+                camera.remove::<(AirStash, DistanceFog)>().insert(stash.settings.clone());
+                if let Some(fog) = stash.fog.clone() {
+                    camera.insert(fog);
+                }
+            }
+            _ => {}
+        }
+    }
+    if traded && stashed.is_none() {
+        // Without air, the sun's light reaches the ground whole: what it is
+        // through a clear day's air is given instead.
+        let suns = suns
+            .iter_mut()
+            .map(|(entity, mut light)| {
+                let raw = light.illuminance;
+                light.illuminance = raw.min(lux::DIRECT_SUNLIGHT);
+                (entity, raw)
+            })
+            .collect();
+        commands.insert_resource(ClearStash { clear: clear.map(|c| c.clone()), suns });
+        commands.insert_resource(ClearColor(sky::SKY_BLUE));
+    } else if on && let Some(stashed) = stashed {
+        for (entity, raw) in &stashed.suns {
+            if let Ok((_, mut light)) = suns.get_mut(*entity) {
+                light.illuminance = *raw;
+            }
+        }
+        match &stashed.clear {
+            Some(clear) => commands.insert_resource(clear.clone()),
+            None => commands.remove_resource::<ClearColor>(),
+        }
+        commands.remove_resource::<ClearStash>();
+    }
+}
+
+/// A material's detail textures, while they are left out.
+#[derive(Clone, Default)]
+struct Detail {
+    normal: Option<Handle<Image>>,
+    roughness: Option<Handle<Image>>,
+    occlusion: Option<Handle<Image>>,
+    depth: Option<Handle<Image>>,
+}
+
+impl Detail {
+    /// Takes the detail textures out of `material`: none if it had none.
+    fn take(material: &mut StandardMaterial) -> Option<Self> {
+        let detail = Self {
+            normal: material.normal_map_texture.take(),
+            roughness: material.metallic_roughness_texture.take(),
+            occlusion: material.occlusion_texture.take(),
+            depth: material.depth_map.take(),
+        };
+        let any = detail.normal.is_some() || detail.roughness.is_some() || detail.occlusion.is_some();
+        (any || detail.depth.is_some()).then_some(detail)
+    }
+
+    fn give_back(self, material: &mut StandardMaterial) {
+        material.normal_map_texture = self.normal;
+        material.metallic_roughness_texture = self.roughness;
+        material.occlusion_texture = self.occlusion;
+        material.depth_map = self.depth;
+    }
+}
+
+/// The materials whose detail textures are left out.
+#[derive(Default)]
+struct Plain(Vec<(AssetId<StandardMaterial>, Detail)>);
+
+fn textures(
+    pace: Res<Pace>,
+    mut materials: ResMut<Assets<StandardMaterial>>,
+    mut added: MessageReader<AssetEvent<StandardMaterial>>,
+    mut plain: Local<Option<Plain>>,
+) {
+    let on = pace.rung().textures;
+    match (on, plain.as_mut()) {
+        (false, None) => {
+            added.clear();
+            let mut taken = Plain::default();
+            for (id, material) in materials.iter_mut() {
+                if let Some(detail) = Detail::take(material) {
+                    taken.0.push((id, detail));
+                }
+            }
+            *plain = Some(taken);
+        }
+        (false, Some(taken)) => {
+            // Materials made meanwhile are drawn plain too.
+            let new: Vec<_> =
+                added.read().filter_map(|e| if let AssetEvent::Added { id } = e { Some(*id) } else { None }).collect();
+            for id in new {
+                if let Some(detail) = materials.get_mut(id).and_then(|mut m| Detail::take(&mut m)) {
+                    taken.0.push((id, detail));
+                }
+            }
+        }
+        (true, Some(_)) => {
+            for (id, detail) in plain.take().map(|p| p.0).unwrap_or_default() {
+                if let Some(mut material) = materials.get_mut(id) {
+                    detail.give_back(&mut material);
+                }
+            }
+        }
+        (true, None) => added.clear(),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -391,6 +630,37 @@ mod tests {
         }
         assert!(changes <= 12, "{changes} changes");
         assert!(governor.rung() >= 1);
+    }
+
+    #[test]
+    fn the_ladder_only_gives_up_more_going_down() {
+        for pair in LADDER.windows(2) {
+            let (a, b) = (pair[0], pair[1]);
+            assert!(b.scale <= a.scale);
+            for (above, below) in [
+                (a.effects, b.effects),
+                (a.shadows, b.shadows),
+                (a.sky_light, b.sky_light),
+                (a.atmosphere, b.atmosphere),
+                (a.textures, b.textures),
+            ] {
+                assert!(above || !below, "{a:?} then {b:?}");
+            }
+            assert_ne!(a, b);
+        }
+        // The light from the sky comes from the atmosphere: it goes first.
+        assert!(LADDER.iter().all(|r| r.atmosphere || !r.sky_light));
+    }
+
+    #[test]
+    fn detail_textures_come_back_as_they_were() {
+        let normal = Handle::<Image>::default();
+        let mut material = StandardMaterial { normal_map_texture: Some(normal.clone()), ..default() };
+        let detail = Detail::take(&mut material).expect("a normal map");
+        assert!(material.normal_map_texture.is_none());
+        detail.give_back(&mut material);
+        assert_eq!(material.normal_map_texture, Some(normal));
+        assert!(Detail::take(&mut StandardMaterial::default()).is_none());
     }
 
     #[test]

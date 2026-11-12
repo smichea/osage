@@ -26,7 +26,7 @@ use bevy::{
     render::render_resource::{Extent3d, TextureDimension, TextureFormat, TextureViewDescriptor, TextureViewDimension},
 };
 
-use crate::{LeftOut, Look, OsageCamera, Sun, Technique, Tier, panorama::Prepared};
+use crate::{LeftOut, Look, OsageCamera, Sun, Technique, Tier, pace::Pace, panorama::Prepared};
 
 /// Luminance of a clear sky overhead, cd/m²: what one unit of the cubemap stands for.
 pub const CLEAR_SKY: f32 = 6000.0;
@@ -63,7 +63,12 @@ fn light(
     panorama: Option<Res<Prepared>>,
     suns: Query<Ref<GlobalTransform>, With<Sun>>,
     cameras: Query<(Entity, Has<EnvironmentMapLight>, Has<AtmosphereEnvironmentMapLight>), With<OsageCamera>>,
+    pace: Option<Res<Pace>>,
 ) {
+    // Traded for a constant light by the frame-rate governor.
+    if pace.is_some_and(|pace| !pace.rung().sky_light) {
+        return;
+    }
     // The world's photograph of the sky, where it gave one.
     if let Some(panorama) = panorama {
         for (camera, lit, _) in &cameras {
