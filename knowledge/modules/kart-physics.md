@@ -15,7 +15,7 @@ One implementation of how a kart moves, shared by everything that must agree on 
 
 # Concepts
 
-- **Kart:** position `x, z`, `heading`, forward `speed`, sideways `slide`, `drift` direction, drift `charge`, `boost` time left, and the `spin` a knock gave it. For contacts, an outline: a capsule 1.9 m by 1.3 m, with a mass and a moment of inertia.
+- **Kart:** position `x, z`, `heading`, forward `speed`, sideways `slide`, `drift` direction, drift `charge`, `boost` time left, `rocket` time left (a paddock object: faster than a boost, 34 m/s, D-048), and the `spin` a knock gave it. For contacts, an outline: a capsule 1.9 m by 1.3 m, with a mass and a moment of inertia.
 - **Controls:** `throttle` and `steer` in −1…1, and the `drift` button.
 - **Track:** a closed centre line, the road's half width, and the verge beyond it; kerbs (`KERB`, 1 m) beyond the road's edge, grass beyond them, and the barriers' face `BARRIER` (0.9 m) beyond the verge.
 - **Ground:** what each wheel runs on — road, kerb or grass.

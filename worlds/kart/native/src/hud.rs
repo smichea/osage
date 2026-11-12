@@ -267,6 +267,7 @@ fn write(
                         Item::Tyre => ("TYRE", Color::srgb(0.85, 0.85, 0.85)),
                         Item::Cone => ("CONE", Color::srgb(1.0, 0.5, 0.15)),
                         Item::Oil => ("OIL", Color::srgb(0.75, 0.6, 1.0)),
+                        Item::Rocket => ("ROCKET", Color::srgb(1.0, 0.3, 0.25)),
                     };
                     tint = Some(colour);
                     format!("{name}  [F]")

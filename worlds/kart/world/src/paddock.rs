@@ -73,6 +73,7 @@ pub fn item(item: Option<Item>) -> proto::Item {
         Some(Item::Tyre) => proto::Item::Tyre,
         Some(Item::Cone) => proto::Item::Cone,
         Some(Item::Oil) => proto::Item::Oil,
+        Some(Item::Rocket) => proto::Item::Rocket,
     }
 }
 

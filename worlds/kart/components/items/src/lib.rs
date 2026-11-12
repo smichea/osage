@@ -8,7 +8,9 @@
 //! one [`Item`], drawn so that the karts at the back get more help than the
 //! leader. A crate comes back a few seconds later. Pressing the use button:
 //!
-//! - **nitro canister:** a boost, as a long drift gives;
+//! - **nitro canister:** a long boost, flames and smoke from the exhausts;
+//! - **rocket:** a rocket strapped behind the seat: faster than a nitro and
+//!   longer; drawn mostly by the back of the field;
 //! - **tyre:** thrown ahead at the kart's speed and more; it rolls, slows,
 //!   bounces off the barriers and spins the first kart it meets;
 //! - **cone:** dropped behind; a kart that hits it is slowed and knocked;
@@ -30,10 +32,11 @@ pub enum Item {
     Tyre,
     Cone,
     Oil,
+    Rocket,
 }
 
 impl Item {
-    pub const ALL: [Item; 4] = [Item::Nitro, Item::Tyre, Item::Cone, Item::Oil];
+    pub const ALL: [Item; 5] = [Item::Nitro, Item::Tyre, Item::Cone, Item::Oil, Item::Rocket];
 }
 
 /// A thing on the track.
@@ -55,8 +58,11 @@ impl Kind {
     }
 }
 
-/// Seconds of boost a nitro canister gives.
-pub const NITRO: f32 = 1.2;
+/// Seconds of boost a nitro canister gives: longer than a long drift's
+/// mini-turbo (1.2 s), to be felt as an item.
+pub const NITRO: f32 = 2.5;
+/// Seconds of rocket.
+pub const ROCKET: f32 = 3.5;
 /// How much faster than the kart a tyre leaves it, m/s.
 pub const THROW: f32 = 14.0;
 /// How fast a rolling tyre slows, m/s².
@@ -289,7 +295,8 @@ impl Paddock {
     /// likelier a nitro, the less likely a cone.
     fn draw(&mut self, place: usize, karts: usize) -> Item {
         let back = if karts > 1 { (place.min(karts - 1)) as f32 / (karts - 1) as f32 } else { 0.0 };
-        let weights = [1.0 + 4.0 * back, 3.0 - back, 3.0 - 2.0 * back, 2.0];
+        // The rocket goes to the back: none to the leader.
+        let weights = [1.0 + 4.0 * back, 3.0 - back, 3.0 - 2.0 * back, 2.0, 3.0 * back * back];
         let total: f32 = weights.iter().sum();
         let mut u = unit(self.seed ^ self.picks.wrapping_mul(0x9e37_79b9)) * total;
         self.picks = self.picks.wrapping_add(1);
@@ -320,6 +327,10 @@ impl Paddock {
         let thing = match item {
             Item::Nitro => {
                 kart.boost = kart.boost.max(NITRO);
+                return;
+            }
+            Item::Rocket => {
+                kart.rocket = kart.rocket.max(ROCKET);
                 return;
             }
             Item::Tyre => {
@@ -368,7 +379,7 @@ fn roll(tyre: &mut Thing, face: f32, track: &Track, events: &mut Vec<Event>) {
 
 /// The point of a kart's spine closest to `(x, z)`, and whether its outline
 /// comes within `reach` of it.
-fn touches(kart: &Kart, x: f32, z: f32, reach: f32) -> bool {
+pub fn touches(kart: &Kart, x: f32, z: f32, reach: f32) -> bool {
     let (dx, dz) = gap(kart, x, z);
     let within = KART_RADIUS + reach;
     dx * dx + dz * dz < within * within
@@ -392,6 +403,7 @@ fn spun(kart: &mut Kart, v: (f32, f32), at: (f32, f32)) {
     kart.drift = 0.0;
     kart.charge = 0.0;
     kart.boost = 0.0;
+    kart.rocket = 0.0;
 }
 
 /// A kart hits a cone at `at`: slowed, knocked away from it.
@@ -436,6 +448,7 @@ pub fn wants(item: Item, me: usize, field: &[Spot], kart: &Kart, track: &Track) 
     });
     match item {
         Item::Nitro => kart.speed > 0.6 * MAX_SPEED && straight(30.0),
+        Item::Rocket => kart.speed > 0.5 * MAX_SPEED && straight(40.0),
         Item::Tyre => {
             straight(25.0) && gaps.clone().any(|(along, across)| (4.0..30.0).contains(&along) && across < 1.5)
         }

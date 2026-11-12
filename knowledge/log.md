@@ -1,6 +1,7 @@
 # Knowledge Update Log
 
 ## 2026-11-12
+* **Update**: [osage-kart-physics](/modules/kart-physics.md) gains a rocket (D-048); [osage-kart-items](/modules/kart-items.md) a rocket item and a 2.5 s nitro; [osage-kart-native](/modules/kart-native.md) glass crates with question marks, broken at once with confetti, rockets and boost flames and smoke.
 * **Creation**: Added the module [osage-update](/modules/osage-update.md): the kart's Windows folder updates itself from GitHub releases before each game (D-047).
 * **Creation**: Added the technique [holding a frame rate](/techniques/frame-pacing.md) to [osage-render](/modules/osage-render.md); [osage-kart-native](/modules/kart-native.md) gains settings (Escape) with the frame rate wanted.
 * **Update**: [osage-kart-items](/modules/kart-items.md) spares the owner of oil and a cone for 6 s; the native client draws things as far ahead as its prediction runs, tosses cones and spreads oil; the cockpit camera no longer lags behind the helmet; [osage-kart-sound](/modules/kart-sound.md)'s engine loops are steadier.

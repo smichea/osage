@@ -16,6 +16,8 @@ export interface KartValues {
   boost: number;
   /** Rate of turn a knock gave, rad/s (D-045). */
   spin: number;
+  /** Seconds of rocket left (paddock objects); 0 from a world that does not send it. */
+  rocket?: number;
 }
 
 /** One step of driving, as in `kart.v1.Step`. */
@@ -58,7 +60,7 @@ export class Physics {
 
   step(k: KartValues, d: Drive): KartValues {
     const w = this.wasm;
-    w.kart_step(k.x, k.z, k.heading, k.speed, k.slide, k.drift, k.charge, k.boost, k.spin, d.throttle, d.steer, d.drift ? 1 : 0);
+    w.kart_step(k.x, k.z, k.heading, k.speed, k.slide, k.drift, k.charge, k.boost, k.spin, k.rocket ?? 0, d.throttle, d.steer, d.drift ? 1 : 0);
     return {
       x: w.kart_get(0),
       z: w.kart_get(1),
@@ -69,6 +71,7 @@ export class Physics {
       charge: w.kart_get(6),
       boost: w.kart_get(7),
       spin: w.kart_get(8),
+      rocket: w.kart_get(9),
     };
   }
 }

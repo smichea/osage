@@ -7,7 +7,7 @@
 //! - `track_clear()`, `track_point(x, z)` for each point, then
 //!   `track_close(half_width, verge)`;
 //! - `kart_step(x, z, heading, speed, slide, drift, charge, boost, spin,
-//!   throttle, steer, drift_button)` advances one step; `kart_get(i)` reads
+//!   rocket, throttle, steer, drift_button)` advances one step; `kart_get(i)` reads
 //!   field `i` of the result, in that order.
 
 use std::cell::RefCell;
@@ -53,11 +53,12 @@ pub extern "C" fn kart_step(
     charge: f32,
     boost: f32,
     spin: f32,
+    rocket: f32,
     throttle: f32,
     steer: f32,
     drift_button: u32,
 ) {
-    let mut kart = Kart { x, z, heading, speed, slide, drift, charge, boost, spin };
+    let mut kart = Kart { x, z, heading, speed, slide, drift, charge, boost, spin, rocket };
     TRACK.with_borrow(|track| {
         if let Some(track) = track {
             step(&mut kart, Controls { throttle, steer, drift: drift_button != 0 }, track);
@@ -78,6 +79,7 @@ pub extern "C" fn kart_get(field: u32) -> f32 {
         6 => k.charge,
         7 => k.boost,
         8 => k.spin,
+        9 => k.rocket,
         _ => f32::NAN,
     })
 }

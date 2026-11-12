@@ -333,6 +333,7 @@ fn state(kart: &Kart, applied: u64) -> proto::KartState {
         boost: kart.boost,
         applied,
         spin: kart.spin,
+        rocket: kart.rocket,
     }
 }
 

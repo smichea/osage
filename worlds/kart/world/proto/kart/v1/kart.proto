@@ -60,6 +60,10 @@ message KartState {
   // Rate of turn a knock gave, rad/s, positive to the left (D-045). Added
   // to kart.state/1: a reader that ignores it predicts without it.
   float spin = 10;
+  // Seconds of rocket left (a paddock object): faster than a boost. Added
+  // to kart.state/1: a reader that ignores it predicts a rocket as a plain
+  // kart, and is corrected.
+  float rocket = 11;
 }
 
 // kart.racer/1 — who drives a kart and how their race goes.
@@ -79,7 +83,7 @@ message Racer {
 
 enum Item {
   ITEM_NONE = 0;
-  // A boost, as a long drift gives.
+  // A long boost.
   ITEM_NITRO = 1;
   // Thrown ahead: it rolls, bounces off the barriers and spins the first
   // kart it meets.
@@ -88,6 +92,8 @@ enum Item {
   ITEM_CONE = 3;
   // A patch left behind: a kart that drives into it spins.
   ITEM_OIL = 4;
+  // A rocket behind the seat: faster than a nitro, and longer.
+  ITEM_ROCKET = 5;
 }
 
 // kart.paddock/1 — crates to pick items from, and what karts left on the

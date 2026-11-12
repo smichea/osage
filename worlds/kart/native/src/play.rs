@@ -206,6 +206,7 @@ fn kart_of(state: &proto::KartState) -> Kart {
         charge: state.charge,
         boost: state.boost,
         spin: state.spin,
+        rocket: state.rocket,
     }
 }
 
@@ -413,12 +414,13 @@ fn summarise(
     mut view: ResMut<RaceView>,
     mut paddock: ResMut<PaddockView>,
 ) {
-    if let Some(now) = replica.paddock().filter(|now| *now != paddock.0) {
-        paddock.0 = now;
+    if let Some(now) = replica.paddock().filter(|now| *now != paddock.paddock) {
+        paddock.paddock = now;
     }
-    let lead = driver.predictor.lead();
-    if paddock.1 != lead {
-        paddock.1 = lead;
+    let (lead, me) = (driver.predictor.lead(), driver.predictor.kart.filter(|_| replica.mine.is_some()));
+    if paddock.lead != lead || paddock.me != me {
+        paddock.lead = lead;
+        paddock.me = me;
     }
     view.held = replica.mine.and_then(|mine| replica.racer(mine)).and_then(|racer| item(racer.held()));
     let race = replica.race();

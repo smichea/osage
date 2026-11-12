@@ -467,3 +467,11 @@ Date: 2026-11-12 · With the maintainer, who asked for an automatic update on Wi
 - **How:** a new crate, `osage-update` (mechanisms: newest release, checked download, unpack, copy over), and the kart's policy in `kart-update`. The system's `curl` and `tar` do the network and the archives: no HTTP, TLS or zip code in the engine. The release workflow writes the commit into `release.txt`.
 - **Why:** players who unzip a folder do not come back to the release page; a fix reaches them only if it comes to them.
 - **Kept:** releases are still the maintainer's act: the updater installs only what was published.
+
+## D-048 — A rocket in the kart's physics
+
+Date: 2026-11-12 · Amends [D-045](#d-045--kart-contacts-with-momentum-and-wheels-that-feel-the-ground), with the maintainer, who asked for a rocket faster and longer than the nitro, and a longer nitro.
+
+- **Decision:** a paddock object, the rocket, gives 3.5 s during which the kart's top speed is 34 m/s (a boost's is 28); a nitro gives 2.5 s of boost instead of 1.2. The rocket goes mostly to the back of the field.
+- **How:** the kart's state gains `rocket`, seconds left, stepped by the physics like `boost`, so that a client predicts it exactly. It travels in `kart.state/1` as field 11 — an added field: an older reader predicts a plain kart and is corrected — and through the WebAssembly interface (`kart_step` takes it after `spin`; `kart_get(9)` reads it). `ITEM_ROCKET = 5` is added to the item enum.
+- **Kept:** the golden files do not change: no rocket in them.

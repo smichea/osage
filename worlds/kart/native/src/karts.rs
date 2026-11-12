@@ -34,6 +34,18 @@ use crate::scene::{Course, PALETTE, Pose, roughness, wobble};
 /// A hop into a drift lasts this long, seconds.
 const HOP: f32 = 0.28;
 
+/// The rockets of a rocket item (paddock objects), strapped either side
+/// behind the seat, pointing back: where each sits, and its nozzle.
+const ROCKETS: [Vec3; 2] = [Vec3::new(0.32, 0.5, -0.62), Vec3::new(-0.32, 0.5, -0.62)];
+const ROCKET_LENGTH: f32 = 0.78;
+const ROCKET_RADIUS: f32 = 0.085;
+pub const ROCKET_NOZZLES: [Vec3; 2] = [
+    Vec3::new(0.32, 0.5, -0.62 - ROCKET_LENGTH / 2.0 - 0.05),
+    Vec3::new(-0.32, 0.5, -0.62 - ROCKET_LENGTH / 2.0 - 0.05),
+];
+/// Rockets slide out and back in this long, seconds.
+const ROCKET_SHOW: f32 = 0.25;
+
 /// The meshes of a part, each with its finish.
 type Meshes = Vec<(Finish, Handle<Mesh>)>;
 
@@ -62,6 +74,8 @@ pub struct Kit {
     models: HashMap<usize, Model>,
     /// The driver's bones at rest, inverted: every driver's skin.
     bindposes: Handle<SkinnedMeshInverseBindposes>,
+    /// A rocket's parts: its tube, its nose, its fins, its nozzle.
+    rocket: Vec<(Handle<Mesh>, Handle<StandardMaterial>, Transform)>,
 }
 
 /// The moving parts of a kart and where its motion stands.
@@ -72,6 +86,9 @@ pub struct Rig {
     bones: Bones,
     /// Each wheel's pivot (the front ones turn to steer) and its tyre (which spins).
     wheels: [(Entity, Entity); 4],
+    /// The rockets, shown while the kart has rocket left.
+    rockets: Entity,
+    shown: f32,
     heading: f32,
     speed: f32,
     steer: f32,
@@ -94,6 +111,7 @@ pub struct Rig {
 
 pub fn setup(
     mut commands: Commands,
+    mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
     mut images: ResMut<Assets<Image>>,
     mut skins: ResMut<Assets<SkinnedMeshInverseBindposes>>,
@@ -110,7 +128,49 @@ pub fn setup(
         })
         .collect();
     let rest: Vec<Mat4> = driver_rest().iter().map(|bone| bone.to_matrix().inverse()).collect();
-    commands.insert_resource(Kit { finishes, models: HashMap::new(), bindposes: skins.add(rest) });
+    // A firework-sized rocket: a red tube with a white band, a nose, three
+    // fins, a dark nozzle. Its axis is +Z; its nose points forward.
+    let paint = |r: f32, g: f32, b: f32, rough: f32, metal: f32| StandardMaterial {
+        base_color: Color::srgb(r, g, b),
+        perceptual_roughness: rough,
+        metallic: metal,
+        ..default()
+    };
+    let (red, white, steel) = (
+        materials.add(paint(0.75, 0.06, 0.04, 0.35, 0.0)),
+        materials.add(paint(0.9, 0.9, 0.88, 0.4, 0.0)),
+        materials.add(paint(0.2, 0.2, 0.22, 0.3, 0.9)),
+    );
+    let along = Quat::from_rotation_x(PI / 2.0);
+    let (r, l) = (ROCKET_RADIUS, ROCKET_LENGTH);
+    let mut rocket = vec![
+        (meshes.add(Cylinder::new(r, l * 0.7)), red.clone(), Transform::from_rotation(along)),
+        (
+            meshes.add(Cylinder::new(r * 1.02, l * 0.1)),
+            white.clone(),
+            Transform::from_xyz(0.0, 0.0, l * 0.2).with_rotation(along),
+        ),
+        (
+            meshes.add(Cone { radius: r, height: l * 0.3 }),
+            red.clone(),
+            Transform::from_xyz(0.0, 0.0, l * 0.5).with_rotation(along),
+        ),
+        (
+            meshes.add(Cylinder::new(r * 0.75, l * 0.12)),
+            steel.clone(),
+            Transform::from_xyz(0.0, 0.0, -l * 0.41).with_rotation(along),
+        ),
+    ];
+    let fin = meshes.add(Cuboid::new(0.012, r * 2.2, l * 0.22));
+    for k in 0..3 {
+        let around = Quat::from_rotation_z(k as f32 * TAU / 3.0);
+        rocket.push((
+            fin.clone(),
+            white.clone(),
+            Transform::from_translation(around * Vec3::Y * r * 1.3 + Vec3::Z * -l * 0.27).with_rotation(around),
+        ));
+    }
+    commands.insert_resource(Kit { finishes, models: HashMap::new(), bindposes: skins.add(rest), rocket });
 }
 
 /// A team's colours from the palette: the paint, white or black stripes
@@ -178,7 +238,7 @@ fn assemble(
     kit: &Kit,
     colour: usize,
     kart: Entity,
-) -> (Entity, Entity, [(Entity, Entity); 4], Bones) {
+) -> (Entity, Entity, [(Entity, Entity); 4], Bones, Entity) {
     let model = &kit.models[&colour];
     let body = commands.spawn((Transform::default(), Visibility::default(), ChildOf(kart))).id();
     spawn_part(commands, kit, &model.body, body);
@@ -207,7 +267,14 @@ fn assemble(
         spawn_part(commands, kit, &model.wheels[i / 2], tyre);
         (pivot, tyre)
     });
-    (body, head, wheels, Bones { steering, joints })
+    let rockets = commands.spawn((Transform::from_scale(Vec3::ZERO), Visibility::Hidden, ChildOf(body))).id();
+    for at in ROCKETS {
+        let rocket = commands.spawn((Transform::from_translation(at), Visibility::default(), ChildOf(rockets))).id();
+        for (mesh, material, place) in &kit.rocket {
+            commands.spawn((Mesh3d(mesh.clone()), MeshMaterial3d(material.clone()), *place, ChildOf(rocket)));
+        }
+    }
+    (body, head, wheels, Bones { steering, joints }, rockets)
 }
 
 /// Gives every parked kart its model.
@@ -235,7 +302,7 @@ pub fn dress(
     for (kart, pose) in &karts {
         let colour = pose.color as usize % PALETTE.len();
         model_of(&mut kit, &mut meshes, colour);
-        let (body, head, wheels, bones) = assemble(&mut commands, &kit, colour, kart);
+        let (body, head, wheels, bones, rockets) = assemble(&mut commands, &kit, colour, kart);
 
         commands.entity(kart).insert((
             Transform::default(),
@@ -245,6 +312,8 @@ pub fn dress(
                 head,
                 bones,
                 wheels,
+                rockets,
+                shown: 0.0,
                 heading: pose.kart.heading,
                 speed: pose.kart.speed,
                 steer: 0.0,
@@ -269,6 +338,7 @@ pub fn animate(
     course: Option<Res<Course>>,
     mut karts: Query<(Entity, &Pose, &mut Rig)>,
     mut transforms: Query<&mut Transform>,
+    mut visibilities: Query<&mut Visibility>,
 ) {
     let seconds = time.delta_secs().max(1e-4);
     let ease = |rate: f32| (seconds * rate).min(1.0);
@@ -311,6 +381,17 @@ pub fn animate(
 
         if let Ok(mut place) = transforms.get_mut(entity) {
             *place = Transform::from_xyz(kart.x, hop, kart.z).with_rotation(Quat::from_rotation_y(kart.heading));
+        }
+        // The rockets slide out while the kart has rocket left, shaking as they burn.
+        let wanted = if kart.rocket > 0.0 { 1.0 } else { 0.0 };
+        rig.shown = (rig.shown + (wanted - rig.shown).signum() * seconds / ROCKET_SHOW).clamp(0.0, 1.0);
+        if let Ok(mut visibility) = visibilities.get_mut(rig.rockets) {
+            visibility.set_if_neq(if rig.shown > 0.0 { Visibility::Inherited } else { Visibility::Hidden });
+        }
+        if let Ok(mut rockets) = transforms.get_mut(rig.rockets) {
+            let burn = wobble(rig.time * 53.0, rig.seed) * 0.006 * wanted;
+            rockets.scale = Vec3::splat(rig.shown);
+            rockets.translation = Vec3::new(burn, -0.25 * (1.0 - rig.shown) + burn, 0.0);
         }
         if let Ok(mut body) = transforms.get_mut(rig.body) {
             body.translation.y = rattle.y * 0.006;

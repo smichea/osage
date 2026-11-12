@@ -143,6 +143,7 @@ fn a_client_predicts_its_kart_exactly() {
         charge: server.charge,
         boost: server.boost,
         spin: server.spin,
+        rocket: server.rocket,
     };
     assert_eq!(server, predicted, "bit for bit");
     assert!(fastest > 21.0 && drifted, "the kart reached full speed and drifted: {fastest}");

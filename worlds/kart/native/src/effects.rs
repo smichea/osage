@@ -2,9 +2,10 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 //! Particles: sparks and smoke from a drifting kart's rear tyres, flames
-//! from its exhausts when it boosts, dust when it leaves the road. On the
-//! photographed circuit ([`Photographed`]), as on a real one: no sparks and
-//! no flames, and tyre smoke a faint veil.
+//! and smoke from its exhausts when it boosts, a rocket's fire and trail of
+//! smoke, dust when it leaves the road. On the photographed circuit
+//! ([`Photographed`]), as on a real one: no sparks, and tyre smoke a faint
+//! veil; boost flames stay (a nitro does that to a real engine).
 //!
 //! A fixed pool of small squares that always face the camera. A particle
 //! fades by shrinking, so that all of a kind share one material and are
@@ -20,12 +21,12 @@ use osage_kart_physics::{LONG_TURBO_CHARGE, SHORT_TURBO_CHARGE};
 use osage_render::OsageCamera;
 
 use crate::{
-    karts::{EXHAUSTS, REAR_CONTACTS},
+    karts::{EXHAUSTS, REAR_CONTACTS, ROCKET_NOZZLES},
     scene::{Course, Photographed, Pose},
 };
 
 /// Particles alive at once, at most.
-const POOL: usize = 640;
+const POOL: usize = 1200;
 
 #[derive(Clone, Copy)]
 enum Kind {
@@ -34,6 +35,10 @@ enum Kind {
     Smoke,
     Dust,
     Flame,
+    /// A rocket's fire: bigger and longer than a boost's flame.
+    Fire,
+    /// Smoke from an exhaust or a rocket: grey, rising, spreading.
+    Exhaust,
 }
 
 #[derive(Component, Default)]
@@ -166,6 +171,8 @@ pub fn emit(
             Kind::Smoke => (0.4 + 0.25 * pool.vary(), 0.3, 1.8, -0.6, pool.smoke.clone()),
             Kind::Dust => (0.5 + 0.3 * pool.vary(), 0.5, 2.0, -0.3, pool.dust.clone()),
             Kind::Flame => (0.12 + 0.1 * pool.vary(), 0.42, -0.7, 0.0, pool.flame.clone()),
+            Kind::Fire => (0.16 + 0.1 * pool.vary(), 0.6, -1.2, 0.0, pool.flame.clone()),
+            Kind::Exhaust => (0.6 + 0.4 * pool.vary(), 0.25, 2.4, -0.4, pool.smoke.clone()),
         };
         *particle = Particle { velocity, life: span, span, size, growth, gravity };
         place.translation = at;
@@ -196,11 +203,27 @@ pub fn emit(
                 }
             }
         }
-        if kart.boost > 0.0 && photographed.is_none() {
+        if kart.boost > 0.0 {
             for exhaust in EXHAUSTS {
                 let at = place.transform_point(exhaust);
                 let jet = -forward * 5.0 + pool.spread(0.6);
                 launch(&mut pool, Kind::Flame, at, forward * speed + jet);
+                if frame.is_multiple_of(2) {
+                    let puff = -forward * 2.0 + Vec3::Y * 0.6 + pool.spread(0.4);
+                    launch(&mut pool, Kind::Exhaust, at, forward * speed * 0.6 + puff);
+                }
+            }
+        }
+        if kart.rocket > 0.0 {
+            for nozzle in ROCKET_NOZZLES {
+                let at = place.transform_point(nozzle);
+                for _ in 0..2 {
+                    let jet = -forward * 9.0 + pool.spread(1.0);
+                    launch(&mut pool, Kind::Fire, at, forward * speed + jet);
+                }
+                // A trail of smoke that hangs where the kart was.
+                let puff = Vec3::Y * 0.4 + pool.spread(0.6);
+                launch(&mut pool, Kind::Exhaust, at - forward * 0.3, puff);
             }
         }
         let off_road = course.as_ref().is_some_and(|course| {

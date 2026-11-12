@@ -5,11 +5,25 @@
 //! standing across the road, tyres rolling, cones and oil left behind. The
 //! world decides what they do ([osage-kart-items](osage_kart_items)); this
 //! only draws them, a pool of models per kind.
+//!
+//! The crates are see-through boxes of amber glass with a question mark on
+//! every face: what is inside is a surprise. The player's own kart breaks
+//! one at once, where it is predicted to be, without waiting for the world
+//! to say so, and it bursts into confetti; another kart's crate bursts when
+//! the world says it is broken.
 
 use std::f32::consts::FRAC_PI_2;
 
-use bevy::prelude::*;
-use osage_kart_items::{CONE_LIFE, CONE_RADIUS, Item, OIL_LIFE, OIL_RADIUS, ROLLING, TYRE_LIFE, TYRE_RADIUS};
+use bevy::{
+    asset::RenderAssetUsages,
+    light::{NotShadowCaster, NotShadowReceiver},
+    prelude::*,
+    render::render_resource::{Extent3d, TextureDimension, TextureFormat},
+};
+use osage_kart_items::{
+    CONE_LIFE, CONE_RADIUS, CRATE_REACH, Item, OIL_LIFE, OIL_RADIUS, ROLLING, TYRE_LIFE, TYRE_RADIUS, touches,
+};
+use osage_kart_physics::Kart;
 use osage_world_kart::proto;
 
 use crate::scene::Stage;
@@ -18,14 +32,20 @@ pub struct PaddockPlugin;
 
 impl Plugin for PaddockPlugin {
     fn build(&self, app: &mut App) {
-        app.init_resource::<PaddockView>().add_systems(Startup, setup).add_systems(Update, show.in_set(Stage::Draw));
+        app.init_resource::<PaddockView>()
+            .add_systems(Startup, setup)
+            .add_systems(Update, (show, confetti).chain().in_set(Stage::Draw));
     }
 }
 
-/// What the world last sent of the paddock, and how far the player's kart
-/// is drawn ahead of it in time (its prediction's lead, seconds).
+/// What the world last sent of the paddock, and the player's kart as it
+/// is drawn: predicted, `lead` seconds ahead of the world's last state.
 #[derive(Resource, Default)]
-pub struct PaddockView(pub proto::Paddock, pub f32);
+pub struct PaddockView {
+    pub paddock: proto::Paddock,
+    pub lead: f32,
+    pub me: Option<Kart>,
+}
 
 /// The item of a protocol value.
 pub fn item(item: proto::Item) -> Option<Item> {
@@ -35,6 +55,7 @@ pub fn item(item: proto::Item) -> Option<Item> {
         proto::Item::Tyre => Some(Item::Tyre),
         proto::Item::Cone => Some(Item::Cone),
         proto::Item::Oil => Some(Item::Oil),
+        proto::Item::Rocket => Some(Item::Rocket),
     }
 }
 
@@ -53,6 +74,24 @@ const SHAPES: [Shape; 4] = [Shape::Crate, Shape::Tyre, Shape::Cone, Shape::Oil];
 struct Looks {
     looks: [(Handle<Mesh>, Handle<StandardMaterial>); 4],
     pools: [Vec<Entity>; 4],
+    /// When each crate was last seen broken here (s, game time), and
+    /// whether the world had it standing.
+    broken: Vec<f32>,
+    standing: Vec<bool>,
+    /// Confetti: a mesh, its colours, the pieces flying.
+    bit: Handle<Mesh>,
+    colours: Vec<Handle<StandardMaterial>>,
+    flying: Vec<(Entity, Bit)>,
+    idle: Vec<Entity>,
+    bursts: u32,
+}
+
+/// A piece of confetti in flight.
+#[derive(Clone, Copy)]
+struct Bit {
+    velocity: Vec3,
+    spin: Vec3,
+    life: f32,
 }
 
 const CRATE: f32 = 0.8;
@@ -60,17 +99,125 @@ const CRATE: f32 = 0.8;
 const TOSS: f32 = 0.45;
 /// Oil spreads to its size in this long, s.
 const SPREAD: f32 = 0.35;
+/// A crate broken here stays hidden this long whatever the world says,
+/// s: the world's word comes a round trip later.
+const TRUST: f32 = 1.5;
+/// Pieces of confetti in a burst, and in flight at most.
+const BURST: usize = 48;
+const CONFETTI: usize = 480;
+/// Seconds a piece of confetti flies.
+const FLIGHT: f32 = 1.4;
 
-fn setup(mut commands: Commands, mut meshes: ResMut<Assets<Mesh>>, mut materials: ResMut<Assets<StandardMaterial>>) {
+/// A face of a crate: amber glass, a darker frame, a question mark drawn
+/// from an arc, a stem and a dot, with soft edges.
+fn crate_face() -> Image {
+    const SIDE: usize = 128;
+    let segment = |p: Vec2, a: Vec2, b: Vec2| {
+        let t = ((p - a).dot(b - a) / (b - a).length_squared()).clamp(0.0, 1.0);
+        p.distance(a + (b - a) * t)
+    };
+    let mut data = Vec::with_capacity(SIDE * SIDE * 4);
+    for y in 0..SIDE {
+        for x in 0..SIDE {
+            let p = Vec2::new(x as f32 + 0.5, y as f32 + 0.5);
+            // How far outside the mark, pixels (negative inside).
+            let centre = Vec2::new(64.0, 44.0);
+            let ring = (p.distance(centre) - 22.0).abs() - 8.0;
+            let angle = (p.y - centre.y).atan2(p.x - centre.x);
+            // The arc: from the left, over the top, down the right to 45°.
+            let arc = if angle <= std::f32::consts::FRAC_PI_4 && angle >= -std::f32::consts::PI * 0.95 {
+                ring
+            } else {
+                f32::MAX
+            };
+            let stem = segment(p, Vec2::new(79.5, 59.5), Vec2::new(64.0, 72.0)).min(segment(
+                p,
+                Vec2::new(64.0, 72.0),
+                Vec2::new(64.0, 82.0),
+            )) - 8.0;
+            let dot = p.distance(Vec2::new(64.0, 102.0)) - 9.0;
+            let mark = (0.5 - arc.min(stem).min(dot)).clamp(0.0, 1.0);
+            let edge = x.min(y).min(SIDE - 1 - x).min(SIDE - 1 - y);
+            let glass = if edge < 8 { [150.0, 70.0, 10.0, 240.0] } else { [255.0, 160.0, 40.0, 90.0] };
+            let white = [255.0, 250.0, 235.0, 255.0];
+            for c in 0..4 {
+                data.push((glass[c] + (white[c] - glass[c]) * mark).round() as u8);
+            }
+        }
+    }
+    Image::new(
+        Extent3d { width: SIDE as u32, height: SIDE as u32, depth_or_array_layers: 1 },
+        TextureDimension::D2,
+        data,
+        TextureFormat::Rgba8UnormSrgb,
+        RenderAssetUsages::RENDER_WORLD,
+    )
+}
+
+/// A box's texture coordinates made again so that every side face shows
+/// its picture upright (a cuboid's left and right faces have it turned a
+/// quarter), read from outside.
+fn upright(mut mesh: Mesh) -> Mesh {
+    let (Some(positions), Some(normals)) = (
+        mesh.attribute(Mesh::ATTRIBUTE_POSITION).and_then(|a| a.as_float3()),
+        mesh.attribute(Mesh::ATTRIBUTE_NORMAL).and_then(|a| a.as_float3()),
+    ) else {
+        return mesh;
+    };
+    let uvs: Vec<[f32; 2]> = positions
+        .iter()
+        .zip(normals)
+        .map(|(p, n)| {
+            let (p, n) = (Vec3::from(*p) / CRATE, Vec3::from(*n));
+            if n.y.abs() > 0.5 {
+                [0.5 + p.x, 0.5 + p.z * n.y.signum()]
+            } else {
+                // Screen right for someone looking at the face.
+                let right = Vec3::Y.cross(n);
+                [0.5 + p.dot(right), 0.5 - p.y]
+            }
+        })
+        .collect();
+    mesh.insert_attribute(Mesh::ATTRIBUTE_UV_0, uvs);
+    mesh
+}
+
+fn setup(
+    mut commands: Commands,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut materials: ResMut<Assets<StandardMaterial>>,
+    mut images: ResMut<Assets<Image>>,
+) {
+    let face = images.add(crate_face());
+    let bit = meshes.add(Rectangle::new(0.07, 0.11));
+    let colours =
+        [(1.0, 0.25, 0.3), (1.0, 0.8, 0.15), (0.2, 0.75, 1.0), (0.35, 0.95, 0.4), (0.85, 0.4, 1.0), (1.0, 1.0, 1.0)]
+            .map(|(r, g, b)| {
+                materials.add(StandardMaterial {
+                    base_color: Color::srgb(r, g, b),
+                    emissive: LinearRgba::rgb(r * 0.6, g * 0.6, b * 0.6),
+                    double_sided: true,
+                    cull_mode: None,
+                    ..default()
+                })
+            })
+            .to_vec();
     let mut look = |mesh: Mesh, material: StandardMaterial| (meshes.add(mesh), materials.add(material));
     let looks = [
-        // A slatted wooden crate, lit from inside: it reads from far away.
+        // Amber glass with a question mark on each face, lit from inside:
+        // it reads from far away.
         look(
-            Cuboid::from_length(CRATE).into(),
+            upright(Cuboid::from_length(CRATE).into()),
             StandardMaterial {
-                base_color: Color::srgb(0.62, 0.43, 0.22),
-                emissive: LinearRgba::rgb(0.9, 0.55, 0.12),
-                perceptual_roughness: 0.75,
+                base_color: Color::WHITE,
+                base_color_texture: Some(face.clone()),
+                emissive: LinearRgba::rgb(1.4, 0.9, 0.45),
+                emissive_texture: Some(face),
+                perceptual_roughness: 0.15,
+                reflectance: 0.5,
+                // Front faces only: the marks on the far faces, seen
+                // through the glass, mirrored, blurred the near ones.
+                alpha_mode: AlphaMode::Blend,
                 ..default()
             },
         ),
@@ -94,7 +241,17 @@ fn setup(mut commands: Commands, mut meshes: ResMut<Assets<Mesh>>, mut materials
             },
         ),
     ];
-    commands.insert_resource(Looks { looks, pools: default() });
+    commands.insert_resource(Looks {
+        looks,
+        pools: default(),
+        broken: Vec::new(),
+        standing: Vec::new(),
+        bit,
+        colours,
+        flying: Vec::new(),
+        idle: Vec::new(),
+        bursts: 0,
+    });
 }
 
 /// Places a model for each crate and thing, hides the models left over.
@@ -107,7 +264,28 @@ fn show(
 ) {
     let t = time.elapsed_secs();
     let mut wanted: [Vec<Transform>; 4] = default();
-    for (i, c) in view.0.crates.iter().enumerate().filter(|(_, c)| c.standing) {
+    let crates = &view.paddock.crates;
+    looks.broken.resize(crates.len(), f32::NEG_INFINITY);
+    looks.standing.resize(crates.len(), false);
+    let mut bursts = Vec::new();
+    for (i, c) in crates.iter().enumerate() {
+        let trusted = t - looks.broken[i] < TRUST;
+        // Broken by the player's kart, as drawn: at once.
+        let at = Vec3::new(c.x, CRATE / 2.0 + 0.15, c.z);
+        if c.standing && !trusted && view.me.is_some_and(|me| touches(&me, c.x, c.z, CRATE_REACH)) {
+            looks.broken[i] = t;
+            bursts.push(at);
+        } else if looks.standing[i] && !c.standing && !trusted {
+            // Broken by another kart, as the world says.
+            looks.broken[i] = t;
+            bursts.push(at);
+        }
+        looks.standing[i] = c.standing;
+    }
+    for at in bursts {
+        burst(&mut commands, &mut looks, at);
+    }
+    for (i, c) in crates.iter().enumerate().filter(|&(i, c)| c.standing && t - looks.broken[i] >= TRUST) {
         let bob = 0.08 * (t * 2.0 + i as f32).sin();
         wanted[0].push(
             Transform::from_xyz(c.x, CRATE / 2.0 + 0.15 + bob, c.z)
@@ -117,8 +295,8 @@ fn show(
     // The player's kart is drawn where it will be once the world has its
     // last steps: things are drawn as far ahead, or a tyre just thrown
     // would show behind the kart that threw it, and run through it.
-    let lead = view.1;
-    for thing in &view.0.things {
+    let lead = view.lead;
+    for thing in &view.paddock.things {
         match thing.kind() {
             proto::Item::Tyre => {
                 let speed = thing.vx.hypot(thing.vz);
@@ -155,7 +333,7 @@ fn show(
             _ => {}
         }
     }
-    let Looks { looks, pools } = &mut *looks;
+    let Looks { looks, pools, .. } = &mut *looks;
     for (k, _) in SHAPES.iter().enumerate() {
         let pool = &mut pools[k];
         for (n, place) in wanted[k].iter().enumerate() {
@@ -177,4 +355,67 @@ fn show(
             }
         }
     }
+}
+
+/// A crate bursts into confetti at `at`.
+fn burst(commands: &mut Commands, looks: &mut Looks, at: Vec3) {
+    looks.bursts = looks.bursts.wrapping_add(1);
+    let seed = looks.bursts.wrapping_mul(0x9e37_79b9);
+    for n in 0..BURST {
+        let entity = match looks.idle.pop() {
+            Some(entity) => entity,
+            None if looks.flying.len() < CONFETTI => {
+                let colour = looks.colours[n % looks.colours.len()].clone();
+                commands
+                    .spawn((
+                        Mesh3d(looks.bit.clone()),
+                        MeshMaterial3d(colour),
+                        Transform::from_translation(at),
+                        Visibility::Hidden,
+                        NotShadowCaster,
+                        NotShadowReceiver,
+                    ))
+                    .id()
+            }
+            None => return,
+        };
+        let u = |k: u32| unit(seed ^ (n as u32).wrapping_mul(0x85eb_ca6b) ^ k.wrapping_mul(0xc2b2_ae35));
+        let around = u(1) * std::f32::consts::TAU;
+        let out = 1.5 + 3.0 * u(2);
+        let velocity = Vec3::new(around.cos() * out, 3.5 + 4.0 * u(3), around.sin() * out);
+        let spin = Vec3::new(u(4) - 0.5, u(5) - 0.5, u(6) - 0.5) * 30.0;
+        commands.entity(entity).insert((Transform::from_translation(at), Visibility::Inherited));
+        looks.flying.push((entity, Bit { velocity, spin, life: FLIGHT * (0.7 + 0.3 * u(7)) }));
+    }
+}
+
+/// Moves the confetti: thrown up, slowed by the air, falling, turning.
+fn confetti(time: Res<Time>, mut looks: ResMut<Looks>, mut bits: Query<(&mut Transform, &mut Visibility)>) {
+    let seconds = time.delta_secs();
+    let Looks { flying, idle, .. } = &mut *looks;
+    flying.retain_mut(|(entity, bit)| {
+        bit.life -= seconds;
+        let Ok((mut place, mut shown)) = bits.get_mut(*entity) else { return false };
+        if bit.life <= 0.0 {
+            *shown = Visibility::Hidden;
+            idle.push(*entity);
+            return false;
+        }
+        bit.velocity.y -= 9.0 * seconds;
+        bit.velocity *= (-2.2 * seconds).exp();
+        place.translation += bit.velocity * seconds;
+        place.rotate(Quat::from_euler(EulerRot::XYZ, bit.spin.x * seconds, bit.spin.y * seconds, bit.spin.z * seconds));
+        place.scale = Vec3::splat((bit.life / 0.3).min(1.0));
+        true
+    });
+}
+
+/// A number in [0, 1) from a hash: the same confetti on every run.
+fn unit(mut x: u32) -> f32 {
+    x ^= x >> 16;
+    x = x.wrapping_mul(0x7feb_352d);
+    x ^= x >> 15;
+    x = x.wrapping_mul(0x846c_a68b);
+    x ^= x >> 16;
+    (x >> 8) as f32 / (1u32 << 24) as f32
 }

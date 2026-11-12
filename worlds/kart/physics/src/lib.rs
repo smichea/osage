@@ -44,6 +44,10 @@ pub const SHORT_TURBO_CHARGE: f32 = 0.7;
 pub const LONG_TURBO_CHARGE: f32 = 1.5;
 const BOOST_SPEED: f32 = 28.0;
 const BOOST_ACCELERATION: f32 = 40.0;
+/// A rocket strapped to the kart: faster than a boost, and pushing on
+/// over grass more than a boost does.
+pub const ROCKET_SPEED: f32 = 34.0;
+const ROCKET_ACCELERATION: f32 = 30.0;
 
 /// A kart's outline, for contacts: a capsule along the kart, its spine
 /// reaching this far ahead of and behind the centre, this thick: 1.9 m long,
@@ -98,6 +102,8 @@ pub struct Kart {
     pub charge: f32,
     /// Seconds of boost left.
     pub boost: f32,
+    /// Seconds of rocket left (paddock objects): faster than a boost.
+    pub rocket: f32,
     /// Rate of turn a knock gave, rad/s, positive to the left (as the
     /// heading grows); the tyres stop it.
     pub spin: f32,
@@ -302,7 +308,13 @@ pub fn step(kart: &mut Kart, controls: Controls, track: &Track) {
     let (grass_left, grass_right) = (count(Ground::Grass, &[0, 2]), count(Ground::Grass, &[1, 3]));
     let grass = (grass_left + grass_right) / 4.0;
     let kerb = count(Ground::Kerb, &[0, 1, 2, 3]) / 4.0;
-    let fastest = if kart.boost > 0.0 { BOOST_SPEED } else { MAX_SPEED };
+    let fastest = if kart.rocket > 0.0 {
+        ROCKET_SPEED
+    } else if kart.boost > 0.0 {
+        BOOST_SPEED
+    } else {
+        MAX_SPEED
+    };
     let top = fastest - (fastest - OFF_ROAD_SPEED) * grass;
     let footing = 1.0 - (1.0 - KERB_GRIP) * kerb - (1.0 - GRASS_GRIP) * grass;
 
@@ -319,8 +331,12 @@ pub fn step(kart: &mut Kart, controls: Controls, track: &Track) {
         kart.speed -= roll * kart.speed.signum();
     }
     if kart.boost > 0.0 {
-        kart.speed = (kart.speed + BOOST_ACCELERATION * DT).min(BOOST_SPEED);
+        kart.speed = (kart.speed + BOOST_ACCELERATION * DT).min(BOOST_SPEED.max(kart.speed));
         kart.boost = (kart.boost - DT).max(0.0);
+    }
+    if kart.rocket > 0.0 {
+        kart.speed = (kart.speed + ROCKET_ACCELERATION * DT).min(ROCKET_SPEED.max(kart.speed));
+        kart.rocket = (kart.rocket - DT).max(0.0);
     }
     if kart.speed > top {
         kart.speed -= (kart.speed - top) * (3.0 * DT).min(1.0);
@@ -517,6 +533,15 @@ mod tests {
         assert!(kart.boost > 1.0 && kart.drift == 0.0, "{kart:?}");
         drive(&mut kart, FULL, 0.5, &track);
         assert!(kart.speed > MAX_SPEED, "boosted: {kart:?}");
+    }
+
+    #[test]
+    fn a_rocket_goes_faster_than_a_boost_and_runs_out() {
+        let (track, mut kart) = (track(), Kart { speed: MAX_SPEED, rocket: 1.5, ..Kart::default() });
+        drive(&mut kart, FULL, 1.4, &track);
+        assert!(kart.speed > BOOST_SPEED + 3.0 && kart.speed <= ROCKET_SPEED, "{kart:?}");
+        drive(&mut kart, FULL, 3.0, &track);
+        assert!(kart.rocket == 0.0 && kart.speed < MAX_SPEED + 0.5, "back to top speed: {kart:?}");
     }
 
     #[test]
