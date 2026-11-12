@@ -458,3 +458,12 @@ Date: 2026-11-12 · With the maintainer, who asked for objects to collect and th
 - **How:** a new component, `osage-kart-items` (D-035), deterministic like the physics, run by the world server, which alone decides what items do. The protocol grows by added fields — `Step.use_item`, `Autopilot.use_items`, `Racer.held` — and one new volatile type, `kart.paddock/1`, on the race board; older clients ignore them and race without items. A human's predicted kart is corrected for what items do to it as for a contact (D-031, D-045).
 - **Why:** items mix the field and give AI drivers one more way to race; paddock objects suit a circuit and are the world's own design, not a copy of another game's.
 - **Kept:** the bench's race (`kart-lap/3`) has no items: its pictures and its golden race do not change.
+
+## D-047 — The kart's Windows folder updates itself from GitHub releases
+
+Date: 2026-11-12 · With the maintainer, who asked for an automatic update on Windows after friends installed the kart from a zip.
+
+- **Decision:** before each game, the Windows launchers run `kart-update.exe`, which brings the folder up to the newest `kart-v…` release of the repository: the programs when the release was built from another commit than the folder's, the content when it changed or is missing. Every download is checked against the SHA-256 GitHub publishes for the asset. Offline or failing, the game starts as it is; `OSAGE_NO_UPDATE=1` or a `no-update` file turns it off.
+- **How:** a new crate, `osage-update` (mechanisms: newest release, checked download, unpack, copy over), and the kart's policy in `kart-update`. The system's `curl` and `tar` do the network and the archives: no HTTP, TLS or zip code in the engine. The release workflow writes the commit into `release.txt`.
+- **Why:** players who unzip a folder do not come back to the release page; a fix reaches them only if it comes to them.
+- **Kept:** releases are still the maintainer's act: the updater installs only what was published.

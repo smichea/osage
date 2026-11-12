@@ -19,7 +19,12 @@ path = "src/main.rs"
 name = "kart-web"
 path = "src/web.rs"
 
+[[bin]]
+name = "kart-update"
+path = "src/update.rs"
+
 [dependencies]
 osage-server.workspace = true
 osage-world-kart.workspace = true
 anyhow.workspace = true
+osage-update.workspace = true

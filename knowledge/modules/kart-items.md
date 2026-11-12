@@ -32,8 +32,8 @@ Something to pick up and use during a race, in the spirit of a kart paddock rath
    - **cone / oil:** left just behind the kart.
 4. Things move and meet karts (the kart's capsule outline against the thing's radius):
    - a **tyre** spares its thrower for 0.5 s; the kart it hits keeps 45 % of its speed, loses its drift and boost, and spins at 5 rad/s the way the blow turned it; the tyre goes;
-   - a **cone** slows the kart to 85 % and knocks it away (an impulse through `Kart::take`); the cone goes;
-   - **oil** acts once as a kart drives in (a bit per kart, so its owner, in it from the start, is spared until it leaves and comes back): 90 % of its speed and a spin of 3.5 rad/s the way it was sliding; the oil stays.
+   - a **cone** slows the kart to 85 % and knocks it away (an impulse through `Kart::take`), but spares the kart that left it for 6 s; the cone goes;
+   - **oil** acts once as a kart drives in (a bit per kart): 90 % of its speed and a spin of 3.5 rad/s the way it was sliding; the oil stays. Its owner is spared for 6 s (`OWN_SPARE`): it does not slip as it pulls away or when it is knocked back into it, but can a lap later. (Sparing the owner only until it first left had it slip on its own oil when knocked back, 2026-11-12.)
 
 It returns events (picked, used, hit, bounced) for sounds and pictures.
 
@@ -52,7 +52,8 @@ The world server (`osage-world-kart`) carries it in its protocol: `Step.use_item
 - The back of the field draws nitros more than twice as often as the leader; the same seed draws the same items. Tested.
 - One press, one use: holding the button does not use the next item. Tested.
 - A tyre rolls ahead and spins the kart it meets, not its thrower; it bounces off a barrier and stays on the track. Tested.
-- A cone slows and knocks; oil spins a kart once as it drives in and spares its owner; things go after their time. Tested.
+- A cone slows and knocks; oil spins a kart once as it drives in and spares its owner, even knocked back into it; things go after their time. Tested.
+- Clients draw things as far ahead in time as the player's kart is predicted, or a tyre just thrown shows behind its thrower and runs through it (kart-native).
 - On the world's circuit, bots break crates, hold items and use them (the world's `tests/race.rs`).
 
 # Knowledge

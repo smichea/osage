@@ -36,11 +36,15 @@ PLASTIC = "151470__bellick__plastic-hit-1.wav"
 CROWD = "486215__craigsmith__r07-32-crowd-egging-on-team.wav"
 
 # name: (original, start s, end s, crossfade s). Passages chosen from their
-# loudness and pitch over time: the engine's steady, the tyres' two tones.
+# loudness and pitch over time (in 50 ms windows): the engine's steady, the
+# tyres' two tones. The dirt bike revs up and down all along its recording:
+# its passages are the steadiest found, and evened (below). The first ones
+# held a pop (7.0 s) and a fall in revs (16.0 s), heard at every turn of
+# the loop: at full speed, about once a second.
 LOOPS = {
     "engine-idle": (ENGINE_IDLE, 6.0, 9.0, 0.25),
-    "engine-mid": (ENGINE_DIRT, 7.0, 8.8, 0.2),
-    "engine-high": (ENGINE_DIRT, 15.5, 16.9, 0.2),
+    "engine-mid": (ENGINE_DIRT, 9.95, 12.3, 0.25),
+    "engine-high": (ENGINE_DIRT, 13.0, 14.3, 0.2),
     "squeal": (HANDBRAKE, 7.85, 9.25, 0.25),
     "gravel": (GRAVEL, 2.8, 4.6, 0.3),
     "crowd": (CROWD, 2.0, 22.0, 1.0),
@@ -87,6 +91,28 @@ def seamless(segment, crossfade: int):
     return out
 
 
+# Engine loops whose loudness is evened within the loop: a swell or a dip
+# repeats with the loop, and the ear hears the repetition.
+EVENED = {"engine-mid", "engine-high"}
+EVEN_WINDOW = 0.08
+
+
+def evened(samples):
+    """The samples with their loudness made steady: each divided by the
+    loudness around it (EVEN_WINDOW), within a factor of three either way."""
+    half = int(EVEN_WINDOW * RATE / 2)
+    squares = [0.0]
+    for s in samples:
+        squares.append(squares[-1] + s * s)
+    mean = math.sqrt(squares[-1] / max(len(samples), 1))
+    out = []
+    for i, s in enumerate(samples):
+        a, b = max(0, i - half), min(len(samples), i + half)
+        around = math.sqrt((squares[b] - squares[a]) / max(b - a, 1))
+        out.append(s * min(3.0, max(1 / 3, mean / max(around, 1e-6))))
+    return out
+
+
 def scaled(samples, gain: float):
     return [max(-1.0, min(1.0, s * gain)) for s in samples]
 
@@ -99,6 +125,8 @@ def main() -> int:
         return 1
     for name, (original, start, end, fade) in LOOPS.items():
         segment = decode(original, start, end)
+        if name in EVENED:
+            segment = evened(segment)
         loop = seamless(segment, int(fade * RATE))
         rms = math.sqrt(sum(s * s for s in loop) / len(loop))
         encode(scaled(loop, LOOP_RMS / max(rms, 1e-6)), name)

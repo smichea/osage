@@ -358,7 +358,13 @@ fn follow(
         // High above and behind, the race laid out ahead.
         View::Bird => (at - looking * 11.0 + Vec3::Y * 8.5, at + looking * 4.0, 5.0),
     };
-    chase.place = chase.place.lerp(place, 1.0 - (-seconds * ease).exp());
+    chase.place = if view == View::Cockpit {
+        // Fixed to the kart, without lag: a camera that eased after the
+        // eyes fell behind the helmet at speed (v / ease metres).
+        place
+    } else {
+        chase.place.lerp(place, 1.0 - (-seconds * ease).exp())
+    };
     camera.translation = chase.place;
     chase.look = chase.look.lerp(look, 1.0 - (-seconds * ease.max(10.0)).exp());
     camera.look_at(chase.look, Vec3::Y);

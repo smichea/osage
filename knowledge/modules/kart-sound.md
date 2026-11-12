@@ -50,7 +50,7 @@ Filters are a state-variable band-pass (topology preserving) and one-pole low-pa
 # Knowledge
 
 - Used by [osage-kart-native](/modules/kart-native.md): a voice per kart, placed where the kart is and heard from the camera, its drive read from the kart's state (the throttle of other karts guessed from how they gain speed, the slide and spin from the physics, a knock from a sudden spin or stop, the ground from where the wheels are).
-- The clips come from CC0 recordings in the [asset manifest](https://github.com/smichea/osage/blob/main/assets/manifest.toml) (Freesound originals), cut, made seamless and evened by `tools/make-sounds.py`: about 0.3 MB of Ogg Vorbis for 27 MB of originals.
+- The clips come from CC0 recordings in the [asset manifest](https://github.com/smichea/osage/blob/main/assets/manifest.toml) (Freesound originals), cut, made seamless and evened by `tools/make-sounds.py`: about 0.3 MB of Ogg Vorbis for 27 MB of originals. A swell or a dip inside a loop repeats with it, and at full speed the ear hears it once a second: the engine loops are cut from the steadiest passages and their loudness evened within the loop (80 ms windows).
 - Oracle: the crate's tests; listening to the example.
 
 # Reuse

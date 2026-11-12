@@ -416,6 +416,10 @@ fn summarise(
     if let Some(now) = replica.paddock().filter(|now| *now != paddock.0) {
         paddock.0 = now;
     }
+    let lead = driver.predictor.lead();
+    if paddock.1 != lead {
+        paddock.1 = lead;
+    }
     view.held = replica.mine.and_then(|mine| replica.racer(mine)).and_then(|racer| item(racer.held()));
     let race = replica.race();
     let now = replica.world_time();

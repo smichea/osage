@@ -7,6 +7,9 @@ rem for the others (they start join.bat, or open it in a browser on port
 rem 8080 from a phone or a tablet), then the game. Closing the game
 rem stops the world.
 cd /d "%~dp0"
+rem First the newest version, if there is one (kart-update.exe runs this file
+rem again once updated; the whole block is read before it runs).
+if not "%OSAGE_UPDATED%"=="1" if exist kart-update.exe (kart-update.exe --then "%~f0" %* & exit /b)
 echo.
 echo  The others start join.bat and type this computer's address:
 for /f "tokens=2 delims=:" %%a in ('ipconfig ^| findstr /c:"IPv4"') do echo     %%a

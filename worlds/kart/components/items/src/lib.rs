@@ -82,6 +82,10 @@ pub const RACK: usize = 4;
 pub const MOST: usize = 32;
 /// A tyre spares the kart that threw it for this long, s.
 const SPARE: f32 = 0.5;
+/// Oil and a cone spare the kart that left them for this long, s: it does
+/// not slip on its own oil as it pulls away, or when it is knocked back
+/// into it, but it can a lap later.
+pub const OWN_SPARE: f32 = 6.0;
 /// What a tyre does to the kart it hits: the share of speed kept, and the
 /// spin it starts, rad/s.
 const TYRE_KEEP: f32 = 0.45;
@@ -247,7 +251,13 @@ impl Paddock {
                 }
                 let bit = 1u64 << k;
                 let touching = touches(kart, thing.x, thing.z, thing.kind.radius());
+                let spared = k == thing.owner && thing.spare > 0.0;
                 if thing.kind == Kind::Oil {
+                    if spared {
+                        // In it when the time is up counts as in it already.
+                        thing.inside = if touching { thing.inside | bit } else { thing.inside & !bit };
+                        continue;
+                    }
                     let entering = touching && thing.inside & bit == 0;
                     thing.inside = if touching { thing.inside | bit } else { thing.inside & !bit };
                     if entering {
@@ -256,7 +266,7 @@ impl Paddock {
                     }
                     continue;
                 }
-                if !touching || (k == thing.owner && thing.spare > 0.0) {
+                if !touching || spared {
                     continue;
                 }
                 match thing.kind {
@@ -303,8 +313,8 @@ impl Paddock {
             vz: v.1,
             life,
             owner: k,
-            spare: SPARE,
-            inside: if kind == Kind::Oil { 1 << k } else { 0 },
+            spare: if kind == Kind::Tyre { SPARE } else { OWN_SPARE },
+            inside: 0,
         };
         let behind = -(KART_REACH + KART_RADIUS + 0.3);
         let thing = match item {
@@ -588,10 +598,24 @@ mod tests {
         }
         assert!(!events.iter().any(|e| matches!(e, Event::Hit { .. })), "{events:?}");
         karts[1].speed = 10.0;
-        let events = run(&mut paddock, &mut karts[1..], &[false], &track, 60);
-        let hits = events.iter().filter(|e| matches!(e, Event::Hit { kind: Kind::Oil, .. })).count();
+        let events = run(&mut paddock, &mut karts, &[false, false], &track, 60);
+        let hits = events.iter().filter(|e| matches!(e, Event::Hit { kart: 1, kind: Kind::Oil })).count();
         assert_eq!(hits, 1, "{events:?}");
         assert_eq!(paddock.things().len(), 1, "oil stays");
+    }
+
+    #[test]
+    fn a_kart_knocked_back_into_its_own_oil_does_not_slip() {
+        let track = track();
+        let mut paddock = Paddock::new(&track, 1, 1);
+        paddock.hold(0, Some(Item::Oil));
+        let mut karts = [kart(30.0, 0.0)];
+        paddock.step(&mut karts, &[true], &[0], &track);
+        let oil = paddock.things()[0];
+        // Thrown back across it, a second later.
+        karts[0] = Kart { x: oil.x, z: oil.z + 3.0, speed: -8.0, ..Kart::default() };
+        let events = run(&mut paddock, &mut karts, &[false], &track, 60);
+        assert!(!events.iter().any(|e| matches!(e, Event::Hit { .. })), "{events:?}");
     }
 
     #[test]

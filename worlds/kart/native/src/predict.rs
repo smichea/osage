@@ -45,6 +45,12 @@ impl Predictor {
         }
     }
 
+    /// How far the prediction runs ahead of the world's last state, seconds:
+    /// the steps the world has not applied yet.
+    pub fn lead(&self) -> f32 {
+        self.pending.len() as f32 * osage_kart_physics::DT
+    }
+
     /// What to send after `fresh` new steps, oldest first: those and a few
     /// sent before, in one message per frame however many steps it took.
     pub fn to_send(&self, fresh: usize) -> Vec<proto::Step> {

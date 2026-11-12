@@ -66,7 +66,9 @@ jobs:
           mkdir -p dist/osage-kart/LICENSES/directx-shader-compiler
           cp dxc/x/bin/x64/dxcompiler.dll dxc/x/bin/x64/dxil.dll dist/osage-kart/
           find dxc/x -maxdepth 2 -iname 'LICENSE*' -exec cp {} dist/osage-kart/LICENSES/directx-shader-compiler/ \;
-          cp target/release/kart-native.exe target/release/kart-server.exe target/release/kart-web.exe dist/osage-kart/
+          cp target/release/kart-native.exe target/release/kart-server.exe target/release/kart-web.exe target/release/kart-update.exe dist/osage-kart/
+          # What the folder holds, for kart-update.exe.
+          printf '# What this folder holds, for its updater.\ncommit = %s\ntag = %s\n' "$(git rev-parse HEAD)" "$TAG" > dist/osage-kart/release.txt
           cp -r worlds/kart/client/dist dist/osage-kart/web
           cp worlds/kart/release/windows/*.bat worlds/kart/release/windows/README.txt dist/osage-kart/
           cp -r LICENSE LICENSE-EXCEPTIONS.md LICENSES dist/osage-kart/

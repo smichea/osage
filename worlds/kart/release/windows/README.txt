@@ -14,6 +14,13 @@ To play
    "More info", then "Run anyway".
    The race starts with you and the bots; the next race follows.
 
+Updates
+-------
+play.bat, host.bat and join.bat first look for a newer version on GitHub
+and install it (checked against the published digest) before the game
+starts. Offline, the game starts as it is. To turn this off, create an
+empty file named  no-update  in this folder.
+
 Controls
 --------
   Arrows or WASD      drive            Space / Shift   drift

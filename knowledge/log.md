@@ -1,6 +1,9 @@
 # Knowledge Update Log
 
 ## 2026-11-12
+* **Creation**: Added the module [osage-update](/modules/osage-update.md): the kart's Windows folder updates itself from GitHub releases before each game (D-047).
+* **Creation**: Added the technique [holding a frame rate](/techniques/frame-pacing.md) to [osage-render](/modules/osage-render.md); [osage-kart-native](/modules/kart-native.md) gains settings (Escape) with the frame rate wanted.
+* **Update**: [osage-kart-items](/modules/kart-items.md) spares the owner of oil and a cone for 6 s; the native client draws things as far ahead as its prediction runs, tosses cones and spreads oil; the cockpit camera no longer lags behind the helmet; [osage-kart-sound](/modules/kart-sound.md)'s engine loops are steadier.
 * **Update**: [osage-kart-sound](/modules/kart-sound.md) plays CC0 recordings when the content has them (engine loops following the revs, squeal, gravel, knocks; the crowd in [osage-kart-native](/modules/kart-native.md)'s grandstand) and synthesises the rest; it computes its slow controls once every 32 samples, which stopped most of the audio callback's underruns.
 * **Creation**: Added the module [osage-kart-items](/modules/kart-items.md): paddock objects — crates, a nitro, a tyre to throw, a cone and oil — in the world's races (D-046); [osage-kart-native](/modules/kart-native.md) draws them and shows the item in hand.
 * **Creation**: Added the module [osage-kart-sound](/modules/kart-sound.md): the karts of [osage-kart-native](/modules/kart-native.md) are heard, their sound synthesised from their state.

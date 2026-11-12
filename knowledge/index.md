@@ -17,6 +17,7 @@ What osage knows about its own modules: their architecture, the algorithms and t
 * [osage-kart-physics](modules/kart-physics.md) - The kart world's arcade physics, one deterministic Rust crate run natively by the server and as WebAssembly by clients.
 * [osage-kart-native](modules/kart-native.md) - The native client of the kart world, built on Bevy, and the testbed of the rendering programme with its benchmark.
 * [osage-content](modules/osage-content.md) - Content from the asset manifest made ready to draw — textures with full mipmaps and filtering, photographs of the sky decoded to linear light.
+* [osage-update](modules/osage-update.md) - Keeps a program folder up to date from a project's GitHub releases — the newest release of a tag prefix, downloads checked against GitHub's digests, files replaced in place; with kart-update, the kart's Windows launcher step.
 * [osage-procedural](modules/osage-procedural.md) - Procedural geometry — shapes sculpted, painted and merged per material and patch of land — and a repeatable generator, so that what is generated is the same on every machine.
 * [osage-props](modules/osage-props.md) - Models of the asset manifest placed many times, drawn in batches, each set seen up to its own distance.
 * [osage-kart-land](modules/kart-land.md) - The land around the kart circuit as geometry — flat where karts drive, hills beyond, a knoll and a lake inside the loop — for whoever draws, dresses or plants it.

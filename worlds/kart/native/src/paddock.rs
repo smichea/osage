@@ -9,7 +9,7 @@
 use std::f32::consts::FRAC_PI_2;
 
 use bevy::prelude::*;
-use osage_kart_items::{CONE_RADIUS, Item, OIL_RADIUS, TYRE_LIFE, TYRE_RADIUS};
+use osage_kart_items::{CONE_LIFE, CONE_RADIUS, Item, OIL_LIFE, OIL_RADIUS, ROLLING, TYRE_LIFE, TYRE_RADIUS};
 use osage_world_kart::proto;
 
 use crate::scene::Stage;
@@ -22,9 +22,10 @@ impl Plugin for PaddockPlugin {
     }
 }
 
-/// What the world last sent of the paddock.
+/// What the world last sent of the paddock, and how far the player's kart
+/// is drawn ahead of it in time (its prediction's lead, seconds).
 #[derive(Resource, Default)]
-pub struct PaddockView(pub proto::Paddock);
+pub struct PaddockView(pub proto::Paddock, pub f32);
 
 /// The item of a protocol value.
 pub fn item(item: proto::Item) -> Option<Item> {
@@ -55,6 +56,10 @@ struct Looks {
 }
 
 const CRATE: f32 = 0.8;
+/// A cone flies this long from the kart to the road, s.
+const TOSS: f32 = 0.45;
+/// Oil spreads to its size in this long, s.
+const SPREAD: f32 = 0.35;
 
 fn setup(mut commands: Commands, mut meshes: ResMut<Assets<Mesh>>, mut materials: ResMut<Assets<StandardMaterial>>) {
     let mut look = |mesh: Mesh, material: StandardMaterial| (meshes.add(mesh), materials.add(material));
@@ -109,23 +114,44 @@ fn show(
                 .with_rotation(Quat::from_rotation_y(t * 0.9 + i as f32) * Quat::from_rotation_x(0.2)),
         );
     }
+    // The player's kart is drawn where it will be once the world has its
+    // last steps: things are drawn as far ahead, or a tyre just thrown
+    // would show behind the kart that threw it, and run through it.
+    let lead = view.1;
     for thing in &view.0.things {
         match thing.kind() {
             proto::Item::Tyre => {
                 let speed = thing.vx.hypot(thing.vz);
                 let heading = thing.vx.atan2(thing.vz);
+                // Where it rolls in `lead`, slowing (barriers aside).
+                let ahead = (speed * lead - 0.5 * ROLLING * lead * lead).max(0.0) / speed.max(1e-3);
+                let (x, z) = (thing.x + thing.vx * ahead, thing.z + thing.vz * ahead);
                 // Turned as far as it has rolled, about.
-                let roll = (TYRE_LIFE - thing.life) * speed / TYRE_RADIUS;
+                let roll = (TYRE_LIFE - thing.life + lead) * speed / TYRE_RADIUS;
                 let turn =
                     Quat::from_rotation_y(heading) * Quat::from_rotation_z(FRAC_PI_2) * Quat::from_rotation_y(roll);
-                wanted[1].push(Transform::from_xyz(thing.x, TYRE_RADIUS, thing.z).with_rotation(turn));
+                wanted[1].push(Transform::from_xyz(x, TYRE_RADIUS, z).with_rotation(turn));
             }
-            proto::Item::Cone => wanted[2].push(Transform::from_xyz(thing.x, 0.3, thing.z)),
-            proto::Item::Oil => wanted[3].push(
-                Transform::from_xyz(thing.x, 0.045, thing.z)
-                    .with_rotation(Quat::from_rotation_x(-FRAC_PI_2))
-                    .with_scale(Vec3::splat(thing.life.clamp(0.2, 1.0))),
-            ),
+            proto::Item::Cone => {
+                // Tossed over the kart's tail: up and over, tumbling, then standing.
+                let age = (CONE_LIFE - thing.life + lead) / TOSS;
+                let place = if age < 1.0 {
+                    let height = 1.1 + 1.6 * age * (1.0 - age) - 0.8 * age;
+                    Transform::from_xyz(thing.x, height, thing.z)
+                        .with_rotation(Quat::from_rotation_x((1.0 - age) * 5.0) * Quat::from_rotation_z(age * 2.0))
+                } else {
+                    Transform::from_xyz(thing.x, 0.3, thing.z)
+                };
+                wanted[2].push(place);
+            }
+            proto::Item::Oil => {
+                let spread = ((OIL_LIFE - thing.life + lead) / SPREAD).clamp(0.15, 1.0);
+                wanted[3].push(
+                    Transform::from_xyz(thing.x, 0.045, thing.z)
+                        .with_rotation(Quat::from_rotation_x(-FRAC_PI_2))
+                        .with_scale(Vec3::splat(thing.life.clamp(0.2, 1.0) * spread)),
+                )
+            }
             _ => {}
         }
     }

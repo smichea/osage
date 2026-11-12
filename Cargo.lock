@@ -4901,6 +4901,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "osage-server",
+ "osage-update",
  "osage-world-kart",
 ]
 
@@ -4987,6 +4988,15 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "wtransport",
+]
+
+[[package]]
+name = "osage-update"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "serde_json",
+ "sha2",
 ]
 
 [[package]]
