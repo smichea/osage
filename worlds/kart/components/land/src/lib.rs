@@ -1,14 +1,16 @@
 // SPDX-FileCopyrightText: The osage contributors
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-//! The land around the kart circuit (knowledge: land around a track): flat
-//! where karts drive, hills beyond that fade at the edge of the modelled
-//! land, a knoll and a lake in the room the circuit leaves inside its loop.
+//! The land around the kart circuit (knowledge: land around a track): level
+//! where karts drive but over the track's crests, which it carries from
+//! barrier to barrier and beyond (D-051); hills beyond that fade at the edge
+//! of the modelled land, a knoll and a lake in the room the circuit leaves
+//! inside its loop.
 //! Geometry only — how far a point is from the track, how high the ground
 //! is, where it is wet — for whoever draws it, dresses it or plants it.
 
 use bevy::prelude::*;
-use osage_kart_physics::Track;
+use osage_kart_physics::{Crest, Track};
 
 /// Side of the square of land modelled around the circuit, metres.
 pub const LAND: f32 = 900.0;
@@ -32,6 +34,27 @@ pub struct Frame {
     pub along: f32,
     /// How sharply the road turns here, radians per metre; positive: to the left.
     pub bend: f32,
+    /// The road's height here (over a crest, or 0), metres, and its slope:
+    /// rise per metre along the track.
+    pub height: f32,
+    pub slope: f32,
+    /// A crest on the stretch to the next frame, and how far past its start
+    /// this frame is (negative when it starts further on).
+    pub crest: Option<(Crest, f32)>,
+}
+
+impl Frame {
+    /// Pieces to draw the stretch to the next frame in, `length` metres on:
+    /// one where the road is level, half-metre pieces over a crest.
+    pub fn pieces(&self, length: f32) -> usize {
+        if self.crest.is_some() { (length / 0.5).ceil().max(1.0) as usize } else { 1 }
+    }
+
+    /// The road's height a share `t` (0..1) of the way to the next frame,
+    /// `length` metres on, as the physics has it.
+    pub fn height_towards(&self, t: f32, length: f32) -> f32 {
+        self.crest.and_then(|(crest, into)| crest.profile(into + t * length)).map_or(0.0, |(height, _)| height)
+    }
 }
 
 pub fn frames(track: &Track) -> Vec<Frame> {
@@ -46,7 +69,16 @@ pub fn frames(track: &Track) -> Vec<Frame> {
             let (arriving, leaving) = ((here - before).normalize_or_zero(), (after - here).normalize_or_zero());
             // Heading grows to the left: with forward (sin h, cos h), a left turn has a negative cross product.
             let bend = -arriving.perp_dot(leaving).asin() / here.distance(after).max(0.1);
-            let frame = Frame { at: here, forward, right: Vec2::new(-forward.y, forward.x), along, bend };
+            let (height, slope) = track.lift(along);
+            let length = here.distance(after);
+            let crest = track.crests().iter().find_map(|crest| {
+                // How far past the crest's start this frame is, the nearer way round.
+                let into =
+                    (along - crest.along + track.length() / 2.0).rem_euclid(track.length()) - track.length() / 2.0;
+                (into < crest.length() && into + length > 0.0).then_some((*crest, into))
+            });
+            let frame =
+                Frame { at: here, forward, right: Vec2::new(-forward.y, forward.x), along, bend, height, slope, crest };
             along += here.distance(after);
             frame
         })
@@ -66,6 +98,8 @@ pub struct Site {
 pub struct Land {
     centre: Vec2,
     points: Vec<Vec2>,
+    /// The track, for its crests: the ground follows them.
+    track: Track,
     /// Beyond this distance from the centre line, the land may rise.
     flat: f32,
     /// A knoll in the widest place inside the circuit: where a landmark stands.
@@ -79,7 +113,7 @@ impl Land {
         let points: Vec<Vec2> = frames.iter().map(|f| f.at).collect();
         let (low, high) = points.iter().fold((Vec2::MAX, Vec2::MIN), |(low, high), p| (low.min(*p), high.max(*p)));
         let flat = track.half_width + track.verge + 5.0;
-        let mut land = Self { centre: (low + high) / 2.0, points, flat, knoll: None, lake: None };
+        let mut land = Self { centre: (low + high) / 2.0, points, track: track.clone(), flat, knoll: None, lake: None };
 
         // The rooms inside the loop, widest first: every few metres, how far the track is.
         let mut rooms = Vec::new();
@@ -133,10 +167,12 @@ impl Land {
         Some(from.length() / (lake.radius * outline))
     }
 
-    /// Height of the ground: zero along the track, hills beyond, zero again
-    /// at the edge of the modelled land; a knoll and a lake inside the loop.
+    /// Height of the ground: the road's along the track (zero, but over a
+    /// crest), hills beyond, zero again at the edge of the modelled land; a
+    /// knoll and a lake inside the loop.
     pub fn height(&self, at: Vec2) -> f32 {
-        let rise = smooth((self.distance_to_track(at) - self.flat) / 70.0);
+        let distance = self.distance_to_track(at);
+        let rise = smooth((distance - self.flat) / 70.0);
         let edge = (at - self.centre).abs().max_element();
         let fade = smooth((LAND / 2.0 - edge) / 120.0);
         let hills = 0.5 * noise(at / 150.0) + 0.3 * noise(at / 61.0 + 17.0) + 0.2 * noise(at / 23.0 + 5.0);
@@ -150,7 +186,18 @@ impl Land {
             height *= smooth((shore - 1.0) / 0.6);
             height -= LAKE_BED * smooth((1.0 - shore) / 0.5);
         }
+        // A crest: the road's height across the flat land, fading into the
+        // hills over the next 30 m.
+        if !self.track.crests().is_empty() && distance < self.flat + 30.0 {
+            let road = self.track.lift(self.track.locate(at.x, at.y).along).0;
+            height += road * (1.0 - smooth((distance - self.flat) / 30.0));
+        }
         height
+    }
+
+    /// Height of the road's surface at a point of the track, as the physics has it.
+    pub fn road(&self, at: Vec2) -> f32 {
+        self.track.lift(self.track.locate(at.x, at.y).along).0
     }
 
     /// Whether a point is in the lake or on its beach.
@@ -191,15 +238,36 @@ mod tests {
     }
 
     #[test]
-    fn the_land_is_flat_where_karts_drive() {
+    fn the_land_is_the_roads_height_where_karts_drive() {
         let (land, circuit) = land();
         let reach = circuit.track.half_width + circuit.track.verge + BARRIER + 0.7;
+        let mut crested = 0;
         for frame in frames(&circuit.track) {
             for lateral in [-reach, 0.0, reach] {
                 let at = frame.at + frame.right * lateral;
-                assert!(land.height(at).abs() < 1e-3, "{} m high at {at}", land.height(at));
+                let road = circuit.track.lift(circuit.track.locate(at.x, at.y).along).0;
+                assert!((land.height(at) - road).abs() < 0.02, "{} m high at {at}, the road {road}", land.height(at));
+                crested += usize::from(road > 0.1);
             }
         }
+        assert!(crested > 0, "the circuit has a crest");
+    }
+
+    #[test]
+    fn between_frames_a_crest_is_drawn_as_the_physics_has_it() {
+        let circuit = Circuit::new();
+        let frames = frames(&circuit.track);
+        let mut worst: f32 = 0.0;
+        for (i, a) in frames.iter().enumerate() {
+            let b = &frames[(i + 1) % frames.len()];
+            let length = a.at.distance(b.at);
+            for k in 0..=10 {
+                let t = k as f32 / 10.0;
+                let along = a.along + t * length;
+                worst = worst.max((a.height_towards(t, length) - circuit.track.lift(along).0).abs());
+            }
+        }
+        assert!(worst < 1e-3, "{worst} m off");
     }
 
     #[test]

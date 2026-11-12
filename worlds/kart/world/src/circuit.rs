@@ -3,11 +3,11 @@
 
 //! The circuit: a closed Catmull-Rom spline through hand-placed points — a
 //! long start straight, a sweeping right-hander, an S, a chicane and a
-//! hairpin; a ramp halfway down the start straight and a smaller one on the
-//! long sweep before the line (D-050).
+//! hairpin; a crest on the start straight, where karts flat out take off
+//! (D-051).
 
 use libm::{cosf, sinf};
-use osage_kart_physics::{Kart, Ramp, Track};
+use osage_kart_physics::{Crest, Kart, Track};
 
 use crate::proto;
 
@@ -62,19 +62,21 @@ impl Circuit {
         let track = Track::new(points, HALF_WIDTH, VERGE);
         // The start line sits at the second control point, on the straight.
         let start = track.locate(CONTROL[1][0], CONTROL[1][1]).along;
-        let sweep = track.locate(-72.0, -127.0).along;
-        let ramps = vec![
-            Ramp { along: start + 42.0, length: 6.0, height: 1.0 },
-            Ramp { along: sweep, length: 5.0, height: 0.7 },
-        ];
-        Self { track: track.with_ramps(ramps), start }
+        // The road goes over the brow of a hill: 12 m up to 1.4 m, 6 m
+        // down. Flat out (about 80 km/h) a kart is half a second in the air.
+        let crests = vec![Crest { along: start + 42.0, rise: 12.0, fall: 6.0, height: 1.4 }];
+        Self { track: track.with_crests(crests), start }
     }
 
     /// The circuit a world announced in its `kart.track/1`.
     pub fn from_proto(track: &proto::Track) -> Self {
         let points = track.points.as_chunks::<2>().0.to_vec();
-        let ramps = track.ramps.iter().map(|r| Ramp { along: r.along, length: r.length, height: r.height }).collect();
-        Self { track: Track::new(points, track.half_width, track.verge).with_ramps(ramps), start: track.start }
+        let crests = track
+            .crests
+            .iter()
+            .map(|c| Crest { along: c.along, rise: c.rise, fall: c.fall, height: c.height })
+            .collect();
+        Self { track: Track::new(points, track.half_width, track.verge).with_crests(crests), start: track.start }
     }
 
     /// Slot `n` of the starting grid: two columns, rows every 7 m behind the line.
@@ -102,11 +104,11 @@ impl Circuit {
             verge: self.track.verge,
             start: self.start,
             sectors: SECTORS,
-            ramps: self
+            crests: self
                 .track
-                .ramps()
+                .crests()
                 .iter()
-                .map(|r| proto::Ramp { along: r.along, length: r.length, height: r.height })
+                .map(|c| proto::Crest { along: c.along, rise: c.rise, fall: c.fall, height: c.height })
                 .collect(),
         }
     }

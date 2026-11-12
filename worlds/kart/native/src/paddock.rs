@@ -260,10 +260,13 @@ fn show(
     mut commands: Commands,
     time: Res<Time>,
     view: Res<PaddockView>,
+    course: Option<Res<crate::scene::Course>>,
     mut looks: ResMut<Looks>,
     mut models: Query<(&mut Transform, &mut Visibility)>,
 ) {
     let t = time.elapsed_secs();
+    // The road's height under a thing: over a crest, it is raised (D-051).
+    let road = |x: f32, z: f32| course.as_ref().map_or(0.0, |c| c.0.track.lift(c.0.track.locate(x, z).along).0);
     let mut wanted: [Vec<Transform>; 4] = default();
     let crates = &view.paddock.crates;
     looks.broken.resize(crates.len(), f32::NEG_INFINITY);
@@ -272,7 +275,7 @@ fn show(
     for (i, c) in crates.iter().enumerate() {
         let trusted = t - looks.broken[i] < TRUST;
         // Broken by the player's kart, as drawn: at once.
-        let at = Vec3::new(c.x, CRATE / 2.0 + 0.15, c.z);
+        let at = Vec3::new(c.x, road(c.x, c.z) + CRATE / 2.0 + 0.15, c.z);
         if c.standing && !trusted && view.me.is_some_and(|me| touches(&me, c.x, c.z, CRATE_REACH)) {
             looks.broken[i] = t;
             bursts.push(at);
@@ -289,7 +292,7 @@ fn show(
     for (i, c) in crates.iter().enumerate().filter(|&(i, c)| c.standing && t - looks.broken[i] >= TRUST) {
         let bob = 0.08 * (t * 2.0 + i as f32).sin();
         wanted[0].push(
-            Transform::from_xyz(c.x, CRATE / 2.0 + 0.15 + bob, c.z)
+            Transform::from_xyz(c.x, road(c.x, c.z) + CRATE / 2.0 + 0.15 + bob, c.z)
                 .with_rotation(Quat::from_rotation_y(t * 0.9 + i as f32) * Quat::from_rotation_x(0.2)),
         );
     }
@@ -309,24 +312,24 @@ fn show(
                 let roll = (TYRE_LIFE - thing.life + lead) * speed / TYRE_RADIUS;
                 let turn =
                     Quat::from_rotation_y(heading) * Quat::from_rotation_z(FRAC_PI_2) * Quat::from_rotation_y(roll);
-                wanted[1].push(Transform::from_xyz(x, TYRE_RADIUS, z).with_rotation(turn));
+                wanted[1].push(Transform::from_xyz(x, road(x, z) + TYRE_RADIUS, z).with_rotation(turn));
             }
             proto::Item::Cone => {
                 // Tossed over the kart's tail: up and over, tumbling, then standing.
                 let age = (CONE_LIFE - thing.life + lead) / TOSS;
                 let place = if age < 1.0 {
                     let height = 1.1 + 1.6 * age * (1.0 - age) - 0.8 * age;
-                    Transform::from_xyz(thing.x, height, thing.z)
+                    Transform::from_xyz(thing.x, road(thing.x, thing.z) + height, thing.z)
                         .with_rotation(Quat::from_rotation_x((1.0 - age) * 5.0) * Quat::from_rotation_z(age * 2.0))
                 } else {
-                    Transform::from_xyz(thing.x, 0.3, thing.z)
+                    Transform::from_xyz(thing.x, road(thing.x, thing.z) + 0.3, thing.z)
                 };
                 wanted[2].push(place);
             }
             proto::Item::Oil => {
                 let spread = ((OIL_LIFE - thing.life + lead) / SPREAD).clamp(0.15, 1.0);
                 wanted[3].push(
-                    Transform::from_xyz(thing.x, 0.045, thing.z)
+                    Transform::from_xyz(thing.x, road(thing.x, thing.z) + 0.045, thing.z)
                         .with_rotation(Quat::from_rotation_x(-FRAC_PI_2))
                         .with_scale(Vec3::splat(thing.life.clamp(0.2, 1.0) * spread)),
                 )

@@ -18,7 +18,7 @@ export interface KartValues {
   spin: number;
   /** Seconds of rocket left (paddock objects); 0 from a world that does not send it. */
   rocket?: number;
-  /** Height above the road and speed upwards, off a ramp (D-050). */
+  /** Height above level ground (the road's on a crest, more in the air) and speed upwards (D-050, D-051). */
   height?: number;
   climb?: number;
   /** 1 once a trick was done in this jump. */
@@ -37,10 +37,11 @@ const FIELDS = [
   "rocket", "height", "climb", "trick", "stall", "draft", "held",
 ] as const;
 
-/** A ramp across the road, as in `kart.track/1`. */
-export interface RampValues {
+/** A crest across the road, as in `kart.track/1` (D-051). */
+export interface CrestValues {
   along: number;
-  length: number;
+  rise: number;
+  fall: number;
   height: number;
 }
 
@@ -62,8 +63,9 @@ export const BARRIER = 0.9;
 interface Exports {
   track_clear(): void;
   track_point(x: number, z: number): void;
-  track_ramp(along: number, length: number, height: number): void;
+  track_crest(along: number, rise: number, fall: number, height: number): void;
   track_close(halfWidth: number, verge: number): number;
+  track_lift(along: number): number;
   kart_set(field: number, value: number): void;
   kart_step(throttle: number, steer: number, drift: number): void;
   kart_get(field: number): number;
@@ -78,11 +80,16 @@ export class Physics {
   }
 
   /** `points`: x0, z0, x1, z1, … of the closed centre line. */
-  setTrack(points: ArrayLike<number>, halfWidth: number, verge: number, ramps: RampValues[] = []): void {
+  setTrack(points: ArrayLike<number>, halfWidth: number, verge: number, crests: CrestValues[] = []): void {
     this.wasm.track_clear();
     for (let i = 0; i + 1 < points.length; i += 2) this.wasm.track_point(points[i], points[i + 1]);
-    for (const r of ramps) this.wasm.track_ramp(r.along, r.length, r.height);
+    for (const c of crests) this.wasm.track_crest(c.along, c.rise, c.fall, c.height);
     if (!this.wasm.track_close(halfWidth, verge)) throw new Error("a track needs at least three points");
+  }
+
+  /** The road's height `along` metres along the centre line: 0 but over a crest (D-051). */
+  roadHeight(along: number): number {
+    return this.wasm.track_lift(along);
   }
 
   step(k: KartValues, d: Drive): KartValues {

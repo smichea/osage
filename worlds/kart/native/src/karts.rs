@@ -119,7 +119,7 @@ pub struct Rig {
     /// Seconds driven, and this kart's own offset, for its rumble.
     time: f32,
     seed: f32,
-    /// The nose up a ramp and through the air, radians (down is positive).
+    /// The nose up a crest and through the air, radians (down is positive).
     attitude: f32,
     /// How far through its roll a trick is, 0 to 1.
     trick: f32,
@@ -461,7 +461,7 @@ pub fn animate(
         rig.torso += sway * step;
         let lean = Quat::from_rotation_x(rig.torso.y) * Quat::from_rotation_z(rig.torso.x);
 
-        // Up a ramp and through the air, the nose follows the path (D-050);
+        // Up a crest and through the air, the nose follows the path (D-050);
         // a trick is a full roll of the body while it flies.
         let path = -(kart.climb / kart.speed.abs().max(4.0)).atan().clamp(-0.5, 0.5);
         rig.attitude += (path - rig.attitude) * ease(14.0);

@@ -15,9 +15,9 @@ One implementation of how a kart moves, shared by everything that must agree on 
 
 # Concepts
 
-- **Kart:** position `x, z`, `heading`, forward `speed`, sideways `slide`, `drift` direction, drift `charge`, `boost` time left, `rocket` time left (a paddock object: faster than a boost, 34 m/s, D-048), the `spin` a knock gave it, and (D-050) its `height` and `climb` off a ramp, a `trick` done in the air, a `stall` after a start too early, its slipstream `draft` and whether the drift button was `held`. For contacts, an outline: a capsule 1.9 m by 1.3 m, with a mass and a moment of inertia.
+- **Kart:** position `x, z`, `heading`, forward `speed`, sideways `slide`, `drift` direction, drift `charge`, `boost` time left, `rocket` time left (a paddock object: faster than a boost, 34 m/s, D-048), the `spin` a knock gave it, and (D-050) its `height` and `climb` (over a crest and in the air), a `trick` done in the air, a `stall` after a start too early, its slipstream `draft` and whether the drift button was `held`. For contacts, an outline: a capsule 1.9 m by 1.3 m, with a mass and a moment of inertia.
 - **Controls:** `throttle` and `steer` in −1…1, and the `drift` button.
-- **Track:** a closed centre line, the road's half width, the verge beyond it, and ramps across it (`Ramp`: where, how long, how high); kerbs (`KERB`, 1 m) beyond the road's edge, grass beyond them, and the barriers' face `BARRIER` (0.9 m) beyond the verge.
+- **Track:** a closed centre line, the road's half width, the verge beyond it, and crests across it (`Crest`: where, how far up, how far down, how high, D-051); kerbs (`KERB`, 1 m) beyond the road's edge, grass beyond them, and the barriers' face `BARRIER` (0.9 m) beyond the verge.
 - **Ground:** what each wheel runs on — road, kerb or grass.
 - **Step:** one sixtieth of a second. Nothing happens between steps.
 
@@ -27,7 +27,7 @@ A pure function `step(kart, controls, track)` and a `Track` that answers three q
 
 # Interfaces
 
-`step`, `bump` (two karts collide), `slipstream`, `launch`, `turbo_level`, `wheels` (the ground under each wheel), `Kart::velocity`, `Track::new`, `Track::with_ramps`, `Track::locate`, `Track::at`, `Track::ground`, `Track::lift`, `Controls::sanitized`, `wrap`, and the constants `KART_REACH`, `KART_RADIUS`, `KERB`, `BARRIER`, `TURBO_CHARGES`, `TURBO_BOOSTS`, `GRAVITY`, `TRICK_BOOST`, `DRAFT_CHARGE`, `LAUNCH_WINDOW`, `LAUNCH_EARLY`; in WebAssembly `track_clear`, `track_point`, `track_ramp`, `track_close`, `kart_set`, `kart_step`, `kart_get` (a kart's sixteen fields by number, so that a new field changes no signature).
+`step`, `bump` (two karts collide), `slipstream`, `launch`, `turbo_level`, `wheels` (the ground under each wheel), `Kart::velocity`, `Track::new`, `Track::with_crests`, `Crest::profile`, `Track::locate`, `Track::at`, `Track::ground`, `Track::lift`, `Controls::sanitized`, `wrap`, and the constants `KART_REACH`, `KART_RADIUS`, `KERB`, `BARRIER`, `TURBO_CHARGES`, `TURBO_BOOSTS`, `GRAVITY`, `TRICK_BOOST`, `DRAFT_CHARGE`, `LAUNCH_WINDOW`, `LAUNCH_EARLY`; in WebAssembly `track_clear`, `track_point`, `track_crest`, `track_close`, `track_lift`, `kart_set`, `kart_step`, `kart_get` (a kart's sixteen fields by number, so that a new field changes no signature).
 
 # Invariants
 
@@ -47,4 +47,4 @@ The crate has no dependency but `libm` and no engine type: it can be used as is 
 
 # Limits
 
-Ramps are the only relief: no slopes, banking or kerbs that lift a wheel, and a ramp spans the whole width (a kart beside it rides it too). Driving backwards into a lip lifts the kart onto it at once. Contacts are in the plane, so no kart rides over another, even one in the air. Contacts between karts run on the server: a client predicting its kart sees a knock when the server's state arrives.
+Crests are the only relief: no hills elsewhere, no banking, no kerbs that lift a wheel; a crest spans the whole width and the kart stays level across it (no roll). The road's slope pitches the kart's model but changes neither its speed nor its grip. Contacts are in the plane, so no kart rides over another, even one in the air. Contacts between karts run on the server: a client predicting its kart sees a knock when the server's state arrives.

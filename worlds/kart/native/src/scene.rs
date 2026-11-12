@@ -322,7 +322,8 @@ fn follow(
     let forward = Vec3::new(kart.heading.sin(), 0.0, kart.heading.cos());
     // The kart's left: it faces +Z with its left at +X.
     let left = Vec3::new(kart.heading.cos(), 0.0, -kart.heading.sin());
-    let at = Vec3::new(kart.x, 0.0, kart.z);
+    // Over a crest and in the air, the camera rises and falls with the kart.
+    let at = Vec3::new(kart.x, kart.height, kart.z);
     let step = seconds.max(1e-4);
     chase.time += step;
     // How fast it turns (positive to the left) and how hard it slows: a

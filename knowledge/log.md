@@ -1,6 +1,7 @@
 # Knowledge Update Log
 
 ## 2026-11-12
+* **Update**: the ramps become crests (D-051): [Arcade kart physics](/algorithms/arcade-kart-physics.md)'s flight is ballistic over a road that rises and falls; [osage-kart-physics](/modules/kart-physics.md) has `Crest` and `track_lift`; [osage-kart-land](/modules/kart-land.md)'s land and frames follow the road over a crest; [osage-kart-native](/modules/kart-native.md) draws road, kerbs, verges, barriers and fences over it.
 * **Update**: [Arcade kart physics](/algorithms/arcade-kart-physics.md) and [osage-kart-physics](/modules/kart-physics.md): three levels of mini-turbo, ramps and tricks, starts judged against the lights, slipstreams, and a table of the values that make the feel (D-050); [osage-kart-racecraft](/modules/kart-racecraft.md)'s bold bots trick off ramps; [osage-kart-native](/modules/kart-native.md) draws ramps, flight, tricks, level-coloured sparks, wakes and stalls.
 * **Update**: [Holding a frame rate](/techniques/frame-pacing.md) can also trade the light from the sky for a constant light, the atmosphere for a sky of one colour and a haze, and leave out detail textures; the sun's shadows come back before Bevy works out its cascades, which it otherwise did not survive.
 * **Update**: [osage-kart-native](/modules/kart-native.md): the host starts each race from the grid, a player alone can end one (D-049).

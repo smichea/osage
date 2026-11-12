@@ -540,27 +540,44 @@ pub fn fences(set: &mut Set, props: &mut Props, circuit: &Circuit, frames: &[Fra
                 since_post = f32::MAX;
                 continue;
             }
-            let (a, b) = (frame.at + frame.right * side * offset, next.at + next.right * side * offset);
-            let (u0, u1) = (frame.along, frame.along + a.distance(b));
-            for (p, u, y) in [(a, u0, 0.05), (b, u1, 0.05), (b, u1, top), (a, u0, 0.05), (b, u1, top), (a, u0, top)] {
-                positions.push([p.x, y, p.y]);
-                uvs.push([u, y]);
-            }
-            let rail = osage_procedural::Shape::sweep(
-                &[Vec3::new(a.x, top, a.y), Vec3::new(b.x, top, b.y)],
-                0.022,
-                8,
-                Vec3::Y,
-            );
-            set.satin.add(&rail, Transform::IDENTITY, steel);
-            since_post += a.distance(b);
-            if since_post >= 2.5 {
-                since_post = 0.0;
-                set.satin.add(
-                    &rod(Vec3::new(a.x, 0.0, a.y), Vec3::new(a.x, top + 0.05, a.y), 0.03),
-                    Transform::IDENTITY,
-                    steel,
+            // Over a crest, in short pieces that rise and fall with the ground.
+            let stretch = frame.at.distance(next.at);
+            let pieces = frame.pieces(stretch);
+            let foot = |t: f32| {
+                let right = frame.right.lerp(next.right, t).normalize_or(frame.right);
+                (frame.at.lerp(next.at, t) + right * side * offset, frame.height_towards(t, stretch))
+            };
+            for piece in 0..pieces {
+                let (t0, t1) = (piece as f32 / pieces as f32, (piece + 1) as f32 / pieces as f32);
+                let ((a, ya), (b, yb)) = (foot(t0), foot(t1));
+                let (u0, u1) = (frame.along + t0 * stretch, frame.along + t1 * stretch);
+                for (p, u, ground, y) in [
+                    (a, u0, ya, 0.05),
+                    (b, u1, yb, 0.05),
+                    (b, u1, yb, top),
+                    (a, u0, ya, 0.05),
+                    (b, u1, yb, top),
+                    (a, u0, ya, top),
+                ] {
+                    positions.push([p.x, ground + y, p.y]);
+                    uvs.push([u, y]);
+                }
+                let rail = osage_procedural::Shape::sweep(
+                    &[Vec3::new(a.x, ya + top, a.y), Vec3::new(b.x, yb + top, b.y)],
+                    0.022,
+                    8,
+                    Vec3::Y,
                 );
+                set.satin.add(&rail, Transform::IDENTITY, steel);
+                since_post += a.distance(b);
+                if since_post >= 2.5 {
+                    since_post = 0.0;
+                    set.satin.add(
+                        &rod(Vec3::new(a.x, ya, a.y), Vec3::new(a.x, ya + top + 0.05, a.y), 0.03),
+                        Transform::IDENTITY,
+                        steel,
+                    );
+                }
             }
         }
         if positions.is_empty() {

@@ -9,7 +9,7 @@
 //! Contacts between karts run on the server only: their script is checked
 //! natively, against `golden-contacts.txt`.
 
-use osage_kart_physics::{Controls, Kart, Ramp, Track, bump, step};
+use osage_kart_physics::{Controls, Crest, Kart, Track, bump, step};
 
 const GOLDEN: &str = include_str!("golden.txt");
 const CONTACTS: &str = include_str!("golden-contacts.txt");
@@ -43,11 +43,11 @@ fn check(results: &str, recorded: &str, file: &str) {
 }
 
 /// The script the client test replays: 1200 steps on a 200 m × 100 m loop
-/// with a ramp on each long side, from a stalled start.
+/// with two crests on its first side, from a stalled start.
 fn run() -> String {
-    let track = Track::new(vec![[0.0, 0.0], [0.0, 200.0], [-100.0, 200.0], [-100.0, 0.0]], 6.0, 3.0).with_ramps(vec![
-        Ramp { along: 20.0, length: 6.0, height: 1.25 },
-        Ramp { along: 34.0, length: 3.0, height: 0.5 },
+    let track = Track::new(vec![[0.0, 0.0], [0.0, 200.0], [-100.0, 200.0], [-100.0, 0.0]], 6.0, 3.0).with_crests(vec![
+        Crest { along: 20.0, rise: 6.0, fall: 4.0, height: 1.0 },
+        Crest { along: 34.0, rise: 4.0, fall: 3.0, height: 0.5 },
     ]);
     let mut kart = Kart { z: 10.0, stall: 0.5, ..Kart::default() };
     let mut out = String::new();
@@ -58,7 +58,7 @@ fn run() -> String {
             drift: i / 120 % 2 == 1,
         };
         step(&mut kart, controls, &track);
-        // Every second, and every step in the air.
+        // Every second, and every step off level ground (on a crest, in the air).
         if i % 60 == 59 || kart.height > 0.0 {
             out.push_str(&format!("{} {}\n", i + 1, bits(&kart)));
         }

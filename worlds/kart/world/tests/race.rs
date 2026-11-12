@@ -58,7 +58,7 @@ impl Client {
         self.catch_up();
         let entity = self.world.entities().find(|&e| self.world.get::<proto::Track>(e, types::TRACK).is_some());
         let track: proto::Track = self.world.get(entity.expect("the track"), types::TRACK).unwrap();
-        // Ramps and all, as a client builds it.
+        // Crests and all, as a client builds it.
         osage_world_kart::Circuit::from_proto(&track).track
     }
 }
@@ -279,19 +279,20 @@ fn a_start_in_time_boosts_and_one_too_early_stalls() {
     assert!(late.stall == 0.0, "{late:?}");
 }
 
-/// The circuit's ramps throw karts into the air, and the bold among the
-/// bots do a trick off them for a boost on landing.
+/// The circuit's crest lifts karts taken over it flat out into the air, and
+/// the bold among the bots do a trick for a boost on landing.
 #[test]
-fn bots_fly_off_the_ramps_and_trick() {
+fn bots_fly_off_the_crests_and_trick() {
     let mut harness = Harness::new(KartWorld::unattended(6, 3), TICK_HZ);
     let mut alice = Client::join(&mut harness, SessionKind::Human, Role::Player, "alice");
     run_until(&mut harness, &mut alice, 5, |c| phase(&c.race()) == proto::Phase::Racing);
-    assert_eq!(alice.track().ramps().len(), 2, "the circuit has its ramps");
+    let track = alice.track();
+    assert_eq!(track.crests().len(), 1, "the circuit has its crest");
     let (mut flew, mut tricked) = (false, false);
     for _ in 0..60 * SECOND {
         harness.run(1);
         for (_, _, kart) in alice.karts() {
-            flew |= kart.height > 1.0;
+            flew |= kart.height > track.lift(track.locate(kart.x, kart.z).along).0 + 0.5;
             tricked |= kart.trick > 0.0;
         }
         if flew && tricked {
@@ -322,11 +323,11 @@ fn bots_lap_the_circuit_in_their_time_band() {
 /// give or take a tenth.
 const BAND: (f32, f32) = (54.0, 66.0);
 
-/// Every flight off a ramp in a race of bots, watched step by step: karts
-/// take off at speed, fly a little over half a second, land on the road
-/// pointing down it, and race on without losing their speed (D-050).
+/// Every flight off the crest in a race of bots, watched step by step: karts
+/// take off at speed, the fast ones fly about half a second, all land on the
+/// road pointing down it and race on without losing their speed (D-051).
 #[test]
-fn every_kart_flies_off_the_ramps_and_lands_on_the_road() {
+fn every_kart_flies_off_the_crests_and_lands_on_the_road() {
     #[derive(Debug, Default)]
     struct Flight {
         takeoff: f32,
@@ -384,12 +385,13 @@ fn every_kart_flies_off_the_ramps_and_lands_on_the_road() {
             }
         }
     }
-    assert!(flights.len() >= 12, "six karts, two ramps, two laps: {} flights", flights.len());
+    let jumps = flights.iter().filter(|(_, f)| f.steps as f32 / TICK_HZ as f32 > 0.3).count();
+    assert!(jumps >= 6, "six karts, one crest, two laps: {jumps} jumps in {flights:?}");
     for (entity, f) in &flights {
         let (lateral, off, speed) = f.landing.unwrap_or_else(|| panic!("kart {entity} never landed: {f:?}"));
         assert!(f.takeoff > 12.0, "kart {entity} took off slowly: {f:?}");
-        assert!((0.2..1.0).contains(&(f.steps as f32 / TICK_HZ as f32)), "kart {entity} flew {} steps", f.steps);
-        assert!(f.peak < 2.5, "kart {entity} flew too high: {f:?}");
+        assert!(f.steps as f32 / TICK_HZ as f32 <= 0.8, "kart {entity} flew {} steps", f.steps);
+        assert!(f.peak < 3.2, "kart {entity} flew too high: {f:?}");
         assert!(
             lateral.abs() < track.half_width + osage_kart_physics::KERB,
             "kart {entity} landed off the road: {f:?}"

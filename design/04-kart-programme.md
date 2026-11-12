@@ -26,7 +26,7 @@ Each milestone ends with every oracle in AGENTS.md green, screenshots of what ch
 | --- | --- | --- |
 | G1.1 Drift boost | Holding a drift charges three levels (sparks change colour); releasing gives a boost by level. | Physics unit tests per level; WASM and Rust agree; new golden file. |
 | G1.2 Start boost | Throttle pressed in a short window before "go" boosts; too early stalls briefly. | World test on the countdown. |
-| G1.3 Tricks | A button at the lip of a jump or bump gives a small boost on landing; the track gains jumps. | Physics test; a jump on the paddock track. |
+| G1.3 Tricks | A button in the air gives a small boost on landing; the track gains a crest that karts flat out take off from (D-051: no ramps, a real track's relief). | Physics test; a crest on the paddock track. |
 | G1.4 Slipstream | Close behind a kart for a moment: a short draft boost, with air lines drawn. | Physics test. |
 | G1.5 Feel | Wall bounces, off-road slowdown and steering tuned; recorded in a card of tuning values. | Bots still finish in a time band (world test). |
 

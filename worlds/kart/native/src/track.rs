@@ -105,9 +105,10 @@ const WHITE: [f32; 4] = [1.0; 4];
 const CELLS: usize = 200;
 
 /// A ribbon along the track between two points of its cross-section, each
-/// given as (metres right of the centre line, height). `facing` says which
-/// way the ribbon faces, in the same terms: (0, 1) up, (-1, 0) towards the
-/// left. `colour` paints each segment, or leaves it out.
+/// given as (metres right of the centre line, height above the road).
+/// `facing` says which way the ribbon faces, in the same terms: (0, 1) up,
+/// (-1, 0) towards the left. `colour` paints each segment, or leaves it out.
+/// Over a crest the ribbon rises and falls with the road, in short pieces.
 fn ribbon(
     frames: &[Frame],
     from: (f32, f32),
@@ -120,25 +121,34 @@ fn ribbon(
     for (i, a) in frames.iter().enumerate() {
         let Some(colour) = colour(i) else { continue };
         let b = &frames[(i + 1) % frames.len()];
-        let ahead = if b.along > a.along { b.along } else { a.along + a.at.distance(b.at) };
-        let corner = |f: &Frame, (lateral, height): (f32, f32)| {
-            let p = f.at + f.right * lateral;
-            Vec3::new(p.x, height, p.y)
-        };
-        let quad = [corner(a, from), corner(b, from), corner(b, to), corner(a, to)];
-        let quad_uvs = [[0.0, a.along], [0.0, ahead], [across, ahead], [across, a.along]];
-        let wanted = Vec3::new(a.right.x * facing.0, facing.1, a.right.y * facing.0);
-        let mut normal = (quad[1] - quad[0]).cross(quad[3] - quad[0]).normalize_or(Vec3::Y);
-        // Wind the two triangles so that the front face is the wanted one.
-        let order = if normal.dot(wanted) >= 0.0 { [0, 1, 3, 3, 1, 2] } else { [0, 3, 1, 1, 3, 2] };
-        if normal.dot(wanted) < 0.0 {
-            normal = -normal;
-        }
-        for corner in order {
-            positions.push(quad[corner].to_array());
-            normals.push(normal.to_array());
-            uvs.push(quad_uvs[corner]);
-            colours.push(colour);
+        let length = a.at.distance(b.at);
+        let pieces = a.pieces(length);
+        // A share `t` of the way from `a` to `b`: where, which way is right, how high the road.
+        let along =
+            |t: f32| (a.at.lerp(b.at, t), a.right.lerp(b.right, t).normalize_or(a.right), a.height_towards(t, length));
+        for piece in 0..pieces {
+            let (t0, t1) = (piece as f32 / pieces as f32, (piece + 1) as f32 / pieces as f32);
+            let corner = |t: f32, (lateral, height): (f32, f32)| {
+                let (at, right, road) = along(t);
+                let p = at + right * lateral;
+                Vec3::new(p.x, road + height, p.y)
+            };
+            let quad = [corner(t0, from), corner(t1, from), corner(t1, to), corner(t0, to)];
+            let (v0, v1) = (a.along + t0 * length, a.along + t1 * length);
+            let quad_uvs = [[0.0, v0], [0.0, v1], [across, v1], [across, v0]];
+            let wanted = Vec3::new(a.right.x * facing.0, facing.1, a.right.y * facing.0);
+            let mut normal = (quad[1] - quad[0]).cross(quad[3] - quad[0]).normalize_or(Vec3::Y);
+            // Wind the two triangles so that the front face is the wanted one.
+            let order = if normal.dot(wanted) >= 0.0 { [0, 1, 3, 3, 1, 2] } else { [0, 3, 1, 1, 3, 2] };
+            if normal.dot(wanted) < 0.0 {
+                normal = -normal;
+            }
+            for corner in order {
+                positions.push(quad[corner].to_array());
+                normals.push(normal.to_array());
+                uvs.push(quad_uvs[corner]);
+                colours.push(colour);
+            }
         }
     }
     let indices = (0..positions.len() as u32).collect();
@@ -449,103 +459,8 @@ pub fn build(
         ));
         commands.insert_resource(Water(water));
     }
-    spawn_ramps(&mut commands, &mut meshes, &mut materials, &mut images, track, &road_material);
 
     commands.insert_resource(land);
-}
-
-/// The ramps across the road (D-050), as the physics has them
-/// ([`osage_kart_physics::Track::lift`]): a slab of the road's own surface
-/// rising to its lip, from barrier to barrier; the lip and the sides striped
-/// black and yellow, to be seen from afar.
-fn spawn_ramps(
-    commands: &mut Commands,
-    meshes: &mut Assets<Mesh>,
-    materials: &mut Assets<StandardMaterial>,
-    images: &mut Assets<Image>,
-    track: &osage_kart_physics::Track,
-    road: &Handle<StandardMaterial>,
-) {
-    if track.ramps().is_empty() {
-        return;
-    }
-    // Reflective paint: it shines a little of its own, in shade too.
-    let painted = images.add(chequers(10, 1, [250, 196, 20], [20, 20, 20]));
-    let stripes = materials.add(StandardMaterial {
-        base_color_texture: Some(painted.clone()),
-        emissive: LinearRgba::rgb(0.35, 0.35, 0.35),
-        emissive_texture: Some(painted),
-        perceptual_roughness: 0.55,
-        cull_mode: None,
-        double_sided: true,
-        ..default()
-    });
-    for ramp in track.ramps() {
-        let (top, sides) = ramp_meshes(track, ramp);
-        commands.spawn((Part, Mesh3d(meshes.add(with_tangents(top))), MeshMaterial3d(road.clone())));
-        commands.spawn((Part, Mesh3d(meshes.add(sides)), MeshMaterial3d(stripes.clone())));
-    }
-}
-
-/// A ramp's top, wound up, and its lip and sides.
-fn ramp_meshes(track: &osage_kart_physics::Track, ramp: &osage_kart_physics::Ramp) -> (Mesh, Mesh) {
-    const ROWS: usize = 8;
-    // From barrier to barrier, as the physics lifts every kart that passes:
-    // no wheel drops off its edge.
-    let reach = track.half_width + track.verge + osage_kart_physics::BARRIER;
-    let point = |s: usize, lateral: f32| {
-        let along = ramp.along + ramp.length * s as f32 / ROWS as f32;
-        let (centre, heading) = track.at(along);
-        // Right of the road is (-cos h, sin h); a whisker above the road.
-        let y = 0.03 + ramp.height * s as f32 / ROWS as f32;
-        Vec3::new(centre[0] - heading.cos() * lateral, y, centre[1] + heading.sin() * lateral)
-    };
-    let (mut positions, mut uvs, mut indices) = (Vec::new(), Vec::new(), Vec::new());
-    for s in 0..=ROWS {
-        for lateral in [-reach, reach] {
-            positions.push(point(s, lateral).to_array());
-            uvs.push([lateral + reach, ramp.length * s as f32 / ROWS as f32]);
-        }
-    }
-    for s in 0..ROWS as u32 {
-        let (a, b, c, d) = (2 * s, 2 * s + 1, 2 * s + 2, 2 * s + 3);
-        indices.extend([a, b, c, b, d, c]);
-    }
-    let normals = vec![[0.0, 1.0, 0.0]; positions.len()];
-    let top = Mesh::new(PrimitiveTopology::TriangleList, RenderAssetUsages::default())
-        .with_inserted_attribute(Mesh::ATTRIBUTE_POSITION, positions)
-        .with_inserted_attribute(Mesh::ATTRIBUTE_NORMAL, normals)
-        .with_inserted_attribute(Mesh::ATTRIBUTE_UV_0, uvs)
-        .with_inserted_indices(Indices::U32(indices));
-    let mut top = facing_up(top);
-    top.compute_smooth_normals();
-
-    // The lip, across the road, and each side, down to the road.
-    let (mut positions, mut uvs, mut indices) = (Vec::new(), Vec::new(), Vec::<u32>::new());
-    // The stripes texture does not repeat: `u` runs 0 to 1 across each face
-    // (ten stripes across the lip), or over a share of it along a side.
-    let mut quad = |a: Vec3, b: Vec3, (u0, u1): (f32, f32)| {
-        let base = positions.len() as u32;
-        let (a0, b0) = (Vec3::new(a.x, 0.0, a.z), Vec3::new(b.x, 0.0, b.z));
-        positions.extend([a0, b0, b, a].map(|v| v.to_array()));
-        uvs.extend([[u0, 1.0], [u1, 1.0], [u1, 0.0], [u0, 0.0]]);
-        indices.extend([base, base + 1, base + 2, base, base + 2, base + 3]);
-    };
-    quad(point(ROWS, -reach), point(ROWS, reach), (0.0, 1.0));
-    let share = ramp.length / (2.0 * reach);
-    for lateral in [-reach, reach] {
-        for s in 0..ROWS {
-            let (u0, u1) = (s as f32 / ROWS as f32 * share, (s + 1) as f32 / ROWS as f32 * share);
-            quad(point(s, lateral), point(s + 1, lateral), (u0, u1));
-        }
-    }
-    let mut sides = Mesh::new(PrimitiveTopology::TriangleList, RenderAssetUsages::default())
-        .with_inserted_attribute(Mesh::ATTRIBUTE_POSITION, positions)
-        .with_inserted_attribute(Mesh::ATTRIBUTE_UV_0, uvs)
-        .with_inserted_indices(Indices::U32(indices));
-    sides.duplicate_vertices();
-    sides.compute_flat_normals();
-    (top, sides)
 }
 
 /// Lanes across the road's mesh: enough for the racing line to curve smoothly.
@@ -588,7 +503,7 @@ fn skid_marks(frames: &[Frame], half: f32) -> Mesh {
                 let width = 0.07;
                 let at = |f: &Frame, lateral: f32| {
                     let p = f.at + f.right * lateral;
-                    [p.x, 0.025, p.y]
+                    [p.x, f.height + 0.025, p.y]
                 };
                 let (la, lb) = (line[i] + track + wobble, line[j] + track + wobble);
                 let quad = [at(a, la - width), at(b, lb - width), at(b, lb + width), at(a, la + width)];
@@ -619,26 +534,49 @@ fn road_mesh(frames: &[Frame], half: f32) -> Mesh {
     let n = frames.len();
     let (mut positions, mut normals, mut uvs, mut colours, mut indices) =
         (Vec::new(), Vec::new(), Vec::new(), Vec::new(), Vec::new());
-    // One more row than frames: the last repeats the first, with its texture further on.
+    // Rows across the road: one at each frame, more over a crest; then a
+    // last one that repeats the first, with its texture further on.
+    let mut rows = Vec::new();
+    for (i, a) in frames.iter().enumerate() {
+        let b = &frames[(i + 1) % n];
+        let length = a.at.distance(b.at);
+        let pieces = a.pieces(length);
+        for piece in 0..pieces {
+            let t = piece as f32 / pieces as f32;
+            let tilt = (a.height_towards(t + 0.01, length) - a.height_towards(t, length)) / (0.01 * length);
+            let forward = (b.at - a.at).normalize_or(a.forward);
+            let normal = Vec3::new(-forward.x * tilt, 1.0, -forward.y * tilt).normalize();
+            let right = a.right.lerp(b.right, t).normalize_or(a.right);
+            rows.push((
+                a.at.lerp(b.at, t),
+                right,
+                a.along + t * length,
+                a.height_towards(t, length),
+                normal,
+                line[i] + (line[(i + 1) % n] - line[i]) * t,
+            ));
+        }
+    }
     let total = frames.last().map_or(0.0, |f| f.along + f.at.distance(frames[0].at));
-    for i in 0..=n {
-        let frame = &frames[i % n];
-        let along = if i == n { total } else { frame.along };
+    rows.push(rows[0]);
+    rows.last_mut().expect("a row").2 = total;
+    let count = rows.len() - 1;
+    for &(at, right, along, height, normal, line) in &rows {
         let patchy = 0.75 + 0.5 * noise(Vec2::new(along / 9.0, 3.0));
         for j in 0..=LANES {
             let lateral = -half + 2.0 * half * j as f32 / LANES as f32;
-            let p = frame.at + frame.right * lateral;
-            positions.push([p.x, 0.02, p.y]);
-            normals.push([0.0, 1.0, 0.0]);
+            let p = at + right * lateral;
+            positions.push([p.x, height + 0.02, p.y]);
+            normals.push(normal.to_array());
             uvs.push([lateral + half, along]);
-            let off = (lateral - line[i % n]) / half;
+            let off = (lateral - line) / half;
             let rubber = (0.3 * (-(off / 0.3).powi(2)).exp() + 0.08 * (-(off / 0.7).powi(2)).exp()) * patchy;
             let shade = (1.0 - rubber).clamp(0.5, 1.05);
             colours.push([shade, shade, shade * 1.01, 1.0]);
         }
     }
     let row = (LANES + 1) as u32;
-    for i in 0..n as u32 {
+    for i in 0..count as u32 {
         for j in 0..LANES as u32 {
             let (a, b) = (i * row + j, i * row + j + 1);
             let (c, d) = (a + row, b + row);
@@ -888,5 +826,4 @@ fn photographed(
     for (mesh, material) in grassed {
         commands.spawn((Part, Mesh3d(meshes.add(mesh)), MeshMaterial3d(material.clone()), NotShadowCaster));
     }
-    spawn_ramps(commands, meshes, materials, images, track, &road);
 }

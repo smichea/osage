@@ -32,7 +32,8 @@ Controls
 Driving well pays:
   - hold a drift through a bend: the sparks turn blue, orange, then
     violet; release for a mini-turbo, longer at each colour;
-  - off a ramp, press drift in the air for a trick and a boost on landing;
+  - over the crest on the start straight, flat out, the kart takes off:
+    press drift in the air for a trick and a boost on landing;
   - press the throttle as the lights go out for a boost; press it too
     early and the engine stalls;
   - stay right behind another kart for a moment: its wake slings you past.

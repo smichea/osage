@@ -341,7 +341,7 @@ pub fn drive(kart: &Kart, me: usize, field: &[Rival], temper: &Temper, mind: &mu
     let tight = sharpest < 40.0 && at < 15.0;
     let mut controls =
         steer(kart, spot, lateral, top.min(allowed), allowed, temper.drifts && tight && mind.plan != Plan::Wait, track);
-    // Off a ramp, the bold do a trick: a press of the button in the air.
+    // Off a crest, the bold do a trick: a press of the button in the air.
     let flying = kart.height > track.lift(spot.along).0 + 1e-3;
     if flying && kart.trick == 0.0 && temper.nerve > 0.4 {
         controls.drift = kart.held == 0.0;

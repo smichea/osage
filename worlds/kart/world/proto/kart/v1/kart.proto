@@ -163,16 +163,19 @@ message Track {
   float start = 4;
   // Sectors a lap is cut into; a lap counts only through all of them, in order.
   uint32 sectors = 5;
-  // Ramps across the road (D-050): a kart that runs up one flies off its lip.
-  repeated Ramp ramps = 6;
+  // Crests across the road, verges and barriers (D-051): taken fast, a kart
+  // leaves the road near the top and lands further on.
+  repeated Crest crests = 6;
 }
 
-message Ramp {
-  // Where it starts, metres along the centre line; over `length` metres it
-  // rises to `height`.
+message Crest {
+  // Where it starts, metres along the centre line. Over `rise` metres the
+  // ground rises to `height`, then over `fall` metres it comes down again,
+  // each way half a cosine.
   float along = 1;
-  float length = 2;
+  float rise = 2;
   float height = 3;
+  float fall = 4;
 }
 
 // kart.race/1 — the race in progress.

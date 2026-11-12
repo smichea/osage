@@ -94,7 +94,7 @@ try {
   $("status").innerHTML = input.touchScreen
     ? `${escape(me)} · via ${session.transport} · ${sourceLink}<br>hold DRIFT through bends, release for a turbo (three levels); press it in the air for a trick`
     : `world <b>${escape(session.welcome.world?.name ?? "")}</b> · you are ${escape(me)} · via ${session.transport}<br>` +
-      `drive: ↑ ↓ ← → or WASD · drift: Space or Shift (hold through a bend, release for a mini-turbo of up to three levels; press it off a ramp for a trick) · throttle as the lights go out for a boost, too early and you stall · gamepad works too<br>` +
+      `drive: ↑ ↓ ← → or WASD · drift: Space or Shift (hold through a bend, release for a mini-turbo of up to three levels; press it off a crest for a trick) · throttle as the lights go out for a boost, too early and you stall · gamepad works too<br>` +
       (source ? `server source: ${sourceLink}` : "");
 
   const race = (): Race | undefined => {
@@ -114,9 +114,12 @@ try {
       if (event.kind === "entered") {
         const track = world.get(event.entity, KART.track, TrackSchema);
         if (track) {
-          physics.setTrack(track.points, track.halfWidth, track.verge, track.ramps);
+          physics.setTrack(track.points, track.halfWidth, track.verge, track.crests);
           if (circuit) scene.remove(circuit.group);
-          circuit = buildCircuit(track.points, track.halfWidth, track.verge, track.start, track.ramps);
+          // Over a crest the road is as high as the physics has it (D-051).
+          circuit = buildCircuit(track.points, track.halfWidth, track.verge, track.start, (along) =>
+            physics.roadHeight(along),
+          );
           scene.add(circuit.group);
         }
         const who = racer(event.entity);

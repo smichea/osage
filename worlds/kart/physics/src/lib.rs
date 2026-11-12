@@ -15,8 +15,8 @@
 //! of inertia, and a knock is an impulse at the point where it lands.
 //!
 //! Skill is rewarded (D-050): a drift charges a mini-turbo of three levels;
-//! ramps throw karts into the air, where a press of the drift button is a
-//! trick that boosts on landing; a kart in another's wake charges a
+//! a crest taken fast enough lifts a kart off the road, where a press of the
+//! drift button is a trick that boosts on landing; a kart in another's wake charges a
 //! slipstream boost ([`slipstream`]); and the world judges each start
 //! ([`launch`]): a boost for throttle in time, a stall for throttle too early.
 
@@ -136,7 +136,8 @@ pub struct Kart {
     /// Rate of turn a knock gave, rad/s, positive to the left (as the
     /// heading grows); the tyres stop it.
     pub spin: f32,
-    /// Height above the road, m, and speed upwards, m/s: off a ramp.
+    /// Height of the kart's base above level ground, m (the road's own height
+    /// on a crest, more in the air), and speed upwards, m/s.
     pub height: f32,
     pub climb: f32,
     /// 1 when a trick was done in this jump: a boost on landing.
@@ -154,13 +155,42 @@ pub fn turbo_level(charge: f32) -> usize {
     TURBO_CHARGES.iter().filter(|&&c| charge >= c).count()
 }
 
-/// A ramp across the whole road: from `along` it rises over `length` metres
-/// to `height`, and drops at its lip.
+/// A crest across the whole road, verges and barriers too (D-051): from
+/// `along` the ground rises over `rise` metres to `height`, then falls back
+/// over `fall` metres, smoothly (half a cosine each way: no edge, no step).
+/// A kart leaves the road where the road curves away faster than it falls —
+/// near the top, taken fast — and lands further on; a slow kart drives over.
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub struct Ramp {
+pub struct Crest {
     pub along: f32,
-    pub length: f32,
+    pub rise: f32,
+    pub fall: f32,
     pub height: f32,
+}
+
+impl Crest {
+    /// Metres along the track it covers.
+    pub fn length(&self) -> f32 {
+        self.rise + self.fall
+    }
+
+    /// The road's height and slope `into` metres past the crest's start;
+    /// none off the crest.
+    pub fn profile(&self, into: f32) -> Option<(f32, f32)> {
+        if !(0.0..self.length()).contains(&into) {
+            return None;
+        }
+        // Half a cosine up, then half a cosine down: 0 to π, π to 2π.
+        let (span, turn) = if into < self.rise {
+            (self.rise, core::f32::consts::PI * into / self.rise.max(f32::EPSILON))
+        } else {
+            let past = into - self.rise;
+            (self.fall, core::f32::consts::PI * (1.0 + past / self.fall.max(f32::EPSILON)))
+        };
+        let height = self.height * 0.5 * (1.0 - cosf(turn));
+        let slope = self.height * 0.5 * core::f32::consts::PI / span.max(f32::EPSILON) * sinf(turn);
+        Some((height, slope))
+    }
 }
 
 /// What a wheel runs on.
@@ -200,7 +230,7 @@ pub struct Track {
     length: f32,
     pub half_width: f32,
     pub verge: f32,
-    ramps: Vec<Ramp>,
+    crests: Vec<Crest>,
 }
 
 /// Where a position is relative to the track.
@@ -223,30 +253,26 @@ impl Track {
             distances.push(length);
             length += distance(points[i], points[(i + 1) % points.len()]);
         }
-        Self { points, distances, length, half_width, verge, ramps: Vec::new() }
+        Self { points, distances, length, half_width, verge, crests: Vec::new() }
     }
 
-    /// The same track with ramps across its road.
-    pub fn with_ramps(mut self, ramps: Vec<Ramp>) -> Self {
-        self.ramps = ramps;
+    /// The same track with crests across its road.
+    pub fn with_crests(mut self, crests: Vec<Crest>) -> Self {
+        self.crests = crests;
         self
     }
 
-    pub fn ramps(&self) -> &[Ramp] {
-        &self.ramps
+    pub fn crests(&self) -> &[Crest] {
+        &self.crests
     }
 
-    /// The road's height at `along` (on a ramp, or 0), and its slope
+    /// The road's height at `along` (on a crest, or 0), and its slope
     /// (rise per metre along the track).
     pub fn lift(&self, along: f32) -> (f32, f32) {
-        for ramp in &self.ramps {
-            let into = (along - ramp.along).rem_euclid(self.length);
-            if into < ramp.length {
-                let slope = ramp.height / ramp.length.max(f32::EPSILON);
-                return (slope * into, slope);
-            }
-        }
-        (0.0, 0.0)
+        self.crests
+            .iter()
+            .find_map(|crest| crest.profile((along - crest.along).rem_euclid(self.length)))
+            .unwrap_or((0.0, 0.0))
     }
 
     pub fn points(&self) -> &[[f32; 2]] {
@@ -386,7 +412,8 @@ pub fn step(kart: &mut Kart, controls: Controls, track: &Track) {
         kart.stall = (kart.stall - DT).max(0.0);
     }
     let here = track.locate(kart.x, kart.z);
-    let flying = kart.height > track.lift(here.along).0 + 1e-3;
+    let road = track.lift(here.along).0;
+    let flying = kart.height > road + 1e-3;
     // Each wheel feels its ground: grass slows the kart in proportion and
     // drags it towards the side it is on; kerbs and grass grip less. In the
     // air, nothing does.
@@ -489,28 +516,28 @@ pub fn step(kart: &mut Kart, controls: Controls, track: &Track) {
     kart.x += v.0 * DT;
     kart.z += v.1 * DT;
     walls(kart, track);
-    fly(kart, track, flying);
+    fly(kart, track, flying, road);
 }
 
-/// Up and down: a kart on the road follows it (up a ramp, its speed lifts
-/// it); off a ramp's lip it flies, falls and lands — with a boost if it did
-/// a trick.
-fn fly(kart: &mut Kart, track: &Track, flying: bool) {
-    let (surface, slope) = track.lift(track.locate(kart.x, kart.z).along);
-    if flying {
-        kart.climb -= GRAVITY * DT;
-        kart.height += kart.climb * DT;
-    }
-    if kart.height <= surface || !flying && kart.height <= surface + 1e-3 {
+/// Up and down, ballistically: a kart falls freely from where it was with
+/// the speed upwards it had; if the road under it is higher than that, the
+/// road carries it (how fast the road under it rose becomes its climb, in
+/// whichever direction it drives). Over a crest
+/// taken fast, the road falls away quicker than the kart: it flies, then
+/// lands — with a boost if it did a trick.
+fn fly(kart: &mut Kart, track: &Track, flying: bool, road: f32) {
+    let surface = track.lift(track.locate(kart.x, kart.z).along).0;
+    let falling = kart.height + kart.climb * DT - 0.5 * GRAVITY * DT * DT;
+    if falling <= surface {
         if flying && kart.trick > 0.0 {
             kart.boost = kart.boost.max(TRICK_BOOST);
         }
         kart.height = surface;
-        kart.climb = slope * kart.speed.max(0.0);
+        kart.climb = (surface - road) / DT;
         kart.trick = 0.0;
-    } else if !flying {
-        // Just over the lip: the speed upwards it had carries it.
-        kart.height += kart.climb * DT;
+    } else {
+        kart.height = falling;
+        kart.climb -= GRAVITY * DT;
     }
 }
 
@@ -715,40 +742,74 @@ mod tests {
         assert!(boosts.windows(2).all(|w| w[1] > w[0]), "{boosts:?}");
     }
 
-    /// The loop with a ramp on its first straight: 6 m long, 1.2 m high.
-    fn ramped() -> Track {
-        track().with_ramps(vec![Ramp { along: 40.0, length: 6.0, height: 1.2 }])
+    /// The loop with a crest on its first straight: 12 m up to 1.4 m, 6 m down.
+    fn crested() -> Track {
+        track().with_crests(vec![Crest { along: 40.0, rise: 12.0, fall: 6.0, height: 1.4 }])
     }
 
     #[test]
-    fn a_ramp_throws_the_kart_into_the_air_and_it_lands() {
-        let track = ramped();
-        let mut kart = Kart { z: 20.0, speed: MAX_SPEED, ..Kart::default() };
-        let mut highest: f32 = 0.0;
-        let mut airborne = 0;
-        for _ in 0..120 {
-            step(&mut kart, FULL, &track);
-            highest = highest.max(kart.height);
-            if kart.height > track.lift(track.locate(kart.x, kart.z).along).0 + 1e-3 {
+    fn a_crest_is_smooth_and_closed() {
+        let track = crested();
+        assert_eq!(track.lift(40.0), (0.0, 0.0));
+        let (top, flat) = track.lift(52.0);
+        assert!((top - 1.4).abs() < 1e-5 && flat.abs() < 1e-5, "{top} {flat}");
+        assert!(track.lift(58.0).0.abs() < 1e-5 && track.lift(58.5) == (0.0, 0.0));
+        // No step anywhere: a centimetre along, the road rises a few millimetres at most.
+        for i in 0..250 {
+            let along = 38.0 + i as f32 * 0.1;
+            let rise = (track.lift(along + 0.01).0 - track.lift(along).0).abs();
+            assert!(rise < 0.004, "{rise} at {along}");
+        }
+    }
+
+    /// Steps in the air and the most clearance over the road, for a kart
+    /// arriving at the crest at `speed` with full throttle.
+    fn over_the_crest(speed: f32) -> (u32, f32, Kart) {
+        let track = crested();
+        let mut kart = Kart { z: 20.0, speed, ..Kart::default() };
+        let (mut airborne, mut clearance) = (0, 0.0_f32);
+        for _ in 0..150 {
+            step(&mut kart, Controls { throttle: if speed < MAX_SPEED { 0.0 } else { 1.0 }, ..FULL }, &track);
+            let road = track.lift(track.locate(kart.x, kart.z).along).0;
+            if kart.height > road + 1e-3 {
                 airborne += 1;
+                clearance = clearance.max(kart.height - road);
             }
         }
-        assert!(highest > 1.4, "flew above the lip: {highest}");
-        assert!((20..60).contains(&airborne), "{airborne} steps in the air");
+        (airborne, clearance, kart)
+    }
+
+    #[test]
+    fn a_crest_taken_flat_out_lifts_the_kart_and_a_slow_one_stays_down() {
+        let (airborne, clearance, kart) = over_the_crest(MAX_SPEED);
+        assert!((28..45).contains(&airborne), "{airborne} steps in the air");
+        assert!((0.6..1.4).contains(&clearance), "{clearance} m under the wheels");
         assert!(kart.height == 0.0 && kart.climb == 0.0, "landed: {kart:?}");
         assert_eq!(kart.boost, 0.0, "no trick, no boost");
         // No drive in the air: the speed it took off with, it keeps.
         assert!((kart.speed - MAX_SPEED).abs() < 0.5, "{kart:?}");
+        // Slower than the crest's curve asks (about 18 m/s), the road holds it.
+        for speed in [8.0, 12.0, 16.0] {
+            assert_eq!(over_the_crest(speed).0, 0, "at {speed} m/s");
+        }
+        // Reversing over it, too: the road carries it either way.
+        let track = crested();
+        let mut kart = Kart { z: 60.0, speed: -6.0, ..Kart::default() };
+        for _ in 0..240 {
+            step(&mut kart, Controls { throttle: -1.0, ..FULL }, &track);
+            let road = track.lift(track.locate(kart.x, kart.z).along).0;
+            assert!(kart.height <= road + 1e-3, "{kart:?}");
+        }
     }
 
     #[test]
     fn a_trick_in_the_air_boosts_on_landing() {
-        let track = ramped();
+        let track = crested();
         let mut kart = Kart { z: 20.0, speed: MAX_SPEED, ..Kart::default() };
         let mut tricked = false;
         for _ in 0..120 {
             let flying = kart.height > track.lift(track.locate(kart.x, kart.z).along).0 + 1e-3;
-            // The button pressed once, just past the lip.
+            // The button pressed once, as the kart leaves the road.
             let press = flying && !tricked;
             tricked |= press;
             step(&mut kart, Controls { drift: press, ..FULL }, &track);
@@ -757,7 +818,7 @@ mod tests {
             }
         }
         assert!(tricked && kart.boost > TRICK_BOOST - 0.05, "{kart:?}");
-        // Holding the button from before the ramp is no trick: it must be pressed.
+        // Holding the button from before the crest is no trick: it must be pressed.
         let mut kart = Kart { z: 20.0, speed: MAX_SPEED, held: 1.0, ..Kart::default() };
         drive(&mut kart, Controls { drift: true, ..FULL }, 1.5, &track);
         assert_eq!(kart.boost, 0.0, "{kart:?}");

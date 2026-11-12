@@ -55,7 +55,7 @@ Opponents that race as people do, each in their own way: one brakes late and div
 
 Any racing game on a track given as a centre line: the bend speeds follow from the vehicle's turning rate, the temperaments from a seed.
 
-Off a ramp, the bold (nerve above 0.4) do a trick: a press of the drift button in the air (D-050).
+In the air over a crest, the bold (nerve above 0.4) do a trick: a press of the drift button in the air (D-050).
 
 # Limits
 

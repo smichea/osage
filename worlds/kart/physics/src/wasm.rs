@@ -4,8 +4,9 @@
 //! WebAssembly interface for clients, numbers only — no allocation shared
 //! with JavaScript, no pointers:
 //!
-//! - `track_clear()`, `track_point(x, z)` for each point, `track_ramp(along,
-//!   length, height)` for each ramp, then `track_close(half_width, verge)`;
+//! - `track_clear()`, `track_point(x, z)` for each point, `track_crest(along,
+//!   rise, fall, height)` for each crest, then `track_close(half_width, verge)`;
+//! - `track_lift(along)`: the road's height that far along (over a crest);
 //! - `kart_set(i, value)` sets field `i` of the kart, `kart_step(throttle,
 //!   steer, drift_button)` advances it one step, `kart_get(i)` reads field
 //!   `i`. Fields, in order: x, z, heading, speed, slide, drift, charge,
@@ -13,11 +14,11 @@
 
 use std::cell::RefCell;
 
-use crate::{Controls, Kart, Ramp, Track, step};
+use crate::{Controls, Crest, Kart, Track, step};
 
 thread_local! {
     static POINTS: RefCell<Vec<[f32; 2]>> = const { RefCell::new(Vec::new()) };
-    static RAMPS: RefCell<Vec<Ramp>> = const { RefCell::new(Vec::new()) };
+    static CRESTS: RefCell<Vec<Crest>> = const { RefCell::new(Vec::new()) };
     static TRACK: RefCell<Option<Track>> = const { RefCell::new(None) };
     static KART: RefCell<Kart> = RefCell::new(Kart::default());
 }
@@ -25,7 +26,7 @@ thread_local! {
 #[unsafe(no_mangle)]
 pub extern "C" fn track_clear() {
     POINTS.with_borrow_mut(Vec::clear);
-    RAMPS.with_borrow_mut(Vec::clear);
+    CRESTS.with_borrow_mut(Vec::clear);
 }
 
 #[unsafe(no_mangle)]
@@ -34,19 +35,25 @@ pub extern "C" fn track_point(x: f32, z: f32) {
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn track_ramp(along: f32, length: f32, height: f32) {
-    RAMPS.with_borrow_mut(|ramps| ramps.push(Ramp { along, length, height }));
+pub extern "C" fn track_crest(along: f32, rise: f32, fall: f32, height: f32) {
+    CRESTS.with_borrow_mut(|crests| crests.push(Crest { along, rise, fall, height }));
+}
+
+/// The road's height `along` metres along the centre line: 0 but over a crest.
+#[unsafe(no_mangle)]
+pub extern "C" fn track_lift(along: f32) -> f32 {
+    TRACK.with_borrow(|track| track.as_ref().map_or(0.0, |track| track.lift(along).0))
 }
 
 /// 1 once the track is ready, 0 if it has fewer than three points.
 #[unsafe(no_mangle)]
 pub extern "C" fn track_close(half_width: f32, verge: f32) -> u32 {
     let points = POINTS.with_borrow_mut(std::mem::take);
-    let ramps = RAMPS.with_borrow_mut(std::mem::take);
+    let crests = CRESTS.with_borrow_mut(std::mem::take);
     if points.len() < 3 {
         return 0;
     }
-    TRACK.set(Some(Track::new(points, half_width, verge).with_ramps(ramps)));
+    TRACK.set(Some(Track::new(points, half_width, verge).with_crests(crests)));
     1
 }
 

@@ -21,8 +21,8 @@ describe("kart physics in WebAssembly", () => {
   it("matches the native build bit for bit", async () => {
     const physics = await Physics.load(readFileSync(new URL("../public/physics.wasm", import.meta.url)));
     physics.setTrack([0, 0, 0, 200, -100, 200, -100, 0], 6, 3, [
-      { along: 20, length: 6, height: 1.25 },
-      { along: 34, length: 3, height: 0.5 },
+      { along: 20, rise: 6, fall: 4, height: 1.0 },
+      { along: 34, rise: 4, fall: 3, height: 0.5 },
     ]);
     let kart: KartValues = { x: 0, z: 10, heading: 0, speed: 0, slide: 0, drift: 0, charge: 0, boost: 0, spin: 0, stall: 0.5 };
     const lines: string[] = [];

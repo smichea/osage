@@ -1,7 +1,7 @@
 ---
 type: Algorithm
 title: Arcade kart physics
-description: A small kart model with drifting, three mini-turbo levels, ramps and tricks, starts and slipstreams, made of a forward speed, a sideways slide, a heading and a height.
+description: A small kart model with drifting, three mini-turbo levels, crests and tricks, starts and slipstreams, made of a forward speed, a sideways slide, a heading and a height.
 resource: https://github.com/smichea/osage/blob/main/worlds/kart/physics/src/lib.rs
 licence: MIT OR Apache-2.0
 status: draft
@@ -19,13 +19,13 @@ A kart that is fun to drive on a keyboard, a pad or a touch screen, cheap enough
 
 # Idea
 
-Not a car simulation. Three numbers describe the motion — speed along the kart, slide across it, heading — and a drift is a state with its own turning rate and grip, charged by time. A height and a speed upwards are added for ramps. Skill is rewarded where the genre rewards it (D-050): longer drifts, tricks in the air, starts in time, driving in a wake. Written without a public reference; the constants were tuned by playing[^own].
+Not a car simulation. Three numbers describe the motion — speed along the kart, slide across it, heading — and a drift is a state with its own turning rate and grip, charged by time. A height and a speed upwards are added for crests (D-051). Skill is rewarded where the genre rewards it (D-050): longer drifts, tricks in the air, starts in time, driving in a wake. Written without a public reference; the constants were tuned by playing[^own].
 
 # Method
 
 Each step of `dt = 1/60 s`, with `throttle` and `steer` in −1…1:
 
-0. **Buttons and the engine:** a press of the drift button is a change from the last step (`held`). A stalled engine (`stall` > 0, a start too early) gives no throttle until it runs out. The kart **flies** when it is higher than the road under it (a ramp's surface, or 0).
+0. **Buttons and the engine:** a press of the drift button is a change from the last step (`held`). A stalled engine (`stall` > 0, a start too early) gives no throttle until it runs out. The kart **flies** when it is higher than the road under it (over a crest, or 0).
 1. **Ground and top speed:** each wheel (0.52 m ahead or behind the centre, 0.55 m to a side) is on the road, a kerb (up to 1 m beyond the road's edge) or grass. The top speed, 28 m/s while boosting and 22 otherwise, falls towards 9 in proportion to the wheels on grass. Grip is scaled by `1 − 0.35·(share on kerbs) − 0.5·(share on grass)`.
 2. **Along:** throttle accelerates at 16 m/s² up to the top speed; braking decelerates at 32, then reverses up to 7 m/s; with no throttle the kart loses 4 m/s². A boost adds 40 m/s² up to 28 m/s. Above the top speed, the excess decays by `3·dt` per step.
 3. **Drift state:**
@@ -39,7 +39,7 @@ Each step of `dt = 1/60 s`, with `throttle` and `steer` in −1…1:
 5. **Spin** from a knock: the heading turns by `spin · dt` while the velocity on the ground stays, so speed becomes slide; the spin decays at `4 · grip scale` per second and stops under 0.001 rad/s.
 6. **Move** by `speed` along the heading and `slide` across it.
 7. **Barriers:** if the kart's outline (a capsule) passes the barriers' face, 0.9 m beyond the verge, push it back and give it an impulse at the corner that touches ([capsule contacts](/algorithms/capsule-contacts.md): restitution 0.2, friction 0.3). An impulse over 2.5 m/s ends a drift.
-8. **Up and down:** a ramp rises over `length` metres to `height` across the whole width, barrier to barrier, and drops at its lip. On the road, the kart follows its surface, and its speed upwards is `slope · speed`; past the lip that speed carries it into the air, where gravity (18 m/s²) pulls it down. In the air the wheels neither drive nor brake, nothing grips or drags (grip × 0.1, no grass), steering turns a quarter as much, and a press of the drift button is a **trick**: landing after one gives a 0.7 s boost.
+8. **Up and down:** a crest (D-051) lifts the whole width of the track, barriers and land too: half a cosine up over `rise` metres to `height`, half a cosine down over `fall`. Each step the kart falls freely from where it was, with the speed upwards it had (gravity 18 m/s²); if the road under it is higher than that, the road carries it, and how fast the road rose under it becomes its climb — whichever way it drives. Over the top the road curves away; where it curves faster than the kart falls (speed² × curvature > gravity) the kart leaves it, and lands further on. In the air the wheels neither drive nor brake, nothing grips or drags (grip × 0.1, no grass), steering turns a quarter as much, and a press of the drift button is a **trick**: landing after one gives a 0.7 s boost.
 
 Two karts whose outlines overlap collide the same way, both moving (restitution 0.3, friction 0.4).
 
@@ -84,7 +84,7 @@ A tyre-force model gives realism the game does not want and determinism problems
 
 # Oracle
 
-[Physics golden file](/oracles/physics-golden.md) (its script flies off two ramps), the unit tests of the crate (each level of drift a longer boost; a ramp's flight and landing; a trick's boost and a held button's none; a wake's boost; a start in time and one too early), and the world's tests: starts judged against the lights, every flight in a race of bots landing on the road, the bots' time band.
+[Physics golden file](/oracles/physics-golden.md) (its script drives over two crests), the unit tests of the crate (each level of drift a longer boost; a crest smooth and closed; a crest that lifts a kart flat out and holds slower or reversing ones; a trick's boost and a held button's none; a wake's boost; a start in time and one too early), and the world's tests: starts judged against the lights, every flight in a race of bots landing on the road, the bots' time band.
 
 # Reuse
 

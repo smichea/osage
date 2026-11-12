@@ -5,7 +5,7 @@
 // (road, kerbs, walls, start line, trees) and the karts — all procedural.
 
 import * as THREE from "three";
-import { BARRIER, KERB, type RampValues, TURBO_CHARGES } from "./physics.js";
+import { BARRIER, KERB, TURBO_CHARGES } from "./physics.js";
 
 /** The colour of drift sparks by the level of mini-turbo charged: none, blue, orange, violet. */
 export function sparkColour(charge: number): string {
@@ -15,7 +15,7 @@ export function sparkColour(charge: number): string {
 
 export const PALETTE = ["#e5534b", "#539bf5", "#57ab5a", "#c69026", "#b083f0", "#39c5cf", "#e0823d", "#f778ba"];
 
-/** A point of the centre line with its unit direction and right vector. */
+/** A point of the centre line with its unit direction and right vector, and its distance along. */
 interface Frame {
   x: number;
   z: number;
@@ -23,33 +23,65 @@ interface Frame {
   fz: number;
   rx: number;
   rz: number;
+  along: number;
 }
 
 function frames(points: ArrayLike<number>): Frame[] {
   const n = points.length / 2;
   const at = (i: number) => [points[2 * ((i + n) % n)], points[2 * ((i + n) % n) + 1]];
+  let along = 0;
   return Array.from({ length: n }, (_, i) => {
     const [[ax, az], [x, z], [bx, bz]] = [at(i - 1), at(i), at(i + 1)];
     const length = Math.hypot(bx - ax, bz - az) || 1;
     const [fx, fz] = [(bx - ax) / length, (bz - az) / length];
     // Right of a kart facing (fx, fz) is (-fz, fx).
-    return { x, z, fx, fz, rx: -fz, rz: fx };
+    const frame = { x, z, fx, fz, rx: -fz, rz: fx, along };
+    const [nx, nz] = at(i + 1);
+    along += Math.hypot(nx - x, nz - z);
+    return frame;
   });
 }
 
-/** A strip from `inner` to `outer` metres right of the centre line (negative: left), coloured per segment. */
-function strip(f: Frame[], inner: number, outer: number, y: number, colour: (i: number) => THREE.Color, height = 0) {
+/** The road's height along the centre line: 0, but over a crest. */
+type Lift = (along: number) => number;
+
+/**
+ * A strip from `inner` to `outer` metres right of the centre line (negative:
+ * left), coloured per segment, `y` above the road; with a `height`, a wall
+ * from the ground up to that far above the road. Over a crest (D-051) it
+ * rises and falls with the road, in half-metre pieces.
+ */
+function strip(
+  f: Frame[],
+  inner: number,
+  outer: number,
+  y: number,
+  colour: (i: number) => THREE.Color,
+  height = 0,
+  lift: Lift = () => 0,
+) {
   const positions: number[] = [];
   const colours: number[] = [];
   for (let i = 0; i < f.length; i++) {
     const [a, b] = [f[i], f[(i + 1) % f.length]];
-    const corner = (p: Frame, d: number, up: number) => [p.x + p.rx * d, y + up, p.z + p.rz * d];
-    const quad = height
-      ? [corner(a, inner, 0), corner(b, inner, 0), corner(b, inner, height), corner(a, inner, height)]
-      : [corner(a, inner, 0), corner(b, inner, 0), corner(b, outer, 0), corner(a, outer, 0)];
-    for (const index of [0, 1, 2, 0, 2, 3]) positions.push(...quad[index]);
+    const length = Math.hypot(b.x - a.x, b.z - a.z);
+    const level = [0, 0.25, 0.5, 0.75, 1].every((t) => lift(a.along + t * length) === 0);
+    const pieces = level ? 1 : Math.max(1, Math.ceil(length / 0.5));
     const c = colour(i);
-    for (let k = 0; k < 6; k++) colours.push(c.r, c.g, c.b);
+    for (let k = 0; k < pieces; k++) {
+      const corner = (t: number, d: number, up: number, base = false) => {
+        const [x, z] = [a.x + t * (b.x - a.x), a.z + t * (b.z - a.z)];
+        const [rx, rz] = [a.rx + t * (b.rx - a.rx), a.rz + t * (b.rz - a.rz)];
+        const road = lift(a.along + t * length);
+        return [x + rx * d, base ? 0 : road + y + up, z + rz * d];
+      };
+      const [t0, t1] = [k / pieces, (k + 1) / pieces];
+      const quad = height
+        ? [corner(t0, inner, 0, true), corner(t1, inner, 0, true), corner(t1, inner, height), corner(t0, inner, height)]
+        : [corner(t0, inner, 0), corner(t1, inner, 0), corner(t1, outer, 0), corner(t0, outer, 0)];
+      for (const index of [0, 1, 2, 0, 2, 3]) positions.push(...quad[index]);
+      for (let v = 0; v < 6; v++) colours.push(c.r, c.g, c.b);
+    }
   }
   const geometry = new THREE.BufferGeometry();
   geometry.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
@@ -72,7 +104,7 @@ export function buildCircuit(
   halfWidth: number,
   verge: number,
   start: number,
-  ramps: RampValues[] = [],
+  lift: Lift = () => 0,
 ): CircuitView {
   const f = frames(points);
   const group = new THREE.Group();
@@ -85,15 +117,24 @@ export function buildCircuit(
 
   const asphalt = new THREE.Color("#3b4048");
   const asphaltLight = new THREE.Color("#41474f");
-  group.add(strip(f, -halfWidth, halfWidth, 0.02, (i) => (i % 2 ? asphalt : asphaltLight)));
+  group.add(strip(f, -halfWidth, halfWidth, 0.02, (i) => (i % 2 ? asphalt : asphaltLight), 0, lift));
   const [red, white] = [new THREE.Color("#d73a3a"), new THREE.Color("#f0f0f0")];
   const kerb = (i: number) => (Math.floor(i / 2) % 2 ? red : white);
-  group.add(strip(f, halfWidth, halfWidth + KERB, 0.03, kerb), strip(f, -halfWidth - KERB, -halfWidth, 0.03, kerb));
-  const [blue, light] = [new THREE.Color("#2f6fd6"), new THREE.Color("#e8eef7")];
-  const wall = (i: number) => (i % 2 ? blue : light);
+  group.add(
+    strip(f, halfWidth, halfWidth + KERB, 0.03, kerb, 0, lift),
+    strip(f, -halfWidth - KERB, -halfWidth, 0.03, kerb, 0, lift),
+  );
   // The barriers' face, where a kart's outline stops (D-045).
   const face = halfWidth + verge + BARRIER;
-  group.add(strip(f, face, 0, 0, wall, 0.9), strip(f, -face, 0, 0, wall, 0.9));
+  // The verges, which rise with the road over a crest.
+  const grass = new THREE.Color("#4f8a3c");
+  group.add(
+    strip(f, halfWidth + KERB, face, 0.01, () => grass, 0, lift),
+    strip(f, -face, -halfWidth - KERB, 0.01, () => grass, 0, lift),
+  );
+  const [blue, light] = [new THREE.Color("#2f6fd6"), new THREE.Color("#e8eef7")];
+  const wall = (i: number) => (i % 2 ? blue : light);
+  group.add(strip(f, face, 0, 0, wall, 0.9, lift), strip(f, -face, 0, 0, wall, 0.9, lift));
 
   // Distances along the centre line, to place things by distance.
   const distances = [0];
@@ -131,40 +172,6 @@ export function buildCircuit(
   line.position.set(s.x, 0.04, s.z);
   line.rotation.y = s.heading;
   group.add(line);
-
-  // Ramps across the road (D-050): a slab rising to its lip, from barrier
-  // to barrier, as the physics lifts every kart that passes.
-  const slab = new THREE.MeshStandardMaterial({ color: "#454b54", roughness: 0.9, side: THREE.DoubleSide });
-  for (const ramp of ramps) {
-    const rows = 8;
-    const reach = halfWidth + verge + BARRIER;
-    const point = (row: number, lateral: number, top: boolean) => {
-      const p = at(ramp.along + (ramp.length * row) / rows);
-      const y = top ? 0.03 + (ramp.height * row) / rows : 0;
-      // Right of the road is (-cos h, sin h).
-      return [p.x - Math.cos(p.heading) * lateral, y, p.z + Math.sin(p.heading) * lateral];
-    };
-    const positions: number[] = [];
-    const quad = (a: number[], b: number[], c: number[], d: number[]) => positions.push(...a, ...b, ...c, ...a, ...c, ...d);
-    for (let r = 0; r < rows; r++) {
-      quad(point(r, -reach, true), point(r, reach, true), point(r + 1, reach, true), point(r + 1, -reach, true));
-      for (const side of [-reach, reach]) quad(point(r, side, false), point(r + 1, side, false), point(r + 1, side, true), point(r, side, true));
-    }
-    quad(point(rows, -reach, false), point(rows, reach, false), point(rows, reach, true), point(rows, -reach, true));
-    const geometry = new THREE.BufferGeometry();
-    geometry.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
-    geometry.computeVertexNormals();
-    group.add(new THREE.Mesh(geometry, slab));
-    // The lip, striped yellow to be seen from afar.
-    const lip = new THREE.Mesh(
-      new THREE.PlaneGeometry(2 * reach, ramp.height),
-      new THREE.MeshStandardMaterial({ color: "#f5c414", roughness: 0.6, side: THREE.DoubleSide }),
-    );
-    const end = at(ramp.along + ramp.length);
-    lip.position.set(end.x, ramp.height / 2, end.z);
-    lip.rotation.y = end.heading;
-    group.add(lip);
-  }
 
   // Trees outside the walls, placed the same way on every client.
   let seed = 7;
@@ -259,7 +266,7 @@ export function poseKart(
 ) {
   view.root.position.set(x, state.height ?? 0, z);
   view.root.rotation.y = heading;
-  // Up a ramp and in the air the nose follows the path; a trick is a roll.
+  // Up a crest and in the air the nose follows the path; a trick is a roll.
   view.root.rotation.x = -Math.atan((state.climb ?? 0) / Math.max(4, Math.abs(state.speed)));
   view.trick = (state.trick ?? 0) > 0 ? Math.min(1, view.trick + seconds / 0.45) : 0;
   view.root.rotation.z = 2 * Math.PI * view.trick * view.trick * (3 - 2 * view.trick);

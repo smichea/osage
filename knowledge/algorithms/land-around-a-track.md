@@ -39,7 +39,7 @@ For a point `p`:
 
 # Invariants
 
-The height is exactly zero within `flat` of the centre line: the road, drawn 2 cm above zero, is never buried. The knoll and the lake stay clear of the barriers, and the lake's shore is above the water all the way round. Unit tests check all three on the kart circuit.
+The height is exactly zero within `flat` of the centre line — but over a crest (D-051), where it is the road's own height, `lift(along)` at the nearest point of the centre line, faded into the hills by `1 − smooth((d − flat) / 30)`: the road, drawn 2 cm above the ground, is never buried. The knoll and the lake stay clear of the barriers, and the lake's shore is above the water all the way round. Unit tests check all three on the kart circuit.
 
 # Cost
 
