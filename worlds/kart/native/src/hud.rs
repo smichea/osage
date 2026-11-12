@@ -31,6 +31,8 @@ pub struct RaceView {
     pub laps: u32,
     /// A time trial (D-062): alone against the clock and the ghosts.
     pub trial: bool,
+    /// The player's finish is being shown again, slowed (D-063).
+    pub replay: bool,
     /// Race time, milliseconds.
     pub clock_ms: i64,
     /// Every kart, in race order.
@@ -409,6 +411,10 @@ fn write(
                 _ => String::new(),
             },
             Label::Lights => match view.stage {
+                _ if view.replay => {
+                    tint = Some(Color::srgb(1.0, 0.85, 0.3));
+                    "REPLAY".to_owned()
+                }
                 Lights::Count(seconds) => seconds.max(1).to_string(),
                 Lights::Go if view.stalled => {
                     tint = Some(Color::srgb(1.0, 0.3, 0.25));

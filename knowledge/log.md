@@ -1,5 +1,8 @@
 # Knowledge Update Log
 
+## 2026-11-13
+* **Update**: [osage-kart-native](/modules/kart-native.md) presents the race (D-063): a flyover of the circuit on the grid, the player's finish again in slow motion.
+
 ## 2026-11-12
 * **Creation**: Added the module [osage-kart-ghost](/modules/kart-ghost.md): time trials against the ghosts of the best runs, kept as the steps of each tick and driven again by the world (D-062); [osage-kart-records](/modules/kart-records.md) keeps the best trials; [osage-kart-cup](/modules/kart-cup.md)'s events gain `trial:ID`; [osage-kart-items](/modules/kart-items.md) has an empty paddock; [osage-kart-native](/modules/kart-native.md) draws ghosts seen through.
 * **Update**: each track its place (D-061): [osage-kart-land](/modules/kart-land.md) can fall away to a sea past cliffs; [osage-kart-roadside](/modules/kart-roadside.md) grows more or fewer trees by the track's scenery; [osage-kart-native](/modules/kart-native.md) draws the sea, a lighthouse, a harbour town.

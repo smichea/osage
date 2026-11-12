@@ -38,6 +38,7 @@ mod predict;
 mod scene;
 mod scenery;
 mod settings;
+mod show;
 #[cfg(feature = "sound")]
 mod sound;
 mod track;

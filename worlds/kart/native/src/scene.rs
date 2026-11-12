@@ -367,8 +367,10 @@ fn follow(
     followed: Query<&Pose, With<Followed>>,
     mut camera: Query<(&mut Transform, &mut Chase, &mut Projection)>,
 ) {
-    if let (Some(viewpoint), Ok((mut camera, ..))) = (viewpoint, camera.single_mut()) {
+    if let (Some(viewpoint), Ok((mut camera, mut chase, _))) = (viewpoint, camera.single_mut()) {
         *camera = Transform::from_translation(viewpoint.from).looking_at(viewpoint.to, Vec3::Y);
+        // When the viewpoint goes, the chase camera eases from here.
+        (chase.place, chase.look, chase.roll) = (viewpoint.from, viewpoint.to, 0.0);
         return;
     }
     let (Some(pose), Ok((mut camera, mut chase, mut projection))) = (followed.iter().next(), camera.single_mut())

@@ -67,15 +67,21 @@ impl Plugin for PlayPlugin {
             .init_resource::<CallWanted>()
             .init_resource::<Chosen>()
             .init_resource::<ChosenEvent>()
-            .add_plugins((HudPlugin, PaddockPlugin))
+            .add_plugins((HudPlugin, PaddockPlugin, crate::show::ShowPlugin))
             .add_systems(FixedUpdate, drive)
             .add_systems(
                 Update,
-                (receive, choose, send, poses, follow_someone, summarise).chain().in_set(Stage::Simulate),
+                (receive, choose, send, poses, follow_someone, summarise.in_set(Summarised))
+                    .chain()
+                    .in_set(Stage::Simulate),
             )
             .add_systems(Update, screenshots);
     }
 }
+
+/// After the race is summarised for the HUD: what shows the race reads it.
+#[derive(SystemSet, Debug, Clone, PartialEq, Eq, Hash)]
+pub struct Summarised;
 
 /// What the network thread hands to the Bevy app.
 enum Net {
