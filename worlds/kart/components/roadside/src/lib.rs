@@ -63,6 +63,17 @@ impl Models {
     }
 }
 
+/// How wooded a place is, by the scenery a track names (D-061): the
+/// meadow's trees times this — a forest is far more, a coast few.
+pub fn trees(scenery: &str) -> f32 {
+    match scenery {
+        "forest" => 2.0,
+        "coast" => 0.35,
+        "town" => 0.5,
+        _ => 1.0,
+    }
+}
+
 /// How much is placed: what a tier's budget allows.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Detail {
@@ -91,6 +102,8 @@ impl Verge<'_> {
     fn free(&self, at: Vec2, margin: f32) -> bool {
         self.land.distance_to_track(at) > self.roadside + margin
             && !self.land.wet(at)
+            // On a coast, the top of the cliffs is open: grass and the wind.
+            && !self.land.offshore(at).is_some_and(|off| off > -90.0)
             && !self.clearings.iter().any(|site| site.centre.distance(at) < site.radius)
     }
 
@@ -123,6 +136,7 @@ pub fn scatters(
     clearings: &[Site],
     models: &Models,
     detail: Detail,
+    trees: f32,
 ) -> Vec<Scatter> {
     let roadside = track.half_width + track.verge + BARRIER;
     let verge = Verge { land, frames, roadside, clearings };
@@ -150,7 +164,10 @@ pub fn scatters(
     for _ in 0..4000 {
         let at = beside(&mut dice, 8.0, 140.0);
         let (turn, size, chance) = (dice.between(0.0, std::f32::consts::TAU), dice.between(4.0, 7.5), dice.roll());
-        if chance < (noise(at / 45.0 + 3.0) - 0.4) * 1.8 && free(at, 8.0) && pines.len() < 300 {
+        if chance < (noise(at / 45.0 + 3.0) - 0.4) * 1.8 * trees
+            && free(at, 8.0)
+            && pines.len() < (300.0 * trees) as usize
+        {
             // A clump: one tall sapling and a few smaller ones close by, as
             // young pines grow, which reads as one full crown from afar.
             pines.push(stand(at, 0.1, turn, size));
@@ -170,12 +187,12 @@ pub fn scatters(
     for _ in 0..3000 {
         let at = beside(&mut dice, 9.0, 150.0);
         let (turn, roll, chance) = (dice.between(0.0, std::f32::consts::TAU), dice.roll(), dice.roll());
-        if chance > (noise(at / 50.0 + 21.0) - 0.38) * 1.6 || !free(at, 9.0) {
+        if chance > (noise(at / 50.0 + 21.0) - 0.38) * 1.6 * trees || !free(at, 9.0) {
             continue;
         }
-        if roll < 0.62 && firs.len() < 120 {
+        if roll < 0.62 && firs.len() < (120.0 * trees) as usize {
             firs.push(stand(at, 0.15, turn, dice.between(0.85, 1.25)));
-        } else if roll >= 0.62 && broadleaves.len() < 70 {
+        } else if roll >= 0.62 && broadleaves.len() < (70.0 * trees) as usize {
             broadleaves.push(stand(at, 0.15, turn, dice.between(1.6, 2.4)));
         }
     }
@@ -275,6 +292,7 @@ pub fn woods(
     clearings: &[Site],
     models: &Models,
     from: f32,
+    trees: f32,
 ) -> Vec<Woods> {
     let roadside = track.half_width + track.verge + BARRIER;
     let verge = Verge { land, frames, roadside, clearings };
@@ -287,7 +305,8 @@ pub fn woods(
     for _ in 0..600 {
         let centre = verge.beside(&mut dice, (from - roadside + 10.0).max(0.0), 430.0);
         let radius = dice.between(14.0, 45.0);
-        if noise(centre / 90.0 + 5.0) < 0.42 {
+        // Groves where the noise is high: more of the land, the more wooded.
+        if noise(centre / 90.0 + 5.0) < (0.42 + (1.0 - trees) * 0.25).clamp(0.05, 0.9) {
             continue;
         }
         let count = (std::f32::consts::PI * radius * radius / 20.0) as usize;
@@ -434,7 +453,7 @@ mod tests {
             broadleaf: Handle::default(),
         };
         let clearings = [Site { centre: frames[0].at, radius: 30.0 }];
-        (scatters(&land, &frames, &circuit.track, &clearings, &models, detail), land, circuit)
+        (scatters(&land, &frames, &circuit.track, &clearings, &models, detail, 1.0), land, circuit)
     }
 
     #[test]
@@ -459,7 +478,7 @@ mod tests {
         let frames = frames(&circuit.track);
         let land = Land::new(&frames, &circuit.track);
         let models = Models::default();
-        let woods = woods(&land, &frames, &circuit.track, &[], &models, WOODS_FROM);
+        let woods = woods(&land, &frames, &circuit.track, &[], &models, WOODS_FROM, 1.0);
         let trees: usize = woods.iter().map(|w| w.places.len()).sum();
         assert!(trees > 1500, "{trees} trees");
         assert!(woods.iter().all(|w| !w.places.is_empty()), "pines, firs and broadleaf trees");

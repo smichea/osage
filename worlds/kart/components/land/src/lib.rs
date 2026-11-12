@@ -21,6 +21,10 @@ pub const KNOLL: f32 = 7.0;
 /// Depth of the lake's bed, and the level of its water, metres.
 pub const LAKE_BED: f32 = 2.4;
 pub const WATER: f32 = -0.45;
+/// The sea's level, metres: the road runs along the top of its cliffs (D-061).
+pub const SEA: f32 = -8.0;
+/// How far under the cliff tops the sea's bed lies, metres.
+const SEA_BED: f32 = 16.0;
 /// How far beyond the verge the barriers stand, metres: where the physics
 /// stops a kart's outline.
 pub use osage_kart_physics::BARRIER;
@@ -106,6 +110,18 @@ pub struct Land {
     pub knoll: Option<Site>,
     /// A lake in the next widest place.
     pub lake: Option<Site>,
+    /// The sea, on a coast: none inland.
+    pub sea: Option<Sea>,
+}
+
+/// The sea beside the land: beyond a shore that runs across one of the
+/// land's axes, just past the track's furthest reach that way.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Sea {
+    /// The way out to sea: one of ±X, ±Z (as a point of the plane, x and y).
+    pub towards: Vec2,
+    /// How far from the land's middle the shore runs, that way, before it wanders.
+    pub shore: f32,
 }
 
 impl Land {
@@ -113,7 +129,8 @@ impl Land {
         let points: Vec<Vec2> = frames.iter().map(|f| f.at).collect();
         let (low, high) = points.iter().fold((Vec2::MAX, Vec2::MIN), |(low, high), p| (low.min(*p), high.max(*p)));
         let flat = track.half_width + track.verge + 5.0;
-        let mut land = Self { centre: (low + high) / 2.0, points, track: track.clone(), flat, knoll: None, lake: None };
+        let mut land =
+            Self { centre: (low + high) / 2.0, points, track: track.clone(), flat, knoll: None, lake: None, sea: None };
 
         // The rooms inside the loop, widest first: every few metres, how far the track is.
         let mut rooms = Vec::new();
@@ -135,6 +152,27 @@ impl Land {
             land.lake = rooms.iter().find(apart).filter(|room| room.radius > flat + 18.0).map(|room| clear(room, 26.0));
         }
         land
+    }
+
+    /// The land on a coast: the sea on the side where the track comes
+    /// nearest the edge of the land, its cliffs a little beyond the track.
+    pub fn with_sea(mut self) -> Self {
+        let ways = [Vec2::X, -Vec2::X, Vec2::Y, -Vec2::Y];
+        let reach = |way: Vec2| self.points.iter().map(|p| (*p - self.centre).dot(way)).fold(f32::MIN, f32::max);
+        let towards = ways.into_iter().max_by(|a, b| reach(*a).total_cmp(&reach(*b))).unwrap_or(Vec2::X);
+        self.sea = Some(Sea { towards, shore: reach(towards) + self.flat + 30.0 });
+        self
+    }
+
+    /// How far out to sea a point is past the shore, metres (below zero:
+    /// inland); none inland. The shore wanders in coves and points.
+    pub fn offshore(&self, at: Vec2) -> Option<f32> {
+        let sea = self.sea?;
+        let from = at - self.centre;
+        let across = from.dot(Vec2::new(-sea.towards.y, sea.towards.x));
+        let wander =
+            22.0 * (noise(Vec2::new(across / 70.0, 3.0)) - 0.5) + 8.0 * (noise(Vec2::new(across / 19.0, 9.0)) - 0.5);
+        Some(from.dot(sea.towards) - sea.shore - wander)
     }
 
     /// The middle of the modelled land.
@@ -186,6 +224,12 @@ impl Land {
             height *= smooth((shore - 1.0) / 0.6);
             height -= LAKE_BED * smooth((1.0 - shore) / 0.5);
         }
+        if let Some(off) = self.offshore(at) {
+            // Towards the sea the hills settle into a plateau at the road's
+            // height; at the shore, a cliff falls to the sea's bed.
+            height *= 1.0 - smooth((off + 45.0) / 40.0);
+            height -= SEA_BED * smooth(off / 7.0);
+        }
         // A crest: the road's height across the flat land, fading into the
         // hills over the next 30 m.
         if !self.track.crests().is_empty() && distance < self.flat + 30.0 {
@@ -200,9 +244,9 @@ impl Land {
         self.track.lift(self.track.locate(at.x, at.y).along).0
     }
 
-    /// Whether a point is in the lake or on its beach.
+    /// Whether a point is in the lake or on its beach, or over the cliff's edge.
     pub fn wet(&self, at: Vec2) -> bool {
-        self.shore(at).is_some_and(|shore| shore < 1.3)
+        self.shore(at).is_some_and(|shore| shore < 1.3) || self.offshore(at).is_some_and(|off| off > -2.0)
     }
 }
 
@@ -268,6 +312,26 @@ mod tests {
             }
         }
         assert!(worst < 1e-3, "{worst} m off");
+    }
+
+    #[test]
+    fn on_a_coast_the_road_runs_along_cliffs_above_the_sea() {
+        let track = Circuit::new().track;
+        let frames = frames(&track);
+        let land = Land::new(&frames, &track).with_sea();
+        let sea = land.sea.expect("a sea");
+        // The track stays inland, on the plateau.
+        for frame in &frames {
+            assert!(land.offshore(frame.at).unwrap() < -25.0, "the track is kept from the cliff");
+            assert!(!land.wet(frame.at));
+        }
+        // Out to sea, the bed lies under the sea's level; well inland, nothing changes.
+        let out = land.centre() + sea.towards * (sea.shore + 60.0);
+        assert!(land.height(out) < SEA - 4.0, "{}", land.height(out));
+        assert!(land.wet(out));
+        let inland = Land::new(&frames, &track);
+        let far_side = land.centre() - sea.towards * 200.0;
+        assert_eq!(land.height(far_side), inland.height(far_side));
     }
 
     #[test]

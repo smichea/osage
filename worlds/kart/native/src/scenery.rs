@@ -198,6 +198,9 @@ pub fn build(
     };
 
     let photographed = osage_content::root().is_some();
+    // How wooded the place is, by the track's scenery (D-061).
+    let scenery = course.0.about.scenery.as_str();
+    let trees = osage_kart_roadside::trees(scenery);
     landmarks::start(&mut set, &mut props, &course.0, &land, photographed);
     landmarks::lake(&mut set, &mut props, &land);
     // With the manifest's content, the circuit is photographed: no toys.
@@ -206,25 +209,31 @@ pub fn build(
         landmarks::onlookers(&mut set, &course.0, &land, &frames);
         landmarks::marshals(&mut set, &course.0, &land, &frames);
         landmarks::hoardings(&mut set, &mut props, &course.0, &frames);
+        if scenery == "town" {
+            landmarks::town(&mut set, &course.0, &land, &frames);
+        }
+        landmarks::lighthouse(&mut set, &land, &frames);
         let look = if let Some(roadside) = roadside.as_deref().filter(|r| r.woods_only) {
             // Cards come nearer: no toy tree is left to stand in for them.
             let from = 35.0;
-            for woods in osage_kart_roadside::woods(&land, &frames, track, &set.clearings, &roadside.models, from) {
+            let models = &roadside.models;
+            for woods in osage_kart_roadside::woods(&land, &frames, track, &set.clearings, models, from, trees) {
                 commands.spawn((Part, woods));
             }
             Growth::Bushes
         } else if let Some(roadside) = &roadside {
-            let scatters =
-                osage_kart_roadside::scatters(&land, &frames, track, &set.clearings, &roadside.models, roadside.detail);
+            let (models, detail) = (&roadside.models, roadside.detail);
+            let scatters = osage_kart_roadside::scatters(&land, &frames, track, &set.clearings, models, detail, trees);
             for scatter in scatters {
                 commands.spawn((Part, scatter));
             }
             let carpet = osage_kart_roadside::carpet(&land, &frames, track, &roadside.models);
             commands.spawn((Part, carpet));
             commands.spawn((Part, osage_kart_roadside::meadow_carpet(&land, track, &roadside.models)));
-            // Woods off the circuit: thousands of trees, drawn as cards.
-            let from = osage_kart_roadside::WOODS_FROM;
-            for woods in osage_kart_roadside::woods(&land, &frames, track, &set.clearings, &roadside.models, from) {
+            // Woods off the circuit: thousands of trees, drawn as cards; in a
+            // forest they come nearer, behind the modelled trees.
+            let from = if scenery == "forest" { 60.0 } else { osage_kart_roadside::WOODS_FROM };
+            for woods in osage_kart_roadside::woods(&land, &frames, track, &set.clearings, models, from, trees) {
                 commands.spawn((Part, woods));
             }
             // Modelled woods stand far too: nothing procedural is needed.
@@ -236,6 +245,7 @@ pub fn build(
         spawn(&mut commands, &mut meshes, set, [matte, satin, concrete], cloth, glass);
         return;
     }
+    landmarks::lighthouse(&mut set, &land, &frames);
     landmarks::bends(&mut set, &mut props, track, &frames);
     landmarks::arches(&mut set, &course.0, &frames);
     landmarks::knoll(&mut set, &mut props, &course.0, &land);

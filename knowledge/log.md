@@ -1,6 +1,7 @@
 # Knowledge Update Log
 
 ## 2026-11-12
+* **Update**: each track its place (D-061): [osage-kart-land](/modules/kart-land.md) can fall away to a sea past cliffs; [osage-kart-roadside](/modules/kart-roadside.md) grows more or fewer trees by the track's scenery; [osage-kart-native](/modules/kart-native.md) draws the sea, a lighthouse, a harbour town.
 * **Creation**: Added the module [osage-voice](/modules/osage-voice.md): the players talk to one another through a relay beside the world, push to talk or an open microphone, each voice mutable (D-060); [osage-kart-native](/modules/kart-native.md) joins the conference, V to talk; `kart-server` starts the relay.
 * **Creation**: Added the module [osage-music](/modules/osage-music.md): files, internet radio and its directory, a host's playlist shared on the network (D-059); [osage-kart-native](/modules/kart-native.md) plays the game's music, the player's, the host's or radio, B to skip; `kart-server --music`.
 * **Creation**: Added the module [osage-kart-cup](/modules/kart-cup.md): cups of four races with points, standings and a podium; the host chooses the event, the others vote (D-057); [osage-kart-native](/modules/kart-native.md) shows the cup between races.

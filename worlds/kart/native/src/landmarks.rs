@@ -1103,3 +1103,163 @@ pub fn fair(set: &mut Set, props: &mut Props, circuit: &Circuit, land: &Land) {
         bunting(&mut set.bright, pair[0] - Vec3::Y * 0.6, pair[1] - Vec3::Y * 0.6, &PALETTE);
     }
 }
+
+/// A harbour town round the circuit (scenery `town`, D-061): rows of
+/// houses two to five floors high, facing the road from behind the wall —
+/// plaster in the warm colours of a port, a gable roof of tiles or slate,
+/// a window to each bay of each floor, a door on the ground — with a gap
+/// now and then, where nothing is built near the start or in a bend.
+pub fn town(set: &mut Set, circuit: &Circuit, land: &Land, frames: &[Frame]) {
+    let track = &circuit.track;
+    let (length, wall) = (track.length(), track.half_width + track.verge + BARRIER);
+    let plasters = [
+        (0.93, 0.86, 0.72),
+        (0.86, 0.62, 0.45),
+        (0.95, 0.92, 0.86),
+        (0.78, 0.55, 0.42),
+        (0.92, 0.80, 0.52),
+        (0.70, 0.74, 0.70),
+        (0.84, 0.70, 0.62),
+    ];
+    let roofs = [(0.55, 0.26, 0.18), (0.32, 0.33, 0.36), (0.62, 0.32, 0.22)];
+    let mut built: Vec<(Vec2, f32)> = Vec::new();
+    let mut since = 0.0;
+    for (i, frame) in frames.iter().enumerate() {
+        let next = &frames[(i + 1) % frames.len()];
+        since += frame.at.distance(next.at);
+        let from_start = (frame.along - circuit.start + length / 2.0).rem_euclid(length) - length / 2.0;
+        if from_start.abs() < 70.0 || since < 11.0 {
+            continue;
+        }
+        since = 0.0;
+        for side in [-1.0f32, 1.0] {
+            let roll = set.dice.roll();
+            // Now and then a gap: a lane, a yard.
+            if roll < 0.18 {
+                continue;
+            }
+            let (width, depth) = (set.dice.between(7.5, 11.5), set.dice.between(8.0, 12.0));
+            let floors = 2 + (set.dice.roll() * 3.99) as usize;
+            let back = wall + set.dice.between(7.0, 11.0);
+            let centre = frame.at + frame.right * side * (back + depth / 2.0);
+            let facing = -frame.right * side;
+            let across = Vec2::new(facing.y, -facing.x);
+            let corners = [(-1.0, -1.0), (1.0, -1.0), (1.0, 1.0), (-1.0, 1.0)]
+                .map(|(a, b)| centre + across * a * width / 2.0 + facing * b * depth / 2.0);
+            // Clear of the road, the lake, and the houses already built.
+            let near_road = corners.iter().any(|c| land.distance_to_track(*c) < wall + 5.0);
+            let crowded = built.iter().any(|(at, r)| at.distance(centre) < r + width.max(depth) / 2.0 + 0.5);
+            if near_road || crowded || corners.iter().any(|c| land.wet(*c)) {
+                continue;
+            }
+            built.push((centre, width.max(depth) / 2.0));
+            set.clear(centre, width.max(depth) * 0.75 + 3.0);
+            let ground = corners.iter().map(|c| land.height(*c)).fold(f32::MAX, f32::min);
+            let place = Transform::from_xyz(centre.x, ground, centre.y).with_rotation(upright(heading(facing)));
+            let anchor = place.translation;
+            let floor = 3.0;
+            let height = floor * floors as f32 + 0.6;
+            let plaster = plasters[(set.dice.roll() * plasters.len() as f32) as usize % plasters.len()];
+            let (w, d) = (width / 2.0, depth / 2.0);
+            // Walls, from a little under the ground (the land is not flat).
+            set.concrete.add_within(
+                anchor,
+                &Shape::block(Vec3::new(-w, -1.5, -d), Vec3::new(w, height, d)),
+                place,
+                Paint::shaded(plaster.0, plaster.1, plaster.2, 0.12),
+            );
+            // A gable roof along the front, overhanging a little.
+            let roof = roofs[(set.dice.roll() * roofs.len() as f32) as usize % roofs.len()];
+            let rise = set.dice.between(2.2, 3.4);
+            let outline = [Vec2::new(-d - 0.4, 0.0), Vec2::new(d + 0.4, 0.0), Vec2::new(0.0, rise)];
+            let gable = Transform::from_xyz(0.0, height, 0.0).with_rotation(Quat::from_rotation_y(FRAC_PI_2));
+            set.matte.add_within(
+                anchor,
+                &Shape::extrude(&outline, -w - 0.3, w + 0.3),
+                place * gable,
+                Paint::shaded(roof.0, roof.1, roof.2, 0.1),
+            );
+            // Windows in bays on the front (+Z faces the road) and the back.
+            let bays = ((width - 1.6) / 2.4).floor().max(1.0) as usize;
+            let pitch = (width - 1.6) / bays as f32;
+            for level in 0..floors {
+                for bay in 0..bays {
+                    let x = -w + 0.8 + pitch * (bay as f32 + 0.5);
+                    let y = floor * level as f32 + 1.0;
+                    // The ground floor: a door in the middle bay.
+                    let door = level == 0 && bay == bays / 2;
+                    let (low, high) = if door { (0.05, 2.3) } else { (y, y + 1.45) };
+                    for z in [d + 0.02, -d - 0.02] {
+                        let pane = Shape::block(Vec3::new(x - 0.5, low, z - 0.02), Vec3::new(x + 0.5, high, z + 0.02));
+                        if door && z > 0.0 {
+                            set.matte.add_within(anchor, &pane, place, Paint::plain(0.25, 0.18, 0.12));
+                        } else {
+                            set.glass.add_within(anchor, &pane, place, Paint::plain(0.12, 0.14, 0.16));
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// A lighthouse on the cliff top where the circuit comes nearest the sea
+/// (scenery `coast`, D-061): a white tower banded red, its gallery, and
+/// the lantern, glazed, under a dark cap.
+pub fn lighthouse(set: &mut Set, land: &Land, frames: &[Frame]) {
+    let Some(sea) = land.sea else { return };
+    let Some(nearest) = frames.iter().max_by(|a, b| {
+        let off = |f: &Frame| land.offshore(f.at).unwrap_or(f32::MIN);
+        off(a).total_cmp(&off(b))
+    }) else {
+        return;
+    };
+    let off = land.offshore(nearest.at).unwrap_or(0.0);
+    // Twelve metres short of the edge, on the plateau.
+    let at = nearest.at + sea.towards * (-off - 12.0);
+    set.clear(at, 9.0);
+    let foot = Vec3::new(at.x, land.height(at), at.y);
+    let place = Transform::from_translation(foot);
+    let (white, red) = (Paint::shaded(0.93, 0.93, 0.9, 0.1), Paint::shaded(0.72, 0.12, 0.1, 0.1));
+    // The tower in five bands, narrowing as it rises.
+    let (height, bands) = (17.0, 5);
+    for band in 0..bands {
+        let (y0, y1) = (band as f32 * height / bands as f32, (band + 1) as f32 * height / bands as f32);
+        let radius = |y: f32| 2.6 - 1.0 * y / height;
+        let shape = Shape::lathe(&[(radius(y0), y0), (radius(y1), y1)], 16);
+        set.concrete.add_within(foot, &shape, place, if band % 2 == 0 { white } else { red });
+    }
+    // A plinth, from a little under the ground.
+    set.concrete.add_within(foot, &Shape::lathe(&[(3.4, -1.0), (3.3, 0.6)], 16), place, white);
+    // The gallery, its rail, the lantern and its cap.
+    let dark = Paint::plain(0.12, 0.13, 0.14);
+    set.satin.add_within(
+        foot,
+        &Shape::lathe(&[(0.0, height), (2.3, height), (2.3, height + 0.25), (0.0, height + 0.25)], 16),
+        place,
+        dark,
+    );
+    set.satin.add_within(foot, &Shape::lathe(&[(2.2, height + 0.25), (2.25, height + 1.1)], 16), place, dark);
+    set.glass.add_within(
+        foot,
+        &Shape::lathe(&[(1.25, height + 0.25), (1.25, height + 2.4)], 12),
+        place,
+        Paint::plain(0.55, 0.6, 0.5),
+    );
+    set.satin.add_within(
+        foot,
+        &Shape::lathe(&[(1.45, height + 2.4), (0.9, height + 3.1), (0.15, height + 3.6), (0.0, height + 3.7)], 12),
+        place,
+        Paint::plain(0.18, 0.2, 0.2),
+    );
+    // The keeper's house beside it.
+    let house = Transform::from_translation(foot + Vec3::new(sea.towards.y, 0.0, -sea.towards.x) * 7.0);
+    set.concrete.add_within(foot, &Shape::block(Vec3::new(-3.0, -1.0, -2.5), Vec3::new(3.0, 3.2, 2.5)), house, white);
+    let roof = [Vec2::new(-2.9, 0.0), Vec2::new(2.9, 0.0), Vec2::new(0.0, 1.8)];
+    set.matte.add_within(
+        foot,
+        &Shape::extrude(&roof, -3.3, 3.3),
+        house * Transform::from_xyz(0.0, 3.2, 0.0).with_rotation(Quat::from_rotation_y(FRAC_PI_2)),
+        Paint::shaded(0.3, 0.31, 0.34, 0.1),
+    );
+}

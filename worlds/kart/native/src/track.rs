@@ -43,7 +43,7 @@ fn colour(land: &Land, at: Vec2, height: f32) -> Vec3 {
         // Deeper, the bed darkens: the water above it looks deep.
         colour = colour.lerp(tone(0.16, 0.36, 0.42), smooth((0.9 - shore) / 0.4));
     }
-    colour
+    colour.lerp(tone(0.5, 0.47, 0.42), cliff(land, at))
 }
 
 /// The colour of a real meadow, linear, under a grain of grass: summer
@@ -73,8 +73,71 @@ fn meadow(land: &Land, at: Vec2, height: f32) -> Vec3 {
         colour = colour.lerp(tone(0.66, 0.58, 0.42), smooth((1.24 - shore) / 0.12));
         colour = colour.lerp(tone(0.2, 0.26, 0.24), smooth((0.9 - shore) / 0.4));
     }
+    colour = colour.lerp(tone(0.43, 0.4, 0.35), cliff(land, at));
     colour / GRAIN
 }
+
+/// How much of a point is the cliff's rock: its edge and face, 0 inland.
+fn cliff(land: &Land, at: Vec2) -> f32 {
+    land.offshore(at).map_or(0.0, |off| smooth((off + 9.0) / 6.0))
+}
+
+/// A strip of the plain beyond the land, cut where the sea begins: the
+/// part of it inland, if any (`low`, `high` from the land's middle).
+fn inland(land: &Land, mut low: Vec2, mut high: Vec2) -> Option<(Vec2, Vec2)> {
+    if let Some(sea) = land.sea {
+        // Under the cliffs' plateau, short of where the shore wanders to.
+        let line = sea.shore - 30.0;
+        match (sea.towards.x, sea.towards.y) {
+            (x, _) if x > 0.5 => high.x = high.x.min(line),
+            (x, _) if x < -0.5 => low.x = low.x.max(-line),
+            (_, y) if y > 0.5 => high.y = high.y.min(line),
+            _ => low.y = low.y.max(-line),
+        }
+    }
+    (high.x > low.x && high.y > low.y).then_some((low, high))
+}
+
+/// The sea, on a coast: deep blue water from under the cliffs to the
+/// horizon, its ripples drifting as the lake's.
+fn sea(
+    commands: &mut Commands,
+    meshes: &mut Assets<Mesh>,
+    materials: &mut Assets<StandardMaterial>,
+    images: &mut Assets<Image>,
+    land: &Land,
+) {
+    let Some(sea) = land.sea else { return };
+    let water = materials.add(StandardMaterial {
+        base_color: Color::srgba(0.05, 0.22, 0.34, 0.93),
+        perceptual_roughness: 0.09,
+        reflectance: 0.6,
+        alpha_mode: AlphaMode::Blend,
+        normal_map_texture: Some(images.add(ripples())),
+        uv_transform: Affine2::from_scale(Vec2::splat(70.0)),
+        ..default()
+    });
+    let (start, horizon) = (sea.shore - 40.0, 3000.0);
+    let middle = land.centre() + sea.towards * (start + horizon) / 2.0;
+    let size = if sea.towards.x.abs() > 0.5 {
+        Vec2::new(horizon - start, 2.0 * horizon)
+    } else {
+        Vec2::new(2.0 * horizon, horizon - start)
+    };
+    let surface = Plane3d::default().mesh().size(size.x, size.y).build();
+    commands.spawn((
+        Part,
+        Mesh3d(meshes.add(with_tangents(surface))),
+        MeshMaterial3d(water.clone()),
+        Transform::from_xyz(middle.x, osage_kart_land::SEA, middle.y),
+        NotShadowCaster,
+    ));
+    commands.insert_resource(Sea(water));
+}
+
+/// The sea's water: its ripples drift too.
+#[derive(Resource)]
+pub struct Sea(Handle<StandardMaterial>);
 
 /// The colour of the field a point lies in, linear: fields of 60 to 120 m
 /// on a grid turned a little, each a crop — pasture, hay, ripe wheat,
@@ -260,10 +323,20 @@ fn with_tangents(mesh: Mesh) -> Mesh {
 #[derive(Resource)]
 pub struct Water(Handle<StandardMaterial>);
 
-pub fn flow(time: Res<Time>, water: Option<Res<Water>>, mut materials: ResMut<Assets<StandardMaterial>>) {
+pub fn flow(
+    time: Res<Time>,
+    water: Option<Res<Water>>,
+    sea: Option<Res<Sea>>,
+    mut materials: ResMut<Assets<StandardMaterial>>,
+) {
     if let Some(mut material) = water.and_then(|water| materials.get_mut(&water.0)) {
         let drift = Vec2::new(0.013, 0.021) * time.elapsed_secs();
         material.uv_transform = Affine2::from_scale_angle_translation(Vec2::splat(9.0), 0.0, drift.fract());
+    }
+    // The sea's swell runs slower across its wider ripples.
+    if let Some(mut material) = sea.and_then(|sea| materials.get_mut(&sea.0)) {
+        let drift = Vec2::new(0.004, 0.009) * time.elapsed_secs();
+        material.uv_transform = Affine2::from_scale_angle_translation(Vec2::splat(70.0), 0.0, drift.fract());
     }
 }
 
@@ -281,10 +354,14 @@ pub fn build(
     for part in &old {
         commands.entity(part).despawn();
     }
+    commands.remove_resource::<Sea>();
     let track = &course.0.track;
     let frames = frames(track);
     let land = Land::new(&frames, track);
+    // On a coast, the sea beside the land, below its cliffs (D-061).
+    let land = if course.0.about.scenery == "coast" { land.with_sea() } else { land };
     let (half, verge) = (track.half_width, track.verge);
+    sea(&mut commands, &mut meshes, &mut materials, &mut images, &land);
     let assets = content::root();
     // The photographic set: the circuit as it would be photographed.
     if let Some(root) = assets.as_deref().filter(|root| root.join("polyhaven/asphalt_02").exists())
@@ -345,6 +422,7 @@ pub fn build(
         (Vec2::new(edge, -edge), Vec2::new(horizon, edge)),
         (Vec2::new(-horizon, -edge), Vec2::new(-edge, edge)),
     ] {
+        let Some((low, high)) = inland(&land, low, high) else { continue };
         let (size, middle) = (high - low, land.centre() + (low + high) / 2.0);
         let strip = Plane3d::default().mesh().size(size.x, size.y).build();
         flat(strip.translated_by(Vec3::new(middle.x, -0.4, middle.y)), &plain_material);
@@ -706,6 +784,7 @@ fn photographed(
         (Vec2::new(edge, -edge), Vec2::new(horizon, edge)),
         (Vec2::new(-horizon, -edge), Vec2::new(-edge, edge)),
     ] {
+        let Some((low, high)) = inland(land, low, high) else { continue };
         let (size, middle) = (high - low, land.centre() + (low + high) / 2.0);
         let strip = Plane3d::default().mesh().size(size.x, size.y).build();
         flat(strip.translated_by(Vec3::new(middle.x, -0.4, middle.y)), &fields);

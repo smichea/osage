@@ -18,6 +18,7 @@ One answer, shared by every part of the kart game that needs it, to: how high is
 - **Frame:** a point of the centre line with the directions ahead and to the right, the distance along, how sharply the road bends, the road's height and slope there, and the crest on the stretch to the next frame, if any (D-051): `pieces` says how many pieces to draw that stretch in, `height_towards` how high the road is on the way, exactly as the physics has it.
 - **Site:** a disc kept clear — the knoll, the lake, a clearing.
 - **Land:** the height of the ground everywhere, the distance to the track, inside or outside the loop, the lake's shore.
+- **Sea:** on a coast (`with_sea`, D-061), the open side of the circuit falls past cliffs to a sea `SEA` (8 m) below the road; the shoreline wanders, 30 m beyond the farthest flat ground; `offshore(at)` is how far a point is out to sea (negative inland).
 
 # Architecture
 
@@ -25,12 +26,13 @@ The algorithm is [land around a track](/algorithms/land-around-a-track.md): valu
 
 # Interfaces
 
-`frames(track)`, `Frame::{pieces, height_towards}`, `Land::{new, height, road, distance_to_track, inside, shore, wet, centre}`, `Site`, `noise`, `smooth`, and the constants `LAND`, `HILLS`, `KNOLL`, `LAKE_BED`, `WATER`, `BARRIER`.
+`frames(track)`, `Frame::{pieces, height_towards}`, `Land::{new, with_sea, height, road, distance_to_track, inside, shore, wet, offshore, centre}`, `Site`, `noise`, `smooth`, and the constants `LAND`, `HILLS`, `KNOLL`, `LAKE_BED`, `WATER`, `SEA`, `SEA_BED`, `BARRIER`.
 
 # Invariants
 
 - Where karts drive, up to the barriers, the land is the road's height: level, but over a crest, where it rises and falls with the road.
 - Between frames, `height_towards` is the physics' own height of the road, to a millimetre.
+- On a coast, the road runs above cliffs and the sea bed lies under the water; where karts drive nothing changes. Tested.
 - The knoll and the lake are inside the loop, clear of the track and of each other; the lake's water is held in all the way round.
 
 # Knowledge
