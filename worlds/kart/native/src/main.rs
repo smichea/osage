@@ -31,6 +31,7 @@ mod play;
 mod predict;
 mod scene;
 mod scenery;
+#[cfg(feature = "sound")]
 mod sound;
 mod track;
 
@@ -41,11 +42,12 @@ use std::{
 
 use anyhow::{Context, Result, bail};
 // Not Bevy's prelude here: its error helpers clash with anyhow's.
+#[cfg(feature = "sound")]
+use bevy::audio::AudioPlugin;
 use bevy::{
     DefaultPlugins,
     app::{App, PluginGroup, ScheduleRunnerPlugin},
     asset::AssetPlugin,
-    audio::AudioPlugin,
     render::RenderPlugin,
     window::{ExitCondition, PresentMode, Window, WindowPlugin, WindowResolution},
     winit::WinitPlugin,
@@ -116,21 +118,25 @@ fn main() -> Result<()> {
         // off-screen picture only, as fast as the machine can.
         let windowless =
             WindowPlugin { primary_window: None, exit_condition: ExitCondition::DontExit, ..Default::default() };
-        app.add_plugins(
-            DefaultPlugins.set(windowless).set(render).set(assets).disable::<WinitPlugin>().disable::<AudioPlugin>(),
-        )
-        .add_plugins(ScheduleRunnerPlugin::run_loop(Duration::ZERO));
+        let plugins = DefaultPlugins.set(windowless).set(render).set(assets).disable::<WinitPlugin>();
+        #[cfg(feature = "sound")]
+        let plugins = plugins.disable::<AudioPlugin>();
+        app.add_plugins(plugins).add_plugins(ScheduleRunnerPlugin::run_loop(Duration::ZERO));
     } else {
         let plugins = DefaultPlugins
             .set(WindowPlugin { primary_window: Some(window), ..Default::default() })
             .set(render)
             .set(assets);
-        // The bench measures pictures: no sound.
+        // The bench measures pictures: no sound (and built without it, it
+        // needs no sound library on the machine).
+        #[cfg(feature = "sound")]
         if bench {
             app.add_plugins(plugins.disable::<AudioPlugin>());
         } else {
             app.add_plugins(plugins).add_plugins(sound::SoundPlugin);
         }
+        #[cfg(not(feature = "sound"))]
+        app.add_plugins(plugins);
     }
     app.insert_resource(scene::look(sky));
     // Before the rendering plugin, which draws the sky from it when it is there.

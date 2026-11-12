@@ -19,8 +19,8 @@ path = "src/main.rs"
 osage-kart-physics.workspace = true
 osage-kart-racecraft.workspace = true
 osage-kart-items.workspace = true
-osage-kart-sound.workspace = true
-lewton.workspace = true
+osage-kart-sound = { workspace = true, optional = true }
+lewton = { workspace = true, optional = true }
 osage-kart-land.workspace = true
 osage-kart-roadside.workspace = true
 osage-kart-model.workspace = true
@@ -32,7 +32,13 @@ osage-props.workspace = true
 osage-sdk.workspace = true
 osage-world-kart.workspace = true
 anyhow.workspace = true
-bevy = { workspace = true, features = ["3d", "ui", "audio", "wav"] }
+bevy = { workspace = true, features = ["3d", "ui"] }
 crossbeam-channel.workspace = true
 serde_json.workspace = true
 tokio.workspace = true
+
+[features]
+default = ["sound"]
+# The karts heard (osage-kart-sound): needs the system's sound library (ALSA
+# on Linux). The bench is built without it: it measures pictures.
+sound = ["bevy/audio", "dep:osage-kart-sound", "dep:lewton"]

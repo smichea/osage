@@ -20,6 +20,9 @@ permissions:
 
 env:
   CARGO_TERM_COLOR: always
+  # The C runtime inside the programs: nothing to install on the player's PC
+  # (no Visual C++ Redistributable).
+  RUSTFLAGS: -C target-feature=+crt-static
 
 jobs:
   windows:

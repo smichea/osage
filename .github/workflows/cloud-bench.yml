@@ -113,7 +113,7 @@ jobs:
           key: assets-${{ hashFiles('assets/manifest.toml') }}
       - run: python3 tools/fetch-assets.py
       # The receipt names the commit it measured; the bench machine has no checkout to ask.
-      - run: OSAGE_COMMIT=$(git rev-parse --short HEAD) cargo build --release -p osage-kart-native
+      - run: OSAGE_COMMIT=$(git rev-parse --short HEAD) cargo build --release -p osage-kart-native --no-default-features
       - run: |
           mkdir -p kart/assets
           cp target/release/kart-native kart/
