@@ -20,6 +20,10 @@ allow = [
     "Zlib",
 ]
 confidence-threshold = 0.9
+# The certificate authorities of Mozilla's root store, as data, for the HTTPS
+# music streams and the radio directory (osage-music, through ureq): a
+# permissive licence for data, allowed for this crate only.
+exceptions = [{ crate = "webpki-roots", allow = ["CDLA-Permissive-2.0"] }]
 
 # osage's own crates carry AGPL-3.0-or-later WITH AdditionRef-osage-exceptions-1.0
 # (declared through `license-file`) or MIT OR Apache-2.0; they are not published

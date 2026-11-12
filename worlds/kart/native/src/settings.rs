@@ -12,7 +12,15 @@
 //! The frame rate wanted: the engine then lowers the picture until frames
 //! come at that rate, and raises it when there is room (osage-render's
 //! `pace`); "off" keeps the tier's picture whatever the rate. Sound and
-//! music, on or off — also N and M at any time in the game.
+//! music, on or off — also N and M at any time in the game. Where the
+//! music comes from (`crate::music`): the host's when they share some,
+//! else the game's own (auto); the game's own; the player's own folder;
+//! the host's; radio stations. And whether the radio directory
+//! (radio-browser.info) is asked, and for which kind of music: off unless
+//! the player turns it on, as asking it tells its servers what is searched.
+//! Voice (`crate::voice`): off — the microphone closed — unless the player
+//! chooses push to talk (V held) or an open microphone; and each other
+//! player's voice muted or heard (left and right pick them, Space mutes).
 //!
 //! Up and down pick a setting, left and right change it.
 
@@ -46,27 +54,134 @@ struct Settings {
     fps: Option<u32>,
     sound: bool,
     music: bool,
+    from: MusicFrom,
+    /// The kind of music asked of the radio directory; none: not asked.
+    directory: Option<usize>,
+    voice: VoiceMode,
 }
 
 impl Default for Settings {
     fn default() -> Self {
-        Self { fps: DEFAULT, sound: true, music: true }
+        Self { fps: DEFAULT, sound: true, music: true, from: MusicFrom::Auto, directory: None, voice: VoiceMode::Off }
     }
 }
 
-/// Whether the game's sounds and its music are heard: what the sound and
-/// music systems follow.
+/// Whether the player's microphone is heard by the others.
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
+pub enum VoiceMode {
+    /// The microphone closed; the others still heard.
+    #[default]
+    Off,
+    /// Heard while V is held.
+    PushToTalk,
+    /// Heard whenever the player speaks louder than the room.
+    Open,
+}
+
+impl VoiceMode {
+    const ALL: [Self; 3] = [Self::Off, Self::PushToTalk, Self::Open];
+
+    fn name(self) -> &'static str {
+        match self {
+            Self::Off => "off",
+            Self::PushToTalk => "push-to-talk",
+            Self::Open => "open",
+        }
+    }
+
+    fn shown(self) -> &'static str {
+        match self {
+            Self::Off => "microphone off",
+            Self::PushToTalk => "push to talk (hold V)",
+            Self::Open => "open microphone",
+        }
+    }
+}
+
+/// The other players in the voice conference, for the settings to show and
+/// mute: filled by `crate::voice`, which takes `toggle` back.
+#[derive(Resource, Default)]
+pub struct Voices {
+    /// (name, muted, talking), the player left out.
+    pub others: Vec<(String, bool, bool)>,
+    pub picked: usize,
+    /// A name whose muting the player switched.
+    pub toggle: Option<String>,
+}
+
+/// Where the music comes from.
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
+pub enum MusicFrom {
+    /// The host's when they share some, else the game's own.
+    #[default]
+    Auto,
+    /// The game's own pieces.
+    Game,
+    /// The player's own folder (`osage/kart-music/`).
+    Mine,
+    /// The host's shared playlist.
+    Host,
+    /// Radio stations: the player's list (`osage/kart-radios.txt`), and the
+    /// directory's when it is asked.
+    Radio,
+}
+
+impl MusicFrom {
+    const ALL: [Self; 5] = [Self::Auto, Self::Game, Self::Mine, Self::Host, Self::Radio];
+
+    fn name(self) -> &'static str {
+        match self {
+            Self::Auto => "auto",
+            Self::Game => "game",
+            Self::Mine => "mine",
+            Self::Host => "host",
+            Self::Radio => "radio",
+        }
+    }
+
+    fn shown(self) -> &'static str {
+        match self {
+            Self::Auto => "host's, else the game's",
+            Self::Game => "the game's",
+            Self::Mine => "my folder",
+            Self::Host => "the host's",
+            Self::Radio => "radio",
+        }
+    }
+}
+
+/// The kinds of music the radio directory may be asked for.
+pub const KINDS: [&str; 8] = ["electronic", "dance", "rock", "funk", "synthwave", "chillout", "jazz", "pop"];
+
+/// Whether the game's sounds and its music are heard, and where the music
+/// comes from: what the sound and music systems follow.
 #[derive(Resource, Clone, Copy, PartialEq, Eq, Debug)]
 pub struct Audio {
     pub sound: bool,
     pub music: bool,
+    pub from: MusicFrom,
+    /// The kind of music asked of the radio directory; none: not asked.
+    pub directory: Option<&'static str>,
+    pub voice: VoiceMode,
+}
+
+impl Audio {
+    fn of(settings: &Settings) -> Self {
+        Self {
+            sound: settings.sound,
+            music: settings.music,
+            from: settings.from,
+            directory: settings.directory.map(|kind| KINDS[kind % KINDS.len()]),
+            voice: settings.voice,
+        }
+    }
 }
 
 /// The setting the arrows change.
 #[derive(Resource, Default)]
 struct Row(usize);
 
-const ROWS: usize = 3;
+const ROWS: usize = 7;
 
 #[derive(Component)]
 struct Panel;
@@ -80,25 +195,33 @@ impl Plugin for SettingsPlugin {
         let settings = Settings { fps: self.fps.unwrap_or(kept.fps), ..kept };
         app.insert_resource(settings)
             .insert_resource(FrameTarget(settings.fps.map(|fps| fps as f32)))
-            .insert_resource(Audio { sound: settings.sound, music: settings.music })
+            .insert_resource(Audio::of(&settings))
             .init_resource::<Menu>()
+            .init_resource::<Voices>()
             .init_resource::<Row>()
             .add_systems(Startup, setup)
             .add_systems(Update, (toggle, quick, choose, show).chain());
     }
 }
 
-fn file() -> Option<PathBuf> {
+/// The player's osage folder, under the system's settings folder.
+pub fn folder() -> Option<PathBuf> {
     let base = std::env::var_os("APPDATA")
         .or_else(|| std::env::var_os("XDG_CONFIG_HOME"))
         .map(PathBuf::from)
         .or_else(|| std::env::var_os("HOME").map(|home| PathBuf::from(home).join(".config")))?;
-    Some(base.join("osage").join("kart-settings.txt"))
+    Some(base.join("osage"))
 }
 
-/// `fps = 60` or `off`, `sound = on` or `off`, `music = on` or `off`; a
-/// line that does not read is ignored, a setting not written is its
-/// default. None when nothing reads.
+fn file() -> Option<PathBuf> {
+    Some(folder()?.join("kart-settings.txt"))
+}
+
+/// `fps = 60` or `off`, `sound = on` or `off`, `music = on` or `off`,
+/// `music-from = auto|game|mine|host|radio`, `radio-directory = off` or a
+/// kind of music, `voice = off|push-to-talk|open`; a line that does not
+/// read is ignored, a setting not written is its default. None when
+/// nothing reads.
 fn parse(text: &str) -> Option<Settings> {
     let mut settings = Settings::default();
     let mut any = false;
@@ -119,6 +242,22 @@ fn parse(text: &str) -> Option<Settings> {
             }
             ("sound", Some(on)) => (settings.sound, any) = (on, true),
             ("music", Some(on)) => (settings.music, any) = (on, true),
+            ("music-from", _) => {
+                if let Some(from) = MusicFrom::ALL.into_iter().find(|f| f.name().eq_ignore_ascii_case(value)) {
+                    (settings.from, any) = (from, true);
+                }
+            }
+            ("voice", _) => {
+                if let Some(mode) = VoiceMode::ALL.into_iter().find(|m| m.name().eq_ignore_ascii_case(value)) {
+                    (settings.voice, any) = (mode, true);
+                }
+            }
+            ("radio-directory", Some(false)) => (settings.directory, any) = (None, true),
+            ("radio-directory", _) => {
+                if let Some(kind) = KINDS.iter().position(|k| k.eq_ignore_ascii_case(value)) {
+                    (settings.directory, any) = (Some(kind), true);
+                }
+            }
             _ => {}
         }
     }
@@ -147,9 +286,12 @@ fn save(settings: Settings) {
     let value = settings.fps.map_or_else(|| "off".to_owned(), |n| n.to_string());
     let on = |on: bool| if on { "on" } else { "off" };
     let text = format!(
-        "# osage kart settings\nfps = {value}\nsound = {}\nmusic = {}\n",
+        "# osage kart settings\nfps = {value}\nsound = {}\nmusic = {}\nmusic-from = {}\nradio-directory = {}\nvoice = {}\n",
         on(settings.sound),
-        on(settings.music)
+        on(settings.music),
+        settings.from.name(),
+        settings.directory.map_or("off", |kind| KINDS[kind % KINDS.len()]),
+        settings.voice.name(),
     );
     let written = path.parent().map_or(Ok(()), std::fs::create_dir_all).and_then(|()| std::fs::write(&path, text));
     if let Err(error) = written {
@@ -203,7 +345,7 @@ fn quick(keys: Res<ButtonInput<KeyCode>>, mut settings: ResMut<Settings>, mut au
     }
     settings.sound ^= sound;
     settings.music ^= music;
-    *audio = Audio { sound: settings.sound, music: settings.music };
+    *audio = Audio::of(&settings);
     save(*settings);
 }
 
@@ -224,8 +366,14 @@ fn choose(
     mut target: ResMut<FrameTarget>,
     mut audio: ResMut<Audio>,
     mut row: ResMut<Row>,
+    mut voices: ResMut<Voices>,
 ) {
     if !menu.0 {
+        return;
+    }
+    if row.0 == 6 && keys.just_pressed(KeyCode::Space) {
+        let picked = voices.others.get(voices.picked).map(|(name, ..)| name.clone());
+        voices.toggle = picked;
         return;
     }
     let pad = |button| gamepads.iter().any(|pad| pad.just_pressed(button));
@@ -260,9 +408,30 @@ fn choose(
             target.0 = settings.fps.map(|fps| fps as f32);
         }
         1 => settings.sound = !settings.sound,
-        _ => settings.music = !settings.music,
+        2 => settings.music = !settings.music,
+        3 => {
+            let at = MusicFrom::ALL.iter().position(|f| *f == settings.from).unwrap_or(0) as i32;
+            let n = MusicFrom::ALL.len() as i32;
+            settings.from = MusicFrom::ALL[(at + step).rem_euclid(n) as usize];
+        }
+        5 => {
+            let at = VoiceMode::ALL.iter().position(|m| *m == settings.voice).unwrap_or(0) as i32;
+            settings.voice = VoiceMode::ALL[(at + step).rem_euclid(VoiceMode::ALL.len() as i32) as usize];
+        }
+        6 => {
+            let n = voices.others.len().max(1) as i32;
+            voices.picked = (voices.picked as i32 + step).rem_euclid(n) as usize;
+            return;
+        }
+        _ => {
+            // Off, then each kind: the directory is asked only once one is chosen.
+            let n = KINDS.len() as i32 + 1;
+            let at = settings.directory.map_or(0, |kind| kind as i32 + 1);
+            let next = (at + step).rem_euclid(n);
+            settings.directory = (next > 0).then(|| next as usize - 1);
+        }
     }
-    *audio = Audio { sound: settings.sound, music: settings.music };
+    *audio = Audio::of(&settings);
     save(*settings);
 }
 
@@ -283,6 +452,7 @@ fn show(
     settings: Res<Settings>,
     pace: Res<Pace>,
     view: Res<RaceView>,
+    voices: Res<Voices>,
     mut lines: Query<&mut Text, With<Lines>>,
 ) {
     if !menu.0 {
@@ -312,13 +482,24 @@ fn show(
     let mark = |r: usize| if row.0 == r { ">" } else { " " };
     let on = |on: bool| if on { "on" } else { "off" };
     let content = format!(
-        "SETTINGS\n\n{} Frame rate wanted   <  {wanted}  >\n  Now {:.0} fps\n  Picture: {picture}\n\n{} Sound   <  {}  >   (N)\n{} Music   <  {}  >   (M)\n{end}\n↑ ↓ choose    ← → change    Esc close",
+        "SETTINGS\n\n{} Frame rate wanted   <  {wanted}  >\n  Now {:.0} fps\n  Picture: {picture}\n\n{} Sound   <  {}  >   (N)\n{} Music   <  {}  >   (M, B next)\n{} Music from   <  {}  >\n{} Radio directory   <  {}  >\n  (off: radio-browser.info is not asked)\n{} Voice   <  {}  >\n{} Mute   <  {}  >   (Space)\n{end}\n↑ ↓ choose    ← → change    Esc close",
         mark(0),
         pace.fps,
         mark(1),
         on(settings.sound),
         mark(2),
         on(settings.music),
+        mark(3),
+        settings.from.shown(),
+        mark(4),
+        settings.directory.map_or("off", |kind| KINDS[kind % KINDS.len()]),
+        mark(5),
+        settings.voice.shown(),
+        mark(6),
+        voices.others.get(voices.picked).map_or_else(
+            || "nobody else talking".to_owned(),
+            |(name, muted, _)| format!("{name}: {}", if *muted { "muted" } else { "heard" })
+        ),
     );
     for mut text in &mut lines {
         if text.0 != content {
@@ -336,8 +517,23 @@ mod tests {
         assert_eq!(parse("# osage kart settings\nfps = 45\n"), Some(Settings { fps: Some(45), ..Settings::default() }));
         assert_eq!(parse("fps = off"), Some(Settings { fps: None, ..Settings::default() }));
         assert_eq!(parse("fps = fast"), None);
-        let all = parse("fps = 60\nsound = off\nmusic = on\n").unwrap();
-        assert_eq!(all, Settings { fps: Some(60), sound: false, music: true });
+        let all = parse("fps = 60\nsound = off\nmusic = on\nmusic-from = radio\nradio-directory = funk\n").unwrap();
+        assert_eq!(
+            all,
+            Settings {
+                fps: Some(60),
+                sound: false,
+                music: true,
+                from: MusicFrom::Radio,
+                directory: Some(3),
+                voice: VoiceMode::Off
+            }
+        );
+        assert_eq!(parse("voice = push-to-talk").map(|s| s.voice), Some(VoiceMode::PushToTalk));
+        assert_eq!(
+            parse("radio-directory = off\nmusic-from = nowhere").map(|s| (s.directory, s.from)),
+            Some((None, MusicFrom::Auto))
+        );
         assert_eq!(parse("music = OFF").map(|s| (s.sound, s.music)), Some((true, false)));
         assert_eq!(parse_fps("5"), Err("--fps takes a number of frames a second (10 to 500) or off, not 5".into()));
     }

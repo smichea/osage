@@ -281,6 +281,13 @@ message Race {
   repeated Vote votes = 9;
   // The events there are to choose from, as Choice.event names them.
   repeated string events = 10;
+  // The port on the world's machine where its host shares their music
+  // (osage-music's share: GET /music/now, /music/list, /music/track/N);
+  // 0 when nothing is shared.
+  uint32 music_port = 11;
+  // The port on the world's machine of its voice relay (osage-voice: UDP),
+  // where the players talk to one another; 0 when there is none.
+  uint32 voice_port = 12;
 }
 
 message Cup {

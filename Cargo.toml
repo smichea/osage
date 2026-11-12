@@ -36,6 +36,8 @@ osage-region-link = { path = "crates/osage-region-link" }
 osage-procedural = { path = "crates/osage-procedural" }
 osage-content = { path = "crates/osage-content" }
 osage-props = { path = "crates/osage-props" }
+osage-music = { path = "crates/osage-music" }
+osage-voice = { path = "crates/osage-voice" }
 anyhow = "1.0.104"
 base64ct = { version = "1.8.3", features = ["alloc"] }
 bevy = { version = "0.20.1", default-features = false }

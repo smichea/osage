@@ -1,0 +1,23 @@
+# SPDX-FileCopyrightText: The osage contributors
+# SPDX-License-Identifier: LicenseRef-osage-AGPL-3.0-or-later-with-exceptions
+
+[package]
+name = "osage-music"
+description = "osage music: playlists of files, internet radio and its directory, a host's playlist shared on the local network, decoded on a thread into a feed of samples"
+license-file = "../../LICENSE-EXCEPTIONS.md"
+publish = false
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+
+[dependencies]
+crossbeam-channel.workspace = true
+serde_json.workspace = true
+symphonia = { version = "0.5.5", default-features = false, features = ["aac", "flac", "isomp4", "mp3", "ogg", "pcm", "vorbis", "wav"] }
+ureq = "3.5.2"
+# The feed as a bevy audio source (MusicPlugin).
+bevy = { workspace = true, features = ["bevy_asset", "bevy_audio"], optional = true }
+
+[features]
+bevy = ["dep:bevy"]

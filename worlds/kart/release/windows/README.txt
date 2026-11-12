@@ -65,6 +65,41 @@ shown between races (NEW! when you just set one). They are kept in
 kart-records.txt in this folder, on the computer that hosts; updates leave
 the file alone.
 
+Sound and music
+---------------
+N switches the game's sounds on or off, M the music; B goes to the next
+piece or radio station, Shift+B back. Escape opens the settings, where
+"Music from" chooses where it comes from:
+  - auto: the host's music when they share some, else the game's own;
+  - the game's: five CC0 pieces that come with the content;
+  - my folder: your own music files (ogg, mp3, flac, wav, m4a), put in
+    %APPDATA%\osage\kart-music (the folder is made the first time);
+  - the host's: the music the host shares (below);
+  - radio: the stations you list in %APPDATA%\osage\kart-radios.txt, one
+    a line:  station NAME | https://ADDRESS-OF-THE-STREAM
+    and, if you turn it on in the settings ("Radio directory": a kind of
+    music), stations of the radio-browser.info directory. It is off
+    unless you choose a kind: asking the directory tells it what you
+    search for, from your address.
+What plays is shown at the bottom of the screen.
+
+Sharing the host's music: put music files in a folder named  music  in
+this folder on the host's computer before starting host.bat. Everyone
+hears the same piece at the same moment (if Windows' firewall asks, allow
+"kart-server" on private networks; it shares on port 7880). Share only
+music you have the right to share with your friends.
+
+Talking to one another
+----------------------
+Everyone in the race hears the others who talk. Your microphone stays
+off until you choose, in the settings (Escape), "Voice": push to talk
+(hold V while you speak) or an open microphone (it sends when you speak
+louder than the room). With an open microphone, wear a headset, or the
+others hear the game from your speakers too. "Mute" picks another player
+(left, right) and Space mutes or unmutes them. Who is talking shows at
+the bottom of the screen. If Windows' firewall asks, allow "kart-server"
+on private networks (the voices go through it, on port 7881).
+
 Racing friends on the same Wi-Fi
 --------------------------------
 1. One computer hosts: double-click host.bat. It shows this computer's
@@ -95,4 +130,5 @@ LICENSE, LICENSE-EXCEPTIONS.md and LICENSES/). Their source is the tag of
 this release on GitHub. dxcompiler.dll and dxil.dll are Microsoft's
 DirectX Shader Compiler (https://github.com/microsoft/DirectXShaderCompiler),
 under its own licences, in LICENSES/directx-shader-compiler/. The content is CC0: authors and sources are in
-assets/manifest.toml.
+assets/manifest.toml (the music: MintoDog, congusbongus, LushoGames and
+Centurion_of_war, on OpenGameArt).

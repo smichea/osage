@@ -1161,3 +1161,52 @@ licence = "CC0-1.0"
 author = "bellick (Freesound)"
 source = "https://freesound.org/people/bellick/sounds/151470/"
 used_by = "worlds/kart/native: kart sound, knock-3"
+
+# Music — OpenGameArt, CC0 (each page's "License(s)" field says CC0 alone),
+# downloaded from the file links of the pages below. Their playlist
+# (titles, authors, levelling gains) is worlds/kart/native/src/kart.playlist.
+
+[[asset]]
+path = "assets/opengameart/music/hot-roadway.ogg"
+url = "https://opengameart.org/sites/default/files/hot_roadway_bpm160_0.ogg"
+sha256 = "66d065b2c48d41f7bf86635a81296b99e5963075dccf4906c83c573f53971a7c"
+licence = "CC0-1.0"
+author = "MintoDog (OpenGameArt)"
+source = "https://opengameart.org/content/hot-roadway"
+used_by = "worlds/kart/native: the game's music (kart.playlist)"
+
+[[asset]]
+path = "assets/opengameart/music/fever-stadium.ogg"
+url = "https://opengameart.org/sites/default/files/fever_stadium_bpm165_0.ogg"
+sha256 = "65c892eba361402e1519c01e5082781931879d247c39a80e45af044303766a6a"
+licence = "CC0-1.0"
+author = "MintoDog (OpenGameArt)"
+source = "https://opengameart.org/content/fever-stadium"
+used_by = "worlds/kart/native: the game's music (kart.playlist)"
+
+[[asset]]
+path = "assets/opengameart/music/raspberry-jam.ogg"
+url = "https://opengameart.org/sites/default/files/raspberry_jam.ogg"
+sha256 = "99d2ff8088f26abaf5bd0b492e870e46ab798eed4eb71bcad6eb310af1049c12"
+licence = "CC0-1.0"
+author = "congusbongus (OpenGameArt)"
+source = "https://opengameart.org/content/raspberry-jam"
+used_by = "worlds/kart/native: the game's music (kart.playlist)"
+
+[[asset]]
+path = "assets/opengameart/music/as-fast-as-you-can.ogg"
+url = "https://opengameart.org/sites/default/files/as_fast_as_you_can_0.ogg"
+sha256 = "bfed8d39f957e1a92f25ecf49f0c804aac43e04120f48601bca064ac24e19e56"
+licence = "CC0-1.0"
+author = "Centurion_of_war (OpenGameArt)"
+source = "https://opengameart.org/content/as-fast-as-you-can"
+used_by = "worlds/kart/native: the game's music (kart.playlist)"
+
+[[asset]]
+path = "assets/opengameart/music/simple-action-beat.mp3"
+url = "https://opengameart.org/sites/default/files/SimpleBeat_0.mp3"
+sha256 = "3c13f2554c938c0cce2edc018a5f116da2003d5a02ef7d4a71ae0ec6ca99bdf3"
+licence = "CC0-1.0"
+author = "LushoGames (OpenGameArt)"
+source = "https://opengameart.org/content/simple-action-beat"
+used_by = "worlds/kart/native: the game's music (kart.playlist)"

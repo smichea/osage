@@ -6,7 +6,12 @@
 //! on a built-in track (paddock, coast, forest, harbour) or one read from a
 //! track file (D-056), race after race; without it the world races the
 //! Grand Tour cup (D-057), and the host may choose another event in the
-//! game; the other options: see `osage_server::cli`.
+//! game; `[--music DIR [--music-listen ADDR]]` shares the host's music
+//! files in DIR with the players on the network (osage-music's share, on
+//! 0.0.0.0:7880 unless told otherwise), each hearing the same piece at the
+//! same point; the players talk to one another through a voice relay
+//! (osage-voice, UDP 0.0.0.0:7881; `--voice-listen ADDR` to move it,
+//! `--no-voice` for none); the other options: see `osage_server::cli`.
 
 use anyhow::Context as _;
 use osage_server::Config;
@@ -16,6 +21,8 @@ fn main() -> anyhow::Result<()> {
     let config = Config { world_name: "osage-kart".to_owned(), tick_hz: TICK_HZ, ..Config::default() };
     let mut world = KartWorld { event: Some("cup:grand-tour".to_owned()), ..KartWorld::default() };
     let mut rest = Vec::new();
+    let (mut music, mut music_listen) = (None, "0.0.0.0:7880".to_owned());
+    let mut voice_listen = Some("0.0.0.0:7881".to_owned());
     let mut args = std::env::args().skip(1);
     while let Some(arg) = args.next() {
         if arg == "--records" {
@@ -32,9 +39,38 @@ fn main() -> anyhow::Result<()> {
             world.event = None;
             let problems = world.track.problems();
             anyhow::ensure!(problems.is_empty(), "track {wanted}: {}", problems.join("; "));
+        } else if arg == "--music" {
+            music = Some(std::path::PathBuf::from(args.next().context("--music needs a folder of music files")?));
+        } else if arg == "--voice-listen" {
+            voice_listen = Some(args.next().context("--voice-listen needs an address")?);
+        } else if arg == "--no-voice" {
+            voice_listen = None;
+        } else if arg == "--music-listen" {
+            music_listen = args.next().context("--music-listen needs an address")?;
         } else {
             rest.push(arg);
         }
+    }
+    if let Some(address) = voice_listen {
+        let socket = std::net::UdpSocket::bind(&address).with_context(|| format!("voice relay on {address}"))?;
+        let relay = osage_voice::relay::serve(socket)?;
+        eprintln!("voice: relay on port {}", relay.port);
+        world.voice_port = Some(relay.port);
+    }
+    if let Some(folder) = music {
+        let (pieces, skipped) =
+            osage_music::share::scan(&folder).with_context(|| format!("music folder {}", folder.display()))?;
+        for (path, why) in skipped {
+            eprintln!("music: left out {}: {why}", path.display());
+        }
+        anyhow::ensure!(!pieces.is_empty(), "no music to share in {}", folder.display());
+        let listener =
+            std::net::TcpListener::bind(&music_listen).with_context(|| format!("music on {music_listen}"))?;
+        let share = osage_music::share::serve(pieces, listener)?;
+        let minutes = share.timeline.pieces.iter().map(|p| p.seconds).sum::<f64>() / 60.0;
+        eprintln!("music: {} pieces ({minutes:.0} min) shared on port {}", share.timeline.pieces.len(), share.port);
+        // Its threads run for as long as the world.
+        world.music_port = Some(share.port);
     }
     osage_server::cli::run_with(world, config, rest)
 }

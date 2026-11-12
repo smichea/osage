@@ -1,6 +1,8 @@
 # Knowledge Update Log
 
 ## 2026-11-12
+* **Creation**: Added the module [osage-voice](/modules/osage-voice.md): the players talk to one another through a relay beside the world, push to talk or an open microphone, each voice mutable (D-060); [osage-kart-native](/modules/kart-native.md) joins the conference, V to talk; `kart-server` starts the relay.
+* **Creation**: Added the module [osage-music](/modules/osage-music.md): files, internet radio and its directory, a host's playlist shared on the network (D-059); [osage-kart-native](/modules/kart-native.md) plays the game's music, the player's, the host's or radio, B to skip; `kart-server --music`.
 * **Creation**: Added the module [osage-kart-cup](/modules/kart-cup.md): cups of four races with points, standings and a podium; the host chooses the event, the others vote (D-057); [osage-kart-native](/modules/kart-native.md) shows the cup between races.
 * **Creation**: Added the module [osage-kart-tracks](/modules/kart-tracks.md): tracks are text files, checked and built (D-056); four tracks; [osage-kart-native](/modules/kart-native.md)'s bench takes `--track` and the scene is built again when the world's track changes; [osage-kart-records](/modules/kart-records.md) keeps records per track.
 * **Creation**: Added the module [osage-kart-roster](/modules/kart-roster.md): eight drivers in three classes and four kart bodies, each pair a build within a narrow band (D-055); [osage-kart-physics](/modules/kart-physics.md) and [Arcade kart physics](/algorithms/arcade-kart-physics.md) carry a build and share bumps by mass; [osage-kart-racecraft](/modules/kart-racecraft.md) drives each build at its limits; [osage-kart-native](/modules/kart-native.md) chooses between races.

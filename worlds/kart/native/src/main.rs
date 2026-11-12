@@ -30,6 +30,8 @@ mod effects;
 mod hud;
 mod karts;
 mod landmarks;
+#[cfg(feature = "sound")]
+mod music;
 mod paddock;
 mod play;
 mod predict;
@@ -39,6 +41,8 @@ mod settings;
 #[cfg(feature = "sound")]
 mod sound;
 mod track;
+#[cfg(feature = "sound")]
+mod voice;
 
 use std::{
     path::PathBuf,
@@ -217,6 +221,8 @@ fn main() -> Result<()> {
         };
         app.add_plugins(play::PlayPlugin { url, tier, autodrive, screenshot_after })
             .add_plugins(settings::SettingsPlugin { fps });
+        #[cfg(feature = "sound")]
+        app.add_plugins((music::MusicPlugin, voice::VoicePlugin));
     }
     app.run();
     Ok(())

@@ -446,6 +446,7 @@ pub fn publish(
     rules: Res<Rules>,
     drivers: Res<Drivers>,
     cups: Res<Cups>,
+    beside: Res<crate::Beside>,
     paddock: Option<Res<Items>>,
     owners: Query<(&Replicated, &Owner)>,
     mut karts: Query<
@@ -485,6 +486,8 @@ pub fn publish(
         event: cups.next(drivers.host().filter(|_| rules.host_starts)).unwrap_or_else(|| cups.event.clone()),
         votes: cups.votes(),
         events: crate::cup::events(),
+        music_port: u32::from(beside.music),
+        voice_port: u32::from(beside.voice),
     };
     if let Ok((mut board, mut volatile)) = board.single_mut() {
         if let Some(paddock) = paddock {
@@ -502,6 +505,8 @@ pub fn publish(
                 && c.cup == summary.cup
                 && c.event == summary.event
                 && c.votes == summary.votes
+                && c.music_port == summary.music_port
+                && c.voice_port == summary.voice_port
                 && c.phase_ends_us.abs_diff(summary.phase_ends_us) < 50_000
                 && c.started_us.abs_diff(summary.started_us) < 50_000
         });

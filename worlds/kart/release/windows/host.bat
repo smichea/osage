@@ -17,7 +17,10 @@ echo.
 echo  A phone or a tablet opens  http://THAT-ADDRESS:8080  in its browser.
 echo  If Windows asks, allow "kart-server" and "kart-web" on private networks.
 echo.
-start "osage kart world (shared)" /min kart-server.exe --listen 0.0.0.0:7878 --webtransport 0.0.0.0:7879 --records kart-records.txt
+rem The host's music, shared with the others, when there is a "music" folder.
+set MUSIC=
+if exist music\ (set MUSIC=--music music& echo  Sharing the music in the "music" folder on port 7880.& echo.)
+start "osage kart world (shared)" /min kart-server.exe --listen 0.0.0.0:7878 --webtransport 0.0.0.0:7879 --records kart-records.txt %MUSIC%
 start "osage kart web" /min kart-web.exe web 0.0.0.0:8080
 timeout /t 3 /nobreak >nul
 kart-native.exe %*

@@ -96,18 +96,50 @@ pub struct KartWorld {
     /// What it races (D-057): a cup (`cup:ID`) or a track (`track:ID`);
     /// none, `track` race after race.
     pub event: Option<String>,
+    /// The port where the host shares their music, announced to the
+    /// players; none when nothing is shared.
+    pub music_port: Option<u16>,
+    /// The port of the voice relay beside the world, announced to the
+    /// players; none when there is no relay.
+    pub voice_port: Option<u16>,
+}
+
+/// The ports beside the world, as announced (0: none): the host's shared
+/// music, the voice relay.
+#[derive(Resource, Clone, Copy, Default)]
+pub struct Beside {
+    pub music: u16,
+    pub voice: u16,
 }
 
 impl Default for KartWorld {
     fn default() -> Self {
-        Self { grid: 6, laps: 3, host_starts: true, records: None, track: paddock(), event: None }
+        Self {
+            grid: 6,
+            laps: 3,
+            host_starts: true,
+            records: None,
+            track: paddock(),
+            event: None,
+            music_port: None,
+            voice_port: None,
+        }
     }
 }
 
 impl KartWorld {
     /// Races that start by themselves: for tests and unattended worlds.
     pub fn unattended(grid: usize, laps: u32) -> Self {
-        Self { grid, laps, host_starts: false, records: None, track: paddock(), event: None }
+        Self {
+            grid,
+            laps,
+            host_starts: false,
+            records: None,
+            track: paddock(),
+            event: None,
+            music_port: None,
+            voice_port: None,
+        }
     }
 }
 
@@ -125,6 +157,7 @@ impl Plugin for KartWorld {
         };
         app.insert_resource(Rules { grid: self.grid, laps: self.laps, host_starts: self.host_starts })
             .insert_resource(cups)
+            .insert_resource(Beside { music: self.music_port.unwrap_or(0), voice: self.voice_port.unwrap_or(0) })
             .init_resource::<race::Calls>()
             .insert_resource(Course(Circuit::of(&track)))
             .init_resource::<race::Race>()

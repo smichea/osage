@@ -61,6 +61,7 @@ impl Plugin for PlayPlugin {
             .insert_resource(NetInbox(rx))
             .insert_resource(NetOutbox(out_tx))
             .insert_resource(Replica { status: format!("connecting to {}…", self.url), ..default() })
+            .insert_resource(Host { host: host_of(&self.url), ..default() })
             .insert_resource(Driver { autodrive: self.autodrive, ..default() })
             .insert_resource(Shots { after: self.screenshot_after.clone() })
             .init_resource::<CallWanted>()
@@ -667,9 +668,36 @@ fn screenshots(mut commands: Commands, time: Res<Time>, keys: Res<ButtonInput<Ke
     }
 }
 
+/// What the world's machine offers beside the world, on the ports the
+/// world announces (0: none): the host's shared music (D-059), the voice
+/// relay; and the player's name there.
+#[derive(Resource, Debug, Clone, PartialEq, Default)]
+pub struct Host {
+    pub host: String,
+    pub music: u16,
+    pub voice: u16,
+    /// The player's driver's name, once the world has given one.
+    pub me: String,
+    /// Whether the world has said (its race is known).
+    pub known: bool,
+}
+
+/// The machine in a world's address (`ws://192.168.0.100:7878`, `[::1]`).
+fn host_of(url: &str) -> String {
+    let rest = url.split_once("://").map_or(url, |(_, rest)| rest);
+    let authority = rest.split(['/', '?']).next().unwrap_or(rest);
+    let authority = authority.rsplit_once('@').map_or(authority, |(_, a)| a);
+    if let Some(inside) = authority.strip_prefix('[') {
+        return inside.split(']').next().unwrap_or(inside).to_owned();
+    }
+    authority.split(':').next().unwrap_or(authority).to_owned()
+}
+
 /// What the interface shows this frame, from what the world sent.
+#[allow(clippy::too_many_arguments)]
 fn summarise(
     replica: Res<Replica>,
+    mut beside: ResMut<Host>,
     driver: Res<Driver>,
     chosen: Res<Chosen>,
     chosen_event: Res<ChosenEvent>,
@@ -685,7 +713,14 @@ fn summarise(
         paddock.lead = lead;
         paddock.me = me;
     }
+    let port = |port: u32| port.min(u32::from(u16::MAX)) as u16;
+    let (music, voice) = replica.race().map_or((0, 0), |race| (port(race.music_port), port(race.voice_port)));
+    let known = replica.race().is_some();
     let racer = replica.mine.and_then(|mine| replica.racer(mine));
+    let me = racer.as_ref().map_or("", |racer| racer.name.as_str());
+    if beside.music != music || beside.voice != voice || beside.known != known || beside.me != me {
+        (beside.music, beside.voice, beside.known, beside.me) = (music, voice, known, me.to_owned());
+    }
     view.held = racer.as_ref().and_then(|racer| item(racer.held()));
     view.count = racer.as_ref().map_or(0, |racer| racer.held_count.min(9) as u8);
     view.trailing = racer.as_ref().is_some_and(|racer| racer.trailing);
@@ -754,4 +789,17 @@ fn summarise(
     let kart = driver.predictor.kart.unwrap_or_default();
     (view.speed, view.charge, view.boosting) = (kart.speed, kart.charge, kart.boost > 0.0);
     view.stalled = kart.stall > 0.0;
+}
+
+#[cfg(test)]
+mod tests {
+    use super::host_of;
+
+    #[test]
+    fn the_worlds_machine_is_read_from_its_address() {
+        assert_eq!(host_of("ws://192.168.0.100:7878"), "192.168.0.100");
+        assert_eq!(host_of("wss://kart.example.org/world?x=1"), "kart.example.org");
+        assert_eq!(host_of("ws://[fe80::1]:7878"), "fe80::1");
+        assert_eq!(host_of("localhost:7878"), "localhost");
+    }
 }

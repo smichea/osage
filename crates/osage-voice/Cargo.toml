@@ -1,0 +1,23 @@
+# SPDX-FileCopyrightText: The osage contributors
+# SPDX-License-Identifier: LicenseRef-osage-AGPL-3.0-or-later-with-exceptions
+
+[package]
+name = "osage-voice"
+description = "osage voice: players talking to one another as in a conference call, through a relay beside the world; push to talk, microphone off until chosen, each voice mutable"
+license-file = "../../LICENSE-EXCEPTIONS.md"
+publish = false
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+
+[dependencies]
+crossbeam-channel.workspace = true
+# The microphone (Microphone): the system's sound library, as for playing.
+cpal = { version = "0.17.3", optional = true }
+# The voices heard as a bevy audio source (VoicePlugin).
+bevy = { workspace = true, features = ["bevy_asset", "bevy_audio"], optional = true }
+
+[features]
+device = ["dep:cpal"]
+bevy = ["dep:bevy"]

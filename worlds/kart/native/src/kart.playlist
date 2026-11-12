@@ -1,0 +1,11 @@
+# SPDX-FileCopyrightText: The osage contributors
+# SPDX-License-Identifier: MIT OR Apache-2.0
+# The kart game's own music, in assets/opengameart/music/ (assets/manifest.toml),
+# levelled to about -14 dBFS (RMS) by the gains, as osage-music's
+# `music probe` measures them.
+osage-playlist/1
+track hot-roadway.ogg | Hot Roadway | MintoDog | CC0-1.0 | -3.3
+track raspberry-jam.ogg | Raspberry Jam | congusbongus | CC0-1.0 | 0
+track fever-stadium.ogg | Fever Stadium | MintoDog | CC0-1.0 | -1.2
+track simple-action-beat.mp3 | Simple Action Beat | LushoGames | CC0-1.0 | -3.1
+track as-fast-as-you-can.ogg | As Fast As You Can | Centurion_of_war | CC0-1.0 | -3.7

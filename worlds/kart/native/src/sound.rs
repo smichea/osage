@@ -57,12 +57,17 @@ impl Plugin for SoundPlugin {
 #[derive(Component)]
 pub struct Music;
 
+/// A sink that plays the other players' voices: neither the sound nor
+/// the music setting mutes it (each voice is muted on its own).
+#[derive(Component)]
+pub struct Speech;
+
 /// Sound off: every sound of the game is muted, new ones as they start;
 /// on, they are heard again (settings, N).
 fn hush(
     audio: Res<Audio>,
-    mut sinks: Query<&mut SpatialAudioSink, Without<Music>>,
-    mut flat: Query<&mut AudioSink, Without<Music>>,
+    mut sinks: Query<&mut SpatialAudioSink, (Without<Music>, Without<Speech>)>,
+    mut flat: Query<&mut AudioSink, (Without<Music>, Without<Speech>)>,
 ) {
     let changed = audio.is_changed();
     let set = |sink: &mut dyn AudioSinkPlayback| {

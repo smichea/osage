@@ -33,6 +33,8 @@ osage-sdk.workspace = true
 osage-world-kart.workspace = true
 osage-kart-tracks.workspace = true
 osage-kart-cup.workspace = true
+osage-music.workspace = true
+osage-voice.workspace = true
 anyhow.workspace = true
 bevy = { workspace = true, features = ["3d", "ui"] }
 crossbeam-channel.workspace = true
@@ -43,4 +45,4 @@ tokio.workspace = true
 default = ["sound"]
 # The karts heard (osage-kart-sound): needs the system's sound library (ALSA
 # on Linux). The bench is built without it: it measures pictures.
-sound = ["bevy/audio", "dep:osage-kart-sound", "dep:lewton"]
+sound = ["bevy/audio", "dep:osage-kart-sound", "dep:lewton", "osage-music/bevy", "osage-voice/bevy", "osage-voice/device"]
