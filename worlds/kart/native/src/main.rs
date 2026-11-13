@@ -46,6 +46,7 @@ mod settings;
 mod show;
 #[cfg(feature = "sound")]
 mod sound;
+mod spans;
 mod track;
 #[cfg(feature = "sound")]
 mod voice;

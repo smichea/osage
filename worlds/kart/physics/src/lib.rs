@@ -119,6 +119,11 @@ const GRASS_GRIP: f32 = 0.5;
 /// A wet road (D-068): the tyres' grip and the brakes as shares of a dry
 /// road's. A slide takes longer to scrub off, a stop longer to make.
 pub const WET_GRIP: f32 = 0.6;
+/// Hills (D-077): how much a slope takes from the top speed or adds to it
+/// (per unit of slope, within 0.8 to 1.15 of it), and how hard it pulls a
+/// kart back or on, m/s² per unit of slope — half of gravity: an arcade's.
+pub const HILL_TOP: f32 = 1.0;
+pub const HILL_PULL: f32 = 9.0;
 /// Oily tyres (D-072): the grip they keep, and how much of the steering.
 pub const SLICK_GRIP: f32 = 0.12;
 pub const SLICK_STEER: f32 = 0.3;
@@ -287,6 +292,9 @@ pub struct Track {
     /// How wet the road is, 0 (dry) to 1 (rain): it grips and brakes less
     /// (D-068). Set by the world for a race.
     pub wet: f32,
+    /// The road's height at each point of the centre line, m (D-077):
+    /// hills. Empty: a level road.
+    heights: Vec<f32>,
 }
 
 /// Where a position is relative to the track.
@@ -309,7 +317,7 @@ impl Track {
             distances.push(length);
             length += distance(points[i], points[(i + 1) % points.len()]);
         }
-        Self { points, distances, length, half_width, verge, crests: Vec::new(), wet: 0.0 }
+        Self { points, distances, length, half_width, verge, crests: Vec::new(), wet: 0.0, heights: Vec::new() }
     }
 
     /// The same track with crests across its road.
@@ -331,10 +339,45 @@ impl Track {
     /// The road's height at `along` (on a crest, or 0), and its slope
     /// (rise per metre along the track).
     pub fn lift(&self, along: f32) -> (f32, f32) {
-        self.crests
+        let crest = self
+            .crests
             .iter()
             .find_map(|crest| crest.profile((along - crest.along).rem_euclid(self.length)))
-            .unwrap_or((0.0, 0.0))
+            .unwrap_or((0.0, 0.0));
+        if self.heights.is_empty() {
+            return crest;
+        }
+        let hill = self.hill(along);
+        (crest.0 + hill.0, crest.1 + hill.1)
+    }
+
+    /// The same track over hills (D-077): the road's height at each point
+    /// of the centre line, m. Anything else than one finite height a point
+    /// leaves it level.
+    pub fn with_heights(mut self, heights: Vec<f32>) -> Self {
+        let whole = heights.len() == self.points.len() && heights.iter().all(|h| h.is_finite());
+        self.heights = if whole && heights.iter().any(|h| *h != 0.0) { heights } else { Vec::new() };
+        self
+    }
+
+    /// The road's height at each point of the centre line; empty when level.
+    pub fn heights(&self) -> &[f32] {
+        &self.heights
+    }
+
+    /// The hills alone, `along` metres along the centre line: the road's
+    /// height and its slope (rise per metre driven), crests left out.
+    pub fn hill(&self, along: f32) -> (f32, f32) {
+        if self.heights.is_empty() {
+            return (0.0, 0.0);
+        }
+        let along = along.rem_euclid(self.length);
+        let i = self.distances.partition_point(|&d| d <= along).saturating_sub(1);
+        let j = (i + 1) % self.points.len();
+        let segment = distance(self.points[i], self.points[j]).max(f32::EPSILON);
+        let t = (along - self.distances[i]) / segment;
+        let (a, b) = (self.heights[i], self.heights[j]);
+        (a + t * (b - a), (b - a) / segment)
     }
 
     pub fn points(&self) -> &[[f32; 2]] {
@@ -492,6 +535,13 @@ pub fn step(kart: &mut Kart, controls: Controls, track: &Track) {
     } else {
         MAX_SPEED * build.top
     };
+    // Uphill a kart is slower, downhill faster (D-077): the slope it faces.
+    let hill = if track.heights.is_empty() || flying {
+        0.0
+    } else {
+        track.hill(here.along).1 * cosf(kart.heading - track.at(here.along).1)
+    };
+    let fastest = if hill != 0.0 { fastest * (1.0 - HILL_TOP * hill).clamp(0.8, 1.15) } else { fastest };
     let top = fastest - (fastest - OFF_ROAD_SPEED) * grass;
     let footing = 1.0 - (1.0 - KERB_GRIP) * kerb - (1.0 - GRASS_GRIP) * grass;
     // Rain takes grip from every tyre (D-068); a dry road, nothing (×1).
@@ -516,6 +566,10 @@ pub fn step(kart: &mut Kart, controls: Controls, track: &Track) {
     } else {
         let roll = (ROLLING * DT).min(fabsf(kart.speed));
         kart.speed -= roll * kart.speed.signum();
+    }
+    // The slope pulls a moving kart back or on.
+    if hill != 0.0 && (fabsf(kart.speed) > 0.5 || throttle != 0.0) {
+        kart.speed -= HILL_PULL * hill * DT;
     }
     if kart.boost > 0.0 {
         kart.speed = (kart.speed + BOOST_ACCELERATION * DT).min((BOOST_SPEED * build.top).max(kart.speed));
@@ -1044,6 +1098,31 @@ mod tests {
         assert!(slid(&wet) > slid(&dry) * 2.0, "dry {}, wet {}", slid(&dry), slid(&wet));
         assert_eq!(track().with_wet(f32::NAN).wet, 0.0);
         assert_eq!(track().with_wet(3.0).wet, 1.0);
+    }
+
+    /// D-077: over hills the road rises and falls under the kart, which
+    /// is slower uphill and faster downhill; a level track is as before.
+    #[test]
+    fn hills_carry_the_kart_and_change_its_speed() {
+        // The rectangle's first side climbs 20 m over its 200 m, the third comes down.
+        let hilly = track().with_heights(vec![0.0, 20.0, 20.0, 0.0]);
+        assert_eq!(hilly.hill(100.0), (10.0, 0.1));
+        assert_eq!(hilly.lift(250.0), (20.0, 0.0));
+        assert_eq!(track().with_heights(vec![0.0; 4]).heights().len(), 0, "all level: no hills");
+        assert_eq!(track().with_heights(vec![1.0]).heights().len(), 0, "not one a point: none");
+        let run = |track: &Track, z: f32, heading: f32| {
+            let mut kart = Kart { z, heading, speed: MAX_SPEED, height: track.lift(z).0, ..Kart::default() };
+            drive(&mut kart, FULL, 3.0, track);
+            kart
+        };
+        let (level, up) = (run(&track(), 20.0, 0.0), run(&hilly, 20.0, 0.0));
+        assert!(up.speed < level.speed - 1.5, "slower uphill: {} against {}", up.speed, level.speed);
+        let spot = hilly.locate(up.x, up.z);
+        assert!((up.height - hilly.lift(spot.along).0).abs() < 1e-3 && up.height > 5.0, "on the road: {up:?}");
+        // Down the same slope, the other way.
+        let down = run(&hilly, 150.0, std::f32::consts::PI);
+        assert!(down.speed > level.speed + 1.5, "faster downhill: {}", down.speed);
+        assert!(down.height < 12.0, "{down:?}");
     }
 
     /// D-072: on oily tyres the kart slides on the way it went and the

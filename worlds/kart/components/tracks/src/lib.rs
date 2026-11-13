@@ -27,7 +27,11 @@
 //! ```
 //!
 //! A `#` starts a comment. `crest AFTER RISE FALL HEIGHT`: a crest starting
-//! AFTER metres past the start line.
+//! AFTER metres past the start line. A point may have a third number, the
+//! road's height there, metres (D-077): `point 120 40 18` — hills, the
+//! heights joined by the same spline as the line. `bridge AFTER LENGTH` and
+//! `tunnel AFTER LENGTH`: the road crosses a gap on a bridge, or runs
+//! through a hill, for LENGTH metres from AFTER metres past the start.
 
 use std::fmt;
 
@@ -50,6 +54,8 @@ pub const BUILT_IN: &[&str] = &[
     include_str!("../tracks/coast.track"),
     include_str!("../tracks/forest.track"),
     include_str!("../tracks/harbour.track"),
+    include_str!("../tracks/mountain.track"),
+    include_str!("../tracks/canyon.track"),
 ];
 
 /// The battle arenas that come with the game (D-065): tracks too — a wide
@@ -73,10 +79,36 @@ pub struct TrackDef {
     pub verge: f32,
     /// Control points of the closed centre line, metres, in racing order.
     pub points: Vec<[f32; 2]>,
+    /// The road's height at each control point, metres (D-077); all zero
+    /// on a level track.
+    pub heights: Vec<f32>,
+    /// Bridges and tunnels along the road (D-077).
+    pub spans: Vec<SpanDef>,
     /// The control point the start line is at.
     pub start: usize,
     pub crests: Vec<CrestDef>,
 }
+
+/// What a stretch of road is built as (D-077).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SpanKind {
+    /// Over a gap: a deck on piers, the land far below.
+    Bridge,
+    /// Through a hill: a vault over the road, the land above it.
+    Tunnel,
+}
+
+/// A bridge or a tunnel, placed from the start line.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct SpanDef {
+    pub kind: SpanKind,
+    /// Metres past the start line where it begins, and how long it is.
+    pub after: f32,
+    pub length: f32,
+}
+
+/// The steepest road allowed: a rise of this much a metre driven.
+pub const STEEPEST: f32 = 0.16;
 
 /// A crest, placed from the start line.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -127,6 +159,8 @@ impl TrackDef {
             half_width: 7.0,
             verge: 4.0,
             points: Vec::new(),
+            heights: Vec::new(),
+            spans: Vec::new(),
             start: 0,
             crests: Vec::new(),
         };
@@ -160,7 +194,11 @@ impl TrackDef {
                 "half-width" => def.half_width = count(1)?[0],
                 "verge" => def.verge = count(1)?[0],
                 "point" => {
-                    let xz = count(2)?;
+                    let mut xz = numbers()?;
+                    if !(2..=3).contains(&xz.len()) {
+                        return Err(fail(n, "point takes X Z and maybe a height"));
+                    }
+                    def.heights.push(if xz.len() == 3 { xz.pop().unwrap_or(0.0) } else { 0.0 });
                     if rest.split_whitespace().any(|word| word == "start") {
                         if start.is_some() {
                             return Err(fail(n, "a second start"));
@@ -172,6 +210,11 @@ impl TrackDef {
                 "crest" => {
                     let c = count(4)?;
                     def.crests.push(CrestDef { after: c[0], rise: c[1], fall: c[2], height: c[3] });
+                }
+                "bridge" | "tunnel" => {
+                    let s = count(2)?;
+                    let kind = if key == "bridge" { SpanKind::Bridge } else { SpanKind::Tunnel };
+                    def.spans.push(SpanDef { kind, after: s[0], length: s[1] });
                 }
                 _ => return Err(fail(n, &format!("unknown key {key}"))),
             }
@@ -203,8 +246,29 @@ impl TrackDef {
     }
 
     /// The physics' track and the distance along it of the start line.
+    /// The road's height at each point of [`centre_line`](Self::centre_line):
+    /// the control points' heights joined by the same spline.
+    pub fn height_line(&self) -> Vec<f32> {
+        let h = &self.heights;
+        let n = h.len();
+        let mut heights = Vec::with_capacity(n * SAMPLES_PER_SPAN);
+        for i in 0..n {
+            let [h0, h1, h2, h3] = [h[(i + n - 1) % n], h[i], h[(i + 1) % n], h[(i + 2) % n]];
+            for s in 0..SAMPLES_PER_SPAN {
+                heights.push(catmull_rom(h0, h1, h2, h3, s as f32 / SAMPLES_PER_SPAN as f32));
+            }
+        }
+        heights
+    }
+
+    /// The bridges and tunnels as stretches of the built track: (kind,
+    /// metres along the centre line where it begins, length).
+    pub fn spans_on(&self, track: &Track, start: f32) -> Vec<(SpanKind, f32, f32)> {
+        self.spans.iter().map(|s| (s.kind, (start + s.after).rem_euclid(track.length()), s.length)).collect()
+    }
+
     pub fn build(&self) -> (Track, f32) {
-        let track = Track::new(self.centre_line(), self.half_width, self.verge);
+        let track = Track::new(self.centre_line(), self.half_width, self.verge).with_heights(self.height_line());
         let [x, z] = self.points[self.start];
         let start = track.locate(x, z).along;
         let length = track.length();
@@ -278,6 +342,25 @@ impl TrackDef {
                 out.push(format!("the crest {} m after the start is in a bend", crest.after));
             }
         }
+        let steepest = (0..(length / 2.0) as usize).map(|i| fabsf(track.hill(i as f32 * 2.0).1)).fold(0.0, f32::max);
+        if steepest > STEEPEST {
+            out.push(format!("a slope of {:.0} %, steeper than {:.0} %", steepest * 100.0, STEEPEST * 100.0));
+        }
+        if grid && fabsf(track.hill(start - 20.0).1) > 0.03 {
+            out.push("the grid is on a slope".to_owned());
+        }
+        for span in &self.spans {
+            if !(10.0..=300.0).contains(&span.length) || span.after < 0.0 || span.after + span.length > length {
+                out.push(format!(
+                    "the {:?} {} m after the start is not 10 to 300 m of this track",
+                    span.kind, span.after
+                ));
+            }
+            if self.crests.iter().any(|c| c.after < span.after + span.length && span.after < c.after + c.rise + c.fall)
+            {
+                out.push(format!("the {:?} {} m after the start has a crest in it", span.kind, span.after));
+            }
+        }
         if grid && turn(start - 40.0, start + 10.0) > 0.25 {
             out.push("the start and its grid are in a bend".to_owned());
         }
@@ -332,12 +415,17 @@ mod tests {
         assert_eq!(tracks.len(), BUILT_IN.len());
         for track in &tracks {
             let (built, _) = track.build();
+            let steepest =
+                (0..(built.length() / 2.0) as usize).map(|i| built.hill(i as f32 * 2.0).1.abs()).fold(0.0, f32::max);
+            let top = built.heights().iter().copied().fold(0.0, f32::max);
             println!(
-                "{}: {:.0} m, tightest {:?}, {} crests",
+                "{}: {:.0} m, tightest {:?}, {} crests, top {top:.0} m, steepest {:.0} %, spans {:?}",
                 track.id,
                 built.length(),
                 tightest(&built),
-                track.crests.len()
+                track.crests.len(),
+                steepest * 100.0,
+                track.spans
             );
             assert_eq!(track.problems(), Vec::<String>::new(), "{}", track.id);
             assert!(!track.name.is_empty() && !track.about.is_empty(), "{}", track.id);
@@ -354,6 +442,29 @@ mod tests {
             assert!(arena.half_width >= 10.0 && by_id(&arena.id).is_none(), "{}: wide, and not a track", arena.id);
         }
         assert!(arena("yard").is_some());
+    }
+
+    /// D-077: points may carry heights, joined by the spline; too steep a
+    /// road, a grid on a slope and a span off the track are refused.
+    #[test]
+    fn a_track_has_hills_bridges_and_tunnels() {
+        let hilly = "kart-track/1\nid hilly\npoint 0 0 0 start\npoint 200 0 12\npoint 200 200 20\npoint 0 200 6\n\
+                     bridge 250 60\ntunnel 420 80\n";
+        let def = TrackDef::parse(hilly).unwrap();
+        assert_eq!(def.heights, [0.0, 12.0, 20.0, 6.0]);
+        let (track, start) = def.build();
+        assert_eq!(track.heights().len(), 4 * SAMPLES_PER_SPAN);
+        let top = (0..400).map(|i| track.lift(i as f32 * 2.0).0).fold(0.0, f32::max);
+        assert!((19.0..23.0).contains(&top), "{top}");
+        assert_eq!(def.spans_on(&track, start).len(), 2);
+        assert_eq!(def.spans[1].kind, SpanKind::Tunnel);
+        let level =
+            TrackDef::parse(&hilly.replace(" 12\n", "\n").replace(" 20\n", "\n").replace(" 6\n", "\n")).unwrap();
+        assert!(level.build().0.heights().is_empty(), "no heights: a level road");
+        let steep = TrackDef::parse(&hilly.replace("200 0 12", "200 0 60")).unwrap();
+        assert!(steep.problems().iter().any(|p| p.contains("steeper")), "{:?}", steep.problems());
+        let off = TrackDef::parse(&hilly.replace("tunnel 420 80", "tunnel 780 80")).unwrap();
+        assert!(off.problems().iter().any(|p| p.contains("Tunnel")), "{:?}", off.problems());
     }
 
     #[test]

@@ -1,0 +1,31 @@
+# SPDX-FileCopyrightText: The osage contributors
+# SPDX-License-Identifier: MIT OR Apache-2.0
+kart-track/1
+id mountain
+name Eagle Ridge
+about A mountain road: up through the switchbacks to a tunnel under the summit, then down across a ravine, 40 m of climb and as much to come down.
+sky noon
+scenery mountain
+rain 0.25
+half-width 6.5
+verge 3
+point -60 -100 0.0 start
+point 40 -100 0.0
+point 130 -95 2.5
+point 175 -60 7.6
+point 180 -5 13.6
+point 150 35 18.7
+point 90 45 22.9
+point 40 70 27.2
+point 35 120 32.3
+point 0 160 37.4
+point -60 170 39.9
+point -120 160 38.2
+point -160 125 34.0
+point -175 70 28.1
+point -150 20 21.2
+point -180 -30 13.6
+point -185 -75 6.8
+point -150 -100 1.7
+tunnel 590 70
+bridge 815 45

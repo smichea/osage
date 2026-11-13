@@ -266,6 +266,25 @@ message Track {
   // (meadow, coast, forest, town): how clients dress it.
   string sky = 10;
   string scenery = 11;
+  // Added with D-077. The road's height at each point of `points`, metres:
+  // hills (a kart is slower uphill, faster downhill). Empty: a level road.
+  repeated float heights = 12;
+  // Bridges and tunnels along the road: scenery, the driving is the same.
+  repeated Span spans = 13;
+}
+
+// A bridge or a tunnel (D-077): from `along` metres along the centre line,
+// for `length` metres.
+message Span {
+  SpanKind kind = 1;
+  float along = 2;
+  float length = 3;
+}
+
+enum SpanKind {
+  SPAN_KIND_UNSPECIFIED = 0;
+  SPAN_KIND_BRIDGE = 1;
+  SPAN_KIND_TUNNEL = 2;
 }
 
 message Crest {

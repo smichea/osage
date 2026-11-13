@@ -1,0 +1,33 @@
+# SPDX-FileCopyrightText: The osage contributors
+# SPDX-License-Identifier: MIT OR Apache-2.0
+kart-track/1
+id canyon
+name Red Gorge
+about Between the walls of a canyon: two bridges over its ravines, a tunnel through the rock, and never a view of the next bend.
+sky evening
+scenery canyon
+rain 0.05
+half-width 6.5
+verge 2.5
+point -80 -120 0 start
+point 20 -120 0
+point 110 -115 0
+point 170 -85 2
+point 190 -30 5
+point 160 20 8
+point 100 40 10
+point 70 90 10
+point 110 140 8
+point 100 190 6
+point 40 215 6
+point -30 200 8
+point -70 150 10
+point -60 90 9
+point -100 40 6
+point -160 20 4
+point -200 -30 2
+point -190 -90 0
+point -140 -120 0
+bridge 425 45
+tunnel 690 70
+bridge 950 40

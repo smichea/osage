@@ -155,7 +155,7 @@ try {
       if (newTrack) {
         const track = world.get(event.entity, KART.track, TrackSchema);
         if (track) {
-          physics.setTrack(track.points, track.halfWidth, track.verge, track.crests);
+          physics.setTrack(track.points, track.halfWidth, track.verge, track.crests, track.heights);
           wet = false;
           if (circuit) scene.remove(circuit.group);
           // Over a crest the road is as high as the physics has it (D-051).
@@ -246,6 +246,8 @@ try {
     coast: "Gull Point",
     forest: "Pinewood",
     harbour: "Harbour Town",
+    mountain: "Eagle Ridge",
+    canyon: "Red Gorge",
   };
   const trackName = (id: string) => TRACK_NAMES[id] ?? id;
   const ARENA_NAMES: Record<string, string> = { yard: "The Yard" };

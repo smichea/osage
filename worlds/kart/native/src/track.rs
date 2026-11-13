@@ -77,6 +77,30 @@ fn meadow(land: &Land, at: Vec2, height: f32) -> Vec3 {
     colour / GRAIN
 }
 
+/// The colour of bare rock where a place has it (D-077), linear: grey
+/// granite in mountains, red sandstone in a canyon.
+fn rock_of(scenery: &str) -> Option<Vec3> {
+    let tone = |r: f32, g: f32, b: f32| Color::srgb(r, g, b).to_linear().to_vec3();
+    match scenery {
+        "mountain" => Some(tone(0.46, 0.44, 0.41)),
+        "canyon" => Some(tone(0.62, 0.36, 0.22)),
+        _ => None,
+    }
+}
+
+/// The land of a track's place (D-077): a mountain's taller hills, a
+/// canyon's walls, a gorge under each bridge and a ridge over each tunnel.
+pub fn place(land: Land, circuit: &osage_world_kart::Circuit) -> Land {
+    let spans = |kind| circuit.spans.iter().filter(|s| s.0 == kind).map(|s| (s.1, s.2)).collect();
+    let land = land.with_spans(spans(osage_kart_tracks::SpanKind::Bridge), spans(osage_kart_tracks::SpanKind::Tunnel));
+    match circuit.about.scenery.as_str() {
+        "mountain" => land.with_relief(2.6),
+        "canyon" => land.with_relief(1.4).with_walls(26.0),
+        "coast" => land.with_sea(),
+        _ => land,
+    }
+}
+
 /// How much of a point is the cliff's rock: its edge and face, 0 inland.
 fn cliff(land: &Land, at: Vec2) -> f32 {
     land.offshore(at).map_or(0.0, |off| smooth((off + 9.0) / 6.0))
@@ -229,7 +253,7 @@ fn ribbon(
 /// The land as a grid, finer around the circuit than far from it, painted
 /// with the colour of the ground. `paint` scales that colour for the
 /// material that will cover it.
-fn land_mesh(land: &Land, paint: impl Fn(Vec2, f32) -> Vec3) -> Mesh {
+fn land_mesh(land: &Land, paint: impl Fn(Vec2, f32) -> Vec3, rock: Option<Vec3>) -> Mesh {
     let n = CELLS;
     // Evenly spaced steps, bent so that the middle ones are five times smaller than the last.
     let along = |i: usize| {
@@ -253,7 +277,15 @@ fn land_mesh(land: &Land, paint: impl Fn(Vec2, f32) -> Vec3) -> Mesh {
             positions.push(here.to_array());
             normals.push(down.cross(across).normalize_or(Vec3::Y).to_array());
             uvs.push([here.x, here.z]);
-            colours.push(paint(Vec2::new(here.x, here.z), here.y).extend(1.0).to_array());
+            let normal = down.cross(across).normalize_or(Vec3::Y);
+            let mut colour = paint(Vec2::new(here.x, here.z), here.y);
+            // In mountains and canyons the steep ground is bare rock (D-077).
+            if let Some(rock) = rock {
+                let steep = smooth((1.0 - normal.y - 0.12) / 0.18);
+                let streak = 0.85 + 0.3 * noise(Vec2::new(here.x, here.z) / 7.0 + here.y / 9.0);
+                colour = colour.lerp(rock * streak, steep);
+            }
+            colours.push(colour.extend(1.0).to_array());
         }
     }
     let mut indices = Vec::with_capacity(n * n * 6);
@@ -357,9 +389,10 @@ pub fn build(
     commands.remove_resource::<Sea>();
     let track = &course.0.track;
     let frames = frames(track);
-    let land = Land::new(&frames, track);
-    // On a coast, the sea beside the land, below its cliffs (D-061).
-    let land = if course.0.about.scenery == "coast" { land.with_sea() } else { land };
+    // On a coast, the sea beside the land, below its cliffs (D-061); a
+    // mountain's heights, a canyon's walls, gorges and ridges (D-077).
+    let land = place(Land::new(&frames, track), &course.0);
+    crate::spans::build(&mut commands, &mut meshes, &mut materials, &course.0, &frames, &land);
     let (half, verge) = (track.half_width, track.verge);
     sea(&mut commands, &mut meshes, &mut materials, &mut images, &land);
     let assets = content::root();
@@ -413,7 +446,8 @@ pub fn build(
 
     // The land, and a plain beyond it down to the horizon: four strips
     // around the land, never under it, where the lake goes below the plain.
-    flat(with_tangents(land_mesh(&land, |at, height| colour(&land, at, height) * paint)), &grass_material);
+    let rock = rock_of(&course.0.about.scenery).map(|rock| rock * paint);
+    flat(with_tangents(land_mesh(&land, |at, height| colour(&land, at, height) * paint, rock)), &grass_material);
     let plain_material = plain(&mut materials, Color::srgb(0.3, 0.58, 0.18), 1.0);
     let (edge, horizon) = (LAND / 2.0 - 1.0, 3000.0);
     for (low, high) in [
@@ -784,7 +818,8 @@ fn photographed(
 
     // Laid once `flat` is done with the commands.
     let mut grassed: Vec<(Mesh, &Handle<GroundMaterial>)> = Vec::new();
-    grassed.push((with_tangents(land_mesh(land, |at, height| meadow(land, at, height))), &grass));
+    let rock = rock_of(&circuit.about.scenery).map(|rock| rock / GRAIN);
+    grassed.push((with_tangents(land_mesh(land, |at, height| meadow(land, at, height), rock)), &grass));
     // Beyond the land, fields as far as the haze.
     let fields = materials.add(StandardMaterial {
         base_color: Color::srgb(0.2, 0.25, 0.12),

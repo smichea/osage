@@ -15,7 +15,7 @@ Something to win over an evening (D-057): a few races on different tracks, point
 
 # Concepts
 
-- **Cup:** an id, a name, its tracks in the order they are raced. Built in: the Grand Tour (paddock, coast, forest, harbour).
+- **Cup:** an id, a name, its tracks in the order they are raced. Built in: the Grand Tour (paddock, coast, forest, harbour) and High Roads (forest, mountain, coast, canyon: D-077).
 - **Points:** 10, 8, 6, 5, 4, 3, 2, 1 for first to eighth; none after.
 - **Standing:** a driver's name, whether a bot, points, and their place in each race (none for a race missed).
 - **Series:** a cup being raced: races run, standings so far.

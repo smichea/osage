@@ -18,6 +18,7 @@ One answer, shared by every part of the kart game that needs it, to: how high is
 - **Frame:** a point of the centre line with the directions ahead and to the right, the distance along, how sharply the road bends, the road's height and slope there, and the crest on the stretch to the next frame, if any (D-051): `pieces` says how many pieces to draw that stretch in, `height_towards` how high the road is on the way, exactly as the physics has it.
 - **Site:** a disc kept clear — the knoll, the lake, a clearing.
 - **Land:** the height of the ground everywhere, the distance to the track, inside or outside the loop, the lake's shore.
+- **Hills, gorges, ridges, walls** (D-077): over a hilly track the land is the road's height beside it and the country's — about the road's — further off; `with_spans` lays a gorge under each bridge (16 m, `GORGE`) and a ridge beside each tunnel (12 m, `RIDGE`; the vault is `VAULT` high), `with_relief` makes the hills taller (a mountain's), `with_walls` stands rock walls along the track (a canyon's).
 - **Sea:** on a coast (`with_sea`, D-061), the open side of the circuit falls past cliffs to a sea `SEA` (8 m) below the road; the shoreline wanders, 30 m beyond the farthest flat ground; `offshore(at)` is how far a point is out to sea (negative inland).
 
 # Architecture

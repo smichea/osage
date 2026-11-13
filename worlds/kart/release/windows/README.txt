@@ -59,6 +59,12 @@ bumper takes one; after a hit you are spared for a moment. With no life
 left you are out (your kart turns see-through). The last kart in wins, or
 the one with most lives after two and a half minutes.
 
+Mountains and canyons: Eagle Ridge climbs 40 m through switchbacks to a
+tunnel under the summit, then comes down across a ravine; Red Gorge runs
+between the walls of a canyon, over two bridges and through a tunnel.
+Uphill your kart is slower, downhill faster. The High Roads cup races
+both, with Pinewood and Gull Point.
+
 Rain: some races are run in the rain (Gull Point most often). The road is
 darker and shines, and it grips and brakes less: brake earlier, and a
 drift slides further. Time trials are always dry.

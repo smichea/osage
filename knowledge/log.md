@@ -1,6 +1,7 @@
 # Knowledge Update Log
 
 ## 2026-11-13
+* **Update**: hills, bridges and tunnels (D-077): [osage-kart-physics](/modules/kart-physics.md) and [arcade kart physics](/algorithms/arcade-kart-physics.md) carry a road's height; [osage-kart-tracks](/modules/kart-tracks.md) has Eagle Ridge and Red Gorge; [osage-kart-land](/modules/kart-land.md) lays gorges, ridges, walls; [osage-kart-native](/modules/kart-native.md) draws bridges and tunnels; [osage-kart-cup](/modules/kart-cup.md) has High Roads.
 * **Update**: [exact client prediction](/algorithms/exact-client-prediction.md) knocks into the other karts, stepped on with the controls their states now carry (D-076); [osage-kart-native](/modules/kart-native.md) draws them at the player's moment.
 * **Update**: [osage-kart-native](/modules/kart-native.md) chooses its tier for the machine and steps down where one fails (D-075); 30 frames a second by default (D-074).
 * **Creation**: Added the module [osage-report](/modules/osage-report.md): crash reports found at the next start and filed as GitHub issues through a relay on Cloud Run, with the player's consent (D-073); [osage-kart-native](/modules/kart-native.md) asks and sends.

@@ -15,7 +15,7 @@ What a race is run on (D-056). A component of the kart game (D-035): the world b
 
 # Concepts
 
-- **Track file:** `kart-track/1`, then a key and its values a line, `#` for comments: `id`, `name`, `about`, `sky` (noon, evening), `scenery` (meadow, coast, forest, town), `half-width`, `verge`, `point X Z [start]` (in racing order; one marked start), `crest AFTER RISE FALL HEIGHT` (metres past the start line), `rain CHANCE` (0 to 1: how often a race on it is run in the rain, D-068; none unless said).
+- **Track file:** `kart-track/1`, then a key and its values a line, `#` for comments: `id`, `name`, `about`, `sky` (noon, evening), `scenery` (meadow, coast, forest, town), `half-width`, `verge`, `point X Z [start]` (in racing order; one marked start), `crest AFTER RISE FALL HEIGHT` (metres past the start line), `rain CHANCE` (0 to 1: how often a race on it is run in the rain, D-068; none unless said); a point's third number is the road's height there (D-077), `bridge AFTER LENGTH` and `tunnel AFTER LENGTH` spans of scenery. A road steeper than 16 % or a grid on a slope is refused. Six tracks come with the game: the four of the Grand Tour, Eagle Ridge (mountain: 40 m of climb, a tunnel, a bridge) and Red Gorge (canyon: two bridges, a tunnel).
 - **Centre line:** the control points joined by a closed Catmull-Rom spline, ten samples a span — the same construction the world used before tracks were data.
 - **Problems:** what makes a track unfit to race; the world refuses a track with any.
 

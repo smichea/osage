@@ -77,6 +77,7 @@ interface Exports {
   track_close(halfWidth: number, verge: number): number;
   track_lift(along: number): number;
   track_wet(wet: number): void;
+  track_height(height: number): void;
   kart_set(field: number, value: number): void;
   kart_step(throttle: number, steer: number, drift: number): void;
   kart_get(field: number): number;
@@ -90,10 +91,20 @@ export class Physics {
     return new Physics(instance.exports as unknown as Exports);
   }
 
-  /** `points`: x0, z0, x1, z1, … of the closed centre line. */
-  setTrack(points: ArrayLike<number>, halfWidth: number, verge: number, crests: CrestValues[] = []): void {
+  /** `points`: x0, z0, x1, z1, … of the closed centre line; `heights`: the road's at each point, over hills (D-077). */
+  setTrack(
+    points: ArrayLike<number>,
+    halfWidth: number,
+    verge: number,
+    crests: CrestValues[] = [],
+    heights: ArrayLike<number> = [],
+  ): void {
     this.wasm.track_clear();
-    for (let i = 0; i + 1 < points.length; i += 2) this.wasm.track_point(points[i], points[i + 1]);
+    const hilly = heights.length * 2 === points.length;
+    for (let i = 0; i + 1 < points.length; i += 2) {
+      this.wasm.track_point(points[i], points[i + 1]);
+      if (hilly) this.wasm.track_height(heights[i / 2]);
+    }
     for (const c of crests) this.wasm.track_crest(c.along, c.rise, c.fall, c.height);
     if (!this.wasm.track_close(halfWidth, verge)) throw new Error("a track needs at least three points");
   }

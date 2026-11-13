@@ -17,3 +17,4 @@ bevy.workspace = true
 
 [dev-dependencies]
 osage-world-kart.workspace = true
+osage-kart-tracks.workspace = true

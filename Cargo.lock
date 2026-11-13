@@ -4875,6 +4875,7 @@ version = "0.1.0"
 dependencies = [
  "bevy",
  "osage-kart-physics",
+ "osage-kart-tracks",
  "osage-world-kart",
 ]
 

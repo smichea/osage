@@ -23,6 +23,15 @@ pub const LAKE_BED: f32 = 2.4;
 pub const WATER: f32 = -0.45;
 /// The sea's level, metres: the road runs along the top of its cliffs (D-061).
 pub const SEA: f32 = -8.0;
+/// How deep the gorge under a bridge is, below the road, m (D-077).
+pub const GORGE: f32 = 16.0;
+/// How high the land stands over a tunnel, above the road, and how high
+/// the tunnel's vault is at its crown, m.
+pub const RIDGE: f32 = 12.0;
+pub const VAULT: f32 = 9.5;
+/// How far across the road a gorge and a ridge reach before they fade, m.
+const GORGE_REACH: f32 = 35.0;
+const RIDGE_REACH: f32 = 45.0;
 /// How far under the cliff tops the sea's bed lies, metres.
 const SEA_BED: f32 = 16.0;
 /// How far beyond the verge the barriers stand, metres: where the physics
@@ -45,6 +54,9 @@ pub struct Frame {
     /// A crest on the stretch to the next frame, and how far past its start
     /// this frame is (negative when it starts further on).
     pub crest: Option<(Crest, f32)>,
+    /// The hills' height here and at the next frame (D-077): between the
+    /// two the road runs straight, as the physics has it.
+    pub hill: (f32, f32),
 }
 
 impl Frame {
@@ -57,7 +69,9 @@ impl Frame {
     /// The road's height a share `t` (0..1) of the way to the next frame,
     /// `length` metres on, as the physics has it.
     pub fn height_towards(&self, t: f32, length: f32) -> f32 {
-        self.crest.and_then(|(crest, into)| crest.profile(into + t * length)).map_or(0.0, |(height, _)| height)
+        let crest =
+            self.crest.and_then(|(crest, into)| crest.profile(into + t * length)).map_or(0.0, |(height, _)| height);
+        crest + self.hill.0 + (self.hill.1 - self.hill.0) * t
     }
 }
 
@@ -81,8 +95,10 @@ pub fn frames(track: &Track) -> Vec<Frame> {
                     (along - crest.along + track.length() / 2.0).rem_euclid(track.length()) - track.length() / 2.0;
                 (into < crest.length() && into + length > 0.0).then_some((*crest, into))
             });
-            let frame =
-                Frame { at: here, forward, right: Vec2::new(-forward.y, forward.x), along, bend, height, slope, crest };
+            let heights = track.heights();
+            let hill = if heights.is_empty() { (0.0, 0.0) } else { (heights[i], heights[(i + 1) % n]) };
+            let right = Vec2::new(-forward.y, forward.x);
+            let frame = Frame { at: here, forward, right, along, bend, height, slope, crest, hill };
             along += here.distance(after);
             frame
         })
@@ -112,6 +128,16 @@ pub struct Land {
     pub lake: Option<Site>,
     /// The sea, on a coast: none inland.
     pub sea: Option<Sea>,
+    /// How tall the hills are, times [`HILLS`] (a mountain's are taller),
+    /// and how high rock walls stand along the track, m (a canyon's).
+    relief: f32,
+    walls: f32,
+    /// Bridges and tunnels (D-077): where along the centre line, how long.
+    bridges: Vec<(f32, f32)>,
+    tunnels: Vec<(f32, f32)>,
+    /// Points of the centre line with the hills' height there: the
+    /// country around the track lies at about the road's height.
+    country: Vec<(Vec2, f32)>,
 }
 
 /// The sea beside the land: beyond a shore that runs across one of the
@@ -129,8 +155,25 @@ impl Land {
         let points: Vec<Vec2> = frames.iter().map(|f| f.at).collect();
         let (low, high) = points.iter().fold((Vec2::MAX, Vec2::MIN), |(low, high), p| (low.min(*p), high.max(*p)));
         let flat = track.half_width + track.verge + 5.0;
-        let mut land =
-            Self { centre: (low + high) / 2.0, points, track: track.clone(), flat, knoll: None, lake: None, sea: None };
+        let country = if track.heights().is_empty() {
+            Vec::new()
+        } else {
+            frames.iter().step_by(3).map(|f| (f.at, f.hill.0)).collect()
+        };
+        let mut land = Self {
+            centre: (low + high) / 2.0,
+            points,
+            track: track.clone(),
+            flat,
+            knoll: None,
+            lake: None,
+            sea: None,
+            relief: 1.0,
+            walls: 0.0,
+            bridges: Vec::new(),
+            tunnels: Vec::new(),
+            country,
+        };
 
         // The rooms inside the loop, widest first: every few metres, how far the track is.
         let mut rooms = Vec::new();
@@ -162,6 +205,52 @@ impl Land {
         let towards = ways.into_iter().max_by(|a, b| reach(*a).total_cmp(&reach(*b))).unwrap_or(Vec2::X);
         self.sea = Some(Sea { towards, shore: reach(towards) + self.flat + 30.0 });
         self
+    }
+
+    /// The land of a mountain: taller hills, by `relief` times.
+    pub fn with_relief(mut self, relief: f32) -> Self {
+        self.relief = relief;
+        self
+    }
+
+    /// The land of a canyon: rock walls `walls` metres high along the track.
+    pub fn with_walls(mut self, walls: f32) -> Self {
+        self.walls = walls;
+        self
+    }
+
+    /// The land with a gorge under each bridge and a ridge over each
+    /// tunnel: (metres along the centre line, length) each.
+    pub fn with_spans(mut self, bridges: Vec<(f32, f32)>, tunnels: Vec<(f32, f32)>) -> Self {
+        (self.bridges, self.tunnels) = (bridges, tunnels);
+        self
+    }
+
+    /// How far into a bridge a point `along` the centre line is, 0 to 1.
+    pub fn on_bridge(&self, along: f32) -> Option<f32> {
+        self.bridges.iter().find_map(|span| self.within(*span, along))
+    }
+
+    /// How far into a tunnel a point `along` the centre line is, 0 to 1.
+    pub fn in_tunnel(&self, along: f32) -> Option<f32> {
+        self.tunnels.iter().find_map(|span| self.within(*span, along))
+    }
+
+    fn within(&self, span: (f32, f32), along: f32) -> Option<f32> {
+        let into = (along - span.0).rem_euclid(self.track.length());
+        (into <= span.1).then(|| into / span.1.max(1.0))
+    }
+
+    /// The height of the country at a point: the heights of the road's
+    /// hills, each weighing less the further it is.
+    fn country(&self, at: Vec2) -> f32 {
+        let (mut sum, mut weight) = (0.0, 0.0);
+        for (point, height) in &self.country {
+            let w = 1.0 / (point.distance_squared(at) + 900.0).powi(2);
+            sum += w * height;
+            weight += w;
+        }
+        if weight > 0.0 { sum / weight } else { 0.0 }
     }
 
     /// How far out to sea a point is past the shore, metres (below zero:
@@ -214,7 +303,12 @@ impl Land {
         let edge = (at - self.centre).abs().max_element();
         let fade = smooth((LAND / 2.0 - edge) / 120.0);
         let hills = 0.5 * noise(at / 150.0) + 0.3 * noise(at / 61.0 + 17.0) + 0.2 * noise(at / 23.0 + 5.0);
-        let mut height = HILLS * rise * fade * hills;
+        let mut height = HILLS * self.relief * rise * fade * hills;
+        if self.walls > 0.0 {
+            // A canyon: rock walls a little beyond the barriers, ragged.
+            let wall = smooth((distance - self.flat - 3.0) / 16.0) * (0.7 + 0.6 * noise(at / 37.0 + 3.0));
+            height += self.walls * wall * fade;
+        }
         if let Some(knoll) = self.knoll {
             height += KNOLL * smooth(1.0 - at.distance(knoll.centre) / knoll.radius);
         }
@@ -230,11 +324,40 @@ impl Land {
             height *= 1.0 - smooth((off + 45.0) / 40.0);
             height -= SEA_BED * smooth(off / 7.0);
         }
+        let hilly = !self.country.is_empty();
+        let spans = !self.bridges.is_empty() || !self.tunnels.is_empty();
+        let crested = !self.track.crests().is_empty() && distance < self.flat + 30.0;
+        if !(hilly || spans || crested) {
+            return height;
+        }
+        let spot = self.track.locate(at.x, at.y);
+        let (hill, _) = self.track.hill(spot.along);
+        let road = self.track.lift(spot.along).0;
         // A crest: the road's height across the flat land, fading into the
         // hills over the next 30 m.
-        if !self.track.crests().is_empty() && distance < self.flat + 30.0 {
-            let road = self.track.lift(self.track.locate(at.x, at.y).along).0;
-            height += road * (1.0 - smooth((distance - self.flat) / 30.0));
+        if crested {
+            height += (road - hill) * (1.0 - smooth((distance - self.flat) / 30.0));
+        }
+        // Hills (D-077): the road's own height beside it, the country's
+        // — about the road's — further off.
+        if hilly {
+            let near = 1.0 - smooth((distance - self.flat) / 60.0);
+            height += hill * near + self.country(at) * (1.0 - near) * fade;
+        }
+        let side = spot.lateral.abs();
+        // Over a tunnel the land stands as a ridge on both sides of the
+        // road (the vault and its cover close it: whoever draws them).
+        let face = self.track.half_width + self.track.verge + BARRIER;
+        if side > face && self.in_tunnel(spot.along).is_some() {
+            let reach = 1.0 - smooth((side - RIDGE_REACH) / 40.0);
+            let ridge = road + RIDGE * smooth((side - face) / 6.0);
+            height += (height.max(ridge) - height) * reach;
+        }
+        // Under a bridge the land falls into a gorge across the road.
+        if let Some(t) = self.on_bridge(spot.along) {
+            let reach = 1.0 - smooth((side - GORGE_REACH) / 35.0);
+            let depth = GORGE * (std::f32::consts::PI * t).sin().max(0.0).powf(0.5);
+            height += (height.min(road - depth) - height) * reach;
         }
         height
     }
@@ -279,6 +402,62 @@ mod tests {
         let circuit = Circuit::new();
         let frames = frames(&circuit.track);
         (Land::new(&frames, &circuit.track), circuit)
+    }
+
+    /// D-077: over hills the land is the road's height beside the road and
+    /// near it further off; a gorge lies under a bridge, a ridge stands
+    /// beside a tunnel, and a canyon has walls.
+    #[test]
+    fn the_land_follows_a_road_over_hills_under_bridges_and_through_tunnels() {
+        for id in ["mountain", "canyon"] {
+            let def = osage_kart_tracks::by_id(id).unwrap();
+            let circuit = Circuit::of(&def);
+            let track = &circuit.track;
+            let frames = frames(track);
+            let spans = |kind| -> Vec<(f32, f32)> {
+                circuit.spans.iter().filter(|s| s.0 == kind).map(|s| (s.1, s.2)).collect()
+            };
+            let (bridges, tunnels) =
+                (spans(osage_kart_tracks::SpanKind::Bridge), spans(osage_kart_tracks::SpanKind::Tunnel));
+            let land = Land::new(&frames, track)
+                .with_walls(if id == "canyon" { 26.0 } else { 0.0 })
+                .with_spans(bridges.clone(), tunnels.clone());
+            let beside = |along: f32, lateral: f32| {
+                let ([x, z], heading) = track.at(along);
+                Vec2::new(x - heading.cos() * lateral, z + heading.sin() * lateral)
+            };
+            let mut along = 0.0;
+            while along < track.length() {
+                let road = track.lift(along).0;
+                let on = land.height(beside(along, 0.0));
+                if land.on_bridge(along).is_none() {
+                    assert!((on - road).abs() < 0.3, "{id}: the land {on} at the road {road}, {along} m along");
+                    // On the verge too.
+                    let verge = land.height(beside(along, track.half_width + 1.5));
+                    assert!((verge - road).abs() < 0.6, "{id}: the verge {verge}, the road {road}, {along} m along");
+                }
+                along += 7.0;
+            }
+            for (from, length) in &bridges {
+                let middle = from + length / 2.0;
+                let under = land.height(beside(middle, 0.0));
+                assert!(under < track.lift(middle).0 - 10.0, "{id}: a gorge under the bridge: {under}");
+                let side = land.height(beside(middle, 25.0));
+                assert!(side < track.lift(middle).0 - 8.0, "{id}: and beside it: {side}");
+            }
+            for (from, length) in &tunnels {
+                let middle = from + length / 2.0;
+                let beside_it = land.height(beside(middle, track.half_width + track.verge + 9.0));
+                assert!(beside_it > track.lift(middle).0 + 10.0, "{id}: a ridge beside the tunnel: {beside_it}");
+                let floor = land.height(beside(middle, 2.0));
+                assert!((floor - track.lift(middle).0).abs() < 0.3, "{id}: the tunnel's floor is the road: {floor}");
+            }
+            if id == "canyon" {
+                let wall = land.height(beside(200.0, 40.0));
+                assert!(wall > track.lift(200.0).0 + 12.0, "walls along a canyon: {wall}");
+            }
+            println!("{id}: bridges {bridges:?}, tunnels {tunnels:?}");
+        }
     }
 
     #[test]

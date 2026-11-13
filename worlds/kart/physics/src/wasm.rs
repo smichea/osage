@@ -4,8 +4,10 @@
 //! WebAssembly interface for clients, numbers only — no allocation shared
 //! with JavaScript, no pointers:
 //!
-//! - `track_clear()`, `track_point(x, z)` for each point, `track_crest(along,
-//!   rise, fall, height)` for each crest, then `track_close(half_width, verge)`;
+//! - `track_clear()`, `track_point(x, z)` for each point (and, over hills,
+//!   `track_height(h)` after each: the road's height there, D-077),
+//!   `track_crest(along, rise, fall, height)` for each crest, then
+//!   `track_close(half_width, verge)`;
 //! - `track_lift(along)`: the road's height that far along (over a crest);
 //! - `track_wet(wet)`: how wet the road is, 0 to 1, for the race (D-068);
 //! - `kart_set(i, value)` sets field `i` of the kart, `kart_step(throttle,
@@ -21,6 +23,7 @@ use crate::{Controls, Crest, Kart, Track, step};
 thread_local! {
     static POINTS: RefCell<Vec<[f32; 2]>> = const { RefCell::new(Vec::new()) };
     static CRESTS: RefCell<Vec<Crest>> = const { RefCell::new(Vec::new()) };
+    static HEIGHTS: RefCell<Vec<f32>> = const { RefCell::new(Vec::new()) };
     static TRACK: RefCell<Option<Track>> = const { RefCell::new(None) };
     static KART: RefCell<Kart> = RefCell::new(Kart::default());
 }
@@ -29,11 +32,19 @@ thread_local! {
 pub extern "C" fn track_clear() {
     POINTS.with_borrow_mut(Vec::clear);
     CRESTS.with_borrow_mut(Vec::clear);
+    HEIGHTS.with_borrow_mut(Vec::clear);
 }
 
 #[unsafe(no_mangle)]
 pub extern "C" fn track_point(x: f32, z: f32) {
     POINTS.with_borrow_mut(|points| points.push([x, z]));
+}
+
+/// The road's height at the point just given (D-077): one for every
+/// point, or none.
+#[unsafe(no_mangle)]
+pub extern "C" fn track_height(height: f32) {
+    HEIGHTS.with_borrow_mut(|heights| heights.push(height));
 }
 
 #[unsafe(no_mangle)]
@@ -61,7 +72,8 @@ pub extern "C" fn track_close(half_width: f32, verge: f32) -> u32 {
     if points.len() < 3 {
         return 0;
     }
-    TRACK.set(Some(Track::new(points, half_width, verge).with_crests(crests)));
+    let heights = HEIGHTS.with_borrow_mut(std::mem::take);
+    TRACK.set(Some(Track::new(points, half_width, verge).with_crests(crests).with_heights(heights)));
     1
 }
 

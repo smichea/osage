@@ -45,7 +45,10 @@ fn race_and_keep_to_the_road(circuit: &Circuit) {
     let mut minds: Vec<_> = (0..8).map(|i| Mind::new(i + 1)).collect();
     let mut travelled = [0.0f32; 8];
     let (mut grass, mut steps) = (0usize, 0usize);
-    for _ in 0..(90.0 / DT) as usize {
+    // Ninety seconds on a short circuit; as long again a lap is longer
+    // (the canyon's 1.26 km, twisting, takes about a minute a lap).
+    let seconds = 90.0 * (track.length() / 800.0).max(1.0);
+    for _ in 0..(seconds / DT) as usize {
         let field = field(track, &karts);
         let controls: Vec<_> = (0..8).map(|i| drive(&karts[i], i, &field, &tempers[i], &mut minds[i], track)).collect();
         for (kart, controls) in karts.iter_mut().zip(controls) {

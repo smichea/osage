@@ -116,11 +116,20 @@ impl Series {
 
 /// The cups that come with the game.
 pub fn built_in() -> Vec<Cup> {
-    vec![Cup {
-        id: "grand-tour".to_owned(),
-        name: "Grand Tour".to_owned(),
-        tracks: ["paddock", "coast", "forest", "harbour"].map(str::to_owned).to_vec(),
-    }]
+    vec![
+        Cup {
+            id: "grand-tour".to_owned(),
+            name: "Grand Tour".to_owned(),
+            tracks: ["paddock", "coast", "forest", "harbour"].map(str::to_owned).to_vec(),
+        },
+        // Up hill and down dale (D-077): the two tracks with relief, and two
+        // of the others between them.
+        Cup {
+            id: "high-roads".to_owned(),
+            name: "High Roads".to_owned(),
+            tracks: ["forest", "mountain", "coast", "canyon"].map(str::to_owned).to_vec(),
+        },
+    ]
 }
 
 #[cfg(test)]

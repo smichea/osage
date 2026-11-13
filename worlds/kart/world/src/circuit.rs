@@ -7,7 +7,7 @@
 
 use libm::{cosf, sinf};
 use osage_kart_physics::{Crest, Kart, Track};
-use osage_kart_tracks::TrackDef;
+use osage_kart_tracks::{SpanKind, TrackDef};
 
 use crate::proto;
 
@@ -30,6 +30,9 @@ pub struct Circuit {
     /// Distance along the centre line of the start/finish line.
     pub start: f32,
     pub about: About,
+    /// Bridges and tunnels (D-077): what, from where along the centre
+    /// line, how long.
+    pub spans: Vec<(SpanKind, f32, f32)>,
 }
 
 impl Default for Circuit {
@@ -55,7 +58,8 @@ impl Circuit {
             scenery: def.scenery.clone(),
             rain: def.rain,
         };
-        Self { track, start, about }
+        let spans = def.spans_on(&track, start);
+        Self { track, start, about, spans }
     }
 
     /// The circuit a world announced in its `kart.track/1`.
@@ -74,7 +78,21 @@ impl Circuit {
             scenery: track.scenery.clone(),
             rain: 0.0,
         };
-        Self { track: Track::new(points, track.half_width, track.verge).with_crests(crests), start: track.start, about }
+        let spans = track
+            .spans
+            .iter()
+            .filter_map(|s| {
+                let kind = match s.kind() {
+                    proto::SpanKind::Bridge => SpanKind::Bridge,
+                    proto::SpanKind::Tunnel => SpanKind::Tunnel,
+                    proto::SpanKind::Unspecified => return None,
+                };
+                Some((kind, s.along, s.length))
+            })
+            .collect();
+        let built =
+            Track::new(points, track.half_width, track.verge).with_crests(crests).with_heights(track.heights.clone());
+        Self { track: built, start: track.start, about, spans }
     }
 
     /// Slot `n` of the starting grid: two columns, rows every 7 m behind the line.
@@ -113,6 +131,20 @@ impl Circuit {
             about: self.about.about.clone(),
             sky: self.about.sky.clone(),
             scenery: self.about.scenery.clone(),
+            heights: self.track.heights().to_vec(),
+            spans: self
+                .spans
+                .iter()
+                .map(|(kind, along, length)| proto::Span {
+                    kind: match kind {
+                        SpanKind::Bridge => proto::SpanKind::Bridge,
+                        SpanKind::Tunnel => proto::SpanKind::Tunnel,
+                    }
+                    .into(),
+                    along: *along,
+                    length: *length,
+                })
+                .collect(),
         }
     }
 }
