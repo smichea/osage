@@ -784,5 +784,6 @@ Date: 2026-11-13 · the browser client drew neither the crates and things the wo
 
 - **Decision:** the browser client draws `kart.paddock/1` — crates bobbing and turning, hidden while broken; tyres rolling; cones standing, or sliding and tumbling once knocked; oil spreading; drones flying — each on the road's height under it, which the WebAssembly physics now gives for any point (`track_along`, then `track_lift`); and, when the race is wet, rain streaks round the camera and a grey sky and haze, easing over four seconds. Meshes are pooled and reused frame to frame.
 - **Why:** the world is the same for every client; what changes the race must be seen in all of them.
-- **Consequences:** the browser still cannot use items (it sends no use button) and draws things at the world's time, not as far ahead as its prediction.
+- **And the items:** the browser sends the item button with each step (F or Ctrl, a gamepad's North button, an ITEM button on a touch screen) and shows the item held; a player in a browser races with items as the native client's do.
+- **Consequences:** the browser draws things at the world's time, not as far ahead as its prediction.
 

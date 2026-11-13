@@ -12,6 +12,7 @@ import * as THREE from "three";
 import {
   ChoiceSchema,
   ControlsSchema,
+  Item,
   KartStateSchema,
   type Paddock,
   PaddockSchema,
@@ -221,7 +222,7 @@ try {
     const wanted = input.read(STEP_SECONDS);
     // The lights hold the karts: the world ignores the throttle until the start.
     if (race()?.phase !== Phase.RACING) wanted.throttle = 0;
-    predictor.step(wanted);
+    predictor.step({ ...wanted, useItem: input.item() });
     return true;
   }
 
@@ -415,6 +416,28 @@ try {
     renderer.render(scene, camera);
   }
 
+  /** What the player holds, from a crate (D-084): its name, how many, and how to use it. */
+  const ITEMS: Record<number, string> = {
+    [Item.NITRO]: "NITRO",
+    [Item.TYRE]: "TYRE",
+    [Item.CONE]: "CONE",
+    [Item.OIL]: "OIL",
+    [Item.ROCKET]: "ROCKET",
+    [Item.SMOKE]: "SMOKE",
+    [Item.STACK]: "TYRES",
+    [Item.DRONE]: "DRONE",
+    [Item.BUMPER]: "BUMPER",
+    [Item.PUSH]: "PIT PUSH",
+  };
+  const TRAILS = new Set([Item.TYRE, Item.STACK, Item.CONE, Item.OIL]);
+  const held = (my: Racer | undefined): string => {
+    const item = my?.held ?? Item.NONE;
+    if (item === Item.NONE) return "";
+    const count = my && my.heldCount > 1 ? ` x${my.heldCount}` : "";
+    const how = !TRAILS.has(item) ? "F" : my?.trailing ? "behind: let go of F" : "hold F";
+    return `<br><b style="color:#ffd24d">${ITEMS[item] ?? "ITEM"}${count}</b> <small>${how}</small>`;
+  };
+
   function hud() {
     const now = race();
     if (!now) return;
@@ -458,7 +481,8 @@ try {
       const colour = sparkColour(kart.charge);
       $("speed").innerHTML =
         `<b>${Math.round(Math.abs(kart.speed) * 3.6)}</b> km/h${kart.boost > 0 ? " · <b style='color:#ff9a3c'>TURBO</b>" : ""}<br>` +
-        `mini-turbo <span class="gauge"><i style="width:${(charge * 100).toFixed(0)}%;background:${colour}"></i></span>`;
+        `mini-turbo <span class="gauge"><i style="width:${(charge * 100).toFixed(0)}%;background:${colour}"></i></span>` +
+        held(my);
     }
 
     if (debug && mine !== undefined && predictor) {

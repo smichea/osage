@@ -8,7 +8,7 @@
 
 import type { Drive } from "./physics.js";
 
-const DRIVING_KEYS = ["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "Space"];
+const DRIVING_KEYS = ["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "Space", "KeyF"];
 /** How fast keyboard steering swings from one side to the other, per second. */
 const STEER_RATE = 6;
 
@@ -20,15 +20,18 @@ class Touch {
   steer = 0;
   brake = false;
   drift = false;
+  item = false;
   private readonly knob: HTMLElement;
 
   constructor() {
     document.body.classList.add("touch");
     const root = document.createElement("div");
     root.id = "touch";
-    root.innerHTML = `<div id="pad"><div id="knob"></div></div><div id="brake">BRAKE</div><div id="drift">DRIFT</div>`;
+    root.innerHTML = `<div id="pad"><div id="knob"></div></div><div id="brake">BRAKE</div><div id="drift">DRIFT</div><div id="item">ITEM</div>`;
     document.body.append(root);
-    const [pad, brake, drift] = ["pad", "brake", "drift"].map((id) => root.querySelector<HTMLElement>(`#${id}`)!);
+    const [pad, brake, drift, item] = ["pad", "brake", "drift", "item"].map(
+      (id) => root.querySelector<HTMLElement>(`#${id}`)!,
+    );
     this.knob = root.querySelector("#knob")!;
 
     const steerAt = (e: PointerEvent) => {
@@ -44,6 +47,7 @@ class Touch {
     pad.addEventListener("pointermove", (e) => pad.hasPointerCapture(e.pointerId) && steerAt(e));
     this.hold(brake, (down) => (this.brake = down));
     this.hold(drift, (down) => (this.drift = down));
+    this.hold(item, (down) => (this.item = down));
   }
 
   /** Calls `change` when a finger lands on `element` and when it leaves. */
@@ -108,6 +112,17 @@ export class Input {
       drift = this.touch.drift;
     }
     return { throttle, steer: this.steer, drift };
+  }
+
+  /**
+   * Whether the item button is held (D-084): F or Ctrl, a gamepad's North
+   * button. Held, a tyre, cone or oil waits behind the kart; let go, it goes
+   * (D-052).
+   */
+  item(): boolean {
+    const key = ["KeyF", "ControlLeft", "ControlRight"].some((c) => this.keys.has(c));
+    const pad = navigator.getGamepads?.().find((g) => g?.connected);
+    return key || (pad?.buttons[3]?.pressed ?? false) || (this.touch?.item ?? false);
   }
 
   /** Nothing pressed, e.g. when the page is hidden. */

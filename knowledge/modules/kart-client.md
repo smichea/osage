@@ -25,7 +25,7 @@ Let anyone race in the kart world from a browser — a computer, a phone on the 
 
 # Interfaces
 
-The page's query: `?server=ws://HOST:PORT` (default: the page's host, 7878), `?debug` (the prediction's diagnostics). Keys: arrows or WASD, Space or Shift to drift, Enter for the host to start, T (or a button) for the next event; between races the driver and the kart are picked with buttons. Items cannot be used from the browser yet.
+The page's query: `?server=ws://HOST:PORT` (default: the page's host, 7878), `?debug` (the prediction's diagnostics). Keys: arrows or WASD, Space or Shift to drift, F or Ctrl (a gamepad's North button, ITEM on a touch screen) for the item — held, what trails waits behind the kart, let go, it goes (D-052) — Enter for the host to start, T (or a button) for the next event; between races the driver and the kart are picked with buttons. The HUD shows the item held, how many and how to use it.
 
 # Invariants
 
@@ -42,4 +42,4 @@ The replica-and-prediction pattern serves any world whose physics compiles to We
 
 # Limits
 
-Plainer than the native client: flat colours, no photographed materials, no sound, no replay, no use of items. Things are drawn at the world's time, not as far ahead as the player's kart is predicted, so a tyre the player throws shows a moment behind the kart. The browser's own kart does not knock into the others in its prediction (D-076 is the native client's).
+Plainer than the native client: flat colours, no photographed materials, no sound, no replay. Things are drawn at the world's time, not as far ahead as the player's kart is predicted, so a tyre the player throws shows a moment behind the kart. The browser's own kart does not knock into the others in its prediction (D-076 is the native client's).

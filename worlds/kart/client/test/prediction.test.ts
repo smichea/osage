@@ -11,6 +11,20 @@ const still: KartValues = { x: 0, z: 0, heading: 0, speed: 0, slide: 0, drift: 0
 const go = { throttle: 1, steer: 0, drift: false };
 
 describe("Predictor", () => {
+  it("sends the item button with each step, for the world to use the item (D-084)", async () => {
+    const { create, toBinary, fromBinary } = await import("@bufbuild/protobuf");
+    const { ControlsSchema } = await import("../src/gen/kart/v1/kart_pb.js");
+    const predictor = new Predictor(line);
+    predictor.reconcile(still, 0n);
+    predictor.step({ ...go, useItem: false });
+    predictor.step({ ...go, useItem: true });
+    const steps = predictor.toSend(2).map((step) => ({ ...step }));
+    expect(steps.map((s) => s.useItem)).toEqual([false, true]);
+    // As main.ts sends them: the field reaches the wire.
+    const wire = toBinary(ControlsSchema, create(ControlsSchema, { steps }));
+    expect(fromBinary(ControlsSchema, wire).steps.map((s) => s.useItem)).toEqual([false, true]);
+  });
+
   it("replays the steps the server has not applied yet", () => {
     const predictor = new Predictor(line);
     predictor.reconcile(still, 0n);

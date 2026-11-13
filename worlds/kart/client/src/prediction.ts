@@ -15,6 +15,8 @@ export interface Stepper {
 
 export interface SentStep extends Drive {
   sequence: bigint;
+  /** The item button held at this step (D-084); the world uses the item. */
+  useItem?: boolean;
 }
 
 /** Steps already sent that go again with the new ones, against datagram loss. */
@@ -38,7 +40,7 @@ export class Predictor {
   constructor(private readonly physics: Stepper) {}
 
   /** Applies one step locally. */
-  step(drive: Drive): void {
+  step(drive: Drive & { useItem?: boolean }): void {
     this.pending.push({ ...drive, sequence: this.next++ });
     if (this.kart) this.kart = this.physics.step(this.kart, drive);
   }
