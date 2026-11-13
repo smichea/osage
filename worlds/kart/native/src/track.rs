@@ -192,7 +192,7 @@ fn linear(r: f32, g: f32, b: f32) -> [f32; 4] {
 
 const WHITE: [f32; 4] = [1.0; 4];
 /// Cells along each side of the land's grid: small around the circuit, large far away.
-const CELLS: usize = 200;
+const CELLS: usize = 280;
 
 /// A ribbon along the track between two points of its cross-section, each
 /// given as (metres right of the centre line, height above the road).
@@ -743,6 +743,8 @@ pub struct Photographed {
     /// Grains, under painted colours.
     paint: Surface,
     concrete: Surface,
+    /// Rock for steep ground (D-081), when the content has it.
+    rock: Option<Surface>,
 }
 
 impl Photographed {
@@ -753,6 +755,7 @@ impl Photographed {
             gravel: Surface::load(root, "gravel_floor_02", images, |p| p)?,
             paint: Surface::load_grain(root, "painted_concrete", images)?,
             concrete: Surface::load_grain(root, "concrete_floor_02", images)?,
+            rock: Surface::load_grain(root, "rock_face_03", images),
         })
     }
 }
@@ -790,8 +793,17 @@ fn photographed(
     // The road: its history along its length — paving seams, repaired
     // patches, cracks, stains — in stretches of 40 m.
     let road = grain(set.asphalt.material(5.0), 5.0, Ground::asphalt().paved(1.0, 40.0, 2.0 * half), road_untiled);
-    // Grass varies in clumps and patches, so that its grain never reads as a carpet.
-    let grass = grain(set.grass.material(2.6), 2.6, Ground::meadow(), ground_untiled);
+    // Grass varies in clumps and patches, so that its grain never reads as a carpet;
+    // steep ground is rock (D-081), in strata: a canyon's sandstone in
+    // bold bands, a mountain's schist in faint ones.
+    let land_ground = match set.rock.as_ref().map(Surface::colour) {
+        Some(rock) => {
+            let (strata, spacing) = if circuit.about.scenery == "canyon" { (0.45, 2.2) } else { (0.18, 1.4) };
+            Ground::meadow().with_rock(rock, 5.0, strata, spacing)
+        }
+        None => Ground::meadow(),
+    };
+    let grass = grain(set.grass.material(2.6), 2.6, land_ground, ground_untiled);
     // Mown grass varies less: clumps only, and faint patches.
     let mown = Ground { variation: Vec4::new(0.3, 0.35, 1.2, 18.0), ..Ground::meadow() };
     let mown_grass = grain(set.grass.material(2.6), 2.6, mown, ground_untiled);

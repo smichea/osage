@@ -297,6 +297,29 @@ impl Land {
         Some(from.length() / (lake.radius * outline))
     }
 
+    /// A canyon's wall at `at`, `distance` from the track (D-081): rock a
+    /// little beyond the barriers, rising as a cliff — faces and ledges
+    /// one over the other, the ledges wandering in height; spurs and
+    /// gullies every few metres pushing the face out and in; taller in
+    /// places than in others.
+    fn cliff(&self, at: Vec2, distance: f32) -> f32 {
+        // Spurs and gullies: the face stands further out or in.
+        let spur = 4.0 * (noise(at / 9.0 + 11.0) - 0.5) + 2.0 * (noise(at / 4.3 + 29.0) - 0.5);
+        let rise = smooth((distance - self.flat - 3.0 + spur) / 22.0);
+        let tall = self.walls * (0.7 + 0.6 * noise(at / 37.0 + 3.0));
+        let plain = tall * rise;
+        // Faces and ledges: in each step of `STEP`, the ground lies nearly
+        // flat for a third, then rises steeply; the steps' heights wander.
+        const STEP: f32 = 8.0;
+        let offset = STEP * noise(at / 23.0 + 7.0);
+        let u = (plain + offset) / STEP;
+        let (k, f) = (u.floor(), u - u.floor());
+        let stepped = (k + smooth((f - 0.3) / 0.55)) * STEP - offset;
+        // Not every step is clean: some faces slump.
+        let clean = 0.55 + 0.35 * noise(at / 15.0 + 41.0);
+        plain + (stepped - plain) * clean * smooth(rise * 6.0)
+    }
+
     /// Height of the ground: the road's along the track (zero, but over a
     /// crest), hills beyond, zero again at the edge of the modelled land; a
     /// knoll and a lake inside the loop.
@@ -308,9 +331,7 @@ impl Land {
         let hills = 0.5 * noise(at / 150.0) + 0.3 * noise(at / 61.0 + 17.0) + 0.2 * noise(at / 23.0 + 5.0);
         let mut height = HILLS * self.relief * rise * fade * hills;
         if self.walls > 0.0 {
-            // A canyon: rock walls a little beyond the barriers, ragged.
-            let wall = smooth((distance - self.flat - 3.0) / 16.0) * (0.7 + 0.6 * noise(at / 37.0 + 3.0));
-            height += self.walls * wall * fade;
+            height += self.cliff(at, distance) * fade;
         }
         if let Some(knoll) = self.knoll {
             height += KNOLL * smooth(1.0 - at.distance(knoll.centre) / knoll.radius);

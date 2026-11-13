@@ -79,6 +79,11 @@ impl Surface {
         })
     }
 
+    /// Its colour map (or grain).
+    pub fn colour(&self) -> Handle<Image> {
+        self.colour.clone()
+    }
+
     /// A material of this surface, repeated every `tile` metres on meshes
     /// whose texture coordinates are in metres.
     pub fn material(&self, tile: f32) -> StandardMaterial {

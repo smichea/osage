@@ -63,6 +63,15 @@ pub struct Ground {
     #[texture(105)]
     #[sampler(106)]
     pub grain: Option<Handle<Image>>,
+    /// Rock on steep ground (D-081): x its strength (0 none), y the
+    /// repeat of its grain in metres, z the strength of its strata, w how
+    /// far apart they lie, m. The grain is projected along the three axes,
+    /// as a cliff has no texture coordinates of its own.
+    #[uniform(107)]
+    pub rock: Vec4,
+    #[texture(108)]
+    #[sampler(109)]
+    pub rock_grain: Option<Handle<Image>>,
 }
 
 impl Ground {
@@ -96,6 +105,8 @@ impl Ground {
             tiling: Vec4::new(0.0, 1.0, 1.0, 6.0),
             path: Vec4::new(0.0, 40.0, 12.0, 0.8),
             grain: None,
+            rock: Vec4::new(0.0, 6.0, 0.0, 2.0),
+            rock_grain: None,
         }
     }
 
@@ -104,6 +115,14 @@ impl Ground {
     /// carry no colour map ([`untextured`]).
     pub fn with_grain(self, colour: Handle<Image>, tile: f32, untiled: bool) -> Self {
         Self { tiling: Vec4::new(if untiled { 1.0 } else { 0.0 }, tile, 1.0, 6.0), grain: Some(colour), ..self }
+    }
+
+    /// Rock where the ground is steep: the grain `colour` (a brightness
+    /// map at the same mean as the surface's grain), repeated every `tile`
+    /// metres, with strata of `strata` strength every `spacing` metres of
+    /// height.
+    pub fn with_rock(self, colour: Handle<Image>, tile: f32, strata: f32, spacing: f32) -> Self {
+        Self { rock: Vec4::new(1.0, tile, strata, spacing), rock_grain: Some(colour), ..self }
     }
 
     /// Draws a road's history on a mesh whose texture coordinates are

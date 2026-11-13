@@ -751,3 +751,12 @@ Date: 2026-11-13 · the maintainer's reminders ("qualité GTA V, oublie pas stp"
 - **Rejected:** a reflection probe inside each tunnel (the right way to stop the sky's reflections indoors; later, with M6's reflections); emissive panels.
 - **Consequences:** the content gains the two sets (18 MB). Each tunnel lamp is a point light: a 70 m tunnel has nine.
 
+## D-081 — Rock on steep ground, and cliffs in a canyon
+
+Date: 2026-11-13 · the maintainer's reminder ("qualité GTA V, oublie pas stp"); Red Gorge's walls read as smooth orange clay.
+
+- **Decision:** the ground material takes a rock layer (`Ground::with_rock`): on steep ground a photographed rock grain (Poly Haven's `rock_face_03`, CC0, already in the content for the tunnels) projected along the three axes, its contrast raised, with strata across it and varnish streaks down it; the land's own colours stay (red sandstone, grey schist). A canyon's walls (`osage-kart-land`) become cliffs: faces and ledges in steps of 8 m whose heights wander, spurs and gullies every few metres, some faces slumped. The land's grid around the circuit is 40 % finer (280 cells a side: 1.3 to 3.4 m) so that it carries them.
+- **Why:** relief and material are what read as rock at a glance; a ramp painted orange reads as a toy whatever the light.
+- **Rejected:** separate rock meshes stood against the walls (more draw calls and seams; later, for boulders and overhangs); triplanar normal maps (the next step).
+- **Consequences:** the T2 kart bench on Eagle Ridge: 19 ms a frame on the Iris Xe laptop (53 fps).
+

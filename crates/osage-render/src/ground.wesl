@@ -6,8 +6,8 @@
 // patches (tens of metres: drier and lusher), in world space; by its grain
 // sampled by hexagonal cells shifted and turned by where they are; and on
 // a paved path by its history (seams, patches, cracks, stains) from the
-// texture coordinates in metres. Octaves smaller than a few pixels fade
-// out: no shimmer in the distance.
+// texture coordinates in metres; on steep ground, rock (D-081). Octaves
+// smaller than a few pixels fade out: no shimmer in the distance.
 
 import bevy_pbr::render::{
     forward_io::{VertexOutput, FragmentOutput},
@@ -29,6 +29,11 @@ import bevy_pbr::render::{
 @group(constants::MATERIAL_BIND_GROUP) @binding(104) var<uniform> path: vec4<f32>;
 @group(constants::MATERIAL_BIND_GROUP) @binding(105) var grain_texture: texture_2d<f32>;
 @group(constants::MATERIAL_BIND_GROUP) @binding(106) var grain_sampler: sampler;
+// Rock on steep ground: x strength, y the grain's repeat (m), z strata's
+// strength, w their spacing (m); its grain, projected along three axes.
+@group(constants::MATERIAL_BIND_GROUP) @binding(107) var<uniform> rock: vec4<f32>;
+@group(constants::MATERIAL_BIND_GROUP) @binding(108) var rock_texture: texture_2d<f32>;
+@group(constants::MATERIAL_BIND_GROUP) @binding(109) var rock_sampler: sampler;
 
 // Hexagonal cells per repeat of the grain (ground.rs: HEX_CELLS).
 const HEX_CELLS: f32 = 1.6;
@@ -209,6 +214,36 @@ fn fragment(in: VertexOutput, @builtin(front_facing) is_front: bool) -> Fragment
             grain = untiled(grain_uv);
         } else {
             grain = textureSample(grain_texture, grain_sampler, grain_uv);
+        }
+        // Where the ground is steep, rock: its grain seen along the axis
+        // nearest the surface's normal (blended), and strata across it,
+        // wavering, as sandstone and schist lie.
+        if (rock.x > 0.0) {
+            let n = normalize(in.world_normal);
+            let steep = rock.x * smoothstep(0.22, 0.42, 1.0 - abs(n.y));
+            if (steep > 0.001) {
+                let p = in.world_position.xyz / rock.y;
+                var w = pow(abs(n), vec3<f32>(4.0));
+                w = w / (w.x + w.y + w.z);
+                let stone = textureSample(rock_texture, rock_sampler, p.zy).rgb * w.x
+                    + textureSample(rock_texture, rock_sampler, p.xz).rgb * w.y
+                    + textureSample(rock_texture, rock_sampler, p.xy).rgb * w.z;
+                let waver = 1.6 * noise(at / 37.0 + 5.0);
+                let band = noise(vec2<f32>(in.world_position.y / rock.w + waver, 3.7));
+                let fine = noise(vec2<f32>(in.world_position.y / (rock.w * 0.31) + waver * 1.7, 9.1));
+                let strata = 1.0 + rock.z * ((band - 0.5) * 1.4 + (fine - 0.5) * 0.6) * shows(rock.w, footprint);
+                // A grain sits about its mean: rock's cracks and lumps read
+                // stronger than grass's, so its contrast is raised.
+                let mean = 0.5;
+                let sharp = clamp(vec3<f32>(mean) + (stone - vec3<f32>(mean)) * 1.9, vec3<f32>(0.05), vec3<f32>(1.6));
+                // Varnish: dark streaks down the face where water ran,
+                // across it along the face's own direction.
+                let across = dot(at, normalize(vec2<f32>(-n.z, n.x) + vec2<f32>(1e-4, 0.0)));
+                let runs = smoothstep(0.52, 0.82, noise(vec2<f32>(across / 1.9, in.world_position.y / 28.0 + 3.0)));
+                let varnish = 1.0 - rock.z * 0.8 * runs * shows(1.9, footprint);
+                grain = vec4<f32>(mix(grain.rgb, sharp * strata * varnish, steep), grain.a);
+                pbr_input.material.perceptual_roughness = mix(pbr_input.material.perceptual_roughness, 0.9, steep);
+            }
         }
         tint = tint * grain.rgb;
         if (path.x > 0.0) {

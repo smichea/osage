@@ -47,6 +47,8 @@ The mean and the contrast stay the grain's; no period is left anywhere ([oracle]
 
 **A road's history** (`Ground::paved`). On a mesh whose texture coordinates are metres across and along a road, a deterministic function of those two numbers draws what a road lives through: a paving seam along it where two passes of the paver met, sealed, wandering a little off the middle; in each stretch (40 m on the kart circuit), more often than not a repaired patch of fresher, darker asphalt with sealed edges and corners not quite square; cracks in the older stretches (the ridges of two noises, branching where they meet); rare stains, darker and smoother; and a tone that wanders over 45 m. Lines thinner than a pixel fade rather than shimmer. The racing line's rubber and the skid marks are the world's (vertex colours, decals): the material adds what time did.
 
+**Rock on steep ground** (`Ground::with_rock`, D-081). A cliff has no texture coordinates of its own: where the surface's normal leans from the vertical by more than about 40° (`1 − |n.y|` from 0.22 to 0.42), a rock grain is read along the three axes and blended by the normal's components to the 4th power (triplanar), its contrast raised 1.9 times about its mean (cracks and lumps read stronger than grass's). Across it lie strata — two noises of the world height, `w` and `0.31 w` metres apart, wavering with a noise of the ground over 37 m — and varnish: dark streaks down the face where water ran, a noise of the position along the face (across its normal) over 1.9 m and of the height over 28 m. Roughness goes to 0.9. The kart's canyon sets bold strata 2.2 m apart, its mountain faint ones 1.4 m apart; the rock's colour stays the land's (vertex colours: a canyon's red sandstone, a mountain's grey).
+
 # Settings per tier
 
 The variation is the same at every tier: a few noise lookups a pixel on the ground. Whether a grain is sampled untiled is the world's choice per material; the kart circuit untiles its road from T2 and its grass and gravel, which fill most of the picture, from T3; the road's history is drawn at every tier.
@@ -59,7 +61,7 @@ Untiled grains and the road's history, the kart bench at T2 (1280×720) on the I
 
 # Limits
 
-Untiled, the colour no longer repeats, but the normal and roughness maps do, close up, and a grain with a strong direction (stripes, planks) must not be turned: `tiling.z` limits the turn. A photograph's own cracks are cut into pieces at the cells' edges, where the blend is narrow. A road's history is drawn, not modelled: patches and cracks have no relief of their own. Splatting several textures (grass, earth, gravel) by masks is the next step for paths and worn ground.
+Untiled, the colour no longer repeats, but the normal and roughness maps do, close up, and a grain with a strong direction (stripes, planks) must not be turned: `tiling.z` limits the turn. A photograph's own cracks are cut into pieces at the cells' edges, where the blend is narrow. A road's history is drawn, not modelled: patches and cracks have no relief of their own. Splatting several textures (grass, earth, gravel) by masks is the next step for paths and worn ground. Rock has no normal map of its own (triplanar normals): its relief is the land's geometry and its grain's shading.
 
 # Oracle
 
