@@ -72,6 +72,8 @@ impl Plugin for PlayPlugin {
                 outbox: out_tx,
                 me: String::new(),
                 controls_type: None,
+                choice_type: None,
+                chosen: None,
                 mine: None,
                 followed: None,
                 driver: Driver::default(),
@@ -308,6 +310,7 @@ fn receive(
                 let world = World::new(&welcome);
                 second.me = welcome.identity.as_ref().map(|i| i.per_world_id.clone()).unwrap_or_default();
                 second.controls_type = world.types().id(types::CONTROLS);
+                second.choice_type = world.types().id(types::CHOICE);
                 second.mine = None;
             }
         }
@@ -677,6 +680,10 @@ pub struct Second {
     /// Who they are in the world, and the type of the controls they send.
     me: String,
     controls_type: Option<u32>,
+    /// The type of the choices they send, and the driver and kart they
+    /// picked (indices into the roster).
+    choice_type: Option<u32>,
+    chosen: Option<(usize, usize)>,
     /// Their kart in the world, its model here.
     pub mine: Option<u64>,
     followed: Option<Entity>,
@@ -779,6 +786,7 @@ fn choose(
     mut kept: ResMut<Kept>,
     photo: Res<crate::photo::Photo>,
     show: Res<crate::show::Show>,
+    mut second: Option<ResMut<Second>>,
 ) {
     let (Some(mine), Some(choice_type), Some(roster)) = (replica.mine, replica.choice_type, replica.roster()) else {
         return;
@@ -818,12 +826,54 @@ fn choose(
         let _ = outbox.0.send(intent(0, mine, choice_type, &choice));
     }
     let by = |forward: bool, back: bool| i64::from(forward) - i64::from(back);
-    let driver = by(
-        pressed(KeyCode::ArrowRight, GamepadButton::DPadRight),
-        pressed(KeyCode::ArrowLeft, GamepadButton::DPadLeft),
-    );
-    let kart =
-        by(pressed(KeyCode::ArrowDown, GamepadButton::DPadDown), pressed(KeyCode::ArrowUp, GamepadButton::DPadUp));
+    let turn = |at: usize, by: i64, of: usize| (at as i64 + by).rem_euclid(of as i64) as usize;
+    // On a split screen (D-086) the first player picks with D A and S W and
+    // the first gamepad, the second with the arrows and the second gamepad.
+    let split = second.is_some();
+    let pad = |n: usize, button: GamepadButton| gamepads.iter().nth(n).is_some_and(|pad| pad.just_pressed(button));
+    if let Some(second) = second.as_deref_mut()
+        && let (Some(theirs), Some(their_type)) = (second.mine, second.choice_type)
+    {
+        let driver = by(
+            keys.just_pressed(KeyCode::ArrowRight) || pad(1, GamepadButton::DPadRight),
+            keys.just_pressed(KeyCode::ArrowLeft) || pad(1, GamepadButton::DPadLeft),
+        );
+        let kart = by(
+            keys.just_pressed(KeyCode::ArrowDown) || pad(1, GamepadButton::DPadDown),
+            keys.just_pressed(KeyCode::ArrowUp) || pad(1, GamepadButton::DPadUp),
+        );
+        if driver != 0 || kart != 0 {
+            let (now_driver, now_kart) = second.chosen.unwrap_or((0, 0));
+            let picked = (turn(now_driver, driver, roster.drivers.len()), turn(now_kart, kart, roster.karts.len()));
+            second.chosen = Some(picked);
+            let choice = proto::Choice {
+                driver: roster.drivers[picked.0].id.clone(),
+                kart: roster.karts[picked.1].id.clone(),
+                ..default()
+            };
+            let _ = second.outbox.send(intent(0, theirs, their_type, &choice));
+        }
+    }
+    let (driver, kart) = if split {
+        (
+            by(
+                keys.just_pressed(KeyCode::KeyD) || pad(0, GamepadButton::DPadRight),
+                keys.just_pressed(KeyCode::KeyA) || pad(0, GamepadButton::DPadLeft),
+            ),
+            by(
+                keys.just_pressed(KeyCode::KeyS) || pad(0, GamepadButton::DPadDown),
+                keys.just_pressed(KeyCode::KeyW) || pad(0, GamepadButton::DPadUp),
+            ),
+        )
+    } else {
+        (
+            by(
+                pressed(KeyCode::ArrowRight, GamepadButton::DPadRight),
+                pressed(KeyCode::ArrowLeft, GamepadButton::DPadLeft),
+            ),
+            by(pressed(KeyCode::ArrowDown, GamepadButton::DPadDown), pressed(KeyCode::ArrowUp, GamepadButton::DPadUp)),
+        )
+    };
     if driver == 0 && kart == 0 {
         return;
     }
@@ -835,7 +885,6 @@ fn choose(
             at(roster.karts.iter().map(|k| k.id.as_str()).collect(), &racer.kart),
         )
     });
-    let turn = |at: usize, by: i64, of: usize| (at as i64 + by).rem_euclid(of as i64) as usize;
     let picked = (turn(now_driver, driver, roster.drivers.len()), turn(now_kart, kart, roster.karts.len()));
     chosen.0 = Some(picked);
     let choice = proto::Choice {
@@ -1241,6 +1290,11 @@ fn summarise(
             speed: second.driver.predictor.kart.map_or(0.0, |kart| kart.speed),
             held: theirs.as_ref().and_then(|racer| item(racer.held())),
             count: theirs.as_ref().map_or(0, |racer| racer.held_count.min(9) as u8),
+            pick: replica.roster().zip(theirs.as_ref()).map_or_else(String::new, |(roster, racer)| {
+                let driver = roster.drivers.iter().find(|d| d.id == racer.driver).map_or("", |d| d.name.as_str());
+                let kart = roster.karts.iter().find(|k| k.id == racer.kart).map_or("", |k| k.name.as_str());
+                format!("{driver} in the {kart}")
+            }),
         }
     });
     let host = race_host.and_then(|host| view.karts.iter().find(|kart| kart.id == host)).map(|kart| kart.name.clone());

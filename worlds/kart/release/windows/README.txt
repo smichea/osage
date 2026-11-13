@@ -22,7 +22,8 @@ below.
             for the item, and the first gamepad.
   Player 2: the arrows to drive, right Shift to drift, right Ctrl or / for
             the item, and the second gamepad.
-Between races, R replays the whole race as television would.
+Between races player 1 picks a driver with A and D and a kart with W and S,
+player 2 with the arrows. R replays the whole race as television would.
 
 Updates
 -------

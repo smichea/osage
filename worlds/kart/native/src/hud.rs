@@ -126,6 +126,8 @@ pub struct SecondLine {
     pub speed: f32,
     pub held: Option<Item>,
     pub count: u8,
+    /// Who drives their kart and in what.
+    pub pick: String,
 }
 
 pub struct Entry {
@@ -659,7 +661,12 @@ fn write(
                         let count = if second.count > 1 { format!(" x{}", second.count) } else { String::new() };
                         format!("   {}{count} [RIGHT CTRL]", format!("{held:?}").to_uppercase())
                     });
-                    format!("P2   {place}   {progress}   {:.0} KM/H{item}", second.speed.abs() * 3.6)
+                    let between = matches!(view.stage, Lights::Waiting | Lights::Ready(_) | Lights::Results(_));
+                    if between {
+                        format!("P2   {}   ARROWS: DRIVER / KART", second.pick.to_uppercase())
+                    } else {
+                        format!("P2   {place}   {progress}   {:.0} KM/H{item}", second.speed.abs() * 3.6)
+                    }
                 }
                 None => String::new(),
             },
