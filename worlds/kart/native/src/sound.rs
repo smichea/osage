@@ -6,7 +6,8 @@
 //! tyres squealing as it slides, kerbs and grass under its wheels, wind, a
 //! knock when it is hit, a bumper's air bag and a pit-crew push from the
 //! kart that uses them — heard from the player's kart (D-070): its own
-//! engine as loud in every view, the others by their distance, to the left
+//! engine loudest from the seat and a little softer from behind or above
+//! (D-078), the others by their distance, to the left
 //! or the right as the camera looks, higher as they come and lower as they
 //! go (Doppler); each drone's rotors where it flies and the crowd in the
 //! grandstand, heard from the camera. A voice plays recordings where
@@ -113,6 +114,18 @@ pub struct Ear {
 impl Default for Ear {
     fn default() -> Self {
         Self { left: 0.0, right: 0.0, pitch: 1.0 }
+    }
+}
+
+/// How loud the player's own kart is in each view (D-078): full from the
+/// seat; from behind, where the default view is, about 2.5 dB under, and
+/// from above about 4 dB, so that the others' karts are heard over it.
+pub fn own_loudness(view: crate::scene::View) -> f32 {
+    use crate::scene::View;
+    match view {
+        View::Cockpit => 1.0,
+        View::Chase => 0.75,
+        View::Bird => 0.63,
     }
 }
 
@@ -413,8 +426,9 @@ fn voice(
 
 /// Where each kart is heard from (D-070): the ear is in the player's kart
 /// — the followed one — turned as the camera looks, so that its own engine
-/// is as loud in every view and the others come and go around it.
+/// is heard in every view and the others come and go around it.
 fn hear(
+    view: Option<Res<crate::scene::View>>,
     camera: Query<&GlobalTransform, With<OsageCamera>>,
     followed: Query<&Pose, With<crate::scene::Followed>>,
     karts: Query<(Entity, &Pose, &Heard)>,
@@ -431,9 +445,13 @@ fn hear(
         None => (camera.translation(), Vec3::ZERO),
     };
     let right = camera.right().as_vec3();
+    let own = own_loudness(view.map_or_else(default, |v| *v));
     for (entity, pose, heard) in &karts {
         let at = Vec3::new(pose.kart.x, pose.kart.height, pose.kart.z);
-        let placed = self::heard(at, velocity(&pose.kart), ear, moving, right, Some(entity) == mine);
+        let mut placed = self::heard(at, velocity(&pose.kart), ear, moving, right, Some(entity) == mine);
+        if Some(entity) == mine {
+            (placed.left, placed.right) = (placed.left * own, placed.right * own);
+        }
         if let Ok(mut shared) = heard.shared.lock() {
             shared.ear = placed;
         }
@@ -571,5 +589,28 @@ fn rotors(
         if let Ok(mut gain) = loudness.0.lock() {
             *gain = if *visibility == Visibility::Hidden { 0.0 } else { 0.8 };
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::scene::View;
+
+    #[test]
+    fn own_kart_softest_from_above_loudest_from_the_seat() {
+        let (seat, behind, above) = (own_loudness(View::Cockpit), own_loudness(View::Chase), own_loudness(View::Bird));
+        assert_eq!(seat, 1.0);
+        assert!(above < behind && behind < seat);
+        // Softer, not lost: no view more than 6 dB under the seat.
+        assert!(20.0 * above.log10() > -6.0);
+    }
+
+    #[test]
+    fn a_kart_coming_is_higher_and_one_going_lower() {
+        let (ear, right) = (Vec3::ZERO, Vec3::X);
+        let coming = heard(Vec3::new(0.0, 0.0, 30.0), Vec3::new(0.0, 0.0, -25.0), ear, Vec3::ZERO, right, false);
+        let going = heard(Vec3::new(0.0, 0.0, 30.0), Vec3::new(0.0, 0.0, 25.0), ear, Vec3::ZERO, right, false);
+        assert!(coming.pitch > 1.0 && going.pitch < 1.0);
     }
 }

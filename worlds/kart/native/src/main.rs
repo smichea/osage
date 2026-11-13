@@ -38,6 +38,7 @@ mod paddock;
 mod photo;
 mod play;
 mod predict;
+mod preview;
 mod rain;
 mod report;
 mod scene;
@@ -47,6 +48,7 @@ mod show;
 #[cfg(feature = "sound")]
 mod sound;
 mod spans;
+mod theme;
 mod track;
 #[cfg(feature = "sound")]
 mod voice;
@@ -82,6 +84,8 @@ fn main() -> Result<()> {
     let mut focus = None;
     // Rain on the bench, from the start (D-068).
     let mut raining = false;
+    // The interface over the bench's race, in states set by hand (D-078).
+    let mut ui_preview = false;
     let mut args = std::env::args().skip(1);
     while let Some(arg) = args.next() {
         let mut value = || args.next().with_context(|| format!("{arg} needs a value"));
@@ -110,6 +114,7 @@ fn main() -> Result<()> {
                 track = Some(def);
             }
             "--rain" => raining = true,
+            "--ui-preview" => ui_preview = true,
             "--focus" => focus = Some(value()?.parse::<f32>().context("--focus takes metres")?),
             "--fps" => fps = Some(settings::parse_fps(&value()?).map_err(anyhow::Error::msg)?),
             "--frames" => frames = value()?.parse().context("--frames")?,
@@ -242,6 +247,9 @@ fn main() -> Result<()> {
         let without = without.iter().map(|t| t.name().to_owned()).collect();
         let held = viewpoint.is_some();
         let sky = format!("{sky:?}").to_lowercase();
+        if ui_preview {
+            app.add_plugins(preview::PreviewPlugin { frames });
+        }
         app.add_plugins(bench::BenchPlugin {
             tier,
             frames,

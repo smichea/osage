@@ -11,10 +11,13 @@
 
 use std::{path::PathBuf, sync::OnceLock, time::Duration};
 
-use bevy::{prelude::*, text::FontSize};
+use bevy::prelude::*;
 use osage_report::{Report, Watch};
 
-use crate::hud::{Lights, RaceView};
+use crate::{
+    hud::{Lights, RaceView},
+    theme::{self, Arrows, Faces, Key},
+};
 
 /// Where the developers' relay takes reports (D-073).
 pub const RELAY: &str = "https://osage-crash-relay-841931972409.europe-west1.run.app/report";
@@ -95,6 +98,9 @@ pub struct ReportPlugin;
 
 impl Plugin for ReportPlugin {
     fn build(&self, app: &mut App) {
+        if !app.is_plugin_added::<theme::ThemePlugin>() {
+            app.add_plugins(theme::ThemePlugin);
+        }
         app.add_systems(Startup, ask).add_systems(Update, (answer, started));
     }
 }
@@ -107,7 +113,13 @@ fn kind(report: &Report) -> &'static str {
     }
 }
 
-fn ask(mut commands: Commands, mut pending: ResMut<Pending>, tier: Res<osage_render::Tier>) {
+fn ask(
+    mut commands: Commands,
+    mut pending: ResMut<Pending>,
+    tier: Res<osage_render::Tier>,
+    faces: Res<Faces>,
+    arrows: Res<Arrows>,
+) {
     let Some(report) = pending.0.as_ref() else { return };
     match consent() {
         Consent::Never => pending.0 = None,
@@ -115,30 +127,64 @@ fn ask(mut commands: Commands, mut pending: ResMut<Pending>, tier: Res<osage_ren
             send(pending.0.take(), *tier);
         }
         Consent::Ask => {
-            let text = format!(
-                "Last time, {}.\n\nSend a report to the developers? It carries the error and the end of\nthe game's log, \
-                 without your name, your folders or any address; it is\npublished as an issue on GitHub \
-                 (smichea/osage) and read by DeepSeek.\n\nY  send     A  always send     N  not now     X  never",
-                kind(report)
-            );
-            commands.spawn((
-                Asking,
-                Node {
-                    position_type: PositionType::Absolute,
-                    top: percent(18),
-                    left: percent(50),
-                    margin: UiRect::left(px(-290)),
-                    width: px(580),
-                    padding: UiRect::all(px(20)),
-                    border_radius: BorderRadius::all(px(12)),
-                    ..default()
-                },
-                BackgroundColor(Color::srgba(0.05, 0.07, 0.12, 0.94)),
-                GlobalZIndex(20),
-                children![(Text::new(text), TextFont { font_size: FontSize::Px(17.0), ..default() })],
-            ));
+            prompt(&mut commands, &faces, &arrows, format!("Last time, {}.", kind(report)));
         }
     }
+}
+
+/// The question, on screen: what went wrong, what a report carries, the
+/// answers' keys. Its entity.
+pub fn prompt(commands: &mut Commands, faces: &Faces, arrows: &Arrows, what: String) -> Entity {
+    let (node, _, edge) = theme::panel(Node {
+        position_type: PositionType::Absolute,
+        top: percent(18),
+        left: percent(50),
+        margin: UiRect::left(px(-300)),
+        width: px(600),
+        flex_direction: FlexDirection::Column,
+        row_gap: px(10),
+        padding: UiRect::all(px(22)),
+        ..default()
+    });
+    commands
+        .spawn((Asking, node, BackgroundColor(theme::DIALOG), edge, GlobalZIndex(20)))
+        .with_children(|panel| {
+            panel.spawn(Node { column_gap: px(10), align_items: AlignItems::Center, ..default() }).with_children(
+                |title| {
+                    title.spawn((Node { width: px(4), height: px(22), ..default() }, BackgroundColor(theme::ACCENT)));
+                    title.spawn(theme::heavy("SEND A REPORT?", 22.0, theme::TEXT));
+                },
+            );
+            panel.spawn(theme::heavy(what, 16.0, theme::ACCENT));
+            panel.spawn(theme::light(
+                "A report carries the error and the end of the game's log, without your name, \
+                 your folders or any address. It is published as an issue on GitHub \
+                 (smichea/osage) and read by DeepSeek, to help the developers fix it.",
+                14.0,
+                theme::TEXT,
+                faces,
+            ));
+            panel
+                .spawn((
+                    Node {
+                        column_gap: px(18),
+                        flex_wrap: FlexWrap::Wrap,
+                        row_gap: px(6),
+                        padding: UiRect::top(px(12)),
+                        margin: UiRect::top(px(4)),
+                        border: UiRect::top(px(1)),
+                        ..default()
+                    },
+                    BorderColor::all(theme::EDGE),
+                ))
+                .with_children(|bar| {
+                    theme::hint(bar, &[Key::Word("Y")], "SEND", arrows);
+                    theme::hint(bar, &[Key::Word("A")], "ALWAYS SEND", arrows);
+                    theme::hint(bar, &[Key::Word("N")], "NOT NOW", arrows);
+                    theme::hint(bar, &[Key::Word("X")], "NEVER", arrows);
+                });
+        })
+        .id()
 }
 
 fn answer(

@@ -12,8 +12,8 @@
 # The game runs without any of them, in procedural form.
 #
 # Only content under a free licence with a known author and source enters
-# here (CC0 preferred). Nothing taken from commercial games (CONTRIBUTING,
-# "Clean sources").
+# here (CC0 preferred; fonts under the SIL OFL, D-078). Nothing taken from
+# commercial games (CONTRIBUTING, "Clean sources").
 
 # Poly Haven — https://polyhaven.com, CC0, fetched through its public API
 # (https://api.polyhaven.com/files/<id>) with a User-Agent naming osage.
@@ -1222,3 +1222,36 @@ licence = "CC0-1.0"
 author = "LushoGames (OpenGameArt)"
 source = "https://opengameart.org/content/simple-action-beat"
 used_by = "worlds/kart/native: the game's music (kart.playlist)"
+
+# Fonts for the interface (D-078), CC0, fetched 2026-11-13 under the kart
+# programme's standing approval for CC0 content (two files of a 50 KB zip).
+
+# Fonts — the only content not under CC0: Saira, under the SIL Open Font
+# Licence 1.1 (D-078). The OFL travels with the fonts (its text below).
+
+[[asset]]
+path = "assets/saira/Saira-Bold.ttf"
+url = "https://raw.githubusercontent.com/Omnibus-Type/Saira/1916f2a575479b626238d9842126e63aa208eebf/Saira/fonts/ttf/Saira-Bold.ttf"
+sha256 = "8bfdfdf7dbe99cc98b921977d2f442f8d03d2da19e33fd3af312ee65c157c952"
+licence = "OFL-1.1"
+author = "Hector Gatti, Omnibus-Type (The Saira Project Authors)"
+source = "https://github.com/Omnibus-Type/Saira"
+used_by = "worlds/kart/native: the interface's display face, figures and titles (D-078)"
+
+[[asset]]
+path = "assets/saira/Saira-Regular.ttf"
+url = "https://raw.githubusercontent.com/Omnibus-Type/Saira/1916f2a575479b626238d9842126e63aa208eebf/Saira/fonts/ttf/Saira-Regular.ttf"
+sha256 = "7b7ca56a5bd93823bbbc9c815fd1569cfd1d78627d319b11b6ca95d12af191ea"
+licence = "OFL-1.1"
+author = "Hector Gatti, Omnibus-Type (The Saira Project Authors)"
+source = "https://github.com/Omnibus-Type/Saira"
+used_by = "worlds/kart/native: the interface's text face (D-078)"
+
+[[asset]]
+path = "assets/saira/OFL.txt"
+url = "https://raw.githubusercontent.com/Omnibus-Type/Saira/1916f2a575479b626238d9842126e63aa208eebf/OFL.txt"
+sha256 = "f2665d4718b452b3818a877191355ac884a6b9b419d35408fe7ee487e9e8f30f"
+licence = "OFL-1.1"
+author = "Hector Gatti, Omnibus-Type (The Saira Project Authors)"
+source = "https://github.com/Omnibus-Type/Saira"
+used_by = "the fonts' licence, shipped beside them (OFL condition 2)"

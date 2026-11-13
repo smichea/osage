@@ -568,9 +568,9 @@ impl Kept {
         let p = &self.profile;
         let paint = p.paint.and_then(osage_kart_profile::paint_name).unwrap_or("the driver's colour");
         let next = p.next().map_or_else(String::new, |(paint, needs)| {
-            format!("  -  {} at {needs} pts", osage_kart_profile::paint_name(paint).unwrap_or("?"))
+            format!(" – {} at {needs} pts", osage_kart_profile::paint_name(paint).unwrap_or("?"))
         });
-        format!("P  paint: {paint}   {}{} pts, {} cups, {} won{next}", self.news, p.points, p.cups, p.wins)
+        format!("Paint: {paint}\n{}{} pts · {} cups · {} won{next}", self.news, p.points, p.cups, p.wins)
     }
 }
 
@@ -724,12 +724,12 @@ fn cup_lines(
     let mut event = if race.events.is_empty() {
         String::new()
     } else if hosting || race.host == 0 {
-        format!("T  next: {}", event_name(shown))
+        format!("Next: {}", event_name(shown))
     } else {
-        format!("Next: {}   T  your vote: {}", event_name(&race.event), event_name(shown))
+        format!("Next: {}\nYour vote: {}", event_name(&race.event), event_name(shown))
     };
     if !votes.is_empty() && !event.is_empty() {
-        event.push_str(&format!("\nvotes: {}", votes.join(", ")));
+        event.push_str(&format!("\nVotes: {}", votes.join(", ")));
     }
     (cup, event)
 }
@@ -743,10 +743,7 @@ fn pick(roster: Option<proto::Roster>, racer: Option<&proto::Racer>, chosen: Opt
     let kart =
         chosen.and_then(|(_, k)| roster.karts.get(k)).or_else(|| roster.karts.iter().find(|k| k.id == racer.kart));
     let (Some(driver), Some(kart)) = (driver, kart) else { return String::new() };
-    format!(
-        "Left/Right  driver: {} ({})  -  {}\nUp/Down  kart: {}  -  {}",
-        driver.name, driver.class, driver.about, kart.name, kart.about
-    )
+    format!("Driver: {} ({}) – {}\nKart: {} – {}", driver.name, driver.class, driver.about, kart.name, kart.about)
 }
 
 /// The frame's steps to the world, in one message.

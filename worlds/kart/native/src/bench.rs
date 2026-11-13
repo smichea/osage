@@ -225,6 +225,7 @@ fn measure(
     mut commands: Commands,
     mut bench: ResMut<Bench>,
     picture: Res<Picture>,
+    composite: Option<Res<crate::preview::Composite>>,
     adapter: Res<RenderAdapterInfo>,
     mut exit: MessageWriter<AppExit>,
 ) {
@@ -253,7 +254,8 @@ fn measure(
     if bench.shots.contains(&frame) {
         let name = format!("shot-{frame:05}.png");
         commands
-            .spawn(Screenshot::image(picture.image.clone()))
+            // With the interface over it, when it is previewed (D-078).
+            .spawn(Screenshot::image(composite.map_or_else(|| picture.image.clone(), |c| c.0.clone())))
             // Encoding the picture takes time that is not rendering's.
             .observe(|_: On<ScreenshotCaptured>, mut bench: ResMut<Bench>| bench.skip = bench.skip.max(1))
             .observe(save_to_disk(bench.out.join(&name)));

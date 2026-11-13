@@ -8,6 +8,7 @@
 
 use std::collections::HashMap;
 
+use bevy::text::FontSource;
 use bevy::{
     asset::RenderAssetUsages,
     prelude::*,
@@ -17,7 +18,10 @@ use bevy::{
 use osage_kart_items::Item;
 use osage_kart_physics::{TURBO_CHARGES, turbo_level};
 
-use crate::scene::{Course, PAINTS, Stage};
+use crate::{
+    scene::{Course, PAINTS, Stage},
+    theme::{self, Arrows, Faces, Key},
+};
 
 /// Side of the circuit map, pixels.
 const MAP: f32 = 190.0;
@@ -127,9 +131,12 @@ pub struct HudPlugin;
 
 impl Plugin for HudPlugin {
     fn build(&self, app: &mut App) {
+        if !app.is_plugin_added::<theme::ThemePlugin>() {
+            app.add_plugins(theme::ThemePlugin);
+        }
         app.init_resource::<RaceView>().init_resource::<Dots>().add_systems(Startup, setup).add_systems(
             Update,
-            (draw_map.run_if(resource_exists_and_changed::<Course>), write, place_dots).after(Stage::Simulate),
+            (draw_map.run_if(resource_exists_and_changed::<Course>), write, board, place_dots).after(Stage::Simulate),
         );
     }
 }
@@ -140,7 +147,6 @@ enum Label {
     Suffix,
     Lap,
     Clock,
-    Board,
     Speed,
     Lights,
     Status,
@@ -149,7 +155,31 @@ enum Label {
     Prompt,
     /// The world's records, between races.
     Records,
+    /// The cup and what is raced next, between races.
+    Cup,
+    /// Who drives the player's kart and in what.
+    Pick,
 }
+
+/// A row of the standings, `0` the leader, and its cells.
+#[derive(Component)]
+struct Row(usize);
+
+#[derive(Component, Clone, Copy, PartialEq)]
+enum Cell {
+    Place,
+    Chip,
+    Name,
+    Status,
+}
+
+/// The item's panel, shown while the kart holds one.
+#[derive(Component)]
+struct ItemPanel;
+
+/// The start key's hint: only for the host, on the grid.
+#[derive(Component)]
+struct StartHint;
 
 /// The panel the records are shown in, hidden while racing.
 #[derive(Component)]
@@ -176,119 +206,234 @@ pub fn clock(ms: i64) -> String {
     format!("{}:{:05.2}", ms / 60_000, (ms % 60_000) as f32 / 1000.0)
 }
 
-fn panel() -> BackgroundColor {
-    BackgroundColor(Color::srgba(0.04, 0.06, 0.1, 0.62))
-}
-
 fn text(label: Label, size: f32) -> impl Bundle {
-    (label, Text::default(), TextFont { font_size: FontSize::Px(size), ..default() }, TextColor(Color::WHITE))
+    (label, Text::default(), TextFont { font_size: FontSize::Px(size), ..default() }, TextColor(theme::TEXT))
 }
 
-fn setup(mut commands: Commands) {
-    let rounded =
-        |node: Node| Node { border_radius: BorderRadius::all(px(12)), padding: UiRect::axes(px(14), px(8)), ..node };
-    let corner = |node: Node| rounded(Node { position_type: PositionType::Absolute, ..node });
+/// A text in the thin face.
+fn thin(label: Label, size: f32, faces: &Faces) -> impl Bundle {
+    (
+        label,
+        Text::default(),
+        TextFont { font: FontSource::Handle(faces.thin.clone()), font_size: FontSize::Px(size), ..default() },
+        TextColor(theme::TEXT),
+    )
+}
 
-    // Top left: the lap and the clock.
+/// A fixed caption, small and muted.
+fn caption(words: &str, size: f32) -> impl Bundle {
+    (Text::new(words), TextFont { font_size: FontSize::Px(size), ..default() }, TextColor(theme::MUTED))
+}
+
+fn setup(mut commands: Commands, faces: Res<Faces>, arrows: Res<Arrows>) {
+    let absolute = |node: Node| Node { position_type: PositionType::Absolute, ..node };
+
+    // Top left: the place, the lap and the clock.
     commands
-        .spawn((
-            corner(Node { top: px(14), left: px(14), flex_direction: FlexDirection::Column, ..default() }),
-            panel(),
-        ))
-        .with_children(|lap| {
-            lap.spawn(text(Label::Lap, 26.0));
-            lap.spawn(text(Label::Clock, 20.0));
+        .spawn(theme::panel(absolute(Node {
+            top: px(14),
+            left: px(14),
+            column_gap: px(14),
+            align_items: AlignItems::Center,
+            ..default()
+        })))
+        .with_children(|p| {
+            p.spawn(Node { align_items: AlignItems::FlexEnd, column_gap: px(2), ..default() }).with_children(|place| {
+                place.spawn((text(Label::Place, 52.0), TextShadow::default()));
+                place.spawn((text(Label::Suffix, 20.0), Node { margin: UiRect::bottom(px(8)), ..default() }));
+            });
+            p.spawn((Node { width: px(2), height: px(44), ..default() }, BackgroundColor(theme::ACCENT)));
+            p.spawn(Node { flex_direction: FlexDirection::Column, row_gap: px(4), ..default() }).with_children(|c| {
+                c.spawn(text(Label::Lap, 20.0));
+                c.spawn(thin(Label::Clock, 18.0, &faces));
+            });
         });
-    // Bottom left: the place, large.
-    let place = Node { bottom: px(46), left: px(18), align_items: AlignItems::FlexEnd, column_gap: px(4), ..default() };
-    commands.spawn(Node { position_type: PositionType::Absolute, ..place }).with_children(|place| {
-        place.spawn((text(Label::Place, 104.0), TextShadow::default()));
-        place.spawn((
-            text(Label::Suffix, 40.0),
-            TextShadow::default(),
-            Node { margin: UiRect::bottom(px(16)), ..default() },
-        ));
-    });
-    // Top right: the order of the race; under it, the map.
+    // Top middle: the item in hand.
     commands
-        .spawn((corner(Node { top: px(14), right: px(14), ..default() }), panel()))
-        .with_child(text(Label::Board, 15.0));
+        .spawn(absolute(Node {
+            top: px(14),
+            width: percent(100),
+            justify_content: JustifyContent::Center,
+            ..default()
+        }))
+        .with_children(|row| {
+            row.spawn((
+                theme::panel(Node {
+                    flex_direction: FlexDirection::Column,
+                    align_items: AlignItems::Center,
+                    min_width: px(170),
+                    row_gap: px(2),
+                    ..default()
+                }),
+                ItemPanel,
+                Visibility::Hidden,
+            ))
+            .with_children(|item| {
+                item.spawn(caption("ITEM", 11.0));
+                item.spawn(text(Label::Held, 20.0));
+            });
+        });
+    // Top right: the standings, a row each kart.
+    commands
+        .spawn(theme::panel(absolute(Node {
+            top: px(14),
+            right: px(14),
+            flex_direction: FlexDirection::Column,
+            row_gap: px(3),
+            min_width: px(220),
+            ..default()
+        })))
+        .with_children(|board| {
+            board.spawn((caption("STANDINGS", 11.0), Node { margin: UiRect::bottom(px(4)), ..default() }));
+            for i in 0..8 {
+                board
+                    .spawn((
+                        Row(i),
+                        Node {
+                            display: Display::None,
+                            align_items: AlignItems::Center,
+                            column_gap: px(8),
+                            padding: UiRect::axes(px(6), px(2)),
+                            border_radius: BorderRadius::all(px(5)),
+                            ..default()
+                        },
+                        BackgroundColor(Color::NONE),
+                    ))
+                    .with_children(|row| {
+                        let cell = |cell: Cell, width: f32, size: f32, faces: &Faces| {
+                            (
+                                cell,
+                                Text::default(),
+                                TextFont {
+                                    font: if cell == Cell::Name {
+                                        FontSource::Handle(faces.thin.clone())
+                                    } else {
+                                        default()
+                                    },
+                                    font_size: FontSize::Px(size),
+                                    ..default()
+                                },
+                                TextColor(theme::TEXT),
+                                Node { width: px(width), ..default() },
+                            )
+                        };
+                        row.spawn(cell(Cell::Place, 18.0, 14.0, &faces));
+                        row.spawn((
+                            Cell::Chip,
+                            Node { width: px(8), height: px(14), border_radius: BorderRadius::all(px(2)), ..default() },
+                            BackgroundColor(Color::WHITE),
+                        ));
+                        row.spawn(cell(Cell::Name, 110.0, 13.0, &faces));
+                        row.spawn((cell(Cell::Status, 64.0, 13.0, &faces), TextLayout::justify(Justify::Right)));
+                    });
+            }
+        });
     commands.spawn((
         Map,
         ImageNode::default(),
-        Node {
-            position_type: PositionType::Absolute,
-            right: px(14),
-            bottom: px(96),
-            width: px(MAP),
-            height: px(MAP),
-            ..default()
-        },
+        absolute(Node { right: px(14), bottom: px(96), width: px(MAP), height: px(MAP), ..default() }),
     ));
     // Bottom right: the speed, and the mini-turbo charging.
     commands
-        .spawn((
-            corner(Node {
-                bottom: px(14),
-                right: px(14),
-                flex_direction: FlexDirection::Column,
-                row_gap: px(6),
-                ..default()
-            }),
-            panel(),
-        ))
+        .spawn(theme::panel(absolute(Node {
+            bottom: px(14),
+            right: px(14),
+            flex_direction: FlexDirection::Column,
+            row_gap: px(6),
+            ..default()
+        })))
         .with_children(|speed| {
-            speed.spawn(text(Label::Speed, 24.0));
-            let track = Node { width: px(160), height: px(10), border_radius: BorderRadius::all(px(5)), ..default() };
-            speed.spawn((track, BackgroundColor(Color::srgba(1.0, 1.0, 1.0, 0.18)))).with_child((
+            speed.spawn(Node { align_items: AlignItems::FlexEnd, column_gap: px(6), ..default() }).with_children(
+                |figure| {
+                    figure.spawn(text(Label::Speed, 34.0));
+                    figure.spawn((caption("KM/H", 12.0), Node { margin: UiRect::bottom(px(5)), ..default() }));
+                },
+            );
+            let track = Node { width: px(150), height: px(8), border_radius: BorderRadius::all(px(4)), ..default() };
+            speed.spawn((track, BackgroundColor(Color::srgba(1.0, 1.0, 1.0, 0.14)))).with_child((
                 Gauge,
-                Node { width: percent(0), height: percent(100), border_radius: BorderRadius::all(px(5)), ..default() },
+                Node { width: percent(0), height: percent(100), border_radius: BorderRadius::all(px(4)), ..default() },
                 BackgroundColor(Color::WHITE),
             ));
         });
-    // Under the lap: the item in hand.
+    // The start lights' count and the results, in the middle; what to do, under them.
     commands.spawn((
-        text(Label::Held, 26.0),
-        TextShadow::default(),
-        Node { position_type: PositionType::Absolute, top: px(104), left: px(20), ..default() },
+        text(Label::Lights, 110.0),
+        TextShadow { offset: Vec2::splat(4.0), ..default() },
+        TextLayout::justify(Justify::Center),
+        absolute(Node { top: percent(14), width: percent(100), ..default() }),
     ));
-    // The start lights' count and the results, in the middle; who and where, small, at the bottom.
     commands.spawn((
-        text(Label::Lights, 120.0),
+        thin(Label::Prompt, 22.0, &faces),
         TextShadow::default(),
         TextLayout::justify(Justify::Center),
-        Node { position_type: PositionType::Absolute, top: percent(16), width: percent(100), ..default() },
+        absolute(Node { top: percent(34), width: percent(100), ..default() }),
     ));
-    commands.spawn((
-        text(Label::Prompt, 26.0),
-        TextShadow::default(),
-        TextLayout::justify(Justify::Center),
-        Node { position_type: PositionType::Absolute, top: percent(36), width: percent(100), ..default() },
-    ));
-    // Between races, under the prompt: the world's records.
+    // Between races: the event, the records and the player's kart, as
+    // cards side by side; the keys under them.
     commands
         .spawn((
-            Node { position_type: PositionType::Absolute, top: percent(46), width: percent(100), ..default() },
+            absolute(Node {
+                top: percent(42),
+                width: percent(100),
+                flex_direction: FlexDirection::Column,
+                align_items: AlignItems::Center,
+                row_gap: px(12),
+                ..default()
+            }),
             Visibility::Hidden,
             RecordsPanel,
         ))
-        .with_children(|row| {
-            row.spawn(Node { width: percent(100), justify_content: JustifyContent::Center, ..default() }).with_child((
-                rounded(Node::default()),
-                panel(),
-                children![text(Label::Records, 16.0)],
-            ));
+        .with_children(|between| {
+            between.spawn(Node { column_gap: px(12), align_items: AlignItems::FlexStart, ..default() }).with_children(
+                |cards| {
+                    for (title, label) in
+                        [("EVENT", Label::Cup), ("RECORDS", Label::Records), ("YOUR KART", Label::Pick)]
+                    {
+                        cards
+                            .spawn(theme::panel(Node {
+                                flex_direction: FlexDirection::Column,
+                                row_gap: px(8),
+                                width: px(300),
+                                ..default()
+                            }))
+                            .with_children(|card| {
+                                card.spawn(Node { column_gap: px(8), align_items: AlignItems::Center, ..default() })
+                                    .with_children(|head| {
+                                        head.spawn((
+                                            Node { width: px(3), height: px(14), ..default() },
+                                            BackgroundColor(theme::ACCENT),
+                                        ));
+                                        head.spawn((
+                                            Text::new(title),
+                                            TextFont { font_size: FontSize::Px(14.0), ..default() },
+                                            TextColor(theme::ACCENT),
+                                        ));
+                                    });
+                                card.spawn(thin(label, 13.0, &faces));
+                            });
+                    }
+                },
+            );
+            // The keys, as keycaps.
+            between
+                .spawn(theme::panel(Node { column_gap: px(18), align_items: AlignItems::Center, ..default() }))
+                .with_children(|bar| {
+                    let start = theme::hint(bar, &[Key::Word("ENTER")], "START", &arrows);
+                    bar.commands().entity(start).insert(StartHint);
+                    theme::hint(bar, &[Key::Arrow(3), Key::Arrow(1)], "DRIVER", &arrows);
+                    theme::hint(bar, &[Key::Arrow(0), Key::Arrow(2)], "KART", &arrows);
+                    theme::hint(bar, &[Key::Word("P")], "PAINT", &arrows);
+                    theme::hint(bar, &[Key::Word("T")], "EVENT", &arrows);
+                    theme::hint(bar, &[Key::Word("ESC")], "SETTINGS", &arrows);
+                });
         });
-    commands.spawn((
-        text(Label::Status, 11.0),
-        Node {
-            position_type: PositionType::Absolute,
-            bottom: px(6),
-            left: px(14),
-            max_width: percent(55),
-            ..default()
-        },
-    ));
+    commands
+        .spawn((
+            thin(Label::Status, 10.0, &faces),
+            absolute(Node { bottom: px(6), left: px(14), max_width: percent(55), ..default() }),
+        ))
+        .insert(TextColor(theme::MUTED));
 }
 
 fn ordinal(place: u32) -> &'static str {
@@ -309,35 +454,45 @@ pub fn records_text(records: &Records) -> String {
             .take(5)
             .enumerate()
             .map(|(i, best)| {
-                let mark = if best.mine { ">" } else { " " };
-                let new = if best.fresh { "  NEW!" } else { "" };
-                format!("{mark}{:>2} {:<14.14} {:>9}{new}", i + 1, best.name, clock(i64::from(best.ms)))
+                let mark = if best.mine { "> " } else { "" };
+                let new = if best.fresh { "   NEW!" } else { "" };
+                format!("{}.  {mark}{}   {}{new}", i + 1, best.name, clock(i64::from(best.ms)))
             })
             .collect::<Vec<_>>()
     };
-    let mut out = vec![format!("RECORDS - {}", records.track.to_uppercase()), "Best laps".to_owned()];
+    let mut out = vec![records.track.to_uppercase(), String::new(), "BEST LAPS".to_owned()];
     out.extend(rows(&records.laps));
     if !records.races.is_empty() {
-        out.push(format!("Best races ({} laps)", records.race_laps));
+        out.extend([String::new(), format!("BEST RACES, {} LAPS", records.race_laps)]);
         out.extend(rows(&records.races));
     }
     if !records.trials.is_empty() {
-        out.push(format!("Best time trials ({} laps)", records.race_laps));
+        out.extend([String::new(), format!("BEST TIME TRIALS, {} LAPS", records.race_laps)]);
         out.extend(rows(&records.trials));
     }
     out.join("\n")
 }
 
+#[allow(clippy::type_complexity)]
 fn write(
     view: Res<RaceView>,
     mut texts: Query<(&Label, &mut Text, &mut TextColor)>,
     mut gauge: Query<(&mut Node, &mut BackgroundColor), With<Gauge>>,
-    mut records: Query<&mut Visibility, With<RecordsPanel>>,
+    mut records: Query<&mut Visibility, (With<RecordsPanel>, Without<ItemPanel>, Without<StartHint>)>,
+    mut item: Query<&mut Visibility, (With<ItemPanel>, Without<StartHint>)>,
+    mut start: Query<&mut Visibility, With<StartHint>>,
 ) {
     let between = matches!(view.stage, Lights::Waiting | Lights::Ready(_) | Lights::Results(_));
     let shown = between && !(view.records.laps.is_empty() && view.cup.is_empty() && view.pick.is_empty());
+    let show = |on: bool| if on { Visibility::Inherited } else { Visibility::Hidden };
     if let Ok(mut visibility) = records.single_mut() {
-        visibility.set_if_neq(if shown { Visibility::Inherited } else { Visibility::Hidden });
+        visibility.set_if_neq(show(shown));
+    }
+    if let Ok(mut visibility) = item.single_mut() {
+        visibility.set_if_neq(show(view.held.is_some() || view.guard > 0.0));
+    }
+    if let Ok(mut visibility) = start.single_mut() {
+        visibility.set_if_neq(show(view.stage == Lights::Ready(true)));
     }
     let me = view.me.and_then(|me| view.karts.get(me));
     for (label, mut text, mut colour) in &mut texts {
@@ -348,7 +503,7 @@ fn write(
             Label::Suffix => me.map_or(String::new(), |me| ordinal(me.position).to_owned()),
             Label::Lap => match me {
                 Some(me) if view.battle && me.out => "OUT".to_owned(),
-                Some(me) if view.battle => format!("LIVES {}", "[#]".repeat(me.lives as usize)),
+                Some(me) if view.battle => lives(me.lives).to_uppercase(),
                 Some(me) if view.trial => format!("TRIAL {}/{}", me.lap.clamp(1, view.laps.max(1)), view.laps),
                 Some(me) => format!("LAP {}/{}", me.lap.clamp(1, view.laps.max(1)), view.laps),
                 None if view.stage == Lights::Off => String::new(),
@@ -360,32 +515,9 @@ fn write(
                 (_, Lights::Go | Lights::Racing) => clock(view.clock_ms),
                 _ => String::new(),
             },
-            Label::Board => {
-                let rows = view.karts.iter().enumerate().map(|(i, kart)| {
-                    // A ghost shows the time it drives to: its driver's best trial.
-                    let best = view.records.trials.iter().find(|best| kart.ghost && best.name == kart.name);
-                    let status = if view.battle {
-                        if kart.out { "out".to_owned() } else { format!("{} lives", kart.lives) }
-                    } else if kart.finish_ms > 0 {
-                        clock(kart.finish_ms as i64)
-                    } else if let Some(best) = best {
-                        clock(i64::from(best.ms))
-                    } else {
-                        format!("lap {}", kart.lap.max(1))
-                    };
-                    let mark = if view.me == Some(i) { ">" } else { " " };
-                    let kind = match (kart.ghost, kart.bot) {
-                        (true, _) => "ghost",
-                        (false, true) => "bot",
-                        (false, false) => "   ",
-                    };
-                    format!("{mark}{:>2} {:<10.10} {kind:<5} {status}", kart.position, kart.name)
-                });
-                rows.collect::<Vec<_>>().join("\n")
-            }
             Label::Speed => match me {
                 Some(_) => {
-                    format!("{:>3.0} km/h{}", view.speed.abs() * 3.6, if view.boosting { "  TURBO" } else { "" })
+                    format!("{:.0}", view.speed.abs() * 3.6)
                 }
                 None => String::new(),
             },
@@ -460,33 +592,34 @@ fn write(
                 Lights::Count(_) if me.is_some() => "Throttle as the lights go out, not before".to_owned(),
                 _ => String::new(),
             },
-            Label::Records if shown => {
+            Label::Records if shown && !view.records.laps.is_empty() => {
                 let records = &view.records;
                 if records.laps.iter().chain(&records.races).chain(&records.trials).any(|b| b.fresh && b.mine) {
-                    tint = Some(Color::srgb(1.0, 0.85, 0.3));
+                    tint = Some(theme::ACCENT);
                 }
-                let records = (!view.records.laps.is_empty()).then(|| records_text(&view.records));
-                let parts = [Some(view.cup.clone()), Some(view.event.clone()), Some(view.pick.clone()), records];
-                parts.into_iter().flatten().filter(|part| !part.is_empty()).collect::<Vec<_>>().join("\n\n")
+                records_text(records)
             }
-            Label::Records => String::new(),
+            Label::Records => "No lap set here yet".to_owned(),
+            Label::Cup if shown => [view.cup.as_str(), view.event.as_str()]
+                .into_iter()
+                .filter(|part| !part.is_empty())
+                .collect::<Vec<_>>()
+                .join("\n\n"),
+            Label::Cup => String::new(),
+            Label::Pick if shown => view.pick.clone(),
+            Label::Pick => String::new(),
         };
         if matches!(label, Label::Place | Label::Suffix) {
             // Gold, silver, bronze; then white.
-            tint = me.map(|me| match me.position {
-                1 => Color::srgb(1.0, 0.84, 0.25),
-                2 => Color::srgb(0.85, 0.89, 0.95),
-                3 => Color::srgb(0.93, 0.6, 0.35),
-                _ => Color::WHITE,
-            });
+            tint = me.map(|me| theme::place_colour(me.position));
         }
         if text.0 != wanted {
             text.0 = wanted;
         }
         if let Some(tint) = tint.filter(|tint| *tint != colour.0) {
             colour.0 = tint;
-        } else if matches!(label, Label::Lights | Label::Records) && tint.is_none() && colour.0 != Color::WHITE {
-            colour.0 = Color::WHITE;
+        } else if matches!(label, Label::Lights | Label::Records) && tint.is_none() && colour.0 != theme::TEXT {
+            colour.0 = theme::TEXT;
         }
     }
 
@@ -505,6 +638,79 @@ fn write(
         };
         if fill.0 != stage {
             fill.0 = stage;
+        }
+    }
+}
+
+/// A battle kart's lives, in words: a row of marks reads poorly small.
+fn lives(left: u32) -> String {
+    match left {
+        1 => "1 life".to_owned(),
+        n => format!("{n} lives"),
+    }
+}
+
+/// The standings, a row each kart: place, colour, name, how it stands.
+#[allow(clippy::type_complexity)]
+fn board(
+    view: Res<RaceView>,
+    mut rows: Query<(&Row, &mut Node, &mut BackgroundColor, &Children), Without<Cell>>,
+    mut cells: Query<(&Cell, Option<&mut Text>, Option<&mut TextColor>, Option<&mut BackgroundColor>), With<Cell>>,
+) {
+    for (row, mut node, mut back, children) in &mut rows {
+        // Rows past the field take no room: the panel is as tall as it.
+        let wanted = if view.karts.get(row.0).is_some() { Display::Flex } else { Display::None };
+        if node.display != wanted {
+            node.display = wanted;
+        }
+        let Some(kart) = view.karts.get(row.0) else { continue };
+        let mine = view.me == Some(row.0);
+        let wanted = if mine { Color::srgba(1.0, 0.72, 0.2, 0.22) } else { Color::NONE };
+        if back.0 != wanted {
+            back.0 = wanted;
+        }
+        // A ghost shows the time it drives to: its driver's best trial.
+        let best = view.records.trials.iter().find(|best| kart.ghost && best.name == kart.name);
+        let status = if view.battle {
+            if kart.out { "OUT".to_owned() } else { lives(kart.lives).to_uppercase() }
+        } else if kart.finish_ms > 0 {
+            clock(kart.finish_ms as i64)
+        } else if let Some(best) = best {
+            clock(i64::from(best.ms))
+        } else {
+            format!("LAP {}", kart.lap.clamp(1, view.laps.max(1)))
+        };
+        let name = match (kart.ghost, kart.bot) {
+            (true, _) => format!("{} (ghost)", kart.name),
+            _ => kart.name.clone(),
+        };
+        for child in children.iter() {
+            let Ok((cell, text, colour, fill)) = cells.get_mut(child) else { continue };
+            let (words, tint) = match cell {
+                Cell::Place => (kart.position.to_string(), theme::place_colour(kart.position)),
+                Cell::Name => (name.clone(), if kart.out { theme::MUTED } else { theme::TEXT }),
+                Cell::Status => (status.clone(), theme::MUTED),
+                Cell::Chip => {
+                    let (r, g, b) = PAINTS[kart.color as usize % PAINTS.len()];
+                    if let Some(mut fill) = fill {
+                        let paint = Color::srgb(r, g, b);
+                        if fill.0 != paint {
+                            fill.0 = paint;
+                        }
+                    }
+                    continue;
+                }
+            };
+            if let Some(mut text) = text
+                && text.0 != words
+            {
+                text.0 = words;
+            }
+            if let Some(mut colour) = colour
+                && colour.0 != tint
+            {
+                colour.0 = tint;
+            }
         }
     }
 }

@@ -26,16 +26,14 @@
 
 use std::path::PathBuf;
 
-use bevy::{prelude::*, text::FontSize};
-use osage_render::{
-    Tier,
-    pace::{FrameTarget, LADDER, Pace},
-};
+use bevy::prelude::*;
+use osage_render::pace::{FrameTarget, LADDER, Pace};
 use osage_world_kart::proto;
 
 use crate::{
     hud::{Lights, RaceView},
     play::CallWanted,
+    theme::{self, Arrows, Faces, Key},
 };
 
 /// The rates offered; `None` is off.
@@ -188,16 +186,17 @@ struct Row(usize);
 
 const ROWS: usize = 7;
 
+/// The settings' panel, shown while they are open.
 #[derive(Component)]
-struct Panel;
-
-#[derive(Component)]
-struct Lines;
+pub struct Panel;
 
 impl Plugin for SettingsPlugin {
     fn build(&self, app: &mut App) {
         let kept = load().unwrap_or_default();
         let settings = Settings { fps: self.fps.unwrap_or(kept.fps), ..kept };
+        if !app.is_plugin_added::<theme::ThemePlugin>() {
+            app.add_plugins(theme::ThemePlugin);
+        }
         app.insert_resource(settings)
             .insert_resource(FrameTarget(settings.fps.map(|fps| fps as f32)))
             .insert_resource(Audio::of(&settings))
@@ -304,31 +303,121 @@ fn save(settings: Settings) {
     }
 }
 
-fn setup(mut commands: Commands) {
-    commands
-        .spawn((
-            Panel,
-            Node {
-                display: Display::None,
-                position_type: PositionType::Absolute,
-                top: percent(30),
-                left: percent(50),
-                margin: UiRect::left(px(-210)),
-                width: px(420),
-                padding: UiRect::all(px(18)),
-                border_radius: BorderRadius::all(px(12)),
+/// Each setting's name, and the key that changes it at any time.
+const NAMES: [(&str, Option<&str>); ROWS] = [
+    ("Frame rate", None),
+    ("Sound", Some("N")),
+    ("Music", Some("M")),
+    ("Music from", None),
+    ("Radio directory", None),
+    ("Voice", None),
+    ("Mute", Some("SPACE")),
+];
+
+/// A setting's row: its name, and its value.
+#[derive(Component)]
+struct Line(usize);
+
+#[derive(Component)]
+struct Value(usize);
+
+/// What the setting chosen does, under the rows.
+#[derive(Component)]
+struct Detail;
+
+/// The hint that Enter ends the race, shown when it may.
+#[derive(Component)]
+struct EndHint;
+
+fn setup(mut commands: Commands, faces: Res<Faces>, arrows: Res<Arrows>) {
+    let (node, _, edge) = theme::panel(Node {
+        display: Display::None,
+        position_type: PositionType::Absolute,
+        top: percent(22),
+        left: percent(50),
+        margin: UiRect::left(px(-240)),
+        width: px(480),
+        flex_direction: FlexDirection::Column,
+        row_gap: px(3),
+        padding: UiRect::all(px(18)),
+        ..default()
+    });
+    commands.spawn((Panel, node, BackgroundColor(theme::DIALOG), edge, GlobalZIndex(10))).with_children(|panel| {
+        panel
+            .spawn(Node {
+                column_gap: px(10),
+                align_items: AlignItems::Center,
+                margin: UiRect::bottom(px(10)),
                 ..default()
-            },
-            BackgroundColor(Color::srgba(0.04, 0.06, 0.1, 0.88)),
-            GlobalZIndex(10),
-        ))
-        .with_child((Lines, Text::default(), TextFont { font_size: FontSize::Px(18.0), ..default() }));
+            })
+            .with_children(|title| {
+                title.spawn((Node { width: px(4), height: px(22), ..default() }, BackgroundColor(theme::ACCENT)));
+                title.spawn(theme::heavy("SETTINGS", 22.0, theme::TEXT));
+            });
+        for (i, (name, key)) in NAMES.iter().enumerate() {
+            panel
+                .spawn((
+                    Line(i),
+                    Node {
+                        justify_content: JustifyContent::SpaceBetween,
+                        align_items: AlignItems::Center,
+                        padding: UiRect::axes(px(10), px(6)),
+                        border_radius: BorderRadius::all(px(6)),
+                        ..default()
+                    },
+                    BackgroundColor(Color::NONE),
+                ))
+                .with_children(|line| {
+                    line.spawn(Node { column_gap: px(8), align_items: AlignItems::Center, ..default() }).with_children(
+                        |left| {
+                            left.spawn(theme::light(*name, 16.0, theme::TEXT, &faces));
+                            if let Some(key) = key {
+                                left.spawn(theme::heavy(*key, 10.0, theme::MUTED));
+                            }
+                        },
+                    );
+                    line.spawn((Value(i), theme::heavy("", 16.0, theme::TEXT)));
+                });
+        }
+        panel.spawn((
+            Detail,
+            theme::light("", 13.0, theme::MUTED, &faces),
+            // Two lines' room, whichever setting is chosen.
+            Node { margin: UiRect::new(px(10), px(10), px(8), px(4)), height: px(40), ..default() },
+        ));
+        panel
+            .spawn((
+                Node {
+                    column_gap: px(16),
+                    flex_wrap: FlexWrap::Wrap,
+                    row_gap: px(6),
+                    padding: UiRect::top(px(12)),
+                    border: UiRect::top(px(1)),
+                    ..default()
+                },
+                BorderColor::all(theme::EDGE),
+            ))
+            .with_children(|bar| {
+                theme::hint(bar, &[Key::Arrow(0), Key::Arrow(2)], "CHOOSE", &arrows);
+                theme::hint(bar, &[Key::Arrow(3), Key::Arrow(1)], "CHANGE", &arrows);
+                let end = theme::hint(bar, &[Key::Word("ENTER")], "END RACE", &arrows);
+                bar.commands().entity(end).insert(EndHint);
+                theme::hint(bar, &[Key::Word("ESC")], "CLOSE", &arrows);
+            });
+    });
     commands.spawn((
         Meter,
-        Text::default(),
-        TextFont { font_size: FontSize::Px(13.0), ..default() },
-        TextColor(Color::srgba(1.0, 1.0, 1.0, 0.7)),
-        Node { position_type: PositionType::Absolute, bottom: px(6), right: px(10), ..default() },
+        theme::light("", 12.0, theme::MUTED, &faces),
+        // Bottom centre: the corners are the HUD's.
+        Node {
+            position_type: PositionType::Absolute,
+            bottom: px(6),
+            left: percent(50),
+            width: px(80),
+            margin: UiRect::left(px(-40)),
+            justify_content: JustifyContent::Center,
+            ..default()
+        },
         GlobalZIndex(9),
     ));
 }
@@ -448,12 +537,12 @@ fn choose(
     save(*settings);
 }
 
-/// The frame rate and the tier, small, in a corner, always.
+/// The frame rate, small, in a corner, always.
 #[derive(Component)]
 struct Meter;
 
-fn meter(pace: Res<Pace>, tier: Res<Tier>, mut texts: Query<&mut Text, With<Meter>>) {
-    let wanted = format!("{:.0} fps  {}", pace.fps, *tier);
+fn meter(pace: Res<Pace>, mut texts: Query<&mut Text, With<Meter>>) {
+    let wanted = format!("{:.0} FPS", pace.fps);
     for mut text in &mut texts {
         if text.0 != wanted {
             text.0.clone_from(&wanted);
@@ -472,7 +561,13 @@ fn next(now: Option<u32>, step: i32) -> Option<u32> {
     CHOICES[(at as i32 + step).clamp(0, last) as usize]
 }
 
-#[allow(clippy::too_many_arguments)]
+/// The words with a capital first letter.
+fn capital(words: &str) -> String {
+    let mut chars = words.chars();
+    chars.next().map_or_else(String::new, |first| first.to_uppercase().chain(chars).collect())
+}
+
+#[allow(clippy::too_many_arguments, clippy::type_complexity)]
 fn show(
     menu: Res<Menu>,
     row: Res<Row>,
@@ -480,20 +575,21 @@ fn show(
     pace: Res<Pace>,
     view: Res<RaceView>,
     voices: Res<Voices>,
-    tier: Res<Tier>,
-    mut lines: Query<&mut Text, With<Lines>>,
+    mut lines: Query<(&Line, &mut BackgroundColor)>,
+    mut values: Query<(&Value, &mut Text, &mut TextColor), Without<Detail>>,
+    mut detail: Query<&mut Text, (With<Detail>, Without<Value>)>,
+    mut end: Query<&mut Node, With<EndHint>>,
 ) {
     if !menu.0 {
         return;
     }
-    let wanted = settings.fps.map_or_else(|| "off".to_owned(), |n| format!("{n} fps"));
     let rung = pace.rung();
     let picture = match pace.aim {
-        None => "the tier's own".to_owned(),
+        None => "picture as this computer started".to_owned(),
         Some(aim) => {
             let level = LADDER.len() - pace.rung;
             let mut parts =
-                vec![format!("level {level}/{}", LADDER.len()), format!("{:.0} % size", rung.scale * 100.0)];
+                vec![format!("picture level {level} of {}", LADDER.len()), format!("{:.0} % size", rung.scale * 100.0)];
             if !rung.effects {
                 parts.push("effects off".to_owned());
             }
@@ -501,38 +597,63 @@ fn show(
                 parts.push("no shadows".to_owned());
             }
             if settings.fps.is_some_and(|fps| aim < fps as f32 - 0.5) {
-                parts.push(format!("screen holds {aim:.0}"));
+                parts.push(format!("the screen holds {aim:.0}"));
             }
             parts.join(" · ")
         }
     };
-    let end = if may_end(&view) { "\nEnter  end this race (you race alone)" } else { "" };
-    let mark = |r: usize| if row.0 == r { ">" } else { " " };
-    let on = |on: bool| if on { "on" } else { "off" };
-    let content = format!(
-        "SETTINGS\n\n{} Frame rate wanted   <  {wanted}  >\n  Now {:.0} fps\n  Picture: {picture}\n\n{} Sound   <  {}  >   (N)\n{} Music   <  {}  >   (M, B next)\n{} Music from   <  {}  >\n{} Radio directory   <  {}  >\n  (off: radio-browser.info is not asked)\n{} Voice   <  {}  >\n{} Mute   <  {}  >   (Space)\n  Picture: {tier}, chosen for this computer\n{end}\n↑ ↓ choose    ← → change    Esc close",
-        mark(0),
-        pace.fps,
-        mark(1),
-        on(settings.sound),
-        mark(2),
-        on(settings.music),
-        mark(3),
-        settings.from.shown(),
-        mark(4),
-        settings.directory.map_or("off", |kind| KINDS[kind % KINDS.len()]),
-        mark(5),
-        settings.voice.shown(),
-        mark(6),
-        voices.others.get(voices.picked).map_or_else(
-            || "nobody else talking".to_owned(),
-            |(name, muted, _)| format!("{name}: {}", if *muted { "muted" } else { "heard" })
+    let on = |on: bool| if on { "On" } else { "Off" }.to_owned();
+    let value = |r: usize| match r {
+        0 => settings.fps.map_or_else(|| "Off".to_owned(), |n| format!("{n} fps")),
+        1 => on(settings.sound),
+        2 => on(settings.music),
+        3 => capital(settings.from.shown()),
+        4 => capital(settings.directory.map_or("Off", |kind| KINDS[kind % KINDS.len()])),
+        5 => capital(settings.voice.shown()),
+        _ => voices.others.get(voices.picked).map_or_else(
+            || "Nobody else talking".to_owned(),
+            |(name, muted, _)| format!("{name}: {}", if *muted { "muted" } else { "heard" }),
         ),
-        tier = *tier,
-    );
-    for mut text in &mut lines {
-        if text.0 != content {
-            text.0 = content.clone();
+    };
+    for (line, mut back) in &mut lines {
+        let wanted = if line.0 == row.0 { Color::srgba(1.0, 0.72, 0.2, 0.2) } else { Color::NONE };
+        if back.0 != wanted {
+            back.0 = wanted;
+        }
+    }
+    for (at, mut text, mut colour) in &mut values {
+        let chosen = at.0 == row.0;
+        // The one chosen shows that the arrows change it.
+        let wanted = if chosen { format!("‹  {}  ›", value(at.0)) } else { value(at.0) };
+        if text.0 != wanted {
+            text.0 = wanted;
+        }
+        let tint = if chosen { theme::ACCENT } else { theme::TEXT };
+        if colour.0 != tint {
+            colour.0 = tint;
+        }
+    }
+    let about = match row.0 {
+        0 => format!(
+            "Picture lowered until frames come this often, raised when there is room.\nNow {:.0} fps · {picture}",
+            pace.fps
+        ),
+        1 => "N turns the sound on or off at any time in the game.".to_owned(),
+        2 => "M turns the music on or off at any time; B skips to the next piece.".to_owned(),
+        3 => "Auto: the host's music when they share some, else the game's own.".to_owned(),
+        4 => "Off: radio-browser.info is not asked. On, it learns the kind of music searched.".to_owned(),
+        5 => "Off closes the microphone. Push to talk: hold V.".to_owned(),
+        _ => "Left and right pick another driver; Space mutes or unmutes them.".to_owned(),
+    };
+    for mut text in &mut detail {
+        if text.0 != about {
+            text.0.clone_from(&about);
+        }
+    }
+    let shown = if may_end(&view) { Display::Flex } else { Display::None };
+    for mut node in &mut end {
+        if node.display != shown {
+            node.display = shown;
         }
     }
 }
