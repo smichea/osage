@@ -845,3 +845,10 @@ Date: 2026-11-13 · the maintainer's goal names it: "tous les extras comme leade
 - **Why:** records seen only between races on one's own screen are a list; a page anyone can open, on a phone at the side of the sofa or on the next computer, is a leaderboard.
 - **Rejected:** a leaderboard shared between worlds over the internet (it would need an account system and a server of ours; each world's own is the next step's foundation).
 
+## D-092 — Painted walls and kerbs on the grain of cast concrete
+
+Date: 2026-11-13 · seen at T3 up close: the red and white barriers looked stained.
+
+- **Decision:** the photographed circuit's painted walls and kerbs take the grain of Poly Haven's `concrete_wall_008` (fine, even, the texture of cast concrete under paint) in place of `painted_concrete`'s, a photograph of peeling green paint whose patches read as stains from the road; the latter stays the fallback.
+- **Why:** paint on a circuit's wall is renewed every season; what shows through is the concrete's pores, not peeling.
+

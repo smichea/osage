@@ -753,7 +753,11 @@ impl Photographed {
             asphalt: Surface::load(root, "asphalt_02", images, |p| p)?,
             grass: Surface::load_grain(root, "sparse_grass", images)?,
             gravel: Surface::load(root, "gravel_floor_02", images, |p| p)?,
-            paint: Surface::load_grain(root, "painted_concrete", images)?,
+            // Painted walls and kerbs: the fine grain of cast concrete under
+            // the paint (D-092; the peeling-paint photograph's patches read
+            // as stains at a distance), else the painted concrete's.
+            paint: Surface::load_grain(root, "concrete_wall_008", images)
+                .or_else(|| Surface::load_grain(root, "painted_concrete", images))?,
             concrete: Surface::load_grain(root, "concrete_floor_02", images)?,
             rock: Surface::load_grain(root, "rock_face_03", images),
         })
