@@ -215,6 +215,60 @@ source = "https://polyhaven.com/a/concrete_floor_02"
 used_by = "worlds/kart/native: concrete: start area, walls, grandstand (R6); occlusion-roughness-metal, 2k"
 
 [[asset]]
+path = "assets/polyhaven/rock_face_03/rock_face_03_diff_2k.jpg"
+url = "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/2k/rock_face_03/rock_face_03_diff_2k.jpg"
+sha256 = "644ee79df7ffbf5f6afc330b64dd3f33794bab8820915fe61ffe0c88ecfd7ece"
+licence = "CC0-1.0"
+author = "Dario Barresi, Rico Cilliers (Poly Haven)"
+source = "https://polyhaven.com/a/rock_face_03"
+used_by = "worlds/kart/native: rock — tunnels' shells, cut faces (D-080); colour, 2k"
+
+[[asset]]
+path = "assets/polyhaven/rock_face_03/rock_face_03_nor_gl_2k.jpg"
+url = "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/2k/rock_face_03/rock_face_03_nor_gl_2k.jpg"
+sha256 = "a498cef4ba6191f6959b6d03fb835263c77271948264a289af24497ab7111dec"
+licence = "CC0-1.0"
+author = "Dario Barresi, Rico Cilliers (Poly Haven)"
+source = "https://polyhaven.com/a/rock_face_03"
+used_by = "worlds/kart/native: rock — tunnels' shells, cut faces (D-080); normal (OpenGL), 2k"
+
+[[asset]]
+path = "assets/polyhaven/rock_face_03/rock_face_03_arm_2k.jpg"
+url = "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/2k/rock_face_03/rock_face_03_arm_2k.jpg"
+sha256 = "1921303981d12bccf72dd29d8a8daf823f1d9bb60400b447c64757203c1e2dad"
+licence = "CC0-1.0"
+author = "Dario Barresi, Rico Cilliers (Poly Haven)"
+source = "https://polyhaven.com/a/rock_face_03"
+used_by = "worlds/kart/native: rock — tunnels' shells, cut faces (D-080); occlusion, roughness, metal, 2k"
+
+[[asset]]
+path = "assets/polyhaven/concrete_wall_008/concrete_wall_008_diff_2k.jpg"
+url = "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/2k/concrete_wall_008/concrete_wall_008_diff_2k.jpg"
+sha256 = "a3eb7b24c5cf6f113ec9b3be8ab1715360ef3cbf4b1699979414e44341f54846"
+licence = "CC0-1.0"
+author = "Charlotte Baglioni, Dario Barresi (Poly Haven)"
+source = "https://polyhaven.com/a/concrete_wall_008"
+used_by = "worlds/kart/native: concrete of bridges and tunnels (D-080); colour, 2k"
+
+[[asset]]
+path = "assets/polyhaven/concrete_wall_008/concrete_wall_008_nor_gl_2k.jpg"
+url = "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/2k/concrete_wall_008/concrete_wall_008_nor_gl_2k.jpg"
+sha256 = "58ce9b818772d37fe16e1154ea0278f3ab423ed34073357e786ef44f9ceef052"
+licence = "CC0-1.0"
+author = "Charlotte Baglioni, Dario Barresi (Poly Haven)"
+source = "https://polyhaven.com/a/concrete_wall_008"
+used_by = "worlds/kart/native: concrete of bridges and tunnels (D-080); normal (OpenGL), 2k"
+
+[[asset]]
+path = "assets/polyhaven/concrete_wall_008/concrete_wall_008_arm_2k.jpg"
+url = "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/2k/concrete_wall_008/concrete_wall_008_arm_2k.jpg"
+sha256 = "98e5e8f447e2ce92bb0349cb0c8265ca0b67c6fe6f6a1be31c4be8e986aa47c7"
+licence = "CC0-1.0"
+author = "Charlotte Baglioni, Dario Barresi (Poly Haven)"
+source = "https://polyhaven.com/a/concrete_wall_008"
+used_by = "worlds/kart/native: concrete of bridges and tunnels (D-080); occlusion, roughness, metal, 2k"
+
+[[asset]]
 path = "assets/polyhaven/painted_concrete/painted_concrete_diff_2k.jpg"
 url = "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/2k/painted_concrete/painted_concrete_diff_2k.jpg"
 sha256 = "558ae59b4b9d159f24686e4ee0a768ea89cbc02f08ede82b91445d57850748b8"

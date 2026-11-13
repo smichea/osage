@@ -392,7 +392,7 @@ pub fn build(
     // On a coast, the sea beside the land, below its cliffs (D-061); a
     // mountain's heights, a canyon's walls, gorges and ridges (D-077).
     let land = place(Land::new(&frames, track), &course.0);
-    crate::spans::build(&mut commands, &mut meshes, &mut materials, &course.0, &frames, &land);
+    crate::spans::build(&mut commands, &mut meshes, &mut materials, &mut images, &course.0, &frames, &land);
     let (half, verge) = (track.half_width, track.verge);
     sea(&mut commands, &mut meshes, &mut materials, &mut images, &land);
     let assets = content::root();

@@ -29,6 +29,9 @@ pub const GORGE: f32 = 16.0;
 /// the tunnel's vault is at its crown, m.
 pub const RIDGE: f32 = 12.0;
 pub const VAULT: f32 = 9.5;
+/// How far past the barrier's face a tunnel's vault and shell reach, m:
+/// the land keeps under the road up to there.
+pub const TUNNEL_CLEAR: f32 = 3.0;
 /// How far across the road a gorge and a ridge reach before they fade, m.
 const GORGE_REACH: f32 = 35.0;
 const RIDGE_REACH: f32 = 45.0;
@@ -346,12 +349,19 @@ impl Land {
         }
         let side = spot.lateral.abs();
         // Over a tunnel the land stands as a ridge on both sides of the
-        // road (the vault and its cover close it: whoever draws them).
+        // road (the vault and its cover close it: whoever draws them),
+        // from beyond the vault's shell: up to it the land keeps under the
+        // road, so that no slope a grid joins crosses the vault.
         let face = self.track.half_width + self.track.verge + BARRIER;
-        if side > face && self.in_tunnel(spot.along).is_some() {
-            let reach = 1.0 - smooth((side - RIDGE_REACH) / 40.0);
-            let ridge = road + RIDGE * smooth((side - face) / 6.0);
-            height += (height.max(ridge) - height) * reach;
+        if self.in_tunnel(spot.along).is_some() {
+            let shell = face + TUNNEL_CLEAR;
+            if side <= shell {
+                height = height.min(road - 0.05);
+            } else {
+                let reach = 1.0 - smooth((side - RIDGE_REACH) / 40.0);
+                let ridge = road + RIDGE * smooth((side - shell) / 6.0);
+                height += (height.max(ridge) - height) * reach;
+            }
         }
         // Under a bridge the land falls into a gorge across the road.
         if let Some(t) = self.on_bridge(spot.along) {

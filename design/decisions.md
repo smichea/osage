@@ -742,3 +742,12 @@ Date: 2026-11-13 · the remainder of the play test's third point ("les collision
 - **Replaces:** D-052's fixed responses (a tyre: 45 % of the speed kept and 5 rad/s of spin; a cone: 85 % and a 1.5 m/s knock; both gone).
 - **Consequences:** a tyre that bounces off one kart can hit another (a life each in a battle, D-065); a cone knocked onto the racing line stays a hazard. The browser client still draws no things.
 
+## D-080 — Bridges and tunnels built as a game studio builds them
+
+Date: 2026-11-13 · the maintainer's reminders ("qualité GTA V, oublie pas stp") after D-077's bridges and tunnels: the tunnel black inside, the hillside through its vault, the bridge's edge reading as two decks.
+
+- **Decision:** `spans` sweeps every piece along the track's frames from a cross-section, with texture coordinates in metres and tangents, under photographed CC0 sets at their real size — Poly Haven's `concrete_wall_008` (2.7 m) for concrete, `rock_face_03` (4 m) for rock, red-tinted in a canyon — and a colour per vertex for the weather's marks: a fascia streaked and darker low, a deck's underside darker, columns splashed at their foot, a tunnel's lining grimed by the road's spray and sooted at its crown. A bridge: deck; fascia and parapet one face under a cornice; a crosshead under the deck every 18 m on two round columns sunk 6 m into the gorge. A tunnel: the lining faced with pale panels (painted concrete's grain under cream, matt: the scene's reflections are the sky's) up to 3.4 m; lamps in housings high on the walls, one side then the other every 8 m, each a light of 3·10⁷ lm (about 30 000 lux on the road, a tunnel's entrance zone under daylight's exposure; 4·10⁶ gave a black tunnel); headwall portals with a coping. The land keeps under the road up to 3 m past the barrier's face in a tunnel (`TUNNEL_CLEAR`), so that the ridge, joined by the land's grid of about 4 m, no longer crosses the vault.
+- **Why:** shapes scaled from cubes carry their texture stretched over metres or none, and read as toys; a game of this ambition builds its structures from profiles with materials at their real size and weathering where water and traffic leave it.
+- **Rejected:** a reflection probe inside each tunnel (the right way to stop the sky's reflections indoors; later, with M6's reflections); emissive panels.
+- **Consequences:** the content gains the two sets (18 MB). Each tunnel lamp is a point light: a 70 m tunnel has nine.
+
