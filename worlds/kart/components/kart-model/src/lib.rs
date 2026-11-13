@@ -303,6 +303,14 @@ pub fn neck(lean: Quat) -> Vec3 {
 /// spine; the arms join them, elbows out and down as sculpted (two-bone
 /// inverse kinematics, the arms' lengths kept).
 pub fn driver_pose(turn: f32, lean: Quat) -> [Transform; DRIVER_BONES] {
+    driver_cheering(turn, lean, [0.0, 0.0], 0.0)
+}
+
+/// The bones as [`driver_pose`] has them, but with each arm — left (+X),
+/// then right — raised off the wheel by `raised` (0 on the rim, 1 a fist
+/// above the helmet), waving with `time` (seconds): a driver cheering a
+/// place on the podium (D-087).
+pub fn driver_cheering(turn: f32, lean: Quat, raised: [f32; 2], time: f32) -> [Transform; DRIVER_BONES] {
     let column = steering_column();
     let spin = column.rotation * Quat::from_rotation_y(turn) * column.rotation.inverse();
     let waist = JOINTS[SPINE];
@@ -316,8 +324,13 @@ pub fn driver_pose(turn: f32, lean: Quat) -> [Transform; DRIVER_BONES] {
         // way it bends, carried the same way.
         let (s, rest_elbow) = (bent(rest_shoulder), bent(e));
         let (upper, fore) = (e.distance(rest_shoulder), w.distance(e));
-        // The wrist, carried round the column with the rim.
-        let target = column.translation + spin * (w - column.translation);
+        // The wrist, carried round the column with the rim; raised, a fist
+        // above the shoulder, a little out, waving.
+        let on_rim = column.translation + spin * (w - column.translation);
+        let up = raised[if side > 0.0 { 0 } else { 1 }].clamp(0.0, 1.0);
+        let wave = (time * 7.0).sin() * 0.06 * up;
+        let fist = s + Vec3::new(side * (0.16 + wave), 0.5, 0.06 + wave * 0.5);
+        let target = on_rim.lerp(fist, up * up * (3.0 - 2.0 * up));
         let towards = target - s;
         let reach = towards.length().clamp((upper - fore).abs() + 1e-3, upper + fore - 1e-3);
         let along = towards.normalize_or(Vec3::Y);
@@ -330,7 +343,7 @@ pub fn driver_pose(turn: f32, lean: Quat) -> [Transform; DRIVER_BONES] {
             .with_rotation(Quat::from_rotation_arc((e - rest_shoulder).normalize(), (elbow - s).normalize()));
         pose[first + 1] = Transform::from_translation(elbow)
             .with_rotation(Quat::from_rotation_arc((w - e).normalize(), (wrist - elbow).normalize()));
-        pose[first + 2] = Transform::from_translation(wrist).with_rotation(spin);
+        pose[first + 2] = Transform::from_translation(wrist).with_rotation(spin.slerp(Quat::IDENTITY, up));
     }
     pose
 }
@@ -791,6 +804,19 @@ mod tests {
     use bevy::mesh::VertexAttributeValues;
 
     use super::*;
+
+    #[test]
+    fn a_cheering_driver_raises_a_fist_above_the_helmet_and_keeps_the_arm_whole() {
+        let pose = driver_cheering(0.0, Quat::IDENTITY, [1.0, 0.0], 0.3);
+        let (s, e, w) = (JOINTS[1], JOINTS[2], JOINTS[3]);
+        let (shoulder, elbow, wrist) = (pose[1].translation, pose[2].translation, pose[3].translation);
+        assert!(wrist.y > NECK.y, "the left fist above the neck: {wrist}");
+        assert!((elbow.distance(shoulder) - e.distance(s)).abs() < 1e-3);
+        assert!((wrist.distance(elbow) - w.distance(e)).abs() < 1e-3);
+        // The other hand stays on the wheel.
+        let still = driver_pose(0.0, Quat::IDENTITY);
+        assert!(pose[6].translation.distance(still[6].translation) < 1e-4);
+    }
 
     #[test]
     fn at_rest_the_driver_is_as_sculpted_and_turning_keeps_the_arms_whole() {

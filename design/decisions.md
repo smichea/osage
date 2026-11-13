@@ -805,3 +805,11 @@ Date: 2026-11-13 · design/04 M4 (split screen), toward the maintainer's "tous l
 - **Rejected:** a second kart driven through the first's connection (the world gives one kart per player: a second identity is the world's own rule, and it keeps the two players' records, places and points apart).
 - **Consequences:** between races player 2 picks a driver and a kart with the arrows and the second gamepad's d-pad (player 1 then with D A and S W), named on their line; paints stay player 1's (the profile is theirs); particles face player 1's camera; two predicted karts and two cameras cost about a second view's rendering.
 
+## D-087 — Drivers who react: cheering on the podium, dizzy in a spin
+
+Date: 2026-11-13 · design/04 M5 (animated drivers), toward Mario Kart's characters who react.
+
+- **Decision:** a driver who has finished on the podium raises the left fist above the helmet and waves it (`osage-kart-model`'s `driver_cheering`: the wrist's target eased from the rim to above the shoulder, the arm solved as before, its lengths kept); a driver whose kart spins shakes their head, as fast as the spin. The world's `Racer` says who finished where; the client draws it (`Pose.cheer`).
+- **Why:** a character who answers what happens to them is what turns a kart with a figure on it into a driver.
+- **Consequences:** the bench's drivers never cheer (no one finishes there); hands off the wheel are drawn, not felt: the kart coasts as before.
+

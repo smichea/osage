@@ -267,6 +267,8 @@ pub struct Pose {
     /// A ghost (D-062): a run from an earlier time trial, driven again;
     /// drawn seen through, and silent.
     pub ghost: bool,
+    /// Its driver finished on the podium, and cheers (D-087).
+    pub cheer: bool,
 }
 
 /// A place the camera is held at, looking at another, instead of following a kart.

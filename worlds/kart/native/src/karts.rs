@@ -24,7 +24,7 @@ use bevy::{
     prelude::*,
 };
 use osage_kart_model::{
-    AXLES, DRIVER_BONES, Finish, Livery, NECK, WHEELS, driver_pose, driver_rest, neck, steering_column,
+    AXLES, DRIVER_BONES, Finish, Livery, NECK, WHEELS, driver_cheering, driver_rest, neck, steering_column,
 };
 pub use osage_kart_model::{EXHAUSTS, REAR_CONTACTS};
 use osage_kart_physics::{MAX_SPEED, wrap};
@@ -125,6 +125,9 @@ pub struct Rig {
     /// moves. A mass on a spring: it lags, swings a little past, settles.
     torso: Vec2,
     sway: Vec2,
+    /// How far the driver's arm is raised, cheering a place on the podium
+    /// (D-087): eased from 0 to 1.
+    cheer: f32,
     /// Seconds driven, and this kart's own offset, for its rumble.
     time: f32,
     seed: f32,
@@ -517,6 +520,7 @@ pub fn dress(
                 drifting: false,
                 torso: Vec2::ZERO,
                 sway: Vec2::ZERO,
+                cheer: 0.0,
                 time: 0.0,
                 seed: (kart.index_u32() % 97) as f32 * 0.61,
                 attitude: 0.0,
@@ -662,19 +666,25 @@ pub fn animate(
         // The head goes where the trunk takes it; the neck keeps the eyes
         // nearer level than the shoulders. The driver looks into the turn
         // and leans against the bend.
+        // Spun round, the driver shakes their head (D-087).
+        let dizzy = (kart.spin.abs() / 4.0).min(1.0);
+        let shake = (rig.time * 16.0 + rig.seed).sin() * 0.35 * dizzy;
         if let Ok(mut head) = transforms.get_mut(rig.head) {
             head.translation = neck(lean);
             head.rotation = Quat::IDENTITY.slerp(lean, 0.45)
-                * Quat::from_rotation_y(rig.steer * 0.45 - rig.slip * 0.6)
+                * Quat::from_rotation_y(rig.steer * 0.45 - rig.slip * 0.6 + shake)
                 * Quat::from_rotation_z(-rig.lean * 1.5);
         }
+        // On the podium, the left arm up, waving.
+        let wanted = if pose.cheer { 1.0 } else { 0.0 };
+        rig.cheer += (wanted - rig.cheer) * (1.0 - (-seconds * 3.0).exp());
         // The steering wheel turns twice as far as the front wheels, the
         // hands on it, the arms following.
         let turn = rig.steer * 1.1;
         if let Ok(mut wheel) = transforms.get_mut(rig.bones.steering) {
             *wheel = steering_column() * Transform::from_rotation(Quat::from_rotation_y(turn));
         }
-        for (joint, bone) in rig.bones.joints.iter().zip(driver_pose(turn, lean)) {
+        for (joint, bone) in rig.bones.joints.iter().zip(driver_cheering(turn, lean, [rig.cheer, 0.0], rig.time)) {
             if let Ok(mut place) = transforms.get_mut(*joint) {
                 *place = bone;
             }

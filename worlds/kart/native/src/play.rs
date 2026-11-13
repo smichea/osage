@@ -396,6 +396,7 @@ fn receive(
                                     trailing: false,
                                     guard: 0.0,
                                     ghost: racer.ghost || racer.out,
+                                    cheer: false,
                                 },
                                 Remote(entity),
                             ))
@@ -1091,6 +1092,8 @@ fn poses(
         pose.held = racer.as_ref().and_then(|racer| item(racer.held()));
         pose.trailing = racer.as_ref().is_some_and(|racer| racer.trailing);
         pose.guard = racer.as_ref().map_or(0.0, |racer| racer.guard);
+        // On the podium, the driver cheers (D-087).
+        pose.cheer = racer.as_ref().is_some_and(|racer| racer.finish_ms > 0 && (1..=3).contains(&racer.position));
         pose.smoke = racer.map(|racer| racer.smoke).filter(|colour| *colour != 0);
     }
 }
