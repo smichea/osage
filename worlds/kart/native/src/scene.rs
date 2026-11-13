@@ -17,7 +17,7 @@ use osage_kart_physics::{Ground, Kart, MAX_SPEED};
 use osage_render::{Look, OsageCamera, Sun, panorama::Panorama};
 use osage_world_kart::Circuit;
 
-use crate::{effects, karts, scenery, track};
+use crate::{effects, karts, marks, scenery, track};
 
 /// Kart colours, by `kart.racer/1` colour index: the browser client's palette.
 pub const PALETTE: [(f32, f32, f32); 8] = [
@@ -226,12 +226,13 @@ pub struct Part;
 
 impl Plugin for ScenePlugin {
     fn build(&self, app: &mut App) {
-        let circuit = (follow_the_sky.run_if(resource_exists::<SkyShown>), track::build, scenery::build)
+        let circuit = (follow_the_sky.run_if(resource_exists::<SkyShown>), track::build, scenery::build, marks::build)
             .chain()
             .run_if(resource_exists_and_changed::<Course>);
         app.configure_sets(Update, (Stage::Simulate, Stage::Draw).chain())
             .init_resource::<View>()
             .init_resource::<Glance>()
+            .init_resource::<marks::Marks>()
             .add_systems(Startup, (setup, karts::setup, effects::setup, scenery::load_roadside))
             .add_systems(
                 Update,
@@ -241,6 +242,7 @@ impl Plugin for ScenePlugin {
                     karts::park,
                     karts::animate,
                     effects::emit,
+                    marks::lay,
                     effects::update,
                     effects::prewarm,
                     scenery::bob,

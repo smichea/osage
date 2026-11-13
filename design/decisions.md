@@ -627,3 +627,12 @@ Date: 2026-11-13 · design/04 G4.7 (its photo half; whole-race replays are left 
 - **Why:** a game that looks like this is photographed by its players, and a long lens wide open is what makes a picture look taken rather than rendered. Freezing the picture locally needs nothing from the world, so it works in any event, alone or with friends.
 - **Rejected:** pausing the world for a photo (four friends in one race: nobody else would want it); a camera of the game's own size of sensor (the default, Super 35, gives little blur at the wide angles players start from).
 - **Consequences:** a photo taken in a race costs the race. The particles go on while the karts are frozen. A race replay — the world's ticks recorded and stepped again — is still to do (G4.7's other half).
+
+## D-067 — Marks on the track: rubber where tyres scrub, ruts in the grass, fading
+
+Date: 2026-11-13 · design/04 V1.1.
+
+- **Decision:** the native client lays marks where the karts' rear tyres work the surface (`marks.rs`): black rubber on the asphalt through a drift, a slide, a spin or a stop harder than braking alone gives, darker the harder; brown ruts where a kart runs on the grass. They are pieces of strip 0.35 m long and a tyre wide, all karts' in one mesh, built again as they are laid and as they fade over 25 s (4000 pieces at most, the oldest first); a new circuit starts clean. They lie over the road and its baked marks (D-054), which stay as the season's rubber through the bends.
+- **Why:** a track shows what was driven on it; marks that appear under the player's own drift are the cheapest proof that the picture follows the game. Laid from the poses the client draws, they need nothing from the world, and the bench draws them as the game does.
+- **Rejected:** decals projected on the ground (a second pass for every mark, for a road that is a mesh one can lay strips on); marks kept for the whole race (the asphalt would turn black in a long one).
+- **Consequences:** marks are each client's: two players see the same marks only as far as their poses agree. Debris after hits (the rest of V1.1) waits for the world to tell clients what hit what.

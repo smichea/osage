@@ -30,6 +30,7 @@ mod effects;
 mod hud;
 mod karts;
 mod landmarks;
+mod marks;
 #[cfg(feature = "sound")]
 mod music;
 mod paddock;
