@@ -77,6 +77,7 @@ interface Exports {
   track_close(halfWidth: number, verge: number): number;
   track_lift(along: number): number;
   track_along(x: number, z: number): number;
+  track_class(c: number): void;
   track_wet(wet: number): void;
   track_height(height: number): void;
   kart_set(field: number, value: number): void;
@@ -118,6 +119,12 @@ export class Physics {
   /** The road's height `along` metres along the centre line: 0 but over a crest (D-051). */
   roadHeight(along: number): number {
     return this.wasm.track_lift(along);
+  }
+
+  /** The race's engine class in cc (D-089): every top speed and acceleration scaled. */
+  setClass(cc: number): void {
+    const factor = cc === 50 ? 0.7 : cc === 100 ? 0.85 : cc === 200 ? 1.15 : 1;
+    this.wasm.track_class(factor);
   }
 
   /** The road's height under the point `x, z`. */

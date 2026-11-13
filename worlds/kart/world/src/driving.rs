@@ -114,6 +114,12 @@ pub fn intents(
             if !choice.event.is_empty() {
                 cups.choose(owner.0, &choice.event);
             }
+            // The engine class (D-089): the host's to say, from the next race.
+            if osage_kart_physics::CLASSES.contains(&choice.class)
+                && (drivers.host() == Some(owner.0) || !rules.host_starts)
+            {
+                rules.class = choice.class;
+            }
             // How the bots race (D-088): the host's to say, from the next race.
             if let Some(bots) = osage_kart_racecraft::Difficulty::parse(&choice.bots)
                 && (drivers.host() == Some(owner.0) || !rules.host_starts)

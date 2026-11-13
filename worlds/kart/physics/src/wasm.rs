@@ -58,6 +58,13 @@ pub extern "C" fn track_lift(along: f32) -> f32 {
     TRACK.with_borrow(|track| track.as_ref().map_or(0.0, |track| track.lift(along).0))
 }
 
+/// The engine class of the race (D-089): every top speed and acceleration
+/// times this; 1 the standard.
+#[unsafe(no_mangle)]
+pub extern "C" fn track_class(class: f32) {
+    TRACK.with_borrow_mut(|track| *track = track.take().map(|track| track.with_class(class)));
+}
+
 /// How far along the centre line the point `x, z` is, m (where the road's
 /// height is looked up for things on it).
 #[unsafe(no_mangle)]

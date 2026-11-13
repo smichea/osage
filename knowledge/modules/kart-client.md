@@ -42,4 +42,4 @@ The replica-and-prediction pattern serves any world whose physics compiles to We
 
 # Limits
 
-Plainer than the native client: flat colours, no photographed materials, no sound, no replay. Things are drawn at the world's time, not as far ahead as the player's kart is predicted, so a tyre the player throws shows a moment behind the kart. The browser's own kart does not knock into the others in its prediction (D-076 is the native client's).
+Plainer than the native client: flat colours, no photographed materials, no sound, no replay. The physics steps in the race's engine class (`Physics::setClass`, D-089) and on its wet road. Things are drawn at the world's time, not as far ahead as the player's kart is predicted, so a tyre the player throws shows a moment behind the kart. The browser's own kart does not knock into the others in its prediction (D-076 is the native client's).

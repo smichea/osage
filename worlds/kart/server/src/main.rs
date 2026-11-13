@@ -46,6 +46,11 @@ fn main() -> anyhow::Result<()> {
                 Some("rain") => osage_world_kart::Weather::Rain,
                 _ => anyhow::bail!("--weather takes track, dry or rain"),
             };
+        } else if arg == "--class" {
+            let cc = args.next().and_then(|cc| cc.trim_end_matches("cc").parse::<u32>().ok());
+            world.class = cc
+                .filter(|cc| osage_kart_physics::CLASSES.contains(cc))
+                .context("--class takes 50, 100, 150 or 200")?;
         } else if arg == "--bots" {
             let wanted = args.next().unwrap_or_default();
             world.bots =

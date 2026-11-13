@@ -35,7 +35,7 @@ Opponents that race as people do, each in their own way: one brakes late and div
 
 # Interfaces
 
-`Temper::{STEADY, HOTHEAD, CAUTIOUS, ROOKIE, VETERAN, of}`, `Difficulty::{Easy, Normal, Hard, temper, next, parse, name}` (D-088: easy — pace 0.78 to 0.84, nerve ×0.6, aggression ×0.5, consistency ×0.85, no drifts; normal as drawn; hard — pace +0.04 up to 0.97, nerve and aggression +0.2, consistency at least 0.9, every one drifts), `Mind::{new, plan, mistake, mistakes, shaken}`, `Plan`, `Mistake`, `Rival`, `Hazard`, `field`, `drive`, `drive_among`, `follow`.
+`Temper::{STEADY, HOTHEAD, CAUTIOUS, ROOKIE, VETERAN, of}`, `Difficulty::{Easy, Normal, Hard, temper, next, parse, name}` (D-088: easy — pace 0.78 to 0.84, nerve ×0.6, aggression ×0.5, consistency ×0.85, no drifts; normal as drawn; hard — pace +0.04 up to 0.97, nerve and aggression +0.2, consistency at least 0.9, every one drifts), `Mind::{new, plan, mistake, mistakes, shaken}`, `Plan`, `Mistake`, `Rival`, `Hazard`, `field`, `drive`, `drive_among`, `follow`. Their top speeds follow the track's engine class (D-089).
 
 # Invariants
 

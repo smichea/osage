@@ -454,7 +454,8 @@ pub fn drive_among(
     let lateral = lateral + (wanted - lateral).clamp(-lane * DT, lane * DT);
     mind.lateral = Some(lateral);
 
-    let top = pace * (MAX_SPEED * build.top) + if kart.boost > 0.0 { 6.0 } else { 0.0 };
+    // The engine class scales the top speed (D-089).
+    let top = pace * (MAX_SPEED * build.top * track.class) + if kart.boost > 0.0 { 6.0 } else { 0.0 };
     let tight = sharpest < 40.0 && at < 15.0;
     let mut controls =
         steer(kart, spot, lateral, top.min(allowed), allowed, temper.drifts && tight && mind.plan != Plan::Wait, track);
@@ -483,7 +484,7 @@ pub fn follow(kart: &Kart, pace: f32, line: f32, drift: bool, track: &Track) -> 
         tight |= radius < 40.0 && distance < 15.0;
     }
     let lateral = line.clamp(-1.0, 1.0) * (track.half_width - 1.5);
-    let top = pace.clamp(0.0, 1.0) * (MAX_SPEED * build.top);
+    let top = pace.clamp(0.0, 1.0) * (MAX_SPEED * build.top * track.class);
     steer(kart, spot, lateral, top.min(allowed), allowed, drift && tight, track)
 }
 

@@ -821,3 +821,11 @@ Date: 2026-11-13 · toward Mario Kart's playability: a race should be winnable b
 - **Why:** with one strength of bots, a race is either too hard for a newcomer or too easy for the friends who play every evening.
 - **Rejected:** rubber-banding (bots that speed up behind and slow down ahead): the items already help the back of the field (D-052), and a bot that cheats is felt; engine classes (50 to 200 cc) — another decision, as they change the physics every client predicts with.
 
+## D-089 — Engine classes: 50, 100, 150 and 200 cc
+
+Date: 2026-11-13 · toward Mario Kart's playability: a slow class to learn a track, a fast one for those who know it.
+
+- **Decision:** a race is run in an engine class, 150 cc by default. The physics' track carries it (`Track.class`): every top speed and acceleration — the kart's, a mini-turbo's, a rocket's — times 0.7 at 50 cc, 0.85 at 100, 1 at 150 (bit for bit the old physics), 1.15 at 200; braking and grip are the same in every class, so 200 cc asks for earlier braking. The host chooses it between races (G in the native client; `Choice.class`), from the next race; `--class` sets it on the server; `Race.class` says it; the bots' pace follows it; both clients predict in it (`track_class` in WebAssembly).
+- **Why:** speed is the difficulty a player feels most, and the one that grows with them.
+- **Rejected:** scaling the karts' builds (they are kept within ±15 %, a flavour, D-055); faster turning at 200 cc (the handling a player has learnt should not change with the class).
+

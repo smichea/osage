@@ -606,6 +606,7 @@ pub fn publish(
         rain: forecast.rain,
         night: forecast.night,
         bots: rules.bots.name().to_owned(),
+        class: rules.class,
     };
     if let Ok((mut board, mut volatile)) = board.single_mut() {
         if let Some(paddock) = paddock {
@@ -630,6 +631,7 @@ pub fn publish(
                 && c.rain == summary.rain
                 && c.night == summary.night
                 && c.bots == summary.bots
+                && c.class == summary.class
                 && c.phase_ends_us.abs_diff(summary.phase_ends_us) < 50_000
                 && c.started_us.abs_diff(summary.started_us) < 50_000
         });

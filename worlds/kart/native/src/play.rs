@@ -476,12 +476,16 @@ fn receive(
             second.driver.predictor.reconcile(built(&state, racer.as_ref()), state.applied, &circuit.track);
         }
     }
-    // The road is as wet as the race says (D-068): the prediction steps on it.
-    let wet = if replica.race().is_some_and(|race| race.rain) { 1.0 } else { 0.0 };
+    // The road is as wet as the race says (D-068), and the race in its
+    // engine class (D-089): the prediction steps on it so.
+    let race = replica.race();
+    let wet = if race.as_ref().is_some_and(|race| race.rain) { 1.0 } else { 0.0 };
+    let class = osage_kart_physics::class_of(race.as_ref().map_or(150, |race| race.class));
     if let Some(circuit) = &mut replica.circuit
-        && circuit.track.wet != wet
+        && (circuit.track.wet != wet || circuit.track.class != class)
     {
         circuit.track.wet = wet;
+        circuit.track.class = class;
     }
 }
 
@@ -810,6 +814,13 @@ fn choose(
     if !between || menu.0 || roster.drivers.is_empty() || roster.karts.is_empty() {
         return;
     }
+    // G: the engine class (D-089), the host's to say.
+    if keys.just_pressed(KeyCode::KeyG) && race.host == mine {
+        let classes = osage_kart_physics::CLASSES;
+        let at = classes.iter().position(|cc| *cc == race.class).unwrap_or(2);
+        let choice = proto::Choice { class: classes[(at + 1) % classes.len()], ..default() };
+        let _ = outbox.0.send(intent(0, mine, choice_type, &choice));
+    }
     // L: how hard the bots race (D-088), the host's to say.
     if keys.just_pressed(KeyCode::KeyL) && race.host == mine {
         let now = osage_kart_racecraft::Difficulty::parse(&race.bots).unwrap_or_default();
@@ -984,7 +995,12 @@ fn cup_lines(
     if !votes.is_empty() && !event.is_empty() {
         event.push_str(&format!("\nVotes: {}", votes.join(", ")));
     }
-    // How the bots race (D-088): the host changes it with L.
+    // The engine class and how the bots race (D-089, D-088): the host
+    // changes them with G and L.
+    if race.class > 0 {
+        let key = if hosting { "  (G to change)" } else { "" };
+        event.push_str(&format!("\nClass: {} cc{key}", race.class));
+    }
     if !race.bots.is_empty() {
         let key = if hosting { "  (L to change)" } else { "" };
         event.push_str(&format!("\nBots: {}{key}", race.bots));

@@ -113,6 +113,8 @@ pub struct KartWorld {
     pub time: TimeOfDay,
     /// How the bots race (D-088).
     pub bots: osage_kart_racecraft::Difficulty,
+    /// The engine class, cc (D-089): 50, 100, 150 or 200.
+    pub class: u32,
     /// The port where the host shares their music, announced to the
     /// players; none when nothing is shared.
     pub music_port: Option<u16>,
@@ -140,6 +142,7 @@ impl Default for KartWorld {
             weather: Weather::Track,
             time: TimeOfDay::Track,
             bots: osage_kart_racecraft::Difficulty::Normal,
+            class: 150,
             track: paddock(),
             event: None,
             music_port: None,
@@ -160,6 +163,7 @@ impl KartWorld {
             weather: Weather::Track,
             time: TimeOfDay::Track,
             bots: osage_kart_racecraft::Difficulty::Normal,
+            class: 150,
             track: paddock(),
             event: None,
             music_port: None,
@@ -180,39 +184,45 @@ impl Plugin for KartWorld {
             Some(event) => cup::Cups::new(event),
             None => (cup::Cups::single(&self.track), self.track.clone()),
         };
-        app.insert_resource(Rules { grid: self.grid, laps: self.laps, host_starts: self.host_starts, bots: self.bots })
-            .insert_resource(cups)
-            .insert_resource(Beside { music: self.music_port.unwrap_or(0), voice: self.voice_port.unwrap_or(0) })
-            .init_resource::<race::Calls>()
-            .insert_resource(self.weather)
-            .init_resource::<weather::Forecast>()
-            .insert_resource(self.time)
-            .insert_resource(Course(Circuit::of(&track)))
-            .init_resource::<race::Race>()
-            .init_resource::<race::Drivers>()
-            .init_resource::<records::Times>()
-            .init_resource::<roster::Choices>()
-            .insert_resource(records::Book::open(self.records.clone()))
-            .insert_resource(trial::Ghosts(osage_kart_ghost::Shelf::open(self.ghosts.clone())))
-            .add_systems(Startup, setup)
-            .add_systems(
-                Update,
-                (
-                    race::sessions,
-                    driving::intents,
-                    race::flow,
-                    weather::forecast,
-                    driving::drive,
-                    driving::collide,
-                    paddock::items,
-                    race::progress,
-                    trial::keep,
-                    records::keep,
-                    race::publish,
-                )
-                    .chain()
-                    .in_set(RegionSet::World),
-            );
+        app.insert_resource(Rules {
+            grid: self.grid,
+            laps: self.laps,
+            host_starts: self.host_starts,
+            bots: self.bots,
+            class: self.class,
+        })
+        .insert_resource(cups)
+        .insert_resource(Beside { music: self.music_port.unwrap_or(0), voice: self.voice_port.unwrap_or(0) })
+        .init_resource::<race::Calls>()
+        .insert_resource(self.weather)
+        .init_resource::<weather::Forecast>()
+        .insert_resource(self.time)
+        .insert_resource(Course(Circuit::of(&track)))
+        .init_resource::<race::Race>()
+        .init_resource::<race::Drivers>()
+        .init_resource::<records::Times>()
+        .init_resource::<roster::Choices>()
+        .insert_resource(records::Book::open(self.records.clone()))
+        .insert_resource(trial::Ghosts(osage_kart_ghost::Shelf::open(self.ghosts.clone())))
+        .add_systems(Startup, setup)
+        .add_systems(
+            Update,
+            (
+                race::sessions,
+                driving::intents,
+                race::flow,
+                weather::forecast,
+                driving::drive,
+                driving::collide,
+                paddock::items,
+                race::progress,
+                trial::keep,
+                records::keep,
+                race::publish,
+            )
+                .chain()
+                .in_set(RegionSet::World),
+        );
     }
 }
 
@@ -309,6 +319,8 @@ struct Rules {
     host_starts: bool,
     /// How the bots race (D-088): the host may change it between races.
     bots: osage_kart_racecraft::Difficulty,
+    /// The engine class, cc (D-089): the host may change it between races.
+    class: u32,
 }
 
 #[derive(Resource)]

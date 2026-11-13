@@ -292,6 +292,10 @@ pub struct Track {
     /// How wet the road is, 0 (dry) to 1 (rain): it grips and brakes less
     /// (D-068). Set by the world for a race.
     pub wet: f32,
+    /// The engine class (D-089): every kart's top speeds and acceleration
+    /// times this — 1 the standard (150 cc), 0.7 for 50 cc, 1.15 for 200 cc.
+    /// Set by the world for a race.
+    pub class: f32,
     /// The road's height at each point of the centre line, m (D-077):
     /// hills. Empty: a level road.
     heights: Vec<f32>,
@@ -317,12 +321,29 @@ impl Track {
             distances.push(length);
             length += distance(points[i], points[(i + 1) % points.len()]);
         }
-        Self { points, distances, length, half_width, verge, crests: Vec::new(), wet: 0.0, heights: Vec::new() }
+        Self {
+            points,
+            distances,
+            length,
+            half_width,
+            verge,
+            crests: Vec::new(),
+            wet: 0.0,
+            class: 1.0,
+            heights: Vec::new(),
+        }
     }
 
     /// The same track with crests across its road.
     pub fn with_crests(mut self, crests: Vec<Crest>) -> Self {
         self.crests = crests;
+        self
+    }
+
+    /// The same track raced in engine class `class` (D-089): 1 the
+    /// standard, within 0.5 to 1.5.
+    pub fn with_class(mut self, class: f32) -> Self {
+        self.class = if class.is_finite() { class.clamp(0.5, 1.5) } else { 1.0 };
         self
     }
 
@@ -528,12 +549,14 @@ pub fn step(kart: &mut Kart, controls: Controls, track: &Track) {
     let grass = (grass_left + grass_right) / 4.0;
     let kerb = count(Ground::Kerb, &[0, 1, 2, 3]) / 4.0;
     let build = kart.build.sanitized();
+    // The engine class scales every top speed (D-089); 1 changes nothing.
+    let class = if track.class.is_finite() { track.class.clamp(0.5, 1.5) } else { 1.0 };
     let fastest = if kart.rocket > 0.0 {
-        ROCKET_SPEED
+        ROCKET_SPEED * class
     } else if kart.boost > 0.0 {
-        BOOST_SPEED * build.top
+        BOOST_SPEED * build.top * class
     } else {
-        MAX_SPEED * build.top
+        MAX_SPEED * build.top * class
     };
     // Uphill a kart is slower, downhill faster (D-077): the slope it faces.
     let hill = if track.heights.is_empty() || flying {
@@ -558,7 +581,7 @@ pub fn step(kart: &mut Kart, controls: Controls, track: &Track) {
     if flying {
     } else if throttle > 0.0 {
         if kart.speed < top {
-            kart.speed = (kart.speed + throttle * (ACCELERATION * build.accel) * DT).min(top);
+            kart.speed = (kart.speed + throttle * (ACCELERATION * build.accel * class) * DT).min(top);
         }
     } else if throttle < 0.0 {
         let rate = if kart.speed > 0.0 { BRAKING * (1.0 - (1.0 - WET_BRAKING) * wet) } else { ACCELERATION / 2.0 };
@@ -572,11 +595,12 @@ pub fn step(kart: &mut Kart, controls: Controls, track: &Track) {
         kart.speed -= HILL_PULL * hill * DT;
     }
     if kart.boost > 0.0 {
-        kart.speed = (kart.speed + BOOST_ACCELERATION * DT).min((BOOST_SPEED * build.top).max(kart.speed));
+        kart.speed =
+            (kart.speed + BOOST_ACCELERATION * class * DT).min((BOOST_SPEED * build.top * class).max(kart.speed));
         kart.boost = (kart.boost - DT).max(0.0);
     }
     if kart.rocket > 0.0 {
-        kart.speed = (kart.speed + ROCKET_ACCELERATION * DT).min(ROCKET_SPEED.max(kart.speed));
+        kart.speed = (kart.speed + ROCKET_ACCELERATION * class * DT).min((ROCKET_SPEED * class).max(kart.speed));
         kart.rocket = (kart.rocket - DT).max(0.0);
     }
     if kart.speed > top {
@@ -843,6 +867,20 @@ pub fn struck(
     let j = (normal.0 * push + side.0 * rub, normal.1 * push + side.1 * rub);
     kart.take((-j.0 / mk, -j.1 / mk), r);
     Some(((j.0 / mb, j.1 / mb), out))
+}
+
+/// The engine classes a race may be run in, cc (D-089).
+pub const CLASSES: [u32; 4] = [50, 100, 150, 200];
+
+/// What a track's `class` is for an engine class in cc: 1 for 150 cc, the
+/// standard; 0.7 for 50, 0.85 for 100, 1.15 for 200; 1 for any other.
+pub fn class_of(cc: u32) -> f32 {
+    match cc {
+        50 => 0.7,
+        100 => 0.85,
+        200 => 1.15,
+        _ => 1.0,
+    }
 }
 
 /// An angle in `(-π, π]`.
@@ -1163,6 +1201,18 @@ mod tests {
         };
         assert!(slid(&wet) > slid(&dry) * 2.0, "dry {}, wet {}", slid(&dry), slid(&wet));
         assert_eq!(track().with_wet(f32::NAN).wet, 0.0);
+        // The engine class (D-089): top speed and acceleration scale with it.
+        for class in [0.7f32, 1.15] {
+            let classed = track().with_class(class);
+            let mut kart = Kart { z: 10.0, ..Kart::default() };
+            drive(&mut kart, FULL, 1.0, &classed);
+            let mut standard = Kart { z: 10.0, ..Kart::default() };
+            drive(&mut standard, FULL, 1.0, &track());
+            assert!((kart.speed / standard.speed - class).abs() < 0.02, "{class}: {kart:?} {standard:?}");
+            drive(&mut kart, FULL, 20.0, &classed);
+            assert!((kart.speed - class * MAX_SPEED).abs() < 0.05, "{class}: {kart:?}");
+        }
+        assert_eq!(track().with_class(9.0).class, 1.5);
         assert_eq!(track().with_wet(3.0).wet, 1.0);
     }
 

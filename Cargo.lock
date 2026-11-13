@@ -4967,6 +4967,7 @@ name = "osage-kart-server"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "osage-kart-physics",
  "osage-kart-racecraft",
  "osage-kart-tracks",
  "osage-music",

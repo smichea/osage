@@ -167,6 +167,9 @@ message Choice {
   // Added with D-088. How the bots race: "easy", "normal" or "hard"; the
   // host's choice is raced from the next race. Empty: no change.
   string bots = 5;
+  // Added with D-089. The engine class, cc: 50, 100, 150 or 200; the
+  // host's choice is raced from the next race. 0: no change.
+  uint32 class = 6;
 }
 
 // kart.roster/1 — on the race board: the drivers and kart bodies there are,
@@ -348,6 +351,11 @@ message Race {
   bool night = 16;
   // Added with D-088. How the bots race: "easy", "normal" or "hard".
   string bots = 17;
+  // Added with D-089. The engine class, cc (50, 100, 150, 200): every top
+  // speed and acceleration times cc/150, 200 cc times 1.15
+  // (osage-kart-physics' Track.class). A client predicting its kart steps
+  // it in that class.
+  uint32 class = 18;
 }
 
 message Cup {

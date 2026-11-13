@@ -58,16 +58,23 @@ pub fn rolled(id: &str, chance: f32, race: u32) -> bool {
 }
 
 /// Decides each race's weather as it lines up, and wets the road.
+#[allow(clippy::too_many_arguments)]
 pub fn forecast(
     weather: Res<Weather>,
+    rules: Res<crate::Rules>,
     time: Res<TimeOfDay>,
     race: Res<Race>,
     cups: Res<Cups>,
     mut course: ResMut<Course>,
     mut forecast: ResMut<Forecast>,
 ) {
+    // The engine class (D-089), from the race lined up after it was chosen.
+    let class = osage_kart_physics::class_of(rules.class);
     if forecast.race == race.races() && !course.is_changed() {
         return;
+    }
+    if course.0.track.class != class {
+        course.0.track.class = class;
     }
     forecast.race = race.races();
     let about = &course.0.about;

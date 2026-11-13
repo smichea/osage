@@ -167,6 +167,8 @@ try {
 
   /** Whether the physics has the road wet: it follows the race's rain (D-068). */
   let wet = false;
+  /** The engine class the physics has (D-089), cc. */
+  let engine = 150;
 
   session.onMessage((message) => {
     if (message.message.case === "state") serverOffset = Number(message.message.value.serverTimeUs) / 1000 - Date.now();
@@ -178,6 +180,7 @@ try {
         if (track) {
           physics.setTrack(track.points, track.halfWidth, track.verge, track.crests, track.heights);
           wet = false;
+          engine = 150;
           if (circuit) scene.remove(circuit.group);
           // Over a crest the road is as high as the physics has it (D-051).
           circuit = buildCircuit(track.points, track.halfWidth, track.verge, track.start, (along) =>
@@ -221,6 +224,12 @@ try {
     if (rain !== wet) {
       physics.setWet(rain ? 1 : 0);
       wet = rain;
+    }
+    // The engine class (D-089): the prediction steps in it.
+    const cc = race()?.class ?? 150;
+    if (cc !== engine) {
+      physics.setClass(cc);
+      engine = cc;
     }
     const wanted = input.read(STEP_SECONDS);
     // The lights hold the karts: the world ignores the throttle until the start.
