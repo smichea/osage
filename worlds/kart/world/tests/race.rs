@@ -829,3 +829,45 @@ fn in_the_rain_a_client_predicts_on_a_wet_road() {
     run_until(&mut harness, &mut bob, 5, |c| phase(&c.race()) == proto::Phase::Racing);
     assert!(!bob.race().rain, "a time trial is dry");
 }
+
+/// D-076: a kart's state carries the controls of the last step the world
+/// applied to it, and a client that steps the kart on with them finds
+/// where the world has it a few ticks later — closer than a client that
+/// moves it on in a straight line.
+#[test]
+fn a_karts_state_carries_its_controls_for_clients_to_step_it_on() {
+    let mut harness = Harness::new(KartWorld::unattended(4, 3), TICK_HZ);
+    let mut alice = Client::join(&mut harness, SessionKind::Human, Role::Player, "alice");
+    run_until(&mut harness, &mut alice, 5, |c| phase(&c.race()) == proto::Phase::Racing);
+    harness.run(6 * SECOND);
+    let track = alice.track();
+    let bots = |c: &mut Client| -> Vec<(u64, proto::Racer, proto::KartState)> {
+        c.karts().into_iter().filter(|(_, r, _)| r.bot).collect()
+    };
+    let (mut by_controls, mut straight, mut steered) = (0.0f32, 0.0f32, false);
+    for _ in 0..40 {
+        let before = bots(&mut alice);
+        harness.run(6);
+        let after = bots(&mut alice);
+        for ((id, racer, state), (id_after, _, now)) in before.iter().zip(&after) {
+            assert_eq!(id, id_after);
+            steered |= state.steer != 0.0;
+            assert!(state.throttle.abs() <= 1.0 && state.steer.abs() <= 1.0, "{state:?}");
+            let mut kart = Kart { build: osage_world_kart::build_of(racer), ..osage_world_kart::kart_of(state) };
+            let held = Controls { throttle: state.throttle, steer: state.steer, drift: state.held != 0.0 };
+            for _ in 0..6 {
+                step(&mut kart, held, &track);
+            }
+            by_controls += (kart.x - now.x).hypot(kart.z - now.z);
+            let (vx, vz) = osage_world_kart::kart_of(state).velocity();
+            straight += (state.x + vx * 0.1 - now.x).hypot(state.z + vz * 0.1 - now.z);
+        }
+    }
+    assert!(steered, "the bots' steering is sent");
+    // Among bots that knock one another and change their minds every tick,
+    // a tenth of a second on: a few centimetres off, and nearer than a
+    // straight line.
+    let samples = 40.0 * 3.0;
+    assert!(by_controls < straight, "stepped on {by_controls} m off in all, in a straight line {straight} m");
+    assert!(by_controls / samples < 0.1, "{} m off a kart", by_controls / samples);
+}

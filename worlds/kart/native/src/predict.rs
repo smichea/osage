@@ -10,7 +10,7 @@
 
 use std::collections::VecDeque;
 
-use osage_kart_physics::{Controls, Kart, Track, step, wrap};
+use osage_kart_physics::{Controls, Kart, Track, bump, step, wrap};
 use osage_world_kart::proto;
 
 /// Steps already sent that go again with the new ones, against datagram loss.
@@ -31,6 +31,36 @@ pub struct Predictor {
     sent: u64,
     /// What is drawn minus the prediction (x, z, heading): fades to zero.
     pub error: [f32; 3],
+    /// The other karts that can be touched, as the world last said, each
+    /// with the controls of its last step: the prediction steps them on
+    /// with those and knocks into them where they then are (D-076).
+    pub others: Vec<(Kart, Controls)>,
+}
+
+/// Every other kart one step on, its last controls held.
+fn advance(others: &mut [(Kart, Controls)], track: &Track) {
+    for (kart, controls) in others {
+        step(kart, *controls, track);
+    }
+}
+
+/// `kart` stepped on `steps` steps with `controls` held: where it is when
+/// a prediction that far ahead of the world is.
+pub fn stepped_on(kart: Kart, controls: Controls, steps: usize, track: &Track) -> Kart {
+    let mut kart = kart;
+    for _ in 0..steps {
+        step(&mut kart, controls, track);
+    }
+    kart
+}
+
+/// Knocks `kart` against the others where they are (copies: what a knock
+/// does to them is the world's to say).
+fn knock(kart: &mut Kart, others: &[(Kart, Controls)]) {
+    for (other, _) in others {
+        let mut there = *other;
+        bump(kart, &mut there);
+    }
 }
 
 impl Predictor {
@@ -40,9 +70,20 @@ impl Predictor {
         self.sent += 1;
         self.pending.push_back((self.sent, controls, using));
         self.previous = self.kart;
+        // The others, as far ahead of the world's state as the prediction is.
+        let mut others = self.others.clone();
+        for _ in 0..self.pending.len() {
+            advance(&mut others, track);
+        }
         if let Some(kart) = &mut self.kart {
             step(kart, controls, track);
+            knock(kart, &others);
         }
+    }
+
+    /// How many steps the prediction runs ahead of the world's last state.
+    pub fn steps_ahead(&self) -> usize {
+        self.pending.len()
     }
 
     /// How far the prediction runs ahead of the world's last state, seconds:
@@ -74,9 +115,12 @@ impl Predictor {
             self.pending.pop_front();
         }
         let (mut kart, mut before) = (server, server);
+        let mut others = self.others.clone();
         for (_, controls, _) in &self.pending {
             before = kart;
             step(&mut kart, *controls, track);
+            advance(&mut others, track);
+            knock(&mut kart, &others);
         }
         if let Some(old) = self.kart {
             let (dx, dz) = (old.x + self.error[0] - kart.x, old.z + self.error[1] - kart.z);
@@ -124,6 +168,24 @@ mod tests {
     }
 
     const GO: Controls = Controls { throttle: 1.0, steer: 0.0, drift: false };
+
+    /// D-076: the prediction knocks into a kart in its way, as the world
+    /// will, instead of driving through it.
+    #[test]
+    fn the_prediction_does_not_drive_through_another_kart() {
+        let track = track();
+        let mut predictor = Predictor::default();
+        predictor.reconcile(Kart { z: 10.0, speed: 15.0, ..Kart::default() }, 0, &track);
+        let slow = Controls { throttle: 0.0, steer: 0.0, drift: false };
+        predictor.others = vec![(Kart { z: 16.0, speed: 3.0, ..Kart::default() }, slow)];
+        for _ in 0..40 {
+            predictor.step(GO, false, &track);
+        }
+        let mine = predictor.kart.unwrap();
+        let other = stepped_on(predictor.others[0].0, slow, 40, &track);
+        assert!(mine.z < other.z, "behind it, not through it: {} and {}", mine.z, other.z);
+        assert!(mine.speed < 15.0, "slowed by the knock: {}", mine.speed);
+    }
 
     #[test]
     fn replaying_unapplied_steps_gives_the_same_prediction() {

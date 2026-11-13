@@ -235,6 +235,7 @@ pub fn drive(
                 controls.throttle = 0.0;
             }
             step(&mut body.0, controls, track);
+            start.last = controls;
         }
     }
 }
@@ -271,6 +272,9 @@ pub struct Launch {
     judged: bool,
     /// The run so far, in a time trial (D-062).
     pub run: Option<Recorder>,
+    /// The controls of the last step applied, sent with the kart's state
+    /// for clients to step it on (D-076).
+    pub last: Controls,
 }
 
 /// The start of the world's own drivers, which press no throttle: a good

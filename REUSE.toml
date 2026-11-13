@@ -42,3 +42,10 @@ path = ["worlds/kart/client/package.json", "worlds/kart/client/tsconfig.json", "
 precedence = "aggregate"
 SPDX-FileCopyrightText = "The osage contributors"
 SPDX-License-Identifier = "MIT OR Apache-2.0"
+
+# The crash relay's process file, which takes no comment (D-073)
+[[annotations]]
+path = ["tools/crash-relay/Procfile"]
+precedence = "aggregate"
+SPDX-FileCopyrightText = "The osage contributors"
+SPDX-License-Identifier = "MIT OR Apache-2.0"

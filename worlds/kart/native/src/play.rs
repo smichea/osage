@@ -257,6 +257,11 @@ fn kart_of(state: &proto::KartState) -> Kart {
     osage_world_kart::kart_of(state)
 }
 
+/// The controls of the last step the world applied to a kart (D-076).
+fn controls_of(state: &proto::KartState) -> Controls {
+    Controls { throttle: state.throttle, steer: state.steer, drift: state.held != 0.0 }.sanitized()
+}
+
 /// The kart as its own driver built it (D-055): what the predictor steps.
 fn built(state: &proto::KartState, racer: Option<&proto::Racer>) -> Kart {
     Kart { build: racer.map_or(osage_kart_physics::Build::STANDARD, osage_world_kart::build_of), ..kart_of(state) }
@@ -457,6 +462,23 @@ fn drive(
         controls.throttle = 0.0;
     }
     let controls = controls.sanitized();
+    // The karts that can be touched (D-076): not in a time trial, not
+    // ghosts, not those out of a battle.
+    let trial = replica.race().is_some_and(|race| race.trial);
+    driver.predictor.others = if trial {
+        Vec::new()
+    } else {
+        replica
+            .karts
+            .keys()
+            .filter(|&&id| id != mine)
+            .filter(|&&id| replica.racer(id).is_none_or(|r| !r.ghost && !r.out))
+            .filter_map(|&id| {
+                let state = replica.world.as_ref()?.get::<proto::KartState>(id, types::STATE)?;
+                Some((built(&state, replica.racer(id).as_ref()), controls_of(&state)))
+            })
+            .collect()
+    };
     driver.predictor.step(controls, using, &circuit.track);
     driver.fresh += 1;
     // What the kart lets go of, drawn at once where the world will put it
@@ -774,17 +796,32 @@ fn poses(
 ) {
     let Some(world) = &replica.world else { return };
     driver.predictor.fade(time.delta_secs());
-    let glide = 1.0 - (-time.delta_secs() * 18.0).exp();
+    let glide = 1.0 - (-time.delta_secs() * 14.0).exp();
+    // The others are drawn where they are at the moment the player's kart
+    // is (D-076): the world's state stepped on, with the controls of its
+    // last step, by as many steps as the prediction is ahead; what changes
+    // from one state to the next is eased in.
+    let ahead = if replica.mine.is_some() { driver.predictor.steps_ahead().min(30) } else { 0 };
     for (remote, mut pose) in &mut karts {
-        let Some(server) = world.get::<proto::KartState>(remote.0, types::STATE).map(|s| kart_of(&s)) else { continue };
+        let Some(state) = world.get::<proto::KartState>(remote.0, types::STATE) else { continue };
+        let server = kart_of(&state);
         let predicted = (replica.mine == Some(remote.0) && !replica.finished(remote.0))
             .then(|| driver.predictor.shown(fixed.overstep_fraction()))
             .flatten();
+        let racer = replica.racer(remote.0);
+        let there = match (&replica.circuit, racer.as_ref().is_some_and(|r| r.ghost)) {
+            (Some(circuit), false) => {
+                let built = Kart { build: racer.as_ref().map_or(server.build, osage_world_kart::build_of), ..server };
+                crate::predict::stepped_on(built, controls_of(&state), ahead, &circuit.track)
+            }
+            _ => server,
+        };
+        let far = (there.x - pose.kart.x).hypot(there.z - pose.kart.z) > 6.0;
         pose.kart = predicted.unwrap_or(Kart {
-            x: pose.kart.x + (server.x - pose.kart.x) * glide,
-            z: pose.kart.z + (server.z - pose.kart.z) * glide,
-            heading: pose.kart.heading + wrap(server.heading - pose.kart.heading) * glide,
-            ..server
+            x: if far { there.x } else { pose.kart.x + (there.x - pose.kart.x) * glide },
+            z: if far { there.z } else { pose.kart.z + (there.z - pose.kart.z) * glide },
+            heading: pose.kart.heading + wrap(there.heading - pose.kart.heading) * glide,
+            ..there
         });
         let racer = replica.racer(remote.0);
         pose.held = racer.as_ref().and_then(|racer| item(racer.held()));

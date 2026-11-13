@@ -558,15 +558,20 @@ pub fn publish(
     paddock: Option<Res<Items>>,
     owners: Query<(&Replicated, &Owner)>,
     mut karts: Query<
-        (&Body, &Progress, &Pilot, &Seat, &mut Transform, &mut Volatile, &mut Discrete),
+        (&Body, &Progress, &Pilot, &Seat, &crate::driving::Launch, &mut Transform, &mut Volatile, &mut Discrete),
         Without<RaceBoard>,
     >,
     mut board: Query<(&mut Discrete, &mut Volatile), With<RaceBoard>>,
 ) {
     let paddock = paddock.as_deref().map(|items| &items.0);
-    for (body, progress, pilot, seat, mut place, mut volatile, mut discrete) in &mut karts {
+    for (body, progress, pilot, seat, launch, mut place, mut volatile, mut discrete) in &mut karts {
         place.set_if_neq(transform(&body.0));
-        let state = prost::Message::encode_to_vec(&state(&body.0, pilot.applied()));
+        let sent = proto::KartState {
+            throttle: launch.last.throttle,
+            steer: launch.last.steer,
+            ..state(&body.0, pilot.applied())
+        };
+        let state = prost::Message::encode_to_vec(&sent);
         if volatile.0.get(&ids.state) != Some(&state) {
             volatile.0.insert(ids.state, state);
         }
@@ -654,6 +659,8 @@ fn state(kart: &Kart, applied: u64) -> proto::KartState {
         draft: kart.draft,
         held: kart.held,
         slick: kart.slick,
+        throttle: 0.0,
+        steer: 0.0,
     }
 }
 

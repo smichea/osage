@@ -94,6 +94,11 @@ message KartState {
   // Added with D-072. Seconds the tyres stay oily: they grip almost
   // nothing, the wheel barely turns the kart.
   float slick = 18;
+  // Added with D-076. The controls of the last step the world applied to
+  // the kart (the drift button is `held`): a client steps the karts near
+  // its own on with them, to where they are when its predicted kart is.
+  float throttle = 19;
+  float steer = 20;
 }
 
 // kart.racer/1 — who drives a kart and how their race goes.

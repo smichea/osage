@@ -68,7 +68,7 @@ One physics step per pending step on each server state: about 15 steps in play. 
 
 - **Repeating the last controls when a step is late** (what the first version did): every late step becomes a misprediction, seen as a correction of up to a metre.
 - **One datagram per step:** a browser may send only about one datagram per rendered frame; the server then sees a fraction of the steps and falls seconds behind. Measured: 90 m behind after 8 s.
-- **Contact with other karts** is not predicted: the correction is real there, and faded.
+- **Contact with other karts** is predicted in the native client since D-076: each kart's state carries the controls of its last step; the client steps the others on with them, held, by as many steps as it is ahead, and knocks its own kart into them there at every step (replayed ones too). It is exact only while the others hold their controls and are not knocked themselves: what is left is a correction, faded. The browser client does not predict contacts.
 
 # Alternatives
 

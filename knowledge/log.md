@@ -1,6 +1,7 @@
 # Knowledge Update Log
 
 ## 2026-11-13
+* **Update**: [exact client prediction](/algorithms/exact-client-prediction.md) knocks into the other karts, stepped on with the controls their states now carry (D-076); [osage-kart-native](/modules/kart-native.md) draws them at the player's moment.
 * **Update**: [osage-kart-native](/modules/kart-native.md) chooses its tier for the machine and steps down where one fails (D-075); 30 frames a second by default (D-074).
 * **Creation**: Added the module [osage-report](/modules/osage-report.md): crash reports found at the next start and filed as GitHub issues through a relay on Cloud Run, with the player's consent (D-073); [osage-kart-native](/modules/kart-native.md) asks and sends.
 * **Update**: [osage-kart-items](/modules/kart-items.md) releases things through one function a client shares (D-071); oil makes tyres oily ([osage-kart-physics](/modules/kart-physics.md)'s `slick`, D-072).
