@@ -64,6 +64,9 @@ pub enum Sky {
     Noon,
     /// Late afternoon, the sun low and warm, scattered clouds.
     Evening,
+    /// Grey cloud from end to end, no sun: the sky of a race in the rain
+    /// (D-069).
+    Overcast,
 }
 
 impl Sky {
@@ -75,7 +78,15 @@ impl Sky {
         match self {
             Sky::Noon => 0.33,
             Sky::Evening => 2.0,
+            // No sun: the light of a grey day, about a twelfth of a sunny one.
+            Sky::Overcast => 3.4,
         }
+    }
+
+    /// How bright the sky is overhead, cd/m², for a sky with no sun to
+    /// scale it by: a heavy overcast, rain falling from it.
+    fn overhead(self) -> Option<f32> {
+        (self == Sky::Overcast).then_some(2_200.0)
     }
 
     fn panorama(self) -> (&'static str, f32) {
@@ -84,6 +95,7 @@ impl Sky {
             // Its sun behind the start straight's camera: everything in view
             // catches the warm light, shadows stretch ahead.
             Sky::Evening => ("table_mountain_2_puresky", 2.73),
+            Sky::Overcast => ("kloofendal_overcast_puresky", 0.0),
         }
     }
 }
@@ -94,9 +106,18 @@ impl std::str::FromStr for Sky {
         match s {
             "noon" => Ok(Sky::Noon),
             "evening" => Ok(Sky::Evening),
-            other => Err(format!("unknown sky {other}: noon or evening")),
+            "overcast" => Ok(Sky::Overcast),
+            other => Err(format!("unknown sky {other}: noon, evening or overcast")),
         }
     }
+}
+
+/// What an unlit colour (smoke, rain, sparks' glow) is multiplied by
+/// under `look`: unlit surfaces are exposed like the rest, so a camera
+/// opened up for a grey day would show them brighter than the noon they
+/// were made for (D-069).
+pub fn unlit(look: &Look) -> f32 {
+    2f32.powf(-(look.exposure - Sky::Noon.exposure()))
 }
 
 /// The kart world's look under `sky`: a sunny day as a camera sees it,
@@ -131,8 +152,18 @@ pub struct SkyShown {
 /// A track raced under another sky: its photograph is decoded on a thread
 /// of its own (seconds, for a 4k panorama), then it and its exposure
 /// replace the shown ones and the rendering works the light out again.
-fn follow_the_sky(mut commands: Commands, course: Res<Course>, mut shown: ResMut<SkyShown>) {
-    let Ok(wanted) = course.0.about.sky.parse::<Sky>() else { return };
+fn follow_the_sky(
+    mut commands: Commands,
+    course: Res<Course>,
+    rain: Res<crate::rain::Rain>,
+    mut shown: ResMut<SkyShown>,
+) {
+    if !course.is_changed() && !rain.is_changed() {
+        return;
+    }
+    // In the rain, an overcast sky (D-069); else the track's.
+    let wanted = if rain.falling { Ok(Sky::Overcast) } else { course.0.about.sky.parse::<Sky>() };
+    let Ok(wanted) = wanted else { return };
     if !shown.follows || wanted == shown.sky {
         return;
     }
@@ -171,7 +202,7 @@ fn sky_loaded(mut commands: Commands, loading: Res<SkyLoading>, shown: Res<SkySh
 pub fn panorama(sky: Sky) -> Option<Panorama> {
     let (id, turn) = sky.panorama();
     let photo = osage_content::panorama::load(&osage_content::root()?, id)?;
-    Some(Panorama { width: photo.width, height: photo.height, pixels: photo.pixels, turn })
+    Some(Panorama { width: photo.width, height: photo.height, pixels: photo.pixels, turn, overhead: sky.overhead() })
 }
 
 pub struct ScenePlugin;
@@ -226,9 +257,8 @@ pub struct Part;
 
 impl Plugin for ScenePlugin {
     fn build(&self, app: &mut App) {
-        let circuit = (follow_the_sky.run_if(resource_exists::<SkyShown>), track::build, scenery::build, marks::build)
-            .chain()
-            .run_if(resource_exists_and_changed::<Course>);
+        let circuit =
+            (track::build, scenery::build, marks::build).chain().run_if(resource_exists_and_changed::<Course>);
         app.configure_sets(Update, (Stage::Simulate, Stage::Draw).chain())
             .init_resource::<View>()
             .init_resource::<Glance>()
@@ -238,6 +268,7 @@ impl Plugin for ScenePlugin {
             .add_systems(
                 Update,
                 (
+                    follow_the_sky.run_if(resource_exists::<SkyShown>).run_if(resource_exists::<Course>),
                     circuit,
                     karts::dress,
                     karts::park,

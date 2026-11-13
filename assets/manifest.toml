@@ -94,6 +94,18 @@ author = "Greg Zaal, Jarod Guest (Poly Haven)"
 source = "https://polyhaven.com/a/table_mountain_2_puresky"
 used_by = "worlds/kart/native: the evening sky (--sky evening), a low warm sun (R1); HDR image, 4k"
 
+# Overcast sky for rain (D-069), CC0, fetched 2026-11-13 under the kart
+# programme's standing approval for CC0 content (16.2 MB).
+
+[[asset]]
+path = "assets/polyhaven/kloofendal_overcast_puresky/kloofendal_overcast_puresky_4k.hdr"
+url = "https://dl.polyhaven.org/file/ph-assets/HDRIs/hdr/4k/kloofendal_overcast_puresky_4k.hdr"
+sha256 = "77ade807bd208195073a51b970dea574fa70cd80cf666aeedf5cd416ab5c8abd"
+licence = "CC0-1.0"
+author = "Greg Zaal (Poly Haven)"
+source = "https://polyhaven.com/a/kloofendal_overcast_puresky"
+used_by = "worlds/kart/native: the sky of races run in the rain (V2.5), calibrated by its brightness overhead; HDR image, 4k"
+
 [[asset]]
 path = "assets/polyhaven/asphalt_02/asphalt_02_diff_2k.jpg"
 url = "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/2k/asphalt_02/asphalt_02_diff_2k.jpg"

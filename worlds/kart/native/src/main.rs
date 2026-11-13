@@ -191,8 +191,12 @@ fn main() -> Result<()> {
     // A bench is raced under its track's sky, unless asked otherwise.
     // In a game, the sky follows the track's unless `--sky` chose one.
     let follows = !bench && sky.is_none();
-    let sky =
-        sky.unwrap_or_else(|| if bench { track.sky.parse().unwrap_or(scene::Sky::Noon) } else { scene::Sky::Noon });
+    // A bench in the rain is raced under an overcast sky (D-069).
+    let sky = sky.unwrap_or_else(|| match (bench, raining) {
+        (true, true) => scene::Sky::Overcast,
+        (true, false) => track.sky.parse().unwrap_or(scene::Sky::Noon),
+        (false, _) => scene::Sky::Noon,
+    });
     app.insert_resource(scene::look(sky)).insert_resource(scene::SkyShown { sky, follows });
     // Before the rendering plugin, which draws the sky from it when it is there.
     if let Some(panorama) = scene::panorama(sky) {

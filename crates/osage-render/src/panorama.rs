@@ -16,6 +16,9 @@
 //! A photograph has no absolute brightness. Its sun does: an unclipped
 //! panorama keeps the ratio of sun to sky, so the whole panorama is scaled
 //! for its sun to give [`SUN`] lux, and the sky then has its true brightness.
+//! An overcast sky has no sun to go by: the world says how bright it is
+//! overhead ([`Panorama::overhead`], cd/m²), the panorama is scaled to
+//! that, and the sun gives what the brightest of its clouds gives — little.
 
 use bevy::{
     camera::Exposure,
@@ -47,6 +50,9 @@ pub struct Panorama {
     pub height: usize,
     pub pixels: Vec<[f32; 3]>,
     pub turn: f32,
+    /// How bright the sky is straight up, cd/m², for a sky with no sun
+    /// in it (overcast); none, the sun sets the scale.
+    pub overhead: Option<f32>,
 }
 
 /// What the techniques use of the panorama, computed again when the
@@ -60,6 +66,9 @@ pub struct Prepared {
     /// cd/m² for one unit of the panorama.
     pub scale: f32,
     pub to_sun: Vec3,
+    /// What the sun gives a surface facing it, lux: [`SUN`], but under an
+    /// overcast sky.
+    pub sun_lux: f32,
     pub sun_colour: Color,
     /// The constant light that stands in below T3.
     pub ambient: GlobalAmbientLight,
@@ -127,6 +136,7 @@ fn prepare(panorama: &Panorama, tier: Tier, look: &Look, images: &mut Assets<Ima
         light: (images.add(matte), images.add(glossy)),
         scale,
         to_sun: analysis.to_sun,
+        sun_lux: analysis.sun_illuminance * scale,
         sun_colour: Color::linear_rgb(analysis.sun_colour.x, analysis.sun_colour.y, analysis.sun_colour.z),
         ambient: GlobalAmbientLight {
             color: {
@@ -163,7 +173,7 @@ fn camera(mut commands: Commands, prepared: Res<Prepared>, cameras: Query<(Entit
 fn sun(prepared: Res<Prepared>, mut suns: Query<(&mut Transform, &mut DirectionalLight, Ref<Sun>)>) {
     for (mut transform, mut light, _) in suns.iter_mut().filter(|(.., s)| s.is_added() || prepared.is_changed()) {
         *transform = Transform::default().looking_to(-prepared.to_sun, Vec3::Y);
-        light.illuminance = SUN;
+        light.illuminance = prepared.sun_lux;
         light.color = prepared.sun_colour;
     }
 }
@@ -257,7 +267,7 @@ impl<'a> Analysis<'a> {
         // The sky's light in the sun's circle, which the circle hid from the sum above.
         sky_illuminance += luminance(around_sun) * inner_area * centre.y.max(0.0);
         let turn = Quat::from_rotation_y(panorama.turn);
-        Self {
+        let mut analysis = Self {
             panorama,
             to_sun: turn * sun_direction.normalize_or(centre),
             sun_colour: excess / sun_illuminance,
@@ -267,7 +277,11 @@ impl<'a> Analysis<'a> {
             sun_illuminance,
             sky_illuminance,
             ground,
+        };
+        if let Some(overhead) = panorama.overhead {
+            analysis.scale = overhead / analysis.radiance(Vec3::Y).max(1e-9);
         }
+        analysis
     }
 
     /// The panorama in direction `d` of the world, bilinear, as photographed.
@@ -368,7 +382,7 @@ mod tests {
                 pixels.push(c.to_array());
             }
         }
-        Panorama { width, height, pixels, turn }
+        Panorama { width, height, pixels, turn, overhead: None }
     }
 
     #[test]
@@ -394,6 +408,26 @@ mod tests {
         let overhead = analysis.radiance(Vec3::Y) * analysis.scale;
         assert!((1_000.0..30_000.0).contains(&overhead), "{overhead}");
         assert!(analysis.sun_colour.x > analysis.sun_colour.z, "a warm sun: {}", analysis.sun_colour);
+    }
+
+    #[test]
+    fn an_overcast_sky_is_as_bright_as_it_is_said_to_be_and_its_sun_gives_little() {
+        // No sun in it: a sky a little brighter round one patch of cloud.
+        let (width, height) = (256, 128);
+        let pixels = (0..width * height)
+            .map(|i| {
+                let (x, y) = (i % width, i / width);
+                let glow = if (x as i32 - 60).abs() < 10 && (y as i32 - 30).abs() < 6 { 1.4 } else { 1.0 };
+                let up = if y < height / 2 { 1.0 } else { 0.3 };
+                [0.8 * glow * up, 0.82 * glow * up, 0.85 * glow * up]
+            })
+            .collect();
+        let panorama = Panorama { width, height, pixels, turn: 0.0, overhead: Some(2_500.0) };
+        let analysis = Analysis::of(&panorama, Vec3::splat(0.2));
+        let overhead = analysis.radiance(Vec3::Y) * analysis.scale;
+        assert!((overhead - 2_500.0).abs() < 1.0, "{overhead}");
+        let sun = analysis.sun_illuminance * analysis.scale;
+        assert!(sun < SUN / 50.0, "a cloud is no sun: {sun} lux");
     }
 
     #[test]

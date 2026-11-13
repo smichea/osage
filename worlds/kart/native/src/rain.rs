@@ -52,6 +52,9 @@ const HAZE: f32 = 380.0;
 pub struct Rain {
     pub falling: bool,
     wet: f32,
+    /// How much the sun and sky are veiled here (none under an overcast
+    /// sky, which is grey already): what unlit smoke darkens with.
+    pub veiled: f32,
     /// The drops' mesh, once made.
     drops: Option<Handle<Mesh>>,
     /// Values as they were dry, and as last written, to scale from.
@@ -168,6 +171,7 @@ fn streaks(eye: Vec3, time: f32) -> Mesh {
 }
 
 /// The drops, round the camera, while it rains.
+#[allow(clippy::too_many_arguments)]
 fn fall(
     mut commands: Commands,
     time: Res<Time>,
@@ -175,7 +179,8 @@ fn fall(
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
     camera: Query<&GlobalTransform, With<OsageCamera>>,
-    mut shown: Query<&mut Visibility, With<Drops>>,
+    mut shown: Query<(&mut Visibility, &MeshMaterial3d<StandardMaterial>), With<Drops>>,
+    look: Option<Res<osage_render::Look>>,
 ) {
     let Ok(eye) = camera.single().map(|c| c.translation()) else { return };
     if rain.drops.is_none() {
@@ -199,8 +204,16 @@ fn fall(
         rain.drops = Some(mesh);
     }
     let falling = rain.falling;
-    for mut visibility in &mut shown {
+    for (mut visibility, material) in &mut shown {
         visibility.set_if_neq(if falling { Visibility::Inherited } else { Visibility::Hidden });
+        // Exposed like the rest: as light against a grey sky as a sunny one (D-069).
+        let shade = (1.6 * look.as_ref().map_or(1.0, |look| crate::scene::unlit(look))).min(1.0);
+        let wanted = Color::srgba(0.78 * shade, 0.8 * shade, 0.83 * shade, 0.13);
+        if materials.get(&material.0).is_some_and(|m| m.base_color != wanted)
+            && let Some(mut material) = materials.get_mut(&material.0)
+        {
+            material.base_color = wanted;
+        }
     }
     if falling && let Some(mesh) = rain.drops.as_ref().and_then(|handle| meshes.get_mut(handle)) {
         let mut mesh = mesh;
@@ -221,6 +234,7 @@ fn wetten(
     mut materials: ResMut<Assets<StandardMaterial>>,
     mut suns: Query<&mut DirectionalLight, With<Sun>>,
     mut cameras: Query<(Option<&mut Skybox>, Option<&mut DistanceFog>), With<OsageCamera>>,
+    shown: Option<Res<crate::scene::SkyShown>>,
 ) {
     let target = if rain.falling { 1.0 } else { 0.0 };
     let step = time.delta_secs() / WETTING;
@@ -243,8 +257,13 @@ fn wetten(
             }
         }
     }
-    // The sky follows the rain, not the road: as the rain starts or stops.
-    let gloom = wet;
+    // Under a photographed overcast sky (D-069) the sun and the sky are
+    // already grey; under another, they are veiled here. The haze is the
+    // rain's either way.
+    let overcast = shown.is_some_and(|shown| shown.sky == crate::scene::Sky::Overcast);
+    let gloom = if overcast { 0.0 } else { wet };
+    rain.veiled = gloom;
+    let haze = wet;
     let rain = &mut *rain;
     for mut light in &mut suns {
         rain.sun.scale(&mut light.illuminance, |dry| dry * (1.0 - (1.0 - VEILED_SUN) * gloom));
@@ -258,9 +277,9 @@ fn wetten(
                 rain.fog = Some((fog.clone(), fog.color));
             }
             if let Some((dry, written)) = &mut rain.fog {
-                let colour = dry.color.mix(&Color::srgb(0.52, 0.55, 0.58), gloom);
-                fog.falloff = if gloom > 0.0 {
-                    let visibility = 1.0 / (1.0 / 3000.0 + gloom / HAZE);
+                let colour = dry.color.mix(&Color::srgb(0.52, 0.55, 0.58), haze);
+                fog.falloff = if haze > 0.0 {
+                    let visibility = 1.0 / (1.0 / 3000.0 + haze / HAZE);
                     FogFalloff::from_visibility_colors(visibility, colour, colour)
                 } else {
                     dry.falloff.clone()

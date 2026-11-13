@@ -170,25 +170,27 @@ type Shaded = (f32, Vec<(Handle<StandardMaterial>, LinearRgba)>);
 pub fn gloom(
     pool: Res<Pool>,
     rain: Option<Res<crate::rain::Rain>>,
+    look: Option<Res<osage_render::Look>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
     mut shaded: Local<Option<Shaded>>,
 ) {
-    let wet = rain.map_or(0.0, |rain| rain.wet());
+    // Veiled by the rain, and exposed like the rest (D-069).
+    let veiled = rain.map_or(0.0, |rain| rain.veiled * rain.wet());
+    let shade = (1.0 - 0.6 * veiled) * look.map_or(1.0, |look| crate::scene::unlit(&look));
     let (done, dry) = shaded.get_or_insert_with(|| {
-        let handles = [&pool.smoke, &pool.veil, &pool.dust, &pool.soot];
+        let handles = [&pool.smoke, &pool.veil, &pool.dust, &pool.soot, &pool.wind];
         let dry = handles
             .into_iter()
             .filter_map(|h| materials.get(h).map(|m| (h.clone(), m.base_color.to_linear())))
             .collect();
-        (0.0, dry)
+        (1.0, dry)
     });
-    if (wet - *done).abs() < 0.02 && !(wet == 0.0 && *done != 0.0) {
+    if (shade - *done).abs() < 0.01 * done.max(0.01) {
         return;
     }
-    *done = wet;
+    *done = shade;
     for (handle, colour) in dry.iter() {
         if let Some(mut material) = materials.get_mut(handle) {
-            let shade = 1.0 - 0.6 * wet;
             material.base_color =
                 LinearRgba::new(colour.red * shade, colour.green * shade, colour.blue * shade, colour.alpha).into();
         }

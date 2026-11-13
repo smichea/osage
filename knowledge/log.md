@@ -1,6 +1,7 @@
 # Knowledge Update Log
 
 ## 2026-11-13
+* **Update**: [a photographed sky](/techniques/panorama.md) can be calibrated by its brightness overhead, for an overcast sky with no sun (D-069); [osage-kart-native](/modules/kart-native.md) races the rain under one.
 * **Update**: rain (D-068): [osage-kart-physics](/modules/kart-physics.md) and [arcade kart physics](/algorithms/arcade-kart-physics.md) have a wet road; [osage-kart-tracks](/modules/kart-tracks.md) a chance of rain; [osage-kart-native](/modules/kart-native.md) draws the rain.
 * **Update**: [osage-kart-native](/modules/kart-native.md) lays marks on the track as karts drive (D-067).
 * **Update**: [osage-kart-native](/modules/kart-native.md) has a photo mode (D-066): the picture frozen, a free camera, zoom and depth of field.
