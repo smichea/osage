@@ -3,7 +3,8 @@
 
 //! What the world races (D-057): a cup — its tracks one after the other,
 //! points for each place, standings between the races, a podium — or one
-//! track, race after race, or a time trial on one track (D-062). The host
+//! track, race after race, a time trial on one track (D-062), or a battle
+//! in an arena (D-065). The host
 //! chooses; the others' choices are votes, and with no host the most wanted
 //! event is raced next.
 
@@ -24,6 +25,7 @@ pub fn events() -> Vec<String> {
         .map(|cup| format!("cup:{}", cup.id))
         .chain(tracks.iter().map(|track| format!("track:{}", track.id)))
         .chain(tracks.iter().map(|track| format!("trial:{}", track.id)))
+        .chain(osage_kart_tracks::arenas().iter().map(|arena| format!("battle:{}", arena.id)))
         .collect()
 }
 
@@ -55,8 +57,11 @@ impl Cups {
     /// Starts `event` from its first race; the track it is on.
     fn start(&mut self, event: &str) -> TrackDef {
         let cup = event.strip_prefix("cup:").and_then(|id| osage_kart_cup::built_in().into_iter().find(|c| c.id == id));
-        let single =
-            event.strip_prefix("track:").or_else(|| event.strip_prefix("trial:")).and_then(osage_kart_tracks::by_id);
+        let single = event
+            .strip_prefix("track:")
+            .or_else(|| event.strip_prefix("trial:"))
+            .and_then(osage_kart_tracks::by_id)
+            .or_else(|| event.strip_prefix("battle:").and_then(osage_kart_tracks::arena));
         let (event, series, track) = match (cup, single) {
             (Some(cup), _) => {
                 let first = cup.tracks.first().and_then(|id| osage_kart_tracks::by_id(id));
@@ -73,6 +78,11 @@ impl Cups {
     /// Whether the event being raced is a time trial (D-062).
     pub fn trial(&self) -> bool {
         self.event.starts_with("trial:")
+    }
+
+    /// Whether the event being fought is a battle (D-065).
+    pub fn battle(&self) -> bool {
+        self.event.starts_with("battle:")
     }
 
     /// A driver's choice of what to race next; empty or unknown, none.

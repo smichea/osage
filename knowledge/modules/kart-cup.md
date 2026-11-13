@@ -19,7 +19,7 @@ Something to win over an evening (D-057): a few races on different tracks, point
 - **Points:** 10, 8, 6, 5, 4, 3, 2, 1 for first to eighth; none after.
 - **Standing:** a driver's name, whether a bot, points, and their place in each race (none for a race missed).
 - **Series:** a cup being raced: races run, standings so far.
-- **Event (in the world):** what a world races — `cup:ID`, `track:ID`, or `trial:ID`, a time trial on a track ([osage-kart-ghost](/modules/kart-ghost.md), D-062).
+- **Event (in the world):** what a world races — `cup:ID`, `track:ID`, or `trial:ID`, a time trial on a track ([osage-kart-ghost](/modules/kart-ghost.md), D-062), or `battle:ARENA`, three lives each in an arena (D-065, the world's `battle.rs`: lives, the 1.5 s spared after a hit, the ranking by lives then by how long each lasted, the end).
 
 # Architecture
 

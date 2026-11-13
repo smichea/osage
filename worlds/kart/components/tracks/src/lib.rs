@@ -51,6 +51,10 @@ pub const BUILT_IN: &[&str] = &[
     include_str!("../tracks/harbour.track"),
 ];
 
+/// The battle arenas that come with the game (D-065): tracks too — a wide
+/// loop with walls — but fought on, not raced.
+pub const ARENAS: &[&str] = &[include_str!("../tracks/yard.track")];
+
 /// A track, as its file describes it.
 #[derive(Clone, Debug, PartialEq)]
 pub struct TrackDef {
@@ -209,6 +213,16 @@ impl TrackDef {
     /// than karts race on, a loop that crosses or comes near itself, a bend
     /// tighter than [`TIGHTEST`], a crest or a grid in a bend.
     pub fn problems(&self) -> Vec<String> {
+        self.checked(400.0, true)
+    }
+
+    /// What is wrong with it as a battle arena (D-065): as a track, but it
+    /// may be shorter — a bowl, where the karts meet — and has no grid.
+    pub fn arena_problems(&self) -> Vec<String> {
+        self.checked(200.0, false)
+    }
+
+    fn checked(&self, shortest: f32, grid: bool) -> Vec<String> {
         let mut out = Vec::new();
         if !(4.0..=12.0).contains(&self.half_width) {
             out.push(format!("half width {} outside 4..12 m", self.half_width));
@@ -218,8 +232,8 @@ impl TrackDef {
         }
         let (track, start) = self.build();
         let length = track.length();
-        if !(400.0..=3000.0).contains(&length) {
-            out.push(format!("length {length:.0} m outside 400..3000 m"));
+        if !(shortest..=3000.0).contains(&length) {
+            out.push(format!("length {length:.0} m outside {shortest}..3000 m"));
         }
         // Two stretches of road further apart along the loop than a bend
         // must keep their barriers apart.
@@ -252,7 +266,7 @@ impl TrackDef {
                 out.push(format!("the crest {} m after the start is in a bend", crest.after));
             }
         }
-        if turn(start - 40.0, start + 10.0) > 0.25 {
+        if grid && turn(start - 40.0, start + 10.0) > 0.25 {
             out.push("the start and its grid are in a bend".to_owned());
         }
         out
@@ -279,6 +293,16 @@ pub fn built_in() -> Vec<TrackDef> {
 /// A built-in track by its id.
 pub fn by_id(id: &str) -> Option<TrackDef> {
     built_in().into_iter().find(|track| track.id == id)
+}
+
+/// The battle arenas that come with the game.
+pub fn arenas() -> Vec<TrackDef> {
+    ARENAS.iter().map(|text| TrackDef::parse(text).expect("a built-in arena reads")).collect()
+}
+
+/// A built-in arena by its id.
+pub fn arena(id: &str) -> Option<TrackDef> {
+    arenas().into_iter().find(|arena| arena.id == id)
 }
 
 fn catmull_rom(p0: f32, p1: f32, p2: f32, p3: f32, t: f32) -> f32 {
@@ -309,6 +333,15 @@ mod tests {
         let mut ids: Vec<_> = tracks.iter().map(|t| t.id.as_str()).collect();
         ids.dedup();
         assert_eq!(ids.len(), tracks.len());
+    }
+
+    #[test]
+    fn every_arena_reads_and_is_wide() {
+        for arena in arenas() {
+            assert_eq!(arena.arena_problems(), Vec::<String>::new(), "{}", arena.id);
+            assert!(arena.half_width >= 10.0 && by_id(&arena.id).is_none(), "{}: wide, and not a track", arena.id);
+        }
+        assert!(arena("yard").is_some());
     }
 
     #[test]

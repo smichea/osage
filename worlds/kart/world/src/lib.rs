@@ -7,6 +7,7 @@
 //! clients predict them with the same physics (D-031); agents drive through
 //! the world's autopilot; bots fill the grid.
 
+mod battle;
 mod circuit;
 mod cup;
 mod driving;
@@ -222,7 +223,7 @@ impl WorldModule for KartWorld {
                 "Racer",
                 false,
                 "Who drives a kart: name, lap, position, finish time; ghost: a run kept from an earlier time \
-                 trial, driven again (name is who drove it).",
+                 trial, driven again (name is who drove it); in a battle, lives left and whether it is out.",
             ),
             spec(
                 types::TRACK,
@@ -237,8 +238,9 @@ impl WorldModule for KartWorld {
                 false,
                 "The race: phase (waiting, ready, countdown, racing, finished), when it ends, laps, order, host; \
                  the cup being raced with its standings, the event chosen next, votes and the events there are \
-                 (cup:ID, track:ID, or trial:ID — a time trial: alone against the clock and the ghosts of the \
-                 best runs, see Racer.ghost). \
+                 (cup:ID, track:ID, trial:ID — a time trial: alone against the clock and the ghosts of the \
+                 best runs, see Racer.ghost — or battle:ARENA: three lives each, every hit takes one, the last \
+                 kart in wins, see Racer.lives and Racer.out). \
                  The host starts each race with Step.call and chooses the event with Choice.event; a driver \
                  alone can end a race.",
             ),

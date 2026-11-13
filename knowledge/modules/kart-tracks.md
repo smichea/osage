@@ -23,6 +23,8 @@ What a race is run on (D-056). A component of the kart game (D-035): the world b
 
 `TrackDef::parse` reads a file and says the line of an error; `centre_line` samples the spline; `build` makes the physics' `Track` with its crests and gives the distance of the start line; `problems` checks: half width 4–12 m, verge 1–10 m, length 400–3000 m; two stretches further apart along the loop than 2.5 times the road's room (both roads and verges, plus 2 m) never come within that room of each other; the tightest bend (heading over 12 m) is at least `TIGHTEST` (12 m of radius); a crest is 4 m or more up, 3 m or more down, at most 3 m high, on road that turns less than 0.25 rad from just before it to where a kart lands; the start and its grid likewise. `built_in()` gives the tracks that come with the game, in the order of a cup; `by_id`.
 
+Battle arenas (D-065) are track files too, kept apart (`ARENAS`, `arenas`, `arena`) and checked by `arena_problems`: as a track, but 200 m long at least instead of 400, and with no grid to keep straight. One comes with the game: the Yard, a 280 m stadium bowl 24 m wide.
+
 # Interfaces
 
 `TrackDef`, `CrestDef`, `ParseError`, `HEADER`, `SAMPLES_PER_SPAN`, `TIGHTEST`, `BUILT_IN`, `built_in`, `by_id`, `tightest`. In the world: `Circuit::of(&TrackDef)`, `KartWorld.track`; `kart-server --track ID|FILE`; `kart-native --bench --track ID|FILE`.

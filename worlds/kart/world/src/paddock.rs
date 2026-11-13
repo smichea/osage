@@ -6,7 +6,7 @@
 //! — clients only see them — and its own drivers use what they pick up.
 
 use bevy::prelude::*;
-use osage_kart_items::{Item, Kind, Paddock, Standing};
+use osage_kart_items::{Event, Item, Kind, Paddock, Standing};
 use osage_kart_physics::{Kart, Track};
 
 use crate::{
@@ -24,12 +24,16 @@ pub struct Items(pub Paddock);
 #[derive(Component, Clone, Copy)]
 pub struct Seat(pub usize);
 
-/// Karts break crates, use what they hold, meet what others left.
+/// Karts break crates, use what they hold, meet what others left; in a
+/// battle (D-065) what hits a kart takes a life, and a kart that is out is
+/// kept away from it all.
 pub fn items(
+    time: Res<Time>,
     race: Res<Race>,
+    cups: Res<crate::cup::Cups>,
     course: Res<crate::Course>,
     paddock: Option<ResMut<Items>>,
-    mut karts: Query<(&Seat, &mut Body, &Pilot, &Progress)>,
+    mut karts: Query<(&Seat, &mut Body, &Pilot, &mut Progress)>,
 ) {
     let Some(mut paddock) = paddock else { return };
     // A time trial has no crates and nothing on the road (D-062).
@@ -44,11 +48,14 @@ pub fn items(
     let leader = karts.iter().map(|(.., progress)| progress.covered()).fold(0.0, f32::max);
     let mut standings = vec![Standing { place: seats, behind: 0.0 }; seats];
     for (seat, body, _, progress) in &karts {
+        if progress.fight.is_out() {
+            continue;
+        }
         bodies[seat.0] = body.0;
-        standings[seat.0] = Standing {
-            place: progress.position.saturating_sub(1) as usize,
-            behind: (leader - progress.covered()).max(0.0),
-        };
+        // In a battle the place is the lives' (D-065): a drone goes for
+        // whoever has most.
+        let behind = (leader - progress.covered()).max(0.0);
+        standings[seat.0] = Standing { place: progress.position.saturating_sub(1) as usize, behind };
     }
     let spots: Vec<_> = bodies.iter().map(|k| track.locate(k.x, k.z)).collect();
     let mut uses = vec![false; seats];
@@ -59,10 +66,21 @@ pub fn items(
             None => paddock.0.button(me, &spots, &standings, &body.0, track),
         };
     }
-    paddock.0.step(&mut bodies, &uses, &standings, track);
-    for (seat, mut body, _, _) in &mut karts {
+    let events = paddock.0.step(&mut bodies, &uses, &standings, track);
+    let now = time.elapsed();
+    for (seat, mut body, _, mut progress) in &mut karts {
+        if progress.fight.is_out() {
+            continue;
+        }
         if body.0 != bodies[seat.0] {
             body.0 = bodies[seat.0];
+        }
+        let hit = events.iter().any(|event| match *event {
+            Event::Hit { kart, .. } | Event::Bumped { kart, .. } => kart == seat.0,
+            _ => false,
+        });
+        if hit && cups.battle() {
+            progress.fight.hit(now);
         }
     }
 }

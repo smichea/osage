@@ -166,7 +166,7 @@ try {
         const who = racer(event.entity);
         const kart = state(event.entity);
         if (who && kart) {
-          const shown = { view: buildKart(who.color, who.ghost), color: who.color, x: kart.x, z: kart.z, heading: kart.heading };
+          const shown = { view: buildKart(who.color, who.ghost || who.out), color: who.color, x: kart.x, z: kart.z, heading: kart.heading };
           karts.set(event.entity, shown);
           scene.add(shown.view.root);
           if (world.get(event.entity, types.controller, components.ControllerSchema)?.perWorldId === me) {
@@ -239,12 +239,15 @@ try {
     harbour: "Harbour Town",
   };
   const trackName = (id: string) => TRACK_NAMES[id] ?? id;
+  const ARENA_NAMES: Record<string, string> = { yard: "The Yard" };
   const eventName = (event: string, cup?: string) =>
     event.startsWith("cup:")
       ? `${cup ?? event.slice(4)} (cup)`
       : event.startsWith("trial:")
         ? `${trackName(event.slice(6))} (time trial)`
-        : `${trackName(event.slice(6))} (one track)`;
+        : event.startsWith("battle:")
+          ? `${ARENA_NAMES[event.slice(7)] ?? event.slice(7)} (battle)`
+          : `${trackName(event.slice(6))} (one track)`;
   /** The cup and its standings, and what is raced next with a button to change it. */
   const cupPanel = () => {
     const now = race();
@@ -393,16 +396,27 @@ try {
 
     const elapsed = now.startedUs > 0n ? serverNow() - Number(now.startedUs) / 1000 : 0;
     const my = mine === undefined ? undefined : racer(mine);
-    $("race").innerHTML = my
-      ? `<b>P${my.position}</b>/${now.order.length || karts.size} · lap ${Math.min(Math.max(my.lap, 1), now.laps)}/${now.laps}<br>` +
-        (my.finishMs > 0n ? `finished in ${clock(Number(my.finishMs))}` : now.phase === Phase.RACING ? clock(elapsed) : "")
-      : "watching · you will be on the grid of the next race";
+    // A battle (D-065): lives, and the time left.
+    const left = Math.max(0, Number(now.phaseEndsUs) / 1000 - serverNow());
+    $("race").innerHTML = !my
+      ? "watching · you will be on the grid of the next race"
+      : now.battle
+        ? `<b>P${my.position}</b>/${now.order.length || karts.size} · ${my.out ? "out" : `${my.lives} lives`}<br>` +
+          (now.phase === Phase.RACING ? clock(left) : "")
+        : `<b>P${my.position}</b>/${now.order.length || karts.size} · lap ${Math.min(Math.max(my.lap, 1), now.laps)}/${now.laps}<br>` +
+          (my.finishMs > 0n ? `finished in ${clock(Number(my.finishMs))}` : now.phase === Phase.RACING ? clock(elapsed) : "");
 
     const rows = now.order
       .map((entity) => [entity, racer(entity)] as const)
       .filter((row): row is readonly [bigint, Racer] => row[1] !== undefined)
       .map(([entity, r]) => {
-        const status = r.finishMs > 0n ? clock(Number(r.finishMs)) : `lap ${Math.min(Math.max(r.lap, 1), now.laps)}`;
+        const status = now.battle
+          ? r.out
+            ? "out"
+            : `${r.lives} lives`
+          : r.finishMs > 0n
+            ? clock(Number(r.finishMs))
+            : `lap ${Math.min(Math.max(r.lap, 1), now.laps)}`;
         const kind = r.ghost ? " <small>ghost</small>" : r.bot ? " <small>bot</small>" : "";
         return `<div class="${entity === mine ? "me" : ""}">${r.position}. <span class="dot" style="background:${PALETTE[r.color % PALETTE.length]}"></span>${escape(r.name)}${kind} · ${status}</div>`;
       });

@@ -150,6 +150,8 @@ pub const CRATE_BACK: f32 = 1.5;
 pub const CRATE_REACH: f32 = 0.5;
 /// Where the racks stand, as shares of the lap.
 pub const RACKS: [f32; 3] = [0.25, 0.55, 0.85];
+/// Where they stand in a battle's arena (D-065): twice as many.
+pub const BATTLE_RACKS: [f32; 6] = [0.08, 0.25, 0.42, 0.58, 0.75, 0.92];
 /// Crates in a rack, spread across the road.
 pub const RACK: usize = 5;
 /// The most things on the track at once; the oldest goes first.
@@ -245,15 +247,28 @@ pub struct Paddock {
     smoke: Vec<(f32, u32)>,
     seed: u32,
     picks: u32,
+    /// A battle's paddock: its draws are things that hit (D-065).
+    battle: bool,
 }
 
 impl Paddock {
     /// The racks of `track`, nothing held by its `karts` karts (at most 64),
     /// draws from `seed`.
     pub fn new(track: &Track, karts: usize, seed: u32) -> Self {
+        Self::with_racks(track, karts, seed, &RACKS)
+    }
+
+    /// A battle's paddock (D-065): more racks, and crates that give what
+    /// hits — tyres, stacks, cones, oil, drones, bumpers — more than what
+    /// helps a kart catch up, whatever its place.
+    pub fn battle(track: &Track, karts: usize, seed: u32) -> Self {
+        Self { battle: true, ..Self::with_racks(track, karts, seed, &BATTLE_RACKS) }
+    }
+
+    fn with_racks(track: &Track, karts: usize, seed: u32, racks: &[f32]) -> Self {
         assert!(karts <= 64, "at most 64 karts");
-        let mut crates = Vec::with_capacity(RACKS.len() * RACK);
-        for share in RACKS {
+        let mut crates = Vec::with_capacity(racks.len() * RACK);
+        for share in racks {
             let ([x, z], heading) = track.at(share * track.length());
             // Right of the heading.
             let right = (-libm::cosf(heading), libm::sinf(heading));
@@ -273,6 +288,7 @@ impl Paddock {
             smoke: vec![(0.0, 0); karts],
             seed,
             picks: 0,
+            battle: false,
         }
     }
 
@@ -290,6 +306,7 @@ impl Paddock {
             smoke: vec![(0.0, 0); karts],
             seed: 0,
             picks: 0,
+            battle: false,
         }
     }
 
@@ -526,18 +543,24 @@ impl Paddock {
         let rank = if karts > 1 { (standing.place.min(karts - 1)) as f32 / (karts - 1) as f32 } else { 0.0 };
         let far = (standing.behind / FAR_BEHIND).clamp(0.0, 1.0);
         let back = if standing.place == 0 { 0.0 } else { rank.max(far) };
-        let weights = [
-            1.0 + 4.0 * back,          // nitro
-            3.0 - back,                // tyre
-            3.0 - 2.0 * back,          // cone
-            2.0 - back,                // oil
-            3.0 * back * back,         // rocket
-            1.5,                       // smoke
-            6.0 * back * (1.0 - back), // stack: the middle of the field
-            2.5 * back * back,         // drone
-            1.5,                       // bumper
-            3.0 * back * back * back,  // push: the very back
-        ];
+        // A battle: what hits, for every place.
+        let battle = [1.0, 3.0, 1.5, 1.5, 0.5, 0.5, 2.0, 1.5, 2.0, 0.5];
+        let weights = if self.battle {
+            battle
+        } else {
+            [
+                1.0 + 4.0 * back,          // nitro
+                3.0 - back,                // tyre
+                3.0 - 2.0 * back,          // cone
+                2.0 - back,                // oil
+                3.0 * back * back,         // rocket
+                1.5,                       // smoke
+                6.0 * back * (1.0 - back), // stack: the middle of the field
+                2.5 * back * back,         // drone
+                1.5,                       // bumper
+                3.0 * back * back * back,  // push: the very back
+            ]
+        };
         let total: f32 = weights.iter().sum();
         let mut u = unit(self.seed ^ self.picks.wrapping_mul(0x9e37_79b9)) * total;
         self.picks = self.picks.wrapping_add(1);
@@ -1052,6 +1075,21 @@ mod tests {
             Item::Rocket | Item::Drone => 4.0,
             Item::Push => 5.0,
         }
+    }
+
+    #[test]
+    fn a_battles_crates_give_what_hits_whatever_the_place() {
+        let track = track();
+        for place in [0, 3, 7] {
+            let mut paddock = Paddock::battle(&track, 8, 5);
+            let draws: Vec<Item> = (0..2000).map(|_| paddock.draw(Standing { place, behind: 0.0 }, 8)).collect();
+            let hitting = draws
+                .iter()
+                .filter(|i| matches!(i, Item::Tyre | Item::Stack | Item::Cone | Item::Oil | Item::Drone | Item::Bumper))
+                .count();
+            assert!(hitting as f32 > 0.7 * draws.len() as f32, "place {place}: {hitting} of {}", draws.len());
+        }
+        assert_eq!(Paddock::battle(&track, 8, 5).crates().len(), BATTLE_RACKS.len() * RACK);
     }
 
     #[test]

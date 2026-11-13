@@ -730,3 +730,59 @@ fn a_driver_paints_their_kart() {
     run_until(&mut harness, &mut alice, 6, |c| phase(&c.race()) == proto::Phase::Racing);
     assert_eq!(colour(&mut alice), 8, "silver, into the race");
 }
+
+/// Battles (G4.2, D-065): on the arena, the karts start spread round it
+/// with three lives each and no laps counted; things that hit them take
+/// lives; the battle ends with one kart in, or when time is up, and the
+/// order follows the lives. Nothing of it happens in a race.
+#[test]
+fn a_battle_is_fought_to_the_last_kart_or_the_clock() {
+    let world = KartWorld { grid: 6, laps: 3, event: Some("battle:yard".into()), ..KartWorld::unattended(6, 3) };
+    let mut harness = Harness::new(world, TICK_HZ);
+    let mut alice = Client::join(&mut harness, SessionKind::Agent, Role::Agent, "agent-1.alice");
+    run_until(&mut harness, &mut alice, 6, |c| phase(&c.race()) == proto::Phase::Racing);
+    let race = alice.race();
+    assert!(race.battle && race.events.contains(&"battle:yard".to_owned()), "{race:?}");
+    assert!(race.phase_ends_us > race.started_us, "time is up at a set time");
+    let karts = alice.karts();
+    assert_eq!(karts.len(), 6);
+    assert!(karts.iter().all(|(_, r, _)| r.lives == 3 && !r.out), "three lives each");
+    let track = alice.track();
+    assert!(track.half_width >= 10.0, "the arena, not a circuit");
+    // The agent fights too: it drives round and uses what it picks up.
+    let (entity, ..) = alice.kart_of("agent-1.alice");
+    let autopilot_type = alice.world.types().id(types::AUTOPILOT).unwrap();
+    let wanted = proto::Autopilot { pace: 0.8, line: 0.3, drift: false, use_items: true };
+    harness.send(alice.session, intent(1, entity, autopilot_type, &wanted));
+    let mut fewest = 3;
+    for _ in 0..160 {
+        harness.run(SECOND);
+        let karts = alice.karts();
+        fewest = fewest.min(karts.iter().map(|(_, r, _)| r.lives).min().unwrap_or(3));
+        assert!(karts.iter().all(|(_, r, _)| r.lap == 0), "no laps in a battle");
+        if phase(&alice.race()) == proto::Phase::Finished {
+            break;
+        }
+    }
+    assert_eq!(phase(&alice.race()), proto::Phase::Finished, "over within its time");
+    assert!(fewest < 3, "things hit karts and took lives");
+    // The order follows the lives, and those out say so.
+    let mut karts = alice.karts();
+    karts.sort_by_key(|(_, r, _)| r.position);
+    let lives: Vec<u32> = karts.iter().map(|(_, r, _)| r.lives).collect();
+    assert!(lives.windows(2).all(|w| w[0] >= w[1]), "best first: {lives:?}");
+    assert!(karts.iter().all(|(_, r, _)| r.out == (r.lives == 0)), "{karts:?}");
+    eprintln!("lives at the end: {lives:?}");
+}
+
+/// In a race nobody has lives to lose: hits only spin karts (D-065).
+#[test]
+fn a_race_has_no_lives() {
+    let mut harness = Harness::new(KartWorld::unattended(6, 1), TICK_HZ);
+    let mut alice = Client::join(&mut harness, SessionKind::Human, Role::Player, "alice");
+    run_until(&mut harness, &mut alice, 6, |c| phase(&c.race()) == proto::Phase::Racing);
+    harness.run(60 * SECOND);
+    let race = alice.race();
+    assert!(!race.battle);
+    assert!(alice.karts().iter().all(|(_, r, _)| r.lives == 0 && !r.out));
+}

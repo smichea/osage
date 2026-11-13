@@ -33,6 +33,8 @@ pub struct RaceView {
     pub trial: bool,
     /// The player's finish is being shown again, slowed (D-063).
     pub replay: bool,
+    /// A battle (D-065): lives, not laps; the clock counts down.
+    pub battle: bool,
     /// Race time, milliseconds.
     pub clock_ms: i64,
     /// Every kart, in race order.
@@ -109,6 +111,9 @@ pub struct Entry {
     pub bot: bool,
     /// A run from an earlier time trial, driven again (D-062).
     pub ghost: bool,
+    /// In a battle (D-065): lives left, and whether it is out.
+    pub lives: u32,
+    pub out: bool,
     pub color: u32,
     pub position: u32,
     pub lap: u32,
@@ -340,6 +345,8 @@ fn write(
             Label::Place => me.map_or(String::new(), |me| me.position.to_string()),
             Label::Suffix => me.map_or(String::new(), |me| ordinal(me.position).to_owned()),
             Label::Lap => match me {
+                Some(me) if view.battle && me.out => "OUT".to_owned(),
+                Some(me) if view.battle => format!("LIVES {}", "[#]".repeat(me.lives as usize)),
                 Some(me) if view.trial => format!("TRIAL {}/{}", me.lap.clamp(1, view.laps.max(1)), view.laps),
                 Some(me) => format!("LAP {}/{}", me.lap.clamp(1, view.laps.max(1)), view.laps),
                 None if view.stage == Lights::Off => String::new(),
@@ -355,7 +362,9 @@ fn write(
                 let rows = view.karts.iter().enumerate().map(|(i, kart)| {
                     // A ghost shows the time it drives to: its driver's best trial.
                     let best = view.records.trials.iter().find(|best| kart.ghost && best.name == kart.name);
-                    let status = if kart.finish_ms > 0 {
+                    let status = if view.battle {
+                        if kart.out { "out".to_owned() } else { format!("{} lives", kart.lives) }
+                    } else if kart.finish_ms > 0 {
                         clock(kart.finish_ms as i64)
                     } else if let Some(best) = best {
                         clock(i64::from(best.ms))
@@ -427,6 +436,10 @@ fn write(
                 Lights::Go => {
                     tint = Some(Color::srgb(0.35, 1.0, 0.45));
                     "GO!".to_owned()
+                }
+                Lights::Results(_) if view.battle && me.is_some_and(|me| me.position == 1) => {
+                    tint = Some(Color::srgb(1.0, 0.84, 0.25));
+                    "WINNER!".to_owned()
                 }
                 Lights::Results(_) if me.is_some_and(|me| me.finish_ms > 0) => "FINISH!".to_owned(),
                 Lights::Ready(_) => "READY".to_owned(),

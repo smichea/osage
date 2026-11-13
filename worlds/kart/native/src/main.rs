@@ -89,7 +89,7 @@ fn main() -> Result<()> {
             "--sky" => sky = Some(value()?.parse::<scene::Sky>().map_err(anyhow::Error::msg)?),
             "--track" => {
                 let wanted = value()?;
-                let def = match osage_kart_tracks::by_id(&wanted) {
+                let def = match osage_kart_tracks::by_id(&wanted).or_else(|| osage_kart_tracks::arena(&wanted)) {
                     Some(def) => def,
                     None => {
                         let text = std::fs::read_to_string(&wanted).with_context(|| format!("no track {wanted}"))?;

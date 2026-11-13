@@ -125,6 +125,10 @@ message Racer {
   // Added with D-062. A ghost: a run kept from an earlier time trial,
   // driven again by the world. `name` is who drove it; nothing touches it.
   bool ghost = 15;
+  // Added with D-065. In a battle: the hits the kart can still take (3 at
+  // the start), and whether it is out — it coasts, nothing touches it.
+  uint32 lives = 16;
+  bool out = 17;
 }
 
 // How a kart is built (D-055): top speed, acceleration, handling, grip and
@@ -300,6 +304,11 @@ message Race {
   // alone against the clock — no bots, no crates, karts pass through one
   // another — with the ghosts of the best runs kept on this track.
   bool trial = 13;
+  // Added with D-065. A battle (the event `battle:ARENA`): every kart has
+  // three lives, each thing that hits it — or a bumper — takes one; the
+  // last kart in wins, or the one with most lives when time is up. While
+  // racing, phase_ends_us is when time is up.
+  bool battle = 14;
 }
 
 message Cup {

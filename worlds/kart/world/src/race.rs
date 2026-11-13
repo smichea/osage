@@ -121,6 +121,8 @@ pub struct Progress {
     lap_started: Option<Duration>,
     /// Who drives and in what (D-055).
     pub pair: Pair,
+    /// Its battle (D-065): lives, hits, when it went out.
+    pub fight: crate::battle::Fight,
 }
 
 impl Progress {
@@ -283,7 +285,8 @@ pub fn flow(
             race.started = now;
             race.ticks = 0;
             race.first_finish = None;
-            race.ends = None;
+            // A battle's time is up at a set time; a race ends with its laps.
+            race.ends = cups.battle().then(|| now + crate::battle::LONGEST);
         }
         Phase::Countdown => {
             // Drivers who arrive during the countdown take a bot's place.
@@ -313,7 +316,12 @@ pub fn flow(
             // A driver racing alone may end the race.
             let alone = drivers.count() == 1;
             let stopped = alone && calls.iter().any(|(_, call)| *call == proto::RaceCall::Stop);
-            let over = all_finished || window_closed || now >= race.started + LONGEST_RACE;
+            let fights: Vec<_> = karts.iter().map(|(_, p, _)| (p.fight, !p.bot)).collect();
+            let over = if cups.battle() {
+                crate::battle::over(&fights, now - race.started)
+            } else {
+                all_finished || window_closed || now >= race.started + LONGEST_RACE
+            };
             if drivers.0.is_empty() || stopped || over {
                 // Points for the cup, by place (D-057).
                 let mut order: Vec<_> =
@@ -384,6 +392,8 @@ fn line_up(
     *races = races.wrapping_add(1);
     commands.insert_resource(if trial {
         Items(osage_kart_items::Paddock::empty(seats))
+    } else if cups.battle() {
+        Items(osage_kart_items::Paddock::battle(&course.0.track, seats, races.wrapping_mul(0x9e37_79b9) ^ 0x6261_7474))
     } else {
         items_for(&course.0.track, seats, *races)
     });
@@ -416,7 +426,8 @@ fn line_up(
     for (slot, (owner, name, controller, pilot, pair)) in people.chain(bots).chain(ghosts).take(seats).enumerate() {
         // In a trial everyone starts from the same place: the runs compare.
         let place = if trial { 0 } else { slot };
-        let kart = Kart { build: osage_kart_roster::build(pair.0, pair.1), ..course.0.grid_slot(place) };
+        let start = if cups.battle() { crate::battle::spot(&course.0, slot, seats) } else { course.0.grid_slot(place) };
+        let kart = Kart { build: osage_kart_roster::build(pair.0, pair.1), ..start };
         let bot = owner.is_none();
         let progress = Progress {
             name,
@@ -430,11 +441,12 @@ fn line_up(
             position: slot as u32 + 1,
             lap_started: None,
             pair,
+            fight: crate::battle::Fight::default(),
         };
         let discrete = Discrete::default()
             .with(ids.content_ref, &builtin(core_types::BUILTIN_AVATAR))
             .with(ids.controller, &controller)
-            .with(ids.racer, &racer(&progress, None, 0));
+            .with(ids.racer, &racer(&progress, None, 0, cups.battle()));
         let volatile = Volatile::default().with(ids.state, &state(&kart, 0));
         let parts = (
             entity_ids.next_id(),
@@ -466,6 +478,19 @@ pub fn progress(
     mut karts: Query<(&Replicated, &Body, &mut Progress)>,
 ) {
     let racing = race.phase == Phase::Racing;
+    // A battle has no laps: its places are its lives (D-065).
+    if cups.battle() {
+        let fights: Vec<(u64, crate::battle::Fight)> = karts.iter().map(|(id, _, p)| (id.0, p.fight)).collect();
+        let ranked = crate::battle::ranking(&fights.iter().map(|(_, f)| *f).collect::<Vec<_>>());
+        race.order = ranked.iter().map(|&i| fights[i].0).collect();
+        for (id, _, mut progress) in &mut karts {
+            let position = race.order.iter().position(|o| *o == id.0).map_or(0, |p| p as u32 + 1);
+            if progress.position != position {
+                progress.position = position;
+            }
+        }
+        return;
+    }
     // A time trial is timed in ticks of the world (D-062): a run driven
     // again takes the same time, however busy the world's machine is.
     let now = if cups.trial() { race.started + clock(race.ticks) } else { time.elapsed() };
@@ -544,7 +569,7 @@ pub fn publish(
         if volatile.0.get(&ids.state) != Some(&state) {
             volatile.0.insert(ids.state, state);
         }
-        let racer = prost::Message::encode_to_vec(&racer(progress, paddock, seat.0));
+        let racer = prost::Message::encode_to_vec(&racer(progress, paddock, seat.0, cups.battle()));
         if discrete.0.get(&ids.racer) != Some(&racer) {
             discrete.0.insert(ids.racer, racer);
         }
@@ -571,6 +596,7 @@ pub fn publish(
         music_port: u32::from(beside.music),
         voice_port: u32::from(beside.voice),
         trial: cups.trial(),
+        battle: cups.battle(),
     };
     if let Ok((mut board, mut volatile)) = board.single_mut() {
         if let Some(paddock) = paddock {
@@ -591,6 +617,7 @@ pub fn publish(
                 && c.music_port == summary.music_port
                 && c.voice_port == summary.voice_port
                 && c.trial == summary.trial
+                && c.battle == summary.battle
                 && c.phase_ends_us.abs_diff(summary.phase_ends_us) < 50_000
                 && c.started_us.abs_diff(summary.started_us) < 50_000
         });
@@ -626,7 +653,7 @@ fn state(kart: &Kart, applied: u64) -> proto::KartState {
     }
 }
 
-fn racer(progress: &Progress, paddock: Option<&osage_kart_items::Paddock>, seat: usize) -> proto::Racer {
+fn racer(progress: &Progress, paddock: Option<&osage_kart_items::Paddock>, seat: usize, battle: bool) -> proto::Racer {
     let (held, smoke) = (paddock.and_then(|p| p.held(seat)), paddock.and_then(|p| p.smoke(seat)));
     proto::Racer {
         name: progress.name.clone(),
@@ -645,5 +672,7 @@ fn racer(progress: &Progress, paddock: Option<&osage_kart_items::Paddock>, seat:
         kart: progress.pair.1.id.to_owned(),
         build: Some(build_proto(osage_kart_roster::build(progress.pair.0, progress.pair.1))),
         ghost: progress.ghost,
+        lives: if battle { progress.fight.lives } else { 0 },
+        out: battle && progress.fight.is_out(),
     }
 }

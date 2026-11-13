@@ -50,8 +50,14 @@ Point along the cliffs, Pinewood through the forest at dusk and Harbour
 Town round the houses - and gives points for each place (10, 8, 6, 5, 4,
 3, 2, 1). The standings show between races, the podium after the last.
 Between races the host presses T to choose what to race next: the cup,
-one track over and over, or a time trial on a track. The others' T is a
+one track over and over, a time trial or a battle. The others' T is a
 vote, which everyone sees.
+
+Battle: in the Yard, a wide bowl of asphalt, every kart has three
+lives. Each thing that hits you - a tyre, a cone, oil, a drone - or a
+bumper takes one; after a hit you are spared for a moment. With no life
+left you are out (your kart turns see-through). The last kart in wins, or
+the one with most lives after two and a half minutes.
 
 Time trials: everyone alone against the clock - no bots, no items, and
 the karts pass through one another. Your best run comes back as a ghost

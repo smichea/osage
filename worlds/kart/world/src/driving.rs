@@ -223,6 +223,9 @@ pub fn drive(
         // Past the line, the autopilot brings the kart round gently.
         if progress.finish_ms.is_some() {
             controls = vec![autopilot(&body.0, &proto::Autopilot { pace: 0.5, line: 0.0, ..default() }, &course.0)];
+        } else if progress.fight.is_out() {
+            // Out of a battle: the kart coasts to a stop (D-065).
+            controls = vec![Controls::default()];
         } else if racing && let Some(run) = &mut start.run {
             run.tick(&controls);
         }
@@ -291,17 +294,25 @@ pub fn autopilot(kart: &Kart, wanted: &proto::Autopilot, circuit: &Circuit) -> C
 
 /// Karts collide (D-045), and those in another's wake charge a slipstream
 /// (D-050) — but in a time trial, where each drives alone (D-062).
-pub fn collide(cups: Res<crate::cup::Cups>, mut karts: Query<&mut Body>) {
+/// A kart out of a battle is touched by nothing (D-065).
+pub fn collide(cups: Res<crate::cup::Cups>, mut karts: Query<(&mut Body, &Progress)>) {
     if cups.trial() {
         return;
     }
     let mut pairs = karts.iter_combinations_mut();
-    while let Some([mut a, mut b]) = pairs.fetch_next() {
-        bump(&mut a.0, &mut b.0);
+    while let Some([(mut a, pa), (mut b, pb)]) = pairs.fetch_next() {
+        if !pa.fight.is_out() && !pb.fight.is_out() {
+            bump(&mut a.0, &mut b.0);
+        }
     }
-    let mut all: Vec<Kart> = karts.iter().map(|body| body.0).collect();
+    let mut all: Vec<Kart> = karts.iter().filter(|(_, p)| !p.fight.is_out()).map(|(body, _)| body.0).collect();
     slipstream(&mut all);
-    for (mut body, kart) in karts.iter_mut().zip(all) {
-        body.0 = kart;
+    let mut drafted = all.into_iter();
+    for (mut body, progress) in &mut karts {
+        if !progress.fight.is_out()
+            && let Some(kart) = drafted.next()
+        {
+            body.0 = kart;
+        }
     }
 }

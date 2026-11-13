@@ -322,7 +322,7 @@ fn receive(
                                     smoke: None,
                                     trailing: false,
                                     guard: 0.0,
-                                    ghost: racer.ghost,
+                                    ghost: racer.ghost || racer.out,
                                 },
                                 Remote(entity),
                             ))
@@ -369,8 +369,10 @@ fn receive(
                     let Some(racer) = world.get::<proto::Racer>(entity, types::RACER) else { continue };
                     let Some(&model) = karts.get(&entity) else { continue };
                     let Ok(pose) = poses.get(model) else { continue };
-                    if pose.color != racer.color {
-                        let pose = Pose { color: racer.color, ..*pose };
+                    // Out of a battle (D-065): drawn as a ghost is.
+                    let ghost = racer.ghost || racer.out;
+                    if pose.color != racer.color || pose.ghost != ghost {
+                        let pose = Pose { color: racer.color, ghost, ..*pose };
                         commands.entity(model).despawn();
                         karts.insert(entity, commands.spawn((pose, Remote(entity))).id());
                     }
@@ -615,6 +617,9 @@ fn event_name(event: &str) -> String {
         format!("{name} (cup)")
     } else if let Some(id) = event.strip_prefix("trial:") {
         format!("{} (time trial)", track_name(id))
+    } else if let Some(id) = event.strip_prefix("battle:") {
+        let name = osage_kart_tracks::arena(id).map_or_else(|| id.to_owned(), |arena| arena.name);
+        format!("{name} (battle)")
     } else {
         format!("{} (one track)", track_name(event.strip_prefix("track:").unwrap_or(event)))
     }
@@ -851,7 +856,12 @@ fn summarise(
     view.status.clone_from(&replica.status);
     view.laps = race.as_ref().map_or(0, |race| race.laps);
     view.trial = race.as_ref().is_some_and(|race| race.trial);
-    view.clock_ms = race.as_ref().map_or(0, |race| (now - race.started_us as i64) / 1000);
+    view.battle = race.as_ref().is_some_and(|race| race.battle);
+    view.clock_ms = race.as_ref().map_or(0, |race| match race.phase() {
+        // A battle counts down to when time is up (D-065).
+        Phase::Racing if race.battle => ((race.phase_ends_us as i64 - now) / 1000).max(0),
+        _ => (now - race.started_us as i64) / 1000,
+    });
     view.stage = match &race {
         None => Lights::Off,
         Some(race) => match race.phase() {
@@ -875,6 +885,8 @@ fn summarise(
                 name: racer.name,
                 bot: racer.bot,
                 ghost: racer.ghost,
+                lives: racer.lives,
+                out: racer.out,
                 color: racer.color,
                 position: racer.position,
                 lap: racer.lap,
