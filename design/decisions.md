@@ -837,3 +837,11 @@ Date: 2026-11-13 · the reference RTX PC shows a grey screen at T3 and has raced
 - **Why:** each failed start costs ten seconds; four of them buy the machine the best picture it can draw, and tell us, through the report, which technique fails on which hardware.
 - **Rejected:** trying each technique alone (more starts for the same answer when one is the culprit); asking the player (they cannot know).
 
+## D-091 — The world's leaderboard, as a page
+
+Date: 2026-11-13 · the maintainer's goal names it: "tous les extras comme leaderboard".
+
+- **Decision:** the world publishes every track's records (`kart.leaderboard/1`: each as `kart.records/1` has the current track's), and the browser client has a second page, `leaderboard.html`, that connects as an observer — the world gives an observer no kart and no place on the grid — and shows, live, every track's best laps, races and time trials (the best five, who, with which driver and kart, when, new ones marked) and the race being run (its phase, laps, class, bots, night, rain, the order). On Windows, `play.bat` and `play-two.bat` serve it at `http://localhost:8080/leaderboard.html`, and `host.bat` at the host's address for everyone on the network.
+- **Why:** records seen only between races on one's own screen are a list; a page anyone can open, on a phone at the side of the sofa or on the next computer, is a leaderboard.
+- **Rejected:** a leaderboard shared between worlds over the internet (it would need an account system and a server of ours; each world's own is the next step's foundation).
+

@@ -25,6 +25,12 @@ below.
 Between races player 1 picks a driver with A and D and a kart with W and S,
 player 2 with the arrows (and a paint with the . key). R replays the whole race as television would.
 
+Leaderboard
+-----------
+While a game runs, open  http://localhost:8080/leaderboard.html  in a
+browser: every track's best laps, races and time trials, and the race
+being run. When you host, the others open it at your address.
+
 Updates
 -------
 play.bat, play-two.bat, host.bat and join.bat first look for a newer

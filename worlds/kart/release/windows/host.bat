@@ -14,7 +14,8 @@ echo.
 echo  The others start join.bat and type this computer's address:
 for /f "tokens=2 delims=:" %%a in ('ipconfig ^| findstr /c:"IPv4"') do echo     %%a
 echo.
-echo  A phone or a tablet opens  http://THAT-ADDRESS:8080  in its browser.
+echo  A phone or a tablet opens  http://THAT-ADDRESS:8080  in its browser,
+echo  and anyone  http://THAT-ADDRESS:8080/leaderboard.html  for the records.
 echo  If Windows asks, allow "kart-server" and "kart-web" on private networks.
 echo.
 rem The host's music, shared with the others, when there is a "music" folder.

@@ -387,6 +387,13 @@ message Vote {
 // kart.records/1 — the world's records on this track (D-053): the best
 // laps and the best races of the world's number of laps, one per driver
 // name, fastest first. Kept by the world across restarts.
+// Added with D-091. Every track's records the world keeps, each as
+// kart.records/1 has the current one's (races and trials of the current
+// number of laps): the world's leaderboard.
+message Leaderboard {
+  repeated Records tracks = 1;
+}
+
 message Records {
   string track = 1;
   repeated Record laps = 2;

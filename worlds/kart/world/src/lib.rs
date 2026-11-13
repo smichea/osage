@@ -83,6 +83,7 @@ pub mod types {
     pub const RACE: &str = "kart.race/1";
     pub const PADDOCK: &str = "kart.paddock/1";
     pub const RECORDS: &str = "kart.records/1";
+    pub const LEADERBOARD: &str = "kart.leaderboard/1";
     pub const CHOICE: &str = "kart.choice/1";
     pub const ROSTER: &str = "kart.roster/1";
 }
@@ -304,6 +305,13 @@ impl WorldModule for KartWorld {
                 "The world's records on this track: best laps, best races and best time trials, one per \
                  driver name, fastest first, with when they were set; fresh ones were set in the latest race.",
             ),
+            spec(
+                types::LEADERBOARD,
+                "Leaderboard",
+                false,
+                "Every track's records the world keeps, as kart.records/1 has the current one's: the \
+                 world's leaderboard. An observer sees it without racing.",
+            ),
         ]
     }
 
@@ -338,6 +346,7 @@ struct Ids {
     race: u32,
     paddock: u32,
     records: u32,
+    leaderboard: u32,
     choice: u32,
     track: u32,
 }
@@ -372,6 +381,7 @@ fn setup(
         race: id(types::RACE),
         paddock: id(types::PADDOCK),
         records: id(types::RECORDS),
+        leaderboard: id(types::LEADERBOARD),
         choice: id(types::CHOICE),
         track: id(types::TRACK),
     };

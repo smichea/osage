@@ -4,7 +4,9 @@
 //! The world's records (D-053, [`osage_kart_records`]): every lap and every
 //! race a human or an agent finishes is offered to the boards; what enters
 //! is saved at once and published on the race board (`kart.records/1`),
-//! marked fresh until the next race lines up. Bots set no records.
+//! marked fresh until the next race lines up. Bots set no records. Every
+//! track's boards go on it too, the world's leaderboard
+//! (`kart.leaderboard/1`, D-091).
 
 use std::{
     collections::BTreeSet,
@@ -97,6 +99,13 @@ pub fn keep(
         && let Ok(mut board) = board.single_mut()
     {
         board.set(ids.records, &to_proto(&book, track, rules.laps));
+        // And every track's, the world's leaderboard (D-091).
+        let mut tracks: Vec<&str> = book.records.boards().map(|(track, ..)| track).collect();
+        tracks.sort_unstable();
+        tracks.dedup();
+        let leaderboard =
+            proto::Leaderboard { tracks: tracks.iter().map(|t| to_proto(&book, t, rules.laps)).collect() };
+        board.set(ids.leaderboard, &leaderboard);
         book.published = Some(track.to_owned());
     }
 }

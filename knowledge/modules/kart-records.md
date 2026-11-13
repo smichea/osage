@@ -28,6 +28,8 @@ The file is text: the line `kart-records/1`, then a record a line, tab-separated
 
 In the world (`osage-world-kart`, `records.rs`): each lap and each race a human or an agent finishes is offered (bots set none), read from the race's progress — a lap from one crossing of the line to the next while racing, the race from the lights. What enters is saved at once and the race board's `kart.records/1` republished: the track, the best laps, the best races and the best time trials ([osage-kart-ghost](/modules/kart-ghost.md)) of the world's number of laps, each with `fresh`. A trial's times are counted in ticks of the world, a race's by its clock. `kart-server --records FILE` names the file; without it, records live as long as the process. The Windows launchers keep them in `kart-records.txt` beside the game, which updates leave alone.
 
+
+The world publishes the current track's boards as `kart.records/1` and every track's as `kart.leaderboard/1` (D-091), which the browser client's leaderboard page (`leaderboard.html`, connected as an observer) shows with the race being run.
 # Interfaces
 
 `Records::{offer, board, boards, to_text, from_text, load, save}`, `Event`, `Record`, `Entered`, `KEPT`, `HEADER`. The protocol: `kart.records/1` (`Records`, `Record` in `kart.proto`), described to agents by the world.

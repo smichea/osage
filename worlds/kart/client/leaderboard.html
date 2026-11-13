@@ -1,0 +1,48 @@
+<!doctype html>
+<!-- SPDX-FileCopyrightText: The osage contributors -->
+<!-- SPDX-License-Identifier: MIT OR Apache-2.0 -->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>osage kart leaderboard</title>
+    <style>
+      :root { --bg: #0b0f16; --panel: #131a24; --edge: #ffffff14; --text: #eef1f6; --muted: #9aa6b6; --accent: #ffb833; --gold: #ffd140; --silver: #d6dde8; --bronze: #ec9452; }
+      * { box-sizing: border-box; }
+      body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.45 system-ui, sans-serif; }
+      header { padding: 24px 16px 8px; max-width: 1100px; margin: 0 auto; display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; }
+      h1 { margin: 0; font-size: 28px; letter-spacing: 0.5px; }
+      h1 span { color: var(--accent); }
+      #status { color: var(--muted); font-size: 13px; }
+      main { max-width: 1100px; margin: 0 auto; padding: 8px 16px 40px; display: grid; gap: 16px; }
+      #tracks { display: grid; gap: 16px; }
+      section { background: var(--panel); border: 1px solid var(--edge); border-radius: 12px; padding: 14px 16px; }
+      h2 { margin: 0 0 10px; font-size: 17px; display: flex; gap: 10px; align-items: center; }
+      h2::before { content: ""; width: 4px; height: 18px; background: var(--accent); border-radius: 2px; }
+      h3 { margin: 10px 0 6px; font-size: 13px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.8px; }
+      .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px 20px; }
+      table { width: 100%; border-collapse: collapse; }
+      td { padding: 3px 4px; white-space: nowrap; }
+      td.place { width: 2.2em; font-weight: 700; }
+      td.time { text-align: right; font-variant-numeric: tabular-nums; font-weight: 600; }
+      td.who small { color: var(--muted); }
+      tr.p1 td.place { color: var(--gold); } tr.p2 td.place { color: var(--silver); } tr.p3 td.place { color: var(--bronze); }
+      .fresh { color: var(--accent); font-size: 11px; font-weight: 700; margin-left: 6px; }
+      .empty { color: var(--muted); font-style: italic; }
+      .dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 6px; }
+      #live .meta { color: var(--muted); font-size: 13px; margin-bottom: 6px; }
+      @media (max-width: 520px) { h1 { font-size: 22px; } td { white-space: normal; } }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>osage kart <span>leaderboard</span></h1>
+      <div id="status">connecting…</div>
+    </header>
+    <main>
+      <section id="live"><h2>Now racing</h2><div class="empty">waiting for the world…</div></section>
+      <div id="tracks"></div>
+    </main>
+    <script type="module" src="/src/leaderboard.ts"></script>
+  </body>
+</html>
