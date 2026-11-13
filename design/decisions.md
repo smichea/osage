@@ -778,3 +778,11 @@ Date: 2026-11-13 · two content changes in a day (the fonts of D-078, the concre
 - **Rejected:** fetching each file from its source (the manifest's URLs): some sources ask a person to download, others are derived files, and a player's game would depend on a dozen sites; deleting files a patch no longer has (content only grows; a stale file is harmless).
 - **Consequences:** an updater from before this decision still downloads the whole zip once; patches serve from the next update on.
 
+## D-084 — The browser draws the paddock's things and the rain
+
+Date: 2026-11-13 · the browser client drew neither the crates and things the world sends (D-052) nor the rain (D-068): a player in a browser drove through tyres and oil they could not see.
+
+- **Decision:** the browser client draws `kart.paddock/1` — crates bobbing and turning, hidden while broken; tyres rolling; cones standing, or sliding and tumbling once knocked; oil spreading; drones flying — each on the road's height under it, which the WebAssembly physics now gives for any point (`track_along`, then `track_lift`); and, when the race is wet, rain streaks round the camera and a grey sky and haze, easing over four seconds. Meshes are pooled and reused frame to frame.
+- **Why:** the world is the same for every client; what changes the race must be seen in all of them.
+- **Consequences:** the browser still cannot use items (it sends no use button) and draws things at the world's time, not as far ahead as its prediction.
+

@@ -76,6 +76,7 @@ interface Exports {
   track_crest(along: number, rise: number, fall: number, height: number): void;
   track_close(halfWidth: number, verge: number): number;
   track_lift(along: number): number;
+  track_along(x: number, z: number): number;
   track_wet(wet: number): void;
   track_height(height: number): void;
   kart_set(field: number, value: number): void;
@@ -117,6 +118,11 @@ export class Physics {
   /** The road's height `along` metres along the centre line: 0 but over a crest (D-051). */
   roadHeight(along: number): number {
     return this.wasm.track_lift(along);
+  }
+
+  /** The road's height under the point `x, z`. */
+  roadHeightAt(x: number, z: number): number {
+    return this.wasm.track_lift(this.wasm.track_along(x, z));
   }
 
   step(k: KartValues, d: Drive): KartValues {

@@ -15,6 +15,7 @@ What osage knows about its own modules: their architecture, the algorithms and t
 
 * [osage-render](modules/osage-render.md) - Rendering techniques as independent Bevy plugins, each configured for the fidelity tier the application runs at.
 * [osage-kart-physics](modules/kart-physics.md) - The kart world's arcade physics, one deterministic Rust crate run natively by the server and as WebAssembly by clients.
+* [osage-kart-client](modules/kart-client.md) - The browser client of the kart world: three.js, the kart predicted by the shared physics in WebAssembly, the paddock's things and the rain drawn.
 * [osage-kart-native](modules/kart-native.md) - The native client of the kart world, built on Bevy, and the testbed of the rendering programme with its benchmark.
 * [osage-content](modules/osage-content.md) - Content from the asset manifest made ready to draw — textures with full mipmaps and filtering, photographs of the sky decoded to linear light.
 * [osage-update](modules/osage-update.md) - Keeps a program folder up to date from a project's GitHub releases — the newest release of a tag prefix, downloads checked against GitHub's digests, files replaced in place; with kart-update, the kart's Windows launcher step.

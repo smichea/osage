@@ -13,6 +13,8 @@ import {
   ChoiceSchema,
   ControlsSchema,
   KartStateSchema,
+  type Paddock,
+  PaddockSchema,
   Phase,
   type Race,
   RaceCall,
@@ -27,6 +29,7 @@ import {
 import { Input } from "./input.js";
 import { type KartValues, Physics, STEP_SECONDS, TURBO_CHARGES } from "./physics.js";
 import { Predictor } from "./prediction.js";
+import { PaddockView, RainView } from "./paddock.js";
 import { type CircuitView, type KartView, PALETTE, buildCircuit, buildKart, poseKart, sparkColour } from "./scene.js";
 
 const KART = {
@@ -38,6 +41,7 @@ const KART = {
   records: "kart.records/1",
   choice: "kart.choice/1",
   roster: "kart.roster/1",
+  paddock: "kart.paddock/1",
 };
 
 const $ = (id: string) => document.getElementById(id)!;
@@ -50,7 +54,9 @@ const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setPixelRatio(Math.min(devicePixelRatio, 1.75));
 document.body.prepend(renderer.domElement);
 const scene = new THREE.Scene();
-scene.background = new THREE.Color("#87b5e0");
+/** The sky and haze of a dry day; the rain greys them (D-068, D-084). */
+const DRY = new THREE.Color("#87b5e0");
+scene.background = DRY.clone();
 scene.fog = new THREE.Fog("#87b5e0", 120, 420);
 scene.add(new THREE.HemisphereLight("#dbeaff", "#4f6b3a", 1.4));
 const sun = new THREE.DirectionalLight("#ffffff", 2.2);
@@ -137,6 +143,17 @@ try {
     return `<hr><b>Records</b><br><small>best laps</small>${rows(value.laps)}${races}${trials}`;
   };
   const state = (entity: bigint): KartValues | undefined => world.get(entity, KART.state, KartStateSchema);
+  // The paddock's crates and things (D-084), and the rain.
+  const paddockView = new PaddockView();
+  const rainView = new RainView();
+  scene.add(paddockView.group, rainView.group);
+  const paddock = (): Paddock | undefined => {
+    for (const entity of world.entities()) {
+      const value = world.get(entity, KART.paddock, PaddockSchema);
+      if (value) return value;
+    }
+    return undefined;
+  };
   // The kart as its own driver built it (D-055): what the predictor steps.
   const built = (entity: bigint, kart: KartValues): KartValues => {
     const b = racer(entity)?.build;
@@ -393,6 +410,8 @@ try {
       look.lerp(new THREE.Vector3(followed.x + fx * 4, 1, followed.z + fz * 4), 1 - Math.exp(-seconds * 10));
       camera.lookAt(look);
     }
+    paddockView.update(paddock(), performance.now() / 1000, 0, (x, z) => physics.roadHeightAt(x, z));
+    rainView.update(race()?.rain ?? false, seconds, camera, scene, DRY);
     renderer.render(scene, camera);
   }
 
