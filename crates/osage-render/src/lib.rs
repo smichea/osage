@@ -27,6 +27,8 @@ pub mod ground;
 pub mod pace;
 pub mod panorama;
 pub mod post;
+#[cfg(feature = "raytracing")]
+pub mod raytracing;
 pub mod resolution;
 pub mod shadows;
 pub mod sky;
@@ -144,16 +146,20 @@ pub enum Technique {
     /// Drawing under the output size ([`resolution`]); without it, the
     /// picture has the output's size, up to the tier's height.
     Upscaling,
+    /// Ray-traced light at T4 (D-093, built with the `raytracing`
+    /// feature, on hardware that traces rays).
+    RayTracing,
 }
 
 impl Technique {
-    pub const ALL: [Technique; 6] = [
+    pub const ALL: [Technique; 7] = [
         Technique::Sky,
         Technique::SkyLight,
         Technique::Shadows,
         Technique::AmbientOcclusion,
         Technique::Post,
         Technique::Upscaling,
+        Technique::RayTracing,
     ];
 
     pub fn name(self) -> &'static str {
@@ -164,6 +170,7 @@ impl Technique {
             Technique::AmbientOcclusion => "ambient-occlusion",
             Technique::Post => "post",
             Technique::Upscaling => "upscaling",
+            Technique::RayTracing => "ray-tracing",
         }
     }
 }
@@ -204,6 +211,10 @@ impl Plugin for OsageRenderPlugin {
                 Technique::Post => app.add_plugins(post::PostPlugin),
                 // Always there: leaving it out only sets its scale to one.
                 Technique::Upscaling => app,
+                #[cfg(feature = "raytracing")]
+                Technique::RayTracing => app.add_plugins(raytracing::RayTracingPlugin),
+                #[cfg(not(feature = "raytracing"))]
+                Technique::RayTracing => app,
             };
         }
     }

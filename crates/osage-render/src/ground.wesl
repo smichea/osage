@@ -10,9 +10,21 @@
 // smaller than a few pixels fade out: no shimmer in the distance.
 
 import bevy_pbr::render::{
-    forward_io::{VertexOutput, FragmentOutput},
     pbr_fragment::pbr_input_from_standard_material,
-    pbr_functions::{alpha_discard, apply_pbr_lighting, main_pass_post_lighting_processing},
+    pbr_functions::alpha_discard,
+};
+
+// Drawn forward, lit here; or into the deferred G-buffer (D-093: the
+// traced light's), lit after.
+@if(PREPASS_PIPELINE)
+import bevy_pbr::{
+    prepass::io::{VertexOutput, FragmentOutput},
+    deferred::functions::deferred_output,
+};
+@else
+import bevy_pbr::render::{
+    forward_io::{VertexOutput, FragmentOutput},
+    pbr_functions::{apply_pbr_lighting, main_pass_post_lighting_processing},
 };
 
 // x: strength of the clumps, y: strength of the patches, z: size of a
@@ -260,8 +272,13 @@ fn fragment(in: VertexOutput, @builtin(front_facing) is_front: bool) -> Fragment
         pbr_input.material.base_color
     );
 
+@if(PREPASS_PIPELINE)
+    let out = deferred_output(in, pbr_input);
+@if(!PREPASS_PIPELINE)
     var out: FragmentOutput;
+@if(!PREPASS_PIPELINE)
     out.color = apply_pbr_lighting(pbr_input);
+@if(!PREPASS_PIPELINE)
     out.color = main_pass_post_lighting_processing(pbr_input, out.color);
     return out;
 }

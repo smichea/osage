@@ -11,7 +11,12 @@ edition.workspace = true
 rust-version.workspace = true
 repository.workspace = true
 
+[features]
+# Ray-traced lighting at T4 (D-093): Bevy Solari, on hardware that traces rays.
+raytracing = ["bevy/bevy_solari"]
+
 [dependencies]
 # "ui": the picture is shown as an interface element (resolution).
 bevy = { workspace = true, features = ["3d", "ui", "experimental_pbr_pcss"] }
+
 half.workspace = true

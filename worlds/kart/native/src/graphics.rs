@@ -19,7 +19,7 @@
 //!   below).
 //! - A tier that fails is not given up at once (D-090): the next start
 //!   tries it again without one technique more, the likeliest culprits
-//!   first — the sky as a light, then post-processing (temporal
+//!   first — the traced light (T4), the sky as a light, then post-processing (temporal
 //!   anti-aliasing, motion blur), ambient occlusion, shadows — and keeps
 //!   the first set that works (`trimmed`); only with every suspect left
 //!   out does it go a tier lower.
@@ -70,8 +70,8 @@ fn lower(tier: Tier) -> Tier {
 
 /// The techniques a tier tries without, one more after each failure,
 /// likeliest culprit first (D-090).
-const SUSPECTS: [Technique; 4] =
-    [Technique::SkyLight, Technique::Post, Technique::AmbientOcclusion, Technique::Shadows];
+const SUSPECTS: [Technique; 5] =
+    [Technique::RayTracing, Technique::SkyLight, Technique::Post, Technique::AmbientOcclusion, Technique::Shadows];
 
 /// What this machine leaves out of each tier, after failures there: lines
 /// `T3 sky-light post`.

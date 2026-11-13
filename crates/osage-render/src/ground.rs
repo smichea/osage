@@ -144,6 +144,11 @@ impl MaterialExtension for Ground {
     fn fragment_shader() -> ShaderRef {
         "embedded://osage_render/ground.wesl".into()
     }
+
+    /// The same, into the deferred G-buffer (D-093).
+    fn deferred_fragment_shader() -> ShaderRef {
+        "embedded://osage_render/ground.wesl".into()
+    }
 }
 
 /// Registers [`GroundMaterial`].

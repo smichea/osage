@@ -852,3 +852,11 @@ Date: 2026-11-13 · seen at T3 up close: the red and white barriers looked stain
 - **Decision:** the photographed circuit's painted walls and kerbs take the grain of Poly Haven's `concrete_wall_008` (fine, even, the texture of cast concrete under paint) in place of `painted_concrete`'s, a photograph of peeling green paint whose patches read as stains from the road; the latter stays the fallback.
 - **Why:** paint on a circuit's wall is renewed every season; what shows through is the concrete's pores, not peeling.
 
+## D-093 — T4: light traced by the hardware (Bevy Solari)
+
+Date: 2026-11-14 · the maintainer's choice for the next step toward "GTA V" lighting: "Lumière RT (RTX)".
+
+- **Decision:** T4 adds Bevy Solari (the `raytracing` feature of `osage-render` and `osage-kart-native`): direct and indirect light traced through the scene on hardware with ray queries (an RTX card, a Radeon from RDNA 2, an Intel Arc). Solari traces meshes of exactly position, normal, texture coordinates and tangent, shaded with the standard material: each mesh drawn with it gets a double for the rays alone (the drawn mesh keeps its vertex colours), and each ground drawn with the ground material a stand-in — its double under a standard material of the ground's colour. Solari draws every opaque material deferred, so the ground material gains its deferred shader (the same WESL, writing the G-buffer) and the T4 camera always has the deferred prepass: on hardware without ray queries Solari stays out and T4 is a deferred raster picture. The traced light is one more suspect in D-090's search (the first at T4). The cloud bench (D-042) builds with the feature, so its T4 run on the NVIDIA L4 is the traced picture.
+- **Why:** bounced light and true reflections are what separate a rendered scene from a photographed one; hardware that traces them is in the players' machines.
+- **Open:** the denoising without DLSS, the cost on the L4, how the sky lights the traced scene, skinned drivers (traced in their rest pose) — measured on the first cloud run.
+

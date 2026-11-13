@@ -50,3 +50,5 @@ default = ["sound"]
 # The karts heard (osage-kart-sound): needs the system's sound library (ALSA
 # on Linux). The bench is built without it: it measures pictures.
 sound = ["bevy/audio", "dep:osage-kart-sound", "dep:lewton", "osage-music/bevy", "osage-voice/bevy", "osage-voice/device"]
+# Ray-traced light at T4 (D-093): Bevy Solari, on hardware that traces rays.
+raytracing = ["osage-render/raytracing"]
