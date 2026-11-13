@@ -215,7 +215,7 @@ struct Shots {
 
 /// The world's entity a kart model stands for.
 #[derive(Component)]
-struct Remote(u64);
+pub struct Remote(pub u64);
 
 fn now_us() -> i64 {
     SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).map_or(0, |d| d.as_micros() as i64)
@@ -598,11 +598,13 @@ fn choose(
     mut chosen_event: ResMut<ChosenEvent>,
     mut kept: ResMut<Kept>,
     photo: Res<crate::photo::Photo>,
+    show: Res<crate::show::Show>,
 ) {
     let (Some(mine), Some(choice_type), Some(roster)) = (replica.mine, replica.choice_type, replica.roster()) else {
         return;
     };
-    if photo.is_on() {
+    // The photo mode's keys, or the whole race shown again's (D-082).
+    if photo.is_on() || show.watching() {
         return;
     }
     // Once a connection: the driver, kart and paint the player raced with

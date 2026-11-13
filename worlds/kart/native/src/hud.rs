@@ -35,8 +35,12 @@ pub struct RaceView {
     pub laps: u32,
     /// A time trial (D-062): alone against the clock and the ghosts.
     pub trial: bool,
-    /// The player's finish is being shown again, slowed (D-063).
+    /// The player's finish is being shown again, slowed (D-063), or the
+    /// whole race (D-082).
     pub replay: bool,
+    /// The whole race shown again (D-082): what is followed and the keys;
+    /// empty when it is not.
+    pub watching: String,
     /// A battle (D-065): lives, not laps; the clock counts down.
     pub battle: bool,
     /// The photo mode's help, while it shows (D-066).
@@ -425,6 +429,7 @@ fn setup(mut commands: Commands, faces: Res<Faces>, arrows: Res<Arrows>) {
                     theme::hint(bar, &[Key::Arrow(0), Key::Arrow(2)], "KART", &arrows);
                     theme::hint(bar, &[Key::Word("P")], "PAINT", &arrows);
                     theme::hint(bar, &[Key::Word("T")], "EVENT", &arrows);
+                    theme::hint(bar, &[Key::Word("R")], "REPLAY", &arrows);
                     theme::hint(bar, &[Key::Word("ESC")], "SETTINGS", &arrows);
                 });
         });
@@ -483,7 +488,10 @@ fn write(
     mut start: Query<&mut Visibility, With<StartHint>>,
 ) {
     let between = matches!(view.stage, Lights::Waiting | Lights::Ready(_) | Lights::Results(_));
-    let shown = between && !(view.records.laps.is_empty() && view.cup.is_empty() && view.pick.is_empty());
+    // Hidden while the whole race is shown again: the picture is the point.
+    let shown = between
+        && view.watching.is_empty()
+        && !(view.records.laps.is_empty() && view.cup.is_empty() && view.pick.is_empty());
     let show = |on: bool| if on { Visibility::Inherited } else { Visibility::Hidden };
     if let Ok(mut visibility) = records.single_mut() {
         visibility.set_if_neq(show(shown));
@@ -584,6 +592,7 @@ fn write(
                 view.photo.clone()
             }
             Label::Prompt => match view.stage {
+                _ if !view.watching.is_empty() => view.watching.clone(),
                 Lights::Ready(true) => {
                     tint = Some(Color::srgb(1.0, 0.85, 0.3));
                     "Press Enter to start the race\n(others can still join)".to_owned()

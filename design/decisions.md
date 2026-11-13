@@ -760,3 +760,12 @@ Date: 2026-11-13 · the maintainer's reminder ("qualité GTA V, oublie pas stp")
 - **Rejected:** separate rock meshes stood against the walls (more draw calls and seams; later, for boulders and overhangs); triplanar normal maps (the next step).
 - **Consequences:** the T2 kart bench on Eagle Ridge: 19 ms a frame on the Iris Xe laptop (53 fps).
 
+## D-082 — The whole race shown again, as television would
+
+Date: 2026-11-13 · design/04 M4 (whole-race replays), toward the maintainer's goal of Mario Kart's extras.
+
+- **Decision:** the native client keeps every kart's pose thirty times a second from the countdown to the results. Between races (results, then the grid while the host has not started), R shows the race again: the camera cuts between cameras by the track (one every 42 m on alternate sides, 1.3 to 5.8 m up, the next ahead of the kart followed, cut when it is 12 m past), a helicopter's behind and above (every fifth shot) and one on the kart behind its driver (every fifth, and always in a tunnel, where no other sees). Left and right follow another kart, up and down run the replay at ¼, ½, 1, 2 or 4 times, Space pauses, R goes back; it loops; the next countdown ends it. The cards between races give way to a line naming the kart followed, with the race clock, the speed and the keys; the keycap bar gains R REPLAY.
+- **Why:** a race seen again from the trackside is half of what makes it a story to tell, and a game's showcase of its own pictures.
+- **Rejected:** keeping it on disk and an editor (later: the tape is a few megabytes, and the photo mode already frames shots); replaying the things on the track (their tape would be the world's).
+- **Consequences:** a few megabytes of memory for a long race (eight karts, six minutes). Only in a game, not on the bench.
+
