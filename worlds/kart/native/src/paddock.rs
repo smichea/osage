@@ -60,7 +60,27 @@ pub struct PaddockView {
     pub paddock: proto::Paddock,
     pub lead: f32,
     pub me: Option<Kart>,
+    /// What the player's kart let go of, drawn at once until the world's
+    /// own arrives (D-071).
+    pub mine: Vec<Provisional>,
 }
+
+/// A thing the player's kart let go of, as the world will release it: a
+/// tyre thrown, a cone or oil left; seconds since.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Provisional {
+    pub kind: osage_kart_items::Kind,
+    pub x: f32,
+    pub z: f32,
+    pub vx: f32,
+    pub vz: f32,
+    pub age: f32,
+}
+
+/// Longest a thing let go of is drawn without the world's, s.
+const UNCONFIRMED: f32 = 1.5;
+/// Nearer than this to one of the world's of its kind, it is that one, m.
+const SAME: f32 = 3.5;
 
 /// The item of a protocol value.
 pub fn item(item: proto::Item) -> Option<Item> {
@@ -293,7 +313,7 @@ fn setup(
 fn show(
     mut commands: Commands,
     time: Res<Time>,
-    view: Res<PaddockView>,
+    mut view: ResMut<PaddockView>,
     course: Option<Res<crate::scene::Course>>,
     mut looks: ResMut<Looks>,
     mut models: Query<(&mut Transform, &mut Visibility)>,
@@ -334,7 +354,50 @@ fn show(
     // last steps: things are drawn as far ahead, or a tyre just thrown
     // would show behind the kart that threw it, and run through it.
     let lead = view.lead;
-    for thing in &view.paddock.things {
+    // The player's own, drawn at once: each until the world's of its kind
+    // arrives where it is, or a while (D-071).
+    let seconds = time.delta_secs();
+    let world: Vec<(proto::Item, f32, f32, f32)> = view
+        .paddock
+        .things
+        .iter()
+        .map(|t| {
+            let speed = t.vx.hypot(t.vz).max(1e-3);
+            let ahead = (speed * lead - 0.5 * ROLLING * lead * lead).max(0.0) / speed;
+            (t.kind(), t.x + t.vx * ahead, t.z + t.vz * ahead, t.life)
+        })
+        .collect();
+    let mut mine = std::mem::take(&mut view.mine);
+    mine.retain_mut(|p| {
+        p.age += seconds;
+        let (x, z) = provisional_at(p);
+        let kind = match p.kind {
+            osage_kart_items::Kind::Tyre => proto::Item::Tyre,
+            osage_kart_items::Kind::Cone => proto::Item::Cone,
+            osage_kart_items::Kind::Oil => proto::Item::Oil,
+            osage_kart_items::Kind::Drone => proto::Item::Drone,
+        };
+        let confirmed = world.iter().any(|(k, wx, wz, _)| *k == kind && (wx - x).hypot(wz - z) < SAME);
+        p.age < UNCONFIRMED && !confirmed
+    });
+    let provisional: Vec<proto::Thing> = mine
+        .iter()
+        .map(|p| {
+            let (x, z) = provisional_at(p);
+            let (kind, life) = match p.kind {
+                osage_kart_items::Kind::Tyre => (proto::Item::Tyre, TYRE_LIFE),
+                osage_kart_items::Kind::Cone => (proto::Item::Cone, CONE_LIFE),
+                _ => (proto::Item::Oil, OIL_LIFE),
+            };
+            let speed = p.vx.hypot(p.vz).max(1e-3);
+            let kept = (speed - ROLLING * p.age).max(0.0) / speed;
+            proto::Thing { kind: kind.into(), x, z, vx: p.vx * kept, vz: p.vz * kept, life: life - p.age, height: 0.0 }
+        })
+        .collect();
+    view.mine = mine;
+    // The world's things drawn `lead` ahead; the player's own, now.
+    let things = view.paddock.things.iter().map(|t| (t, lead)).chain(provisional.iter().map(|t| (t, 0.0)));
+    for (thing, lead) in things {
         match thing.kind() {
             proto::Item::Tyre => {
                 let speed = thing.vx.hypot(thing.vz);
@@ -421,6 +484,16 @@ fn show(
             }
         }
     }
+}
+
+/// Where a thing let go of is now: a tyre rolling on, slowing.
+fn provisional_at(p: &Provisional) -> (f32, f32) {
+    let speed = p.vx.hypot(p.vz);
+    if speed < 1e-3 {
+        return (p.x, p.z);
+    }
+    let rolled = (speed * p.age - 0.5 * ROLLING * p.age * p.age).max(0.0);
+    (p.x + p.vx / speed * rolled, p.z + p.vz / speed * rolled)
 }
 
 /// A crate bursts into confetti at `at`.

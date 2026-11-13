@@ -29,6 +29,8 @@ export interface KartValues {
   draft?: number;
   /** 1 when the drift button was held at the last step. */
   held?: number;
+  /** Seconds the tyres stay oily (D-072): they grip almost nothing. */
+  slick?: number;
   /** How the kart is built (D-055), shares of the standard kart's: 1 when absent. */
   top?: number;
   accel?: number;
@@ -40,7 +42,7 @@ export interface KartValues {
 /** The fields of a kart, in the order the WebAssembly physics numbers them. */
 const FIELDS = [
   "x", "z", "heading", "speed", "slide", "drift", "charge", "boost", "spin",
-  "rocket", "height", "climb", "trick", "stall", "draft", "held",
+  "rocket", "height", "climb", "trick", "stall", "draft", "held", "slick",
 ] as const;
 /** Then the build's, numbered on from the state's; 1 when not given. */
 const BUILD = ["top", "accel", "handling", "grip", "weight"] as const;

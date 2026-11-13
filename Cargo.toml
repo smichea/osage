@@ -40,6 +40,7 @@ osage-content = { path = "crates/osage-content" }
 osage-props = { path = "crates/osage-props" }
 osage-music = { path = "crates/osage-music" }
 osage-voice = { path = "crates/osage-voice" }
+osage-report = { path = "crates/osage-report" }
 anyhow = "1.0.104"
 base64ct = { version = "1.8.3", features = ["alloc"] }
 bevy = { version = "0.20.1", default-features = false }

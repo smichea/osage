@@ -1,0 +1,17 @@
+# SPDX-FileCopyrightText: The osage contributors
+# SPDX-License-Identifier: LicenseRef-osage-AGPL-3.0-or-later-with-exceptions
+
+[package]
+name = "osage-report"
+description = "Crash reports for osage programs: what went wrong in the last run — a panic, a start that never finished, errors of the renderer — found at the next start, cleaned of what identifies the player, and sent where the program says, with the player's consent"
+license = "LicenseRef-osage-AGPL-3.0-or-later-with-exceptions"
+publish = false
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+
+[dependencies]
+serde_json.workspace = true
+tracing-subscriber.workspace = true
+ureq = "3.5.2"

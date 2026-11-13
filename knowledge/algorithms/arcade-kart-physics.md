@@ -37,6 +37,7 @@ Each step of `dt = 1/60 s`, with `throttle` and `steer` in −1…1:
    - Drifting: `tightness = 1 + 0.45 · steer · drift`; `heading −= drift · tightness · 2.7 · scale · dt`; the charge grows by `dt · tightness`; the slide is pulled towards `−drift · speed · 0.12` with grip 3.
    - Grass drags: `heading += (left wheels on grass − right ones) / 2 · 0.02 · speed · dt`.
    - Rain (D-068): on a wet road (`track.wet`, 0 to 1) every wheel's footing is multiplied by `1 − 0.4 · wet` — the slide and the spin scrub off more slowly — and braking by `1 − 0.3 · wet`; dry, both are 1, and the bits are those of a dry road.
+   - Oil (D-072): while `slick` (seconds of oily tyres) lasts, every wheel's footing is × 0.12 and the steering × 0.3; it counts down.
 5. **Spin** from a knock: the heading turns by `spin · dt` while the velocity on the ground stays, so speed becomes slide; the spin decays at `4 · grip scale` per second and stops under 0.001 rad/s.
 6. **Move** by `speed` along the heading and `slide` across it.
 7. **Barriers:** if the kart's outline (a capsule) passes the barriers' face, 0.9 m beyond the verge, push it back and give it an impulse at the corner that touches ([capsule contacts](/algorithms/capsule-contacts.md): restitution 0.2, friction 0.3). An impulse over 2.5 m/s ends a drift.

@@ -11,7 +11,8 @@
 //! - `kart_set(i, value)` sets field `i` of the kart, `kart_step(throttle,
 //!   steer, drift_button)` advances it one step, `kart_get(i)` reads field
 //!   `i`. Fields, in order: x, z, heading, speed, slide, drift, charge,
-//!   boost, spin, rocket, height, climb, trick, stall, draft, held.
+//!   boost, spin, rocket, height, climb, trick, stall, draft, held, slick;
+//!   then the build's: top, accel, handling, grip, weight.
 
 use std::cell::RefCell;
 
@@ -82,11 +83,12 @@ fn field(kart: &mut Kart, i: u32) -> Option<&mut f32> {
         13 => &mut kart.stall,
         14 => &mut kart.draft,
         15 => &mut kart.held,
-        16 => &mut kart.build.top,
-        17 => &mut kart.build.accel,
-        18 => &mut kart.build.handling,
-        19 => &mut kart.build.grip,
-        20 => &mut kart.build.weight,
+        16 => &mut kart.slick,
+        17 => &mut kart.build.top,
+        18 => &mut kart.build.accel,
+        19 => &mut kart.build.handling,
+        20 => &mut kart.build.grip,
+        21 => &mut kart.build.weight,
         _ => return None,
     })
 }

@@ -41,7 +41,9 @@ use crate::{
 /// The rates offered; `None` is off.
 const CHOICES: [Option<u32>; 8] = [None, Some(30), Some(45), Some(60), Some(75), Some(90), Some(120), Some(144)];
 /// Without settings kept: 60 frames a second.
-const DEFAULT: Option<u32> = Some(60);
+/// The frame rate wanted unless the player chose: 30, the whole picture
+/// kept more often (the maintainer's choice, D-074).
+const DEFAULT: Option<u32> = Some(30);
 
 pub struct SettingsPlugin {
     /// From the command line: wins over the settings kept, without changing them.
@@ -61,29 +63,12 @@ struct Settings {
     /// The kind of music asked of the radio directory; none: not asked.
     directory: Option<usize>,
     voice: VoiceMode,
-    /// The picture's quality, a tier (T1 to T4), from the next start; none:
-    /// the game's default (T2) or the command line's.
-    quality: Option<Tier>,
 }
 
 impl Default for Settings {
     fn default() -> Self {
-        Self {
-            fps: DEFAULT,
-            sound: true,
-            music: true,
-            from: MusicFrom::Auto,
-            directory: None,
-            voice: VoiceMode::Off,
-            quality: None,
-        }
+        Self { fps: DEFAULT, sound: true, music: true, from: MusicFrom::Auto, directory: None, voice: VoiceMode::Off }
     }
-}
-
-/// The quality the player chose in the settings, for the next start: what
-/// `main` starts with when the command line says no `--tier`.
-pub fn kept_quality() -> Option<Tier> {
-    load().and_then(|settings| settings.quality)
 }
 
 /// Whether the player's microphone is heard by the others.
@@ -201,7 +186,7 @@ impl Audio {
 #[derive(Resource, Default)]
 struct Row(usize);
 
-const ROWS: usize = 8;
+const ROWS: usize = 7;
 
 #[derive(Component)]
 struct Panel;
@@ -272,12 +257,6 @@ fn parse(text: &str) -> Option<Settings> {
                     (settings.voice, any) = (mode, true);
                 }
             }
-            ("quality", _) if value.eq_ignore_ascii_case("auto") => (settings.quality, any) = (None, true),
-            ("quality", _) => {
-                if let Ok(tier) = value.parse::<Tier>() {
-                    (settings.quality, any) = (Some(tier), true);
-                }
-            }
             ("radio-directory", Some(false)) => (settings.directory, any) = (None, true),
             ("radio-directory", _) => {
                 if let Some(kind) = KINDS.iter().position(|k| k.eq_ignore_ascii_case(value)) {
@@ -312,13 +291,12 @@ fn save(settings: Settings) {
     let value = settings.fps.map_or_else(|| "off".to_owned(), |n| n.to_string());
     let on = |on: bool| if on { "on" } else { "off" };
     let text = format!(
-        "# osage kart settings\nfps = {value}\nsound = {}\nmusic = {}\nmusic-from = {}\nradio-directory = {}\nvoice = {}\nquality = {}\n",
+        "# osage kart settings\nfps = {value}\nsound = {}\nmusic = {}\nmusic-from = {}\nradio-directory = {}\nvoice = {}\n",
         on(settings.sound),
         on(settings.music),
         settings.from.name(),
         settings.directory.map_or("off", |kind| KINDS[kind % KINDS.len()]),
         settings.voice.name(),
-        settings.quality.map_or_else(|| "auto".to_owned(), |tier| tier.to_string()),
     );
     let written = path.parent().map_or(Ok(()), std::fs::create_dir_all).and_then(|()| std::fs::write(&path, text));
     if let Err(error) = written {
@@ -458,12 +436,6 @@ fn choose(
             voices.picked = (voices.picked as i32 + step).rem_euclid(n) as usize;
             return;
         }
-        7 => {
-            // Auto, then T1 to T4; from the next start.
-            let all = [None, Some(Tier::T1), Some(Tier::T2), Some(Tier::T3), Some(Tier::T4)];
-            let at = all.iter().position(|q| *q == settings.quality).unwrap_or(0) as i32;
-            settings.quality = all[(at + step).rem_euclid(all.len() as i32) as usize];
-        }
         _ => {
             // Off, then each kind: the directory is asked only once one is chosen.
             let n = KINDS.len() as i32 + 1;
@@ -474,16 +446,6 @@ fn choose(
     }
     *audio = Audio::of(&settings);
     save(*settings);
-}
-
-/// A tier as the settings name it.
-fn quality_name(tier: Tier) -> &'static str {
-    match tier {
-        Tier::T1 => "T1 (old integrated graphics)",
-        Tier::T2 => "T2 (integrated graphics)",
-        Tier::T3 => "T3 (graphics card)",
-        Tier::T4 => "T4 (ray tracing card)",
-    }
 }
 
 /// The frame rate and the tier, small, in a corner, always.
@@ -548,7 +510,7 @@ fn show(
     let mark = |r: usize| if row.0 == r { ">" } else { " " };
     let on = |on: bool| if on { "on" } else { "off" };
     let content = format!(
-        "SETTINGS\n\n{} Frame rate wanted   <  {wanted}  >\n  Now {:.0} fps\n  Picture: {picture}\n\n{} Sound   <  {}  >   (N)\n{} Music   <  {}  >   (M, B next)\n{} Music from   <  {}  >\n{} Radio directory   <  {}  >\n  (off: radio-browser.info is not asked)\n{} Voice   <  {}  >\n{} Mute   <  {}  >   (Space)\n{} Quality   <  {}  >\n  now {tier}; a change takes effect at the next start\n{end}\n↑ ↓ choose    ← → change    Esc close",
+        "SETTINGS\n\n{} Frame rate wanted   <  {wanted}  >\n  Now {:.0} fps\n  Picture: {picture}\n\n{} Sound   <  {}  >   (N)\n{} Music   <  {}  >   (M, B next)\n{} Music from   <  {}  >\n{} Radio directory   <  {}  >\n  (off: radio-browser.info is not asked)\n{} Voice   <  {}  >\n{} Mute   <  {}  >   (Space)\n  Picture: {tier}, chosen for this computer\n{end}\n↑ ↓ choose    ← → change    Esc close",
         mark(0),
         pace.fps,
         mark(1),
@@ -566,8 +528,6 @@ fn show(
             || "nobody else talking".to_owned(),
             |(name, muted, _)| format!("{name}: {}", if *muted { "muted" } else { "heard" })
         ),
-        mark(7),
-        settings.quality.map_or_else(|| "auto (T2)".to_owned(), |tier| quality_name(tier).to_owned()),
         tier = *tier,
     );
     for mut text in &mut lines {
@@ -595,13 +555,10 @@ mod tests {
                 music: true,
                 from: MusicFrom::Radio,
                 directory: Some(3),
-                voice: VoiceMode::Off,
-                quality: None
+                voice: VoiceMode::Off
             }
         );
         assert_eq!(parse("voice = push-to-talk").map(|s| s.voice), Some(VoiceMode::PushToTalk));
-        assert_eq!(parse("quality = t4").map(|s| s.quality), Some(Some(Tier::T4)));
-        assert_eq!(parse("quality = auto").map(|s| s.quality), Some(None));
         assert_eq!(
             parse("radio-directory = off\nmusic-from = nowhere").map(|s| (s.directory, s.from)),
             Some((None, MusicFrom::Auto))

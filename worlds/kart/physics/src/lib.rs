@@ -119,6 +119,9 @@ const GRASS_GRIP: f32 = 0.5;
 /// A wet road (D-068): the tyres' grip and the brakes as shares of a dry
 /// road's. A slide takes longer to scrub off, a stop longer to make.
 pub const WET_GRIP: f32 = 0.6;
+/// Oily tyres (D-072): the grip they keep, and how much of the steering.
+pub const SLICK_GRIP: f32 = 0.12;
+pub const SLICK_STEER: f32 = 0.3;
 pub const WET_BRAKING: f32 = 0.7;
 /// Grass drags the wheels in it: with a side's two wheels in it, the kart
 /// turns towards it by this many rad/s per m/s.
@@ -193,6 +196,9 @@ pub struct Kart {
     pub draft: f32,
     /// 1 when the drift button was held at the last step: a press is a change.
     pub held: f32,
+    /// Seconds the tyres stay oily (D-072): they grip almost nothing, the
+    /// kart slides on the way it went and the wheel barely turns it.
+    pub slick: f32,
     /// How it is built: fixed for a race, set by the world.
     pub build: Build,
 }
@@ -491,6 +497,12 @@ pub fn step(kart: &mut Kart, controls: Controls, track: &Track) {
     // Rain takes grip from every tyre (D-068); a dry road, nothing (×1).
     let wet = track.wet.clamp(0.0, 1.0);
     let footing = footing * (1.0 - (1.0 - WET_GRIP) * wet);
+    // Oil on the tyres takes nearly all of it, while it lasts (D-072).
+    let oily = kart.slick > 0.0;
+    let footing = if oily { footing * SLICK_GRIP } else { footing };
+    if oily {
+        kart.slick = (kart.slick - DT).max(0.0);
+    }
 
     // Along the kart: wheels in the air neither drive nor brake.
     if flying {
@@ -544,6 +556,7 @@ pub fn step(kart: &mut Kart, controls: Controls, track: &Track) {
     // Turning: weaker at low speed, reversed when reversing.
     let steering =
         (fabsf(kart.speed) / FULL_STEER_SPEED).min(1.0) * kart.speed.signum() * if flying { AIR_STEER } else { 1.0 };
+    let steering = if oily { steering * SLICK_STEER } else { steering };
     let (target_slide, grip) = if kart.drift != 0.0 {
         // Steering into the drift tightens it, against it widens it.
         let tightness = 1.0 + 0.45 * steer * kart.drift;
@@ -1031,6 +1044,29 @@ mod tests {
         assert!(slid(&wet) > slid(&dry) * 2.0, "dry {}, wet {}", slid(&dry), slid(&wet));
         assert_eq!(track().with_wet(f32::NAN).wet, 0.0);
         assert_eq!(track().with_wet(3.0).wet, 1.0);
+    }
+
+    /// D-072: on oily tyres the kart slides on the way it went and the
+    /// wheel barely turns it; once they are clean, it grips again.
+    #[test]
+    fn oily_tyres_slide_on_and_hardly_steer() {
+        let track = Track { half_width: 60.0, ..track() };
+        let turn = Controls { throttle: 1.0, steer: 1.0, drift: false };
+        let run = |slick: f32| {
+            let mut kart = Kart { z: 10.0, speed: 18.0, slide: 4.0, slick, ..Kart::default() };
+            drive(&mut kart, turn, 0.4, &track);
+            kart
+        };
+        let (clean, oily) = (run(0.0), run(1.0));
+        assert!(oily.slide.abs() > clean.slide.abs() * 3.0, "the slide lasts: {} against {}", oily.slide, clean.slide);
+        assert!(
+            oily.heading.abs() < clean.heading.abs() * 0.5,
+            "it hardly turns: {} against {}",
+            oily.heading,
+            clean.heading
+        );
+        assert!(oily.slick > 0.0 && oily.slick < 1.0, "the oil wears off: {}", oily.slick);
+        assert_eq!(run(0.0), clean, "clean tyres: as before");
     }
 
     #[test]

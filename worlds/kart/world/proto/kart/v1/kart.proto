@@ -91,6 +91,9 @@ message KartState {
   // 1 when the drift button was held at the last step applied: a trick
   // needs a press.
   float held = 17;
+  // Added with D-072. Seconds the tyres stay oily: they grip almost
+  // nothing, the wheel barely turns the kart.
+  float slick = 18;
 }
 
 // kart.racer/1 — who drives a kart and how their race goes.

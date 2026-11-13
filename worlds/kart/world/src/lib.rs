@@ -66,6 +66,7 @@ pub fn kart_of(state: &proto::KartState) -> osage_kart_physics::Kart {
         stall: state.stall,
         draft: state.draft,
         held: state.held,
+        slick: state.slick,
         build: osage_kart_physics::Build::STANDARD,
     }
 }

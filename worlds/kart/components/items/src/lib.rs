@@ -170,8 +170,12 @@ const TYRE_SPIN: f32 = 5.0;
 const CONE_KEEP: f32 = 0.85;
 const CONE_KNOCK: f32 = 1.5;
 /// Oil: the share of speed kept and the spin, rad/s.
-const OIL_KEEP: f32 = 0.9;
-const OIL_SPIN: f32 = 3.5;
+/// Oil (D-072): the share of speed kept on entering it — little is lost,
+/// the tyres simply stop gripping — the slow turn it starts, rad/s, and
+/// how long the tyres stay oily after the patch, s.
+const OIL_KEEP: f32 = 0.97;
+const OIL_SPIN: f32 = 1.1;
+pub const OILY: f32 = 0.6;
 
 /// A crate of a rack.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -492,6 +496,10 @@ impl Paddock {
                         slip(kart, k as u32 ^ self.seed);
                         events.push(Event::Hit { kart: k, kind: Kind::Oil });
                     }
+                    // In it, the tyres are oily, and stay so a moment after.
+                    if touching {
+                        kart.slick = kart.slick.max(OILY);
+                    }
                     continue;
                 }
                 if !touching || spared {
@@ -597,11 +605,10 @@ impl Paddock {
             return;
         }
         let kart = &mut karts[k];
-        let forward = (libm::sinf(kart.heading), libm::cosf(kart.heading));
-        let thing = |kind: Kind, along: f32, v: (f32, f32), life: f32| Thing {
+        let thing = |kind: Kind, x: f32, z: f32, v: (f32, f32), life: f32| Thing {
             kind,
-            x: kart.x + forward.0 * along,
-            z: kart.z + forward.1 * along,
+            x,
+            z,
             vx: v.0,
             vz: v.1,
             height: 0.0,
@@ -611,7 +618,6 @@ impl Paddock {
             spare: if kind == Kind::Tyre { SPARE } else { OWN_SPARE },
             inside: 0,
         };
-        let behind = -(KART_REACH + KART_RADIUS + 0.3);
         let thing = match item {
             Item::Nitro => {
                 kart.boost = kart.boost.max(NITRO);
@@ -638,24 +644,54 @@ impl Paddock {
                 let Some(leader) = (0..standings.len()).find(|&j| standings[j].place == 0 && j != k) else {
                     return;
                 };
-                let mut drone = thing(Kind::Drone, 0.0, (0.0, 0.0), DRONE_LIFE);
+                let mut drone = thing(Kind::Drone, kart.x, kart.z, (0.0, 0.0), DRONE_LIFE);
                 drone.height = 1.0;
                 drone.target = leader;
                 drone
             }
-            Item::Tyre | Item::Stack => {
-                let v = kart.velocity();
-                let ahead = KART_REACH + KART_RADIUS + TYRE_RADIUS + 0.1;
-                let speed = (v.0 * forward.0 + v.1 * forward.1).max(0.0) + THROW;
-                thing(Kind::Tyre, ahead, (forward.0 * speed, forward.1 * speed), TYRE_LIFE)
+            Item::Tyre | Item::Stack | Item::Cone | Item::Oil => {
+                let Some((kind, x, z, vx, vz)) = released(item, kart) else { return };
+                let life = match kind {
+                    Kind::Tyre => TYRE_LIFE,
+                    Kind::Cone => CONE_LIFE,
+                    _ => OIL_LIFE,
+                };
+                thing(kind, x, z, (vx, vz), life)
             }
-            Item::Cone => thing(Kind::Cone, behind - CONE_RADIUS, (0.0, 0.0), CONE_LIFE),
-            Item::Oil => thing(Kind::Oil, behind - OIL_RADIUS, (0.0, 0.0), OIL_LIFE),
         };
         if self.things.len() >= MOST {
             self.things.remove(0);
         }
         self.things.push(thing);
+    }
+}
+
+/// What leaves a kart when it uses `item`, where and how fast: a tyre
+/// thrown ahead, a cone or oil left behind; none for what stays with the
+/// kart or flies off by itself (a drone). The world releases things so, and
+/// a client draws its own player's at once the same way (D-071), before
+/// the world's reach it.
+pub fn released(item: Item, kart: &Kart) -> Option<(Kind, f32, f32, f32, f32)> {
+    let forward = (libm::sinf(kart.heading), libm::cosf(kart.heading));
+    let at = |along: f32| (kart.x + forward.0 * along, kart.z + forward.1 * along);
+    let behind = -(KART_REACH + KART_RADIUS + 0.3);
+    match item {
+        Item::Tyre | Item::Stack => {
+            let v = kart.velocity();
+            let ahead = KART_REACH + KART_RADIUS + TYRE_RADIUS + 0.1;
+            let speed = (v.0 * forward.0 + v.1 * forward.1).max(0.0) + THROW;
+            let (x, z) = at(ahead);
+            Some((Kind::Tyre, x, z, forward.0 * speed, forward.1 * speed))
+        }
+        Item::Cone => {
+            let (x, z) = at(behind - CONE_RADIUS);
+            Some((Kind::Cone, x, z, 0.0, 0.0))
+        }
+        Item::Oil => {
+            let (x, z) = at(behind - OIL_RADIUS);
+            Some((Kind::Oil, x, z, 0.0, 0.0))
+        }
+        _ => None,
     }
 }
 
@@ -767,8 +803,9 @@ fn knocked(kart: &mut Kart, at: (f32, f32)) {
     kart.take((-dx / d * CONE_KNOCK, -dz / d * CONE_KNOCK), r);
 }
 
-/// A kart drives into oil: it slows a little and spins, the way it was
-/// sliding (or one picked by `seed`).
+/// A kart drives into oil: it keeps nearly all its speed and starts to turn
+/// slowly, the way it was sliding (or one picked by `seed`); its tyres lose
+/// their grip while they are in it ([`Kart::slick`], D-072).
 fn slip(kart: &mut Kart, seed: u32) {
     kart.speed *= OIL_KEEP;
     let way = if kart.slide != 0.0 {
@@ -1001,6 +1038,12 @@ mod tests {
         let hits = events.iter().filter(|e| matches!(e, Event::Hit { kart: 1, kind: Kind::Oil })).count();
         assert_eq!(hits, 1, "{events:?}");
         assert_eq!(paddock.things().len(), 1, "oil stays");
+        // D-072: in it the tyres are oily; past it, a moment more.
+        let oil = paddock.things()[0];
+        let mut through = [kart(30.0, 0.0), Kart { x: oil.x, z: oil.z, speed: 12.0, ..Kart::default() }];
+        paddock.step(&mut through, &[false, false], &at_places(&[0, 1]), &track);
+        assert_eq!(through[1].slick, OILY, "{:?}", through[1]);
+        assert!(through[1].speed > 11.0, "it keeps its speed: {}", through[1].speed);
     }
 
     #[test]

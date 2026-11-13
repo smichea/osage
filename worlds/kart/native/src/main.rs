@@ -27,6 +27,7 @@
 
 mod bench;
 mod effects;
+mod graphics;
 mod hud;
 mod karts;
 mod landmarks;
@@ -38,6 +39,7 @@ mod photo;
 mod play;
 mod predict;
 mod rain;
+mod report;
 mod scene;
 mod scenery;
 mod settings;
@@ -131,7 +133,21 @@ fn main() -> Result<()> {
         }
     }
 
-    let tier = tier.or_else(|| if bench { None } else { settings::kept_quality() }).unwrap_or(Tier::T2);
+    // Crash reports (D-073): a game watches its run, and finds what went
+    // wrong in the last one; the bench does not.
+    let last_report = if bench { None } else { report::begin() };
+    // The tier: the command line's, else (a game) chosen for the machine
+    // (D-075), else T2 (the bench's default).
+    let chosen = tier.is_none() && !bench;
+    let tier = match tier {
+        Some(tier) => tier,
+        None if bench => Tier::T2,
+        None => {
+            let (tier, adapter) = graphics::choose(last_report.is_some());
+            eprintln!("graphics: {adapter}: {tier}");
+            tier
+        }
+    };
     if headless && !bench {
         bail!("--headless goes with --bench: playing needs a window");
     }
@@ -159,6 +175,7 @@ fn main() -> Result<()> {
         render
     };
     // Models are loaded from the asset manifest's content, wherever it is.
+    let log = bevy::log::LogPlugin { custom_layer: report::layer, ..Default::default() };
     let assets = AssetPlugin {
         file_path: osage_content::root()
             .map_or_else(|| "assets".to_owned(), |root| root.to_string_lossy().into_owned()),
@@ -169,7 +186,7 @@ fn main() -> Result<()> {
         // off-screen picture only, as fast as the machine can.
         let windowless =
             WindowPlugin { primary_window: None, exit_condition: ExitCondition::DontExit, ..Default::default() };
-        let plugins = DefaultPlugins.set(windowless).set(render).set(assets).disable::<WinitPlugin>();
+        let plugins = DefaultPlugins.set(windowless).set(render).set(assets).set(log).disable::<WinitPlugin>();
         #[cfg(feature = "sound")]
         let plugins = plugins.disable::<AudioPlugin>();
         app.add_plugins(plugins).add_plugins(ScheduleRunnerPlugin::run_loop(Duration::ZERO));
@@ -177,7 +194,8 @@ fn main() -> Result<()> {
         let plugins = DefaultPlugins
             .set(WindowPlugin { primary_window: Some(window), ..Default::default() })
             .set(render)
-            .set(assets);
+            .set(assets)
+            .set(log);
         // The bench measures pictures: no sound (and built without it, it
         // needs no sound library on the machine).
         #[cfg(feature = "sound")]
@@ -242,10 +260,16 @@ fn main() -> Result<()> {
             Tier::T4 => v0::Tier::T4Ultra,
         };
         app.add_plugins(play::PlayPlugin { url, tier, autodrive, screenshot_after })
-            .add_plugins(settings::SettingsPlugin { fps });
+            .add_plugins(settings::SettingsPlugin { fps })
+            .insert_resource(report::Pending(last_report))
+            .add_plugins((report::ReportPlugin, graphics::GraphicsPlugin));
+        if chosen {
+            app.insert_resource(graphics::Chosen);
+        }
         #[cfg(feature = "sound")]
         app.add_plugins((music::MusicPlugin, voice::VoicePlugin));
     }
     app.run();
+    report::finish();
     Ok(())
 }

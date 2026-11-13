@@ -194,6 +194,11 @@ struct Driver {
     /// (a message may be lost).
     call: proto::RaceCall,
     calls_left: u8,
+    /// The use button at the last step, and whether what the kart holds
+    /// is behind it (as the world will have it): to see when the kart lets
+    /// go of a tyre, a cone or oil, and draw it at once (D-071).
+    button: bool,
+    trailing: bool,
 }
 
 /// A call about the race the player asked for elsewhere (the settings).
@@ -391,6 +396,7 @@ fn receive(
 }
 
 /// One physics step of this player's kart: read the controls, predict.
+#[allow(clippy::too_many_arguments)]
 fn drive(
     time: Res<Time>,
     keys: Res<ButtonInput<KeyCode>>,
@@ -399,6 +405,7 @@ fn drive(
     menu: Res<Menu>,
     photo: Res<crate::photo::Photo>,
     mut driver: ResMut<Driver>,
+    mut paddock: ResMut<PaddockView>,
 ) {
     let (Some(mine), Some(circuit)) = (replica.mine, &replica.circuit) else { return };
     // While the settings are open, or a picture is taken, the keys are theirs.
@@ -452,6 +459,26 @@ fn drive(
     let controls = controls.sanitized();
     driver.predictor.step(controls, using, &circuit.track);
     driver.fresh += 1;
+    // What the kart lets go of, drawn at once where the world will put it
+    // (D-071): the world's arrives a round trip later.
+    let held = replica.racer(mine).and_then(|racer| item(racer.held()));
+    let (pressed, let_go) = (using && !driver.button, !using && driver.button);
+    driver.button = using;
+    match held {
+        Some(held) if held.trails() => {
+            if pressed {
+                driver.trailing = true;
+            }
+            if let_go
+                && std::mem::take(&mut driver.trailing)
+                && let Some(kart) = driver.predictor.kart
+                && let Some((kind, x, z, vx, vz)) = osage_kart_items::released(held, &kart)
+            {
+                paddock.mine.push(crate::paddock::Provisional { kind, x, z, vx, vz, age: 0.0 });
+            }
+        }
+        _ => driver.trailing = false,
+    }
 }
 
 /// The player's profile (D-064, [`osage_kart_profile`]), kept in

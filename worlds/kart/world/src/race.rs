@@ -653,6 +653,7 @@ fn state(kart: &Kart, applied: u64) -> proto::KartState {
         stall: kart.stall,
         draft: kart.draft,
         held: kart.held,
+        slick: kart.slick,
     }
 }
 

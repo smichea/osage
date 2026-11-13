@@ -31,6 +31,9 @@ osage-content.workspace = true
 osage-props.workspace = true
 osage-sdk.workspace = true
 osage-kart-profile.workspace = true
+osage-report.workspace = true
+# The adapter, asked before the game starts (D-075): the version Bevy uses.
+wgpu = { version = "30.0.1", default-features = false }
 osage-world-kart.workspace = true
 osage-kart-tracks.workspace = true
 osage-kart-cup.workspace = true

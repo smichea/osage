@@ -4910,11 +4910,13 @@ dependencies = [
  "osage-procedural",
  "osage-props",
  "osage-render",
+ "osage-report",
  "osage-sdk",
  "osage-voice",
  "osage-world-kart",
  "serde_json",
  "tokio",
+ "wgpu",
 ]
 
 [[package]]
@@ -5036,6 +5038,15 @@ version = "0.1.0"
 dependencies = [
  "bevy",
  "half",
+]
+
+[[package]]
+name = "osage-report"
+version = "0.1.0"
+dependencies = [
+ "serde_json",
+ "tracing-subscriber",
+ "ureq",
 ]
 
 [[package]]

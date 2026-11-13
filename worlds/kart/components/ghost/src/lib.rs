@@ -193,6 +193,8 @@ impl Ghost {
             stall: s[13],
             draft: s[14],
             held: s[15],
+            // A run starts on clean tyres.
+            slick: 0.0,
             build,
         };
         let mut ticks = Vec::with_capacity(count);

@@ -663,3 +663,44 @@ Date: 2026-11-13 · after the maintainer's play test on the reference RTX PC ("l
 - **Why:** what was wrong was what a player hears most: their own engine. Grains are the usual cure for a short loop; a listener in the player's kart is what racing games do, so that the view chosen does not change the mix.
 - **Rejected:** longer loops (the original recording has no longer steady passage at high revs); the audio engine's spatial sinks with a scale (no Doppler, an inverse-square fall that cannot be shaped).
 - **Consequences:** a kart's sound now costs a resampling in its stream (two multiplications a sample). The player's engine does not move with the camera's look-back (Q, E, X): it is the ear that is in the kart.
+
+## D-071 — A player's own items drawn at once, where the world will put them
+
+Date: 2026-11-13 · from the play test on the reference RTX PC ("le lancer de pneu se fait à quelques mètres de la voiture"; a cone or oil dropped seemed to land far behind).
+
+- **Decision:** where and how fast a thing leaves a kart is one function of `osage-kart-items`, `released(item, kart)`, which the world uses to release it and the native client to draw it: when the player's kart lets go of a tyre, a stack's tyre, a cone or oil — the use button let go while it was held behind — the client draws it at once from the predicted kart (`PaddockView::mine`), a tyre rolling on, until the world's thing of that kind arrives within 3.5 m of it, or for 1.5 s.
+- **Why:** the world places the thing right against the kart, but the client saw it only a round trip later, by when the predicted kart had gone on a few metres: a cone or oil appeared metres behind, a tyre metres ahead. The prediction is exact, so the client's thing and the world's lie in the same place.
+- **Consequences:** a release the world refuses (an item the client did not yet know was gone) shows for 1.5 s at most.
+
+## D-072 — Oil takes the tyres' grip, not the kart's speed
+
+Date: 2026-11-13 · from the same play test ("le passage sur la flaque d'huile est pas réaliste").
+
+- **Decision:** the physics' kart has `slick`, seconds its tyres stay oily: while it lasts the footing is 0.12 of what it would be and the steering 0.3, so the kart slides on the way it went and the wheel hardly turns it. Oil keeps a kart's tyres oily while it is in the patch and 0.6 s after; driving in keeps 97 % of the speed (it was 90 %) and starts a slow turn of 1.1 rad/s (it was a spin of 3.5). Clean tyres give the same bits as before.
+- **Why:** on oil a real kart does not stop or spin on the spot: it stops gripping, and goes where it was going.
+- **Consequences:** `kart.state/1` carries `slick`; the WebAssembly field numbers of the build move up by one (16 is now `slick`, the build 17 to 21). A ghost's run starts on clean tyres.
+
+## D-073 — Crash reports filed as GitHub issues through a relay, with the player's consent
+
+Date: 2026-11-13 · at the maintainer's request (no more asking players for their logs), with the choices they made: a relay on Cloud Run, the players asked once, DeepSeek reading the logs.
+
+- **Decision:** an engine crate, `osage-report`, watches a program's runs in a folder of its own: a marker (`starting`, then `started`, removed by a clean exit), the run's log (a tracing layer), a panic's message and trace (its hook), and a watchdog that notes a start not finished after a while. At the next start it gives the report of the run before, if there is one to make — a panic, a start that never finished (the marker still says `starting`: hung, or closed before anything was shown, as the grey screen at T3/T4 on the reference RTX PC), or errors of the renderer in the log — cleaned on the player's computer (home folder, user and machine names, network addresses, e-mail-like names), with the start of the log (the machine, the graphics) and its end. A run that started and was then killed is not reported. The kart game keeps these in `osage/kart-reports/` and, when there is a report, asks the player once: send, always, not now, never (kept in `consent`). A report goes to a relay (`tools/crash-relay`, Python, standard library only), deployed on Cloud Run in the project `osage-bench` with the only key to the repository (an issues-only token in Secret Manager). The relay works out the report's signature without AI — the error's message and the first frames of its trace with numbers, addresses, paths and quoted values taken out — ends the issue's title with it, and comments on the issue that has it or opens one; with a DeepSeek key it heads a new issue with DeepSeek's short reading of the log, marked automatic and unchecked. It takes 512 KB at most a report and twelve reports an hour from one address; text from a report is made inert on GitHub (no mention, no closed fence).
+- **Why:** a player who meets a crash should not have to find a log; a developer should get each problem once, with its machine. A relay keeps the key out of the game (a key in a zip is a key for anyone); a signature without AI keeps duplicates out even when the AI is down or wrong.
+- **Rejected:** a token in the game; pre-filled GitHub pages (a GitHub account for every player); deduplication by AI.
+- **Consequences:** reports are public (the repository is), and DeepSeek reads them: the question to the player says both. The relay is a service to keep running and its token to renew within a year. A world chooses its own relay or none (mechanisms, not policy).
+
+## D-074 — 30 frames a second by default
+
+Date: 2026-11-13 · the maintainer's choice ("par défaut le nombre de fps goal devrait être 30").
+
+- **Decision:** the kart game aims at 30 frames a second unless the player chooses another rate in the settings; within the tier, the frame pacing's ladder (render scale, effects, shadows; `osage-render`'s `pace`) keeps the whole picture more often at 30 than at 60.
+- **Why:** a kart race at 30 steady frames with the whole picture reads better on the friends' PCs than 60 with the picture cut down.
+- **Consequences:** a player whose settings file already says 60 keeps it until they change it.
+
+## D-075 — The player chooses a frame rate; the game chooses the tier, and steps down where one fails
+
+Date: 2026-11-13 · the maintainer's request ("il ne faut plus avoir à choisir de tiers, juste les fps cible").
+
+- **Decision:** the settings have no quality any more: the game asks the graphics adapter, before it starts, as Bevy will pick it (high performance; Direct3D 12 on Windows unless `WGPU_BACKEND`), and gives a discrete one T3, an integrated one T2, none T1 (T4, ray tracing, only with `--tier T4` until it is ready). Each start notes its tier; if the run before, at a tier chosen so, did not finish starting, panicked or reported renderer errors (D-073), that tier is marked failed on the machine (`osage/kart-reports/failed`) and the next lower one is used from then on. Ten seconds into the race the game looks at one frame: a picture of one colour — the grey screen T3 gave on the reference RTX PC — marks the tier failed, leaves the run to be reported, and starts the game again a tier lower. `--tier` still forces one (the bench, tests); the meter shows the tier in use.
+- **Why:** the tier is what a machine can draw, not a taste; the frame rate is the taste. A machine where a tier fails should never show it twice, and its player should not have to know why.
+- **Consequences:** the first start on a machine whose T3 does not work shows ten seconds of it before the game starts again at T2; its report tells why.

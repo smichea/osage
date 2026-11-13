@@ -1,6 +1,9 @@
 # Knowledge Update Log
 
 ## 2026-11-13
+* **Update**: [osage-kart-native](/modules/kart-native.md) chooses its tier for the machine and steps down where one fails (D-075); 30 frames a second by default (D-074).
+* **Creation**: Added the module [osage-report](/modules/osage-report.md): crash reports found at the next start and filed as GitHub issues through a relay on Cloud Run, with the player's consent (D-073); [osage-kart-native](/modules/kart-native.md) asks and sends.
+* **Update**: [osage-kart-items](/modules/kart-items.md) releases things through one function a client shares (D-071); oil makes tyres oily ([osage-kart-physics](/modules/kart-physics.md)'s `slick`, D-072).
 * **Update**: [osage-kart-sound](/modules/kart-sound.md) plays its engine loops as grains; [osage-kart-native](/modules/kart-native.md) hears the karts from the player's kart with distance, panning and Doppler (D-070), shows a frame-rate meter and keeps a quality setting.
 * **Update**: [a photographed sky](/techniques/panorama.md) can be calibrated by its brightness overhead, for an overcast sky with no sun (D-069); [osage-kart-native](/modules/kart-native.md) races the rain under one.
 * **Update**: rain (D-068): [osage-kart-physics](/modules/kart-physics.md) and [arcade kart physics](/algorithms/arcade-kart-physics.md) have a wet road; [osage-kart-tracks](/modules/kart-tracks.md) a chance of rain; [osage-kart-native](/modules/kart-native.md) draws the rain.
