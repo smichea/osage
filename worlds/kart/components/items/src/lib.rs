@@ -15,10 +15,12 @@
 //! - **tyre:** held behind the kart while the button is down — a shield
 //!   against a tyre from behind — and thrown ahead as it comes up, at the
 //!   kart's speed and more; it rolls, slows, bounces off the barriers and
-//!   spins the first kart it meets;
+//!   off the first kart it meets (D-079: an impulse where it lands, by its
+//!   weight and the kart's), goes under its wheels and spins it;
 //! - **stack of three tyres:** the same, three times;
-//! - **cone:** held behind, then dropped; a kart that hits it is slowed and
-//!   knocked;
+//! - **cone:** held behind, then dropped; a kart that hits it knocks it
+//!   flying, a little slowed (D-079): the cone slides, tumbles, bounces off
+//!   the barriers and lies where it stops, for the next kart;
 //! - **oil:** held behind, then left as a patch; a kart that drives into it
 //!   spins;
 //! - **smoke:** a canister that pours smoke of a colour of its own behind
@@ -36,7 +38,7 @@
 //! function.
 
 use libm::{fabsf, sqrtf};
-use osage_kart_physics::{BARRIER, DT, KART_RADIUS, KART_REACH, Kart, MAX_SPEED, Spot, Track, wrap};
+use osage_kart_physics::{BARRIER, DT, KART_RADIUS, KART_REACH, Kart, MAX_SPEED, Spot, Track, struck, wrap};
 
 /// What a kart can hold.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -162,13 +164,27 @@ const SPARE: f32 = 0.5;
 /// not slip on its own oil as it pulls away, or when it is knocked back
 /// into it, but it can a lap later.
 pub const OWN_SPARE: f32 = 6.0;
-/// What a tyre does to the kart it hits: the share of speed kept, and the
-/// spin it starts, rad/s.
-const TYRE_KEEP: f32 = 0.45;
-const TYRE_SPIN: f32 = 5.0;
-/// A cone: the share of speed kept and the knock, m/s.
-const CONE_KEEP: f32 = 0.85;
-const CONE_KNOCK: f32 = 1.5;
+/// A thrown tyre's weight, as a share of a standard kart's (D-079): a real
+/// one is about a fiftieth; a thrown one weighs a quarter, so that it
+/// knocks a kart as an item must — the game's one liberty with the weights.
+const TYRE_WEIGHT: f32 = 0.25;
+/// A tyre that hits a kart goes under its wheels: the share of speed kept,
+/// the least spin it leaves, rad/s, the way its blow turns the kart, and
+/// how long the tyres lose their grip, s.
+const TYRE_KEEP: f32 = 0.7;
+const TYRE_SPIN: f32 = 3.0;
+const TRIP: f32 = 0.5;
+/// A cone (D-079): a fortieth of a kart, giving back a fifth of the closing
+/// speed; the share of speed a kart keeps through one; how fast a knocked
+/// cone slows, sliding and tumbling, m/s², and what it keeps of its speed
+/// across a barrier.
+const CONE_WEIGHT: f32 = 0.025;
+const CONE_GIVE: f32 = 0.2;
+const CONE_KEEP: f32 = 0.92;
+pub const CONE_SLIDE: f32 = 9.0;
+const CONE_BOUNCE: f32 = 0.3;
+/// A thing knocked by a kart spares it for this long, s: it leaves it.
+const KNOCKED_SPARE: f32 = 0.4;
 /// Oil: the share of speed kept and the spin, rad/s.
 /// Oil (D-072): the share of speed kept on entering it — little is lost,
 /// the tyres simply stop gripping — the slow turn it starts, rad/s, and
@@ -444,7 +460,7 @@ impl Paddock {
             let thing = &mut self.things[i];
             thing.life -= DT;
             thing.spare = (thing.spare - DT).max(0.0);
-            if thing.kind == Kind::Tyre {
+            if matches!(thing.kind, Kind::Tyre | Kind::Cone) {
                 roll(thing, face, track, &mut events);
             }
             let mut gone = thing.life <= 0.0;
@@ -521,18 +537,30 @@ impl Paddock {
                     gone = true;
                     continue;
                 }
-                match thing.kind {
-                    Kind::Tyre => spun(kart, (thing.vx, thing.vz), (thing.x, thing.z)),
-                    _ => knocked(kart, (thing.x, thing.z)),
+                // The two exchange an impulse where they meet; the thing is
+                // sent off, out of the kart, and spares it a moment.
+                let (weight, give) =
+                    if thing.kind == Kind::Tyre { (TYRE_WEIGHT, TYRE_BOUNCE) } else { (CONE_WEIGHT, CONE_GIVE) };
+                let before = kart.spin;
+                if let Some((change, out)) =
+                    struck(kart, (thing.x, thing.z), (thing.vx, thing.vz), thing.kind.radius(), weight, give)
+                {
+                    (thing.vx, thing.vz) = (thing.vx + change.0, thing.vz + change.1);
+                    (thing.x, thing.z) = out;
                 }
-                // Spun, a kart drops what it held behind it.
-                if thing.kind == Kind::Tyre && self.trailing[k] {
-                    self.held[k] = None;
-                    self.count[k] = 0;
-                    self.trailing[k] = false;
+                (thing.owner, thing.spare) = (k, KNOCKED_SPARE);
+                if thing.kind == Kind::Tyre {
+                    tripped(kart, kart.spin - before);
+                    // Spun, a kart drops what it held behind it.
+                    if self.trailing[k] {
+                        self.held[k] = None;
+                        self.count[k] = 0;
+                        self.trailing[k] = false;
+                    }
+                } else {
+                    kart.speed *= CONE_KEEP;
                 }
                 events.push(Event::Hit { kart: k, kind: thing.kind });
-                gone = true;
             }
             if gone {
                 self.things.remove(i);
@@ -695,11 +723,17 @@ pub fn released(item: Item, kart: &Kart) -> Option<(Kind, f32, f32, f32, f32)> {
     }
 }
 
-/// A rolling tyre: it slows, and bounces off the barriers.
+/// A rolling tyre, or a knocked cone sliding: it slows, and bounces off the
+/// barriers.
 fn roll(tyre: &mut Thing, face: f32, track: &Track, events: &mut Vec<Event>) {
+    let (slowing, bounce) = if tyre.kind == Kind::Cone { (CONE_SLIDE, CONE_BOUNCE) } else { (ROLLING, TYRE_BOUNCE) };
     let speed = sqrtf(tyre.vx * tyre.vx + tyre.vz * tyre.vz);
+    if speed == 0.0 && tyre.kind == Kind::Cone {
+        // A cone at rest stays where it stands, even against a barrier.
+        return;
+    }
     if speed > 0.0 {
-        let kept = (speed - ROLLING * DT).max(0.0) / speed;
+        let kept = (speed - slowing * DT).max(0.0) / speed;
         (tyre.vx, tyre.vz) = (tyre.vx * kept, tyre.vz * kept);
     }
     tyre.x += tyre.vx * DT;
@@ -717,7 +751,7 @@ fn roll(tyre: &mut Thing, face: f32, track: &Track, events: &mut Vec<Event>) {
     tyre.z += normal.1 * depth;
     let closing = tyre.vx * normal.0 + tyre.vz * normal.1;
     if closing < 0.0 {
-        let change = -(1.0 + TYRE_BOUNCE) * closing;
+        let change = -(1.0 + bounce) * closing;
         (tyre.vx, tyre.vz) = (tyre.vx + normal.0 * change, tyre.vz + normal.1 * change);
         events.push(Event::Bounced { x: tyre.x, z: tyre.z });
     }
@@ -779,28 +813,21 @@ fn gap(kart: &Kart, x: f32, z: f32) -> (f32, f32) {
     (x - kart.x - forward.0 * s, z - kart.z - forward.1 * s)
 }
 
-/// A tyre moving at `v` hits a kart at `at`: it loses most of its speed and
-/// spins, the way the tyre struck it.
-fn spun(kart: &mut Kart, v: (f32, f32), at: (f32, f32)) {
-    let r = (at.0 - kart.x, at.1 - kart.z);
-    // Which way the blow turns the kart (as `swept` in the physics).
-    let turn = r.1 * (v.0 - kart.velocity().0) - r.0 * (v.1 - kart.velocity().1);
+/// A tyre has struck a kart, turning it by `turned` (rad/s): it goes under
+/// its wheels — speed lost, the grip gone a moment — and the kart spins at
+/// least `TYRE_SPIN` the way the blow turned it (one dead on its line:
+/// to the left, a positive spin).
+fn tripped(kart: &mut Kart, turned: f32) {
     kart.speed *= TYRE_KEEP;
-    kart.slide *= TYRE_KEEP;
-    kart.spin += if turn >= 0.0 { TYRE_SPIN } else { -TYRE_SPIN };
+    let way = if turned < 0.0 { -1.0 } else { 1.0 };
+    if fabsf(kart.spin) < TYRE_SPIN || kart.spin * way < 0.0 {
+        kart.spin = way * TYRE_SPIN.max(fabsf(kart.spin));
+    }
+    kart.slick = kart.slick.max(TRIP);
     kart.drift = 0.0;
     kart.charge = 0.0;
     kart.boost = 0.0;
     kart.rocket = 0.0;
-}
-
-/// A kart hits a cone at `at`: slowed, knocked away from it.
-fn knocked(kart: &mut Kart, at: (f32, f32)) {
-    kart.speed *= CONE_KEEP;
-    let (dx, dz) = gap(kart, at.0, at.1);
-    let d = sqrtf(dx * dx + dz * dz).max(1e-4);
-    let r = (at.0 - kart.x, at.1 - kart.z);
-    kart.take((-dx / d * CONE_KNOCK, -dz / d * CONE_KNOCK), r);
 }
 
 /// A kart drives into oil: it keeps nearly all its speed and starts to turn
@@ -968,7 +995,7 @@ mod tests {
     }
 
     #[test]
-    fn a_thrown_tyre_rolls_ahead_and_spins_the_kart_it_meets_not_its_thrower() {
+    fn a_thrown_tyre_rolls_ahead_bounces_off_the_kart_it_meets_and_spins_it_not_its_thrower() {
         let track = track();
         let mut paddock = Paddock::new(&track, 2, 1);
         paddock.hold(0, Some(Item::Tyre));
@@ -980,7 +1007,43 @@ mod tests {
         events.extend(run(&mut paddock, &mut karts, &[false, false], &track, 180));
         assert!(events.contains(&Event::Hit { kart: 1, kind: Kind::Tyre }), "{events:?}");
         assert!(!events.contains(&Event::Hit { kart: 0, kind: Kind::Tyre }));
-        assert!(paddock.things().is_empty());
+        // It bounced off, and is still on the track; the kart it hit spins,
+        // its grip gone a moment.
+        assert_eq!(paddock.things().len(), 1);
+        assert!(karts[1].spin.abs() > 1.0 || karts[1].heading.abs() > 0.3, "{:?}", karts[1]);
+    }
+
+    #[test]
+    fn a_tyre_turns_the_kart_the_way_its_blow_does() {
+        let track = track();
+        // A kart going up +Z; tyres from its left (+X) at its nose, then at its tail.
+        let hit = |dz: f32| {
+            let mut paddock = Paddock::new(&track, 1, 1);
+            let mut karts = [kart(20.0, 5.0)];
+            paddock.things.push(Thing {
+                kind: Kind::Tyre,
+                x: 1.0,
+                z: 20.0 + dz,
+                vx: -20.0,
+                vz: 0.0,
+                height: 0.0,
+                target: 0,
+                life: TYRE_LIFE,
+                owner: 9,
+                spare: 0.0,
+                inside: 0,
+            });
+            let events = paddock.step(&mut karts, &[false], &at_places(&[0]), &track);
+            assert!(events.contains(&Event::Hit { kart: 0, kind: Kind::Tyre }), "{events:?}");
+            let tyre = paddock.things()[0];
+            assert!(tyre.vx > -20.0 * 0.9, "the tyre lost speed to the kart: {tyre:?}");
+            karts[0]
+        };
+        let (nose, tail) = (hit(0.3), hit(-0.3));
+        assert!(nose.spin * tail.spin < 0.0, "opposite ways: {nose:?} {tail:?}");
+        assert!(nose.spin.abs() >= TYRE_SPIN && tail.spin.abs() >= TYRE_SPIN);
+        // Both pushed away from the blow, towards -X.
+        assert!(nose.velocity().0 < 0.0 && tail.velocity().0 < 0.0, "{nose:?} {tail:?}");
     }
 
     #[test]
@@ -1004,7 +1067,7 @@ mod tests {
     }
 
     #[test]
-    fn a_cone_slows_and_knocks_the_kart_behind() {
+    fn a_kart_knocks_a_cone_flying_and_it_lies_where_it_stops() {
         let track = track();
         let mut paddock = Paddock::new(&track, 2, 1);
         paddock.hold(0, Some(Item::Cone));
@@ -1015,9 +1078,23 @@ mod tests {
         karts[0].z = 100.0;
         let cone = paddock.things()[0];
         karts[1] = Kart { x: cone.x + 0.2, z: cone.z - 0.9, speed: 15.0, ..Kart::default() };
-        let events = paddock.step(&mut karts, &[false, false], &at_places(&[0, 1]), &track);
+        let mut events = paddock.step(&mut karts, &[false, false], &at_places(&[0, 1]), &track);
         assert_eq!(events, vec![Event::Hit { kart: 1, kind: Kind::Cone }]);
-        assert!(karts[1].speed < 15.0 * CONE_KEEP + 0.5 && karts[1].spin != 0.0, "{:?}", karts[1]);
+        // The kart hardly feels it; the cone flies off ahead, faster than it.
+        assert!(karts[1].speed > 15.0 * CONE_KEEP - 1.0 && karts[1].speed < 15.0, "{:?}", karts[1]);
+        let flying = paddock.things()[0];
+        assert!(flying.vz > 15.0, "{flying:?}");
+        // It slides and stops within a few seconds, on the track, and the
+        // kart, slowed, is not hit by it again.
+        karts[1].speed = 0.0;
+        for _ in 0..(3.0 / DT) as usize {
+            events.extend(paddock.step(&mut karts, &[false, false], &at_places(&[0, 1]), &track));
+        }
+        let lying = paddock.things()[0];
+        let face = track.half_width + track.verge + BARRIER;
+        assert!(lying.vx == 0.0 && lying.vz == 0.0 && lying.z > cone.z + 5.0, "{lying:?}");
+        assert!(fabsf(track.locate(lying.x, lying.z).lateral) <= face);
+        assert_eq!(events.iter().filter(|e| matches!(e, Event::Hit { .. })).count(), 1, "{events:?}");
     }
 
     #[test]

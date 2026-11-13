@@ -22,7 +22,8 @@ use bevy::{
     render::render_resource::{Extent3d, TextureDimension, TextureFormat},
 };
 use osage_kart_items::{
-    CONE_LIFE, CONE_RADIUS, CRATE_REACH, Item, OIL_LIFE, OIL_RADIUS, ROLLING, TYRE_LIFE, TYRE_RADIUS, touches,
+    CONE_LIFE, CONE_RADIUS, CONE_SLIDE, CRATE_REACH, Item, OIL_LIFE, OIL_RADIUS, ROLLING, TYRE_LIFE, TYRE_RADIUS,
+    touches,
 };
 
 /// A drone: a body, four arms and four rotors, as one mesh.
@@ -414,7 +415,16 @@ fn show(
             proto::Item::Cone => {
                 // Tossed over the kart's tail: up and over, tumbling, then standing.
                 let age = (CONE_LIFE - thing.life + lead) / TOSS;
-                let place = if age < 1.0 {
+                let speed = thing.vx.hypot(thing.vz);
+                let place = if speed > 0.05 {
+                    // Knocked by a kart (D-079): sliding where it goes in
+                    // `lead`, slowing, and tumbling over and over as it goes.
+                    let ahead = (speed * lead - 0.5 * CONE_SLIDE * lead * lead).max(0.0) / speed;
+                    let (x, z) = (thing.x + thing.vx * ahead, thing.z + thing.vz * ahead);
+                    let across = Vec3::new(thing.vz, 0.0, -thing.vx) / speed;
+                    let tumble = Quat::from_axis_angle(across, (t * 2.0 + thing.x) * speed.min(12.0));
+                    Transform::from_xyz(x, road(x, z) + 0.3, z).with_rotation(tumble)
+                } else if age < 1.0 {
                     let height = 1.1 + 1.6 * age * (1.0 - age) - 0.8 * age;
                     Transform::from_xyz(thing.x, road(thing.x, thing.z) + height, thing.z)
                         .with_rotation(Quat::from_rotation_x((1.0 - age) * 5.0) * Quat::from_rotation_z(age * 2.0))

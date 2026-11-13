@@ -799,6 +799,52 @@ pub fn bump(a: &mut Kart, b: &mut Kart) {
     b.take((j.0 / mb, j.1 / mb), rb);
 }
 
+/// A loose body — a thrown tyre, a cone — meets a kart: `at` its centre,
+/// `velocity` its own, `radius` its size, `weight` as a share of a standard
+/// kart's, `restitution` what it gives back of the closing speed. If it
+/// touches the kart's outline closing on it, the two exchange an impulse
+/// where they touch, as two karts do ([`bump`]): the kart pushed and spun by
+/// where the body lands, the body sent off. The body's change of velocity,
+/// and where it now is (out of the kart's outline); none if they do not meet.
+pub fn struck(
+    kart: &mut Kart,
+    at: (f32, f32),
+    velocity: (f32, f32),
+    radius: f32,
+    weight: f32,
+    restitution: f32,
+) -> Option<((f32, f32), (f32, f32))> {
+    let (forward, _) = axes(kart.heading);
+    let along = ((at.0 - kart.x) * forward.0 + (at.1 - kart.z) * forward.1).clamp(-KART_REACH, KART_REACH);
+    let spine = (kart.x + forward.0 * along, kart.z + forward.1 * along);
+    let gap = (at.0 - spine.0, at.1 - spine.1);
+    let distance = sqrtf(dot(gap, gap));
+    if distance >= KART_RADIUS + radius {
+        return None;
+    }
+    // From the kart to the body; dead on the spine, out to the side.
+    let normal = if distance > 1e-4 { (gap.0 / distance, gap.1 / distance) } else { (forward.1, -forward.0) };
+    let out = (spine.0 + normal.0 * (KART_RADIUS + radius), spine.1 + normal.1 * (KART_RADIUS + radius));
+    let r = (spine.0 + normal.0 * KART_RADIUS - kart.x, spine.1 + normal.1 * KART_RADIUS - kart.z);
+    let mine = kart.velocity_at(r);
+    let relative = (velocity.0 - mine.0, velocity.1 - mine.1);
+    let closing = dot(relative, normal);
+    if closing >= 0.0 {
+        return Some(((0.0, 0.0), out));
+    }
+    let side = (-normal.1, normal.0);
+    let (mk, mb) = (kart.build.sanitized().weight, weight.max(1e-3));
+    let resistance = |n: (f32, f32)| {
+        let k = dot(swept(r), n);
+        1.0 / mk + 1.0 / mb + k * k / mk / YAW_INERTIA
+    };
+    let push = -(1.0 + restitution) * closing / resistance(normal);
+    let rub = (-dot(relative, side) / resistance(side)).clamp(-KART_FRICTION * push, KART_FRICTION * push);
+    let j = (normal.0 * push + side.0 * rub, normal.1 * push + side.1 * rub);
+    kart.take((-j.0 / mk, -j.1 / mk), r);
+    Some(((j.0 / mb, j.1 / mb), out))
+}
+
 /// An angle in `(-π, π]`.
 pub fn wrap(angle: f32) -> f32 {
     atan2f(sinf(angle), cosf(angle))
@@ -821,6 +867,26 @@ mod tests {
     }
 
     const FULL: Controls = Controls { throttle: 1.0, steer: 0.0, drift: false };
+
+    #[test]
+    fn a_body_that_strikes_a_kart_keeps_their_momentum_and_leaves_it() {
+        let mut kart = Kart { z: 10.0, speed: 12.0, ..Kart::default() };
+        let before = kart.velocity();
+        let (v, weight) = ((-18.0, 3.0), 0.25);
+        let (change, out) = struck(&mut kart, (0.8, 10.4), v, 0.35, weight, 0.6).expect("they meet");
+        let after = kart.velocity();
+        // The kart's momentum lost is the body's gained (weights as shares).
+        let (dk, db) = ((after.0 - before.0, after.1 - before.1), (change.0 * weight, change.1 * weight));
+        assert!(fabsf(dk.0 + db.0) < 1e-4 && fabsf(dk.1 + db.1) < 1e-4, "{dk:?} {db:?}");
+        // Pushed away from it, spun by where it landed, and the body outside.
+        assert!(after.0 < before.0 && kart.spin != 0.0);
+        assert!(struck(&mut kart.clone(), out, (0.0, 0.0), 0.34, weight, 0.6).is_none());
+        // A body going away, or too far, does nothing.
+        let mut still = Kart { z: 10.0, ..Kart::default() };
+        assert_eq!(struck(&mut still, (0.8, 10.0), (5.0, 0.0), 0.35, 0.25, 0.6), Some(((0.0, 0.0), (1.0, 10.0))));
+        assert!(struck(&mut still, (3.0, 10.0), (-5.0, 0.0), 0.35, 0.25, 0.6).is_none());
+        assert_eq!(still.velocity(), (0.0, 0.0));
+    }
 
     /// A kart built otherwise: one share changed.
     fn built(change: impl Fn(&mut Build)) -> Kart {

@@ -733,3 +733,12 @@ Date: 2026-11-13 · the maintainer's request after the play test ("l'UI (textes,
 - **Rejected:** the variable Saira (one file for every weight; two static faces are simpler to check and to draw); Kenney Future; images of text.
 - **Consequences:** the content zip carries `saira/` (three files, 0.23 MB). Without the content the interface falls back to Bevy's face, with the same layout.
 
+## D-079 — Thrown tyres and cones are bodies: an impulse where they meet a kart
+
+Date: 2026-11-13 · the remainder of the play test's third point ("les collisions ne sont pas réalistes, ni entre les karts ni entre les objets et les glissières ou kart").
+
+- **Decision:** a thrown tyre and a cone meet a kart as two karts do (D-045): the physics' `struck` exchanges an impulse where the body touches the kart's outline — momentum kept, the body's give, the rub along — so that the kart is pushed and turned by where the body lands, and the body is sent off and stays on the track. A tyre weighs a quarter of a standard kart (a real one a fiftieth: the game's one liberty with the weights, so that a tyre is felt) and gives back 60 %; then it goes under the kart's wheels: 70 % of the speed kept, drift and boost lost, the grip gone for half a second, and a spin of at least 3 rad/s the way the blow turned it. A cone weighs a fortieth of a kart and gives back a fifth: the kart keeps 92 % of its speed and the cone flies off, slides and tumbles (9 m/s²), bounces off the barriers and lies where it stops, for the next kart. A thing knocked by a kart spares it 0.4 s. The native client draws a knocked cone sliding and tumbling.
+- **Why:** a tyre that stopped a kart dead and vanished, whichever way it came, and a cone that vanished and pushed the kart sideways, read as scripted; a blow at the nose and one at the tail must turn a kart opposite ways, and a cone hit at speed must fly.
+- **Replaces:** D-052's fixed responses (a tyre: 45 % of the speed kept and 5 rad/s of spin; a cone: 85 % and a 1.5 m/s knock; both gone).
+- **Consequences:** a tyre that bounces off one kart can hit another (a life each in a battle, D-065); a cone knocked onto the racing line stays a hazard. The browser client still draws no things.
+

@@ -39,8 +39,9 @@ Something to pick up and use during a race, in the spirit of a kart paddock rath
    - **bumper:** every other kart within 4.5 m takes an impulse away from the kart (7 m/s near, half at the edge), off its centre so that it turns, and loses its drift;
    - **push:** 2 s of boost and 2.5 s of guard.
 4. Things move and meet karts (the kart's capsule outline against the thing's radius):
-   - a **tyre** spares its thrower for 0.5 s; a kart holding something behind it, hit from behind, is shielded; otherwise the kart keeps 45 % of its speed, loses its drift and boost, and spins at 5 rad/s the way the blow turned it; the tyre goes;
-   - a **cone** slows the kart to 85 % and knocks it away (an impulse through `Kart::take`), but spares the kart that left it for 6 s; the cone goes;
+   - a **tyre** spares its thrower for 0.5 s; a kart holding something behind it, hit from behind, is shielded; otherwise the two exchange an impulse where they touch (the physics' `struck`, D-079: the tyre weighs a quarter of a standard kart — a real one a fiftieth, the game's one liberty — and gives back 60 % of the closing speed), so that the kart is pushed and turned by where the tyre lands and the tyre bounces off and stays on the track; then the tyre goes under its wheels: the kart keeps 70 % of its speed, loses its drift and boost and its grip for 0.5 s, and spins at least 3 rad/s the way the blow turned it;
+   - a **cone** spares the kart that left it for 6 s; another kart knocks it flying (`struck`, D-079: a fortieth of a kart, giving back a fifth of the closing speed) and keeps 92 % of its speed; the cone slides and tumbles, slowing at 9 m/s² (`CONE_SLIDE`), bounces off the barriers with 30 % of its speed across them, and lies where it stops for the next kart;
+   - a thing knocked by a kart spares that kart for 0.4 s, so that it leaves it;
    - **oil** acts once as a kart drives in (a bit per kart): 90 % of its speed and a spin of 3.5 rad/s the way it was sliding; the oil stays. Its owner is spared for 6 s (`OWN_SPARE`): it does not slip as it pulls away or when it is knocked back into it, but can a lap later. (Sparing the owner only until it first left had it slip on its own oil when knocked back, 2026-11-12.)
    - a kart under **guard** is touched by nothing: a tyre or cone it meets goes, oil does nothing.
 
@@ -50,7 +51,7 @@ It returns events (picked, trailing, used, hit, blocked, bumped, bounced) for so
 
 # Interfaces
 
-`Item` (`ALL`, `trails`), `Kind`, `Standing`, `Crate`, `Thing`, `Event`, `released` (where and how fast a thing leaves a kart: the world's and a client's, D-071), `Paddock::{new, battle (six racks, `BATTLE_RACKS`, and draws of what hits, D-065), empty (no crates: a time trial's, D-062), step, button, crates, things, held, count, trailing, guard, smoke, hold}`, `wants`, `touches`, and the constants of the design (`NITRO`, `ROCKET`, `SMOKE`, `STACK`, `THROW`, `ROLLING`, `TYRE_BOUNCE`, `DRONE_*`, `BUMPER_REACH`, `BUMPER_KNOCK`, `PUSH`, `GUARD`, `FAR_BEHIND`, radii and lives, `RACKS`, `RACK`, `CRATE_BACK`, `MOST`).
+`Item` (`ALL`, `trails`), `Kind`, `Standing`, `Crate`, `Thing`, `Event`, `released` (where and how fast a thing leaves a kart: the world's and a client's, D-071), `Paddock::{new, battle (six racks, `BATTLE_RACKS`, and draws of what hits, D-065), empty (no crates: a time trial's, D-062), step, button, crates, things, held, count, trailing, guard, smoke, hold}`, `wants`, `touches`, and the constants of the design (`NITRO`, `ROCKET`, `SMOKE`, `STACK`, `THROW`, `ROLLING`, `TYRE_BOUNCE`, `CONE_SLIDE`, `DRONE_*`, `BUMPER_REACH`, `BUMPER_KNOCK`, `PUSH`, `GUARD`, `FAR_BEHIND`, radii and lives, `RACKS`, `RACK`, `CRATE_BACK`, `MOST`).
 
 The world server (`osage-world-kart`) carries it in its protocol: `Step.use_item` (the button, for humans), `Autopilot.use_items` (agents let the world's rule decide), `Racer.held`, `held_count`, `trailing` and `guard`, and `kart.paddock/1` (crates standing or not; things with their velocity, life and height) on the race board, sent when it changes. The world gives each kart's standing from its race: place, and the distance it has covered against the leader's.
 
@@ -62,8 +63,8 @@ The world server (`osage-world-kart`) carries it in its protocol: `Step.use_item
 - One press, one use: holding the button does not use the next item. Tested.
 - What trails is held behind while the button is down and used as it comes up; a tyre held behind stops a tyre from behind and goes; without it the tyre spins the kart. Tested.
 - A stack throws three tyres, one press each. A drone flies over the others to the leader, comes down on it and goes; the leader's own goes nowhere. A push boosts and nothing touches the kart meanwhile. A bumper knocks karts beside aside, not those further, not its own. Tested.
-- A tyre rolls ahead and spins the kart it meets, not its thrower; it bounces off a barrier and stays on the track. Tested.
-- A cone slows and knocks; oil spins a kart once as it drives in and spares its owner, even knocked back into it; things go after their time. Tested.
+- A tyre rolls ahead, bounces off the kart it meets and spins it, not its thrower; one at a kart's nose and one at its tail turn it opposite ways, both pushing it away; a tyre bounces off a barrier and stays on the track. Tested.
+- A kart knocks a cone flying ahead of it, hardly slowed, and the cone lies on the track where it stops, hitting the kart once; oil spins a kart once as it drives in and spares its owner, even knocked back into it; things go after their time. Tested.
 - An AI driver holds a tyre behind with a kart behind and throws at one ahead; it sends a drone when it does not lead, a bumper with a kart beside, a push on a straight. Tested.
 - Clients draw things as far ahead in time as the player's kart is predicted, or a tyre just thrown shows behind its thrower and runs through it (kart-native).
 - On the world's circuit, bots break crates, hold at least eight kinds, keep items behind, and leave or send at least three kinds of things, drones flying among them (the world's `tests/race.rs`).
