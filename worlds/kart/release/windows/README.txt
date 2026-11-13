@@ -59,6 +59,10 @@ bumper takes one; after a hit you are spared for a moment. With no life
 left you are out (your kart turns see-through). The last kart in wins, or
 the one with most lives after two and a half minutes.
 
+Rain: some races are run in the rain (Gull Point most often). The road is
+darker and shines, and it grips and brakes less: brake earlier, and a
+drift slides further. Time trials are always dry.
+
 Time trials: everyone alone against the clock - no bots, no items, and
 the karts pass through one another. Your best run comes back as a ghost
 (a pale kart you can see through) in the next trials, with the fastest

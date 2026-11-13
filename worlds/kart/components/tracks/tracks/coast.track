@@ -6,6 +6,7 @@ name Gull Point
 about A fast road along the cliffs of a headland: a long straight over a rise, a sweeper by the sea, a hairpin under the lighthouse and esses back inland.
 sky noon
 scenery coast
+rain 0.35
 half-width 7.5
 verge 4
 point 0 -120

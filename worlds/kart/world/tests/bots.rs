@@ -23,6 +23,18 @@ fn eight_drivers_race_every_track_and_keep_to_the_road() {
     }
 }
 
+/// D-068: in the rain, on every track, the field still laps and keeps
+/// to the road, if a little more often on the grass.
+#[test]
+fn eight_drivers_race_in_the_rain_and_keep_to_the_road() {
+    for def in osage_kart_tracks::built_in() {
+        eprintln!("{} in the rain:", def.id);
+        let mut circuit = Circuit::of(&def);
+        circuit.track.wet = 1.0;
+        race_and_keep_to_the_road(&circuit);
+    }
+}
+
 fn race_and_keep_to_the_road(circuit: &Circuit) {
     let track = &circuit.track;
     let tempers: Vec<Temper> = [Temper::VETERAN, Temper::ROOKIE, Temper::HOTHEAD, Temper::STEADY, Temper::CAUTIOUS]

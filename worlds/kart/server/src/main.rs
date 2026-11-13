@@ -8,7 +8,9 @@
 //! track file (D-056), race after race; without it the world races the
 //! Grand Tour cup (D-057) — or `[--event cup:ID|track:ID|trial:ID]`, a
 //! time trial say (D-062) — and the host may choose another event in the
-//! game; `[--laps N]` laps a race (3); `[--music DIR [--music-listen
+//! game; `[--laps N]` laps a race (3); `[--weather track|dry|rain]` each
+//! track's chance of rain, rolled for every race, or always dry or wet
+//! (D-068); `[--music DIR [--music-listen
 //! ADDR]]` shares the host's music files in DIR with the players on the network (osage-music's share, on
 //! 0.0.0.0:7880 unless told otherwise), each hearing the same piece at the
 //! same point; the players talk to one another through a voice relay
@@ -37,6 +39,13 @@ fn main() -> anyhow::Result<()> {
         } else if arg == "--laps" {
             let laps = args.next().and_then(|laps| laps.parse().ok()).filter(|laps| (1..=20).contains(laps));
             world.laps = laps.context("--laps needs a number of laps, 1 to 20")?;
+        } else if arg == "--weather" {
+            world.weather = match args.next().as_deref() {
+                Some("track") => osage_world_kart::Weather::Track,
+                Some("dry") => osage_world_kart::Weather::Dry,
+                Some("rain") => osage_world_kart::Weather::Rain,
+                _ => anyhow::bail!("--weather takes track, dry or rain"),
+            };
         } else if arg == "--ghosts" {
             world.ghosts = Some(args.next().context("--ghosts needs a folder")?.into());
         } else if arg == "--track" {

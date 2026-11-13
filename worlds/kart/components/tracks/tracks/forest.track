@@ -6,6 +6,7 @@ name Pinewood
 about A narrow lane through a pine forest at dusk: bend after bend, a dip and a brow, never a long straight.
 sky evening
 scenery forest
+rain 0.25
 half-width 6
 verge 3
 point 0 -60

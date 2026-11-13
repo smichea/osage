@@ -381,6 +381,13 @@ fn receive(
             }
         }
     }
+    // The road is as wet as the race says (D-068): the prediction steps on it.
+    let wet = if replica.race().is_some_and(|race| race.rain) { 1.0 } else { 0.0 };
+    if let Some(circuit) = &mut replica.circuit
+        && circuit.track.wet != wet
+    {
+        circuit.track.wet = wet;
+    }
 }
 
 /// One physics step of this player's kart: read the controls, predict.
@@ -822,6 +829,7 @@ fn summarise(
     chosen: Res<Chosen>,
     chosen_event: Res<ChosenEvent>,
     mut kept: ResMut<Kept>,
+    mut rain: ResMut<crate::rain::Rain>,
     karts: Query<(&Remote, &Pose)>,
     mut view: ResMut<RaceView>,
     mut paddock: ResMut<PaddockView>,
@@ -862,6 +870,11 @@ fn summarise(
     view.status.clone_from(&replica.status);
     view.laps = race.as_ref().map_or(0, |race| race.laps);
     view.trial = race.as_ref().is_some_and(|race| race.trial);
+    // The race's weather (D-068): seen here, predicted in `receive`.
+    let raining = race.as_ref().is_some_and(|race| race.rain);
+    if rain.falling != raining {
+        rain.falling = raining;
+    }
     view.battle = race.as_ref().is_some_and(|race| race.battle);
     view.clock_ms = race.as_ref().map_or(0, |race| match race.phase() {
         // A battle counts down to when time is up (D-065).

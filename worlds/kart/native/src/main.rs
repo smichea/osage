@@ -37,6 +37,7 @@ mod paddock;
 mod photo;
 mod play;
 mod predict;
+mod rain;
 mod scene;
 mod scenery;
 mod settings;
@@ -75,6 +76,8 @@ fn main() -> Result<()> {
     let mut fps = None;
     // A lens focused this far, f/2.8, as the photo mode has it (D-066).
     let mut focus = None;
+    // Rain on the bench, from the start (D-068).
+    let mut raining = false;
     let mut args = std::env::args().skip(1);
     while let Some(arg) = args.next() {
         let mut value = || args.next().with_context(|| format!("{arg} needs a value"));
@@ -102,6 +105,7 @@ fn main() -> Result<()> {
                 };
                 track = Some(def);
             }
+            "--rain" => raining = true,
             "--focus" => focus = Some(value()?.parse::<f32>().context("--focus takes metres")?),
             "--fps" => fps = Some(settings::parse_fps(&value()?).map_err(anyhow::Error::msg)?),
             "--frames" => frames = value()?.parse().context("--frames")?,
@@ -199,6 +203,9 @@ fn main() -> Result<()> {
         .add_plugins(scene::ScenePlugin);
     if let Some(viewpoint) = viewpoint {
         app.insert_resource(viewpoint);
+    }
+    if raining {
+        app.insert_resource(rain::Rain::already());
     }
     if let Some(focus) = focus {
         app.add_systems(bevy::app::Update, photo::focus(focus));

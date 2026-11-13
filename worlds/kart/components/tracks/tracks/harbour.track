@@ -6,6 +6,7 @@ name Harbour Town
 about A street circuit round the blocks of a harbour town: along the quay, up between the houses and down the market square, corner after corner.
 sky noon
 scenery town
+rain 0.3
 half-width 6.5
 verge 2
 point -60 0

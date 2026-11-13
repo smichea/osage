@@ -1,6 +1,7 @@
 # Knowledge Update Log
 
 ## 2026-11-13
+* **Update**: rain (D-068): [osage-kart-physics](/modules/kart-physics.md) and [arcade kart physics](/algorithms/arcade-kart-physics.md) have a wet road; [osage-kart-tracks](/modules/kart-tracks.md) a chance of rain; [osage-kart-native](/modules/kart-native.md) draws the rain.
 * **Update**: [osage-kart-native](/modules/kart-native.md) lays marks on the track as karts drive (D-067).
 * **Update**: [osage-kart-native](/modules/kart-native.md) has a photo mode (D-066): the picture frozen, a free camera, zoom and depth of field.
 * **Update**: battles (D-065): [osage-kart-tracks](/modules/kart-tracks.md) has arenas, the Yard among them; [osage-kart-items](/modules/kart-items.md) has a battle's paddock; [osage-kart-cup](/modules/kart-cup.md)'s events gain `battle:ARENA`; [osage-kart-native](/modules/kart-native.md) shows lives.

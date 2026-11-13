@@ -233,6 +233,7 @@ impl Plugin for ScenePlugin {
             .init_resource::<View>()
             .init_resource::<Glance>()
             .init_resource::<marks::Marks>()
+            .add_plugins(crate::rain::RainPlugin)
             .add_systems(Startup, (setup, karts::setup, effects::setup, scenery::load_roadside))
             .add_systems(
                 Update,
@@ -242,6 +243,7 @@ impl Plugin for ScenePlugin {
                     karts::park,
                     karts::animate,
                     effects::emit,
+                    effects::gloom,
                     marks::lay,
                     effects::update,
                     effects::prewarm,

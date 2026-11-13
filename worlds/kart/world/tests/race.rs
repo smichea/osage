@@ -786,3 +786,46 @@ fn a_race_has_no_lives() {
     assert!(!race.battle);
     assert!(alice.karts().iter().all(|(_, r, _)| r.lives == 0 && !r.out));
 }
+
+/// Rain (D-068): the race says it is wet, and a client that steps its
+/// kart on the wet road predicts it bit for bit — on a dry one it would
+/// not. A time trial is dry whatever the weather.
+#[test]
+fn in_the_rain_a_client_predicts_on_a_wet_road() {
+    let world = KartWorld { weather: osage_world_kart::Weather::Rain, ..KartWorld::unattended(1, 3) };
+    let mut harness = Harness::new(world, TICK_HZ);
+    let mut alice = Client::join(&mut harness, SessionKind::Human, Role::Player, "alice");
+    run_until(&mut harness, &mut alice, 5, |c| phase(&c.race()) == proto::Phase::Racing);
+    assert!(alice.race().rain, "it rains");
+    let wet = alice.track().with_wet(1.0);
+    let dry = alice.track();
+    let (entity, _, start) = alice.kart_of("alice");
+    let controls_type = alice.world.types().id(types::CONTROLS).unwrap();
+    let mut on_wet = Kart { x: start.x, z: start.z, heading: start.heading, ..Kart::default() };
+    let mut on_dry = on_wet;
+    for sequence in 1..=400u64 {
+        let (steer, drift) = if (150..=220).contains(&sequence) { (0.35, true) } else { (0.0, false) };
+        let throttle = if (300..=330).contains(&sequence) { -1.0 } else { 1.0 };
+        let step_controls = proto::Step { sequence, throttle, steer, drift, ..Default::default() };
+        harness.send(
+            alice.session,
+            intent(sequence, entity, controls_type, &proto::Controls { steps: vec![step_controls] }),
+        );
+        harness.run(1);
+        step(&mut on_wet, Controls { throttle, steer, drift }, &wet);
+        step(&mut on_dry, Controls { throttle, steer, drift }, &dry);
+    }
+    let server = osage_world_kart::kart_of(&alice.kart_of("alice").2);
+    assert_eq!(server, on_wet, "bit for bit on the wet road");
+    assert_ne!(server, on_dry, "the rain changes the driving");
+
+    let trial = KartWorld {
+        weather: osage_world_kart::Weather::Rain,
+        event: Some("trial:paddock".into()),
+        ..KartWorld::unattended(1, 1)
+    };
+    let mut harness = Harness::new(trial, TICK_HZ);
+    let mut bob = Client::join(&mut harness, SessionKind::Human, Role::Player, "bob");
+    run_until(&mut harness, &mut bob, 5, |c| phase(&c.race()) == proto::Phase::Racing);
+    assert!(!bob.race().rain, "a time trial is dry");
+}

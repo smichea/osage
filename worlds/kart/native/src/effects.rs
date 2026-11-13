@@ -39,6 +39,8 @@ enum Kind {
     Soot,
     Smoke,
     Dust,
+    /// Water thrown up by the wheels on a wet road (D-068): a pale mist.
+    Spray,
     Flame,
     /// A rocket's fire: bigger and longer than a boost's flame.
     Fire,
@@ -160,6 +162,39 @@ pub fn setup(
     commands.insert_resource(pool);
 }
 
+/// How dark the smoke was made last, and its materials' dry colours.
+type Shaded = (f32, Vec<(Handle<StandardMaterial>, LinearRgba)>);
+
+/// Unlit smoke glows in the gloom of a rain: as the sky darkens (D-068),
+/// the smoke, the veil, the dust and the soot darken with it.
+pub fn gloom(
+    pool: Res<Pool>,
+    rain: Option<Res<crate::rain::Rain>>,
+    mut materials: ResMut<Assets<StandardMaterial>>,
+    mut shaded: Local<Option<Shaded>>,
+) {
+    let wet = rain.map_or(0.0, |rain| rain.wet());
+    let (done, dry) = shaded.get_or_insert_with(|| {
+        let handles = [&pool.smoke, &pool.veil, &pool.dust, &pool.soot];
+        let dry = handles
+            .into_iter()
+            .filter_map(|h| materials.get(h).map(|m| (h.clone(), m.base_color.to_linear())))
+            .collect();
+        (0.0, dry)
+    });
+    if (wet - *done).abs() < 0.02 && !(wet == 0.0 && *done != 0.0) {
+        return;
+    }
+    *done = wet;
+    for (handle, colour) in dry.iter() {
+        if let Some(mut material) = materials.get_mut(handle) {
+            let shade = 1.0 - 0.6 * wet;
+            material.base_color =
+                LinearRgba::new(colour.red * shade, colour.green * shade, colour.blue * shade, colour.alpha).into();
+        }
+    }
+}
+
 /// What the karts throw up this frame.
 #[allow(clippy::too_many_arguments)]
 pub fn emit(
@@ -169,6 +204,7 @@ pub fn emit(
     mut pool: ResMut<Pool>,
     mut materials: ResMut<Assets<StandardMaterial>>,
     mut frame: Local<u32>,
+    rain: Option<Res<crate::rain::Rain>>,
     karts: Query<(&Pose, &Transform)>,
     mut particles: Query<
         (&mut Particle, &mut Transform, &mut Visibility, &mut MeshMaterial3d<StandardMaterial>),
@@ -190,6 +226,8 @@ pub fn emit(
             Kind::Smoke if real => (0.9 + 0.5 * pool.vary(), 0.45, 3.2, -0.25, pool.veil.clone()),
             Kind::Smoke => (0.4 + 0.25 * pool.vary(), 0.3, 1.8, -0.6, pool.smoke.clone()),
             Kind::Dust => (0.5 + 0.3 * pool.vary(), 0.5, 2.0, -0.3, pool.dust.clone()),
+            // Gone before a chasing camera, 3.4 m behind at speed, gets there.
+            Kind::Spray => (0.1 + 0.06 * pool.vary(), 0.25, 3.0, 3.0, pool.veil.clone()),
             Kind::Flame => (0.12 + 0.1 * pool.vary(), 0.42, -0.7, 0.0, pool.flame.clone()),
             Kind::Fire => (0.16 + 0.1 * pool.vary(), 0.6, -1.2, 0.0, pool.flame.clone()),
             Kind::Exhaust => (0.6 + 0.4 * pool.vary(), 0.25, 2.4, -0.4, pool.smoke.clone()),
@@ -275,6 +313,15 @@ pub fn emit(
             for exhaust in EXHAUSTS {
                 let puff = Vec3::Y * 0.5 + pool.spread(0.9);
                 launch(&mut pool, Kind::Tinted(colour), place.transform_point(exhaust), forward * speed * 0.15 + puff);
+            }
+        }
+        // On a wet road the rear wheels throw spray, more the faster (D-068).
+        let wet = rain.as_ref().map_or(0.0, |rain| rain.wet());
+        if wet > 0.3 && speed.abs() > 6.0 {
+            for contact in REAR_CONTACTS {
+                // Up and a little back: kept round the wheels, out of a chasing lens.
+                let throw = behind * 0.12 + Vec3::Y * (0.9 + 0.8 * pool.vary()) + pool.spread(0.5);
+                launch(&mut pool, Kind::Spray, place.transform_point(contact) + Vec3::Y * 0.15, throw * wet);
             }
         }
         let off_road = course.as_ref().is_some_and(|course| {

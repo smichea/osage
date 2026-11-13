@@ -554,6 +554,7 @@ pub fn publish(
     drivers: Res<Drivers>,
     cups: Res<Cups>,
     beside: Res<crate::Beside>,
+    forecast: Res<crate::weather::Forecast>,
     paddock: Option<Res<Items>>,
     owners: Query<(&Replicated, &Owner)>,
     mut karts: Query<
@@ -597,6 +598,7 @@ pub fn publish(
         voice_port: u32::from(beside.voice),
         trial: cups.trial(),
         battle: cups.battle(),
+        rain: forecast.rain,
     };
     if let Ok((mut board, mut volatile)) = board.single_mut() {
         if let Some(paddock) = paddock {
@@ -618,6 +620,7 @@ pub fn publish(
                 && c.voice_port == summary.voice_port
                 && c.trial == summary.trial
                 && c.battle == summary.battle
+                && c.rain == summary.rain
                 && c.phase_ends_us.abs_diff(summary.phase_ends_us) < 50_000
                 && c.started_us.abs_diff(summary.started_us) < 50_000
         });

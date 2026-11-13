@@ -74,6 +74,7 @@ interface Exports {
   track_crest(along: number, rise: number, fall: number, height: number): void;
   track_close(halfWidth: number, verge: number): number;
   track_lift(along: number): number;
+  track_wet(wet: number): void;
   kart_set(field: number, value: number): void;
   kart_step(throttle: number, steer: number, drift: number): void;
   kart_get(field: number): number;
@@ -93,6 +94,11 @@ export class Physics {
     for (let i = 0; i + 1 < points.length; i += 2) this.wasm.track_point(points[i], points[i + 1]);
     for (const c of crests) this.wasm.track_crest(c.along, c.rise, c.fall, c.height);
     if (!this.wasm.track_close(halfWidth, verge)) throw new Error("a track needs at least three points");
+  }
+
+  /** How wet the road is for the race: 0 dry, 1 in the rain (D-068). A new track is dry. */
+  setWet(wet: number): void {
+    this.wasm.track_wet(wet);
   }
 
   /** The road's height `along` metres along the centre line: 0 but over a crest (D-051). */

@@ -6,6 +6,7 @@ name The Paddock
 about A club circuit in the hills: a long straight over a crest, a sweeping right-hander, an S, a chicane and a hairpin.
 sky noon
 scenery meadow
+rain 0.15
 half-width 7
 verge 4
 point 0 -90

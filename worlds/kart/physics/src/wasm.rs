@@ -7,6 +7,7 @@
 //! - `track_clear()`, `track_point(x, z)` for each point, `track_crest(along,
 //!   rise, fall, height)` for each crest, then `track_close(half_width, verge)`;
 //! - `track_lift(along)`: the road's height that far along (over a crest);
+//! - `track_wet(wet)`: how wet the road is, 0 to 1, for the race (D-068);
 //! - `kart_set(i, value)` sets field `i` of the kart, `kart_step(throttle,
 //!   steer, drift_button)` advances it one step, `kart_get(i)` reads field
 //!   `i`. Fields, in order: x, z, heading, speed, slide, drift, charge,
@@ -43,6 +44,12 @@ pub extern "C" fn track_crest(along: f32, rise: f32, fall: f32, height: f32) {
 #[unsafe(no_mangle)]
 pub extern "C" fn track_lift(along: f32) -> f32 {
     TRACK.with_borrow(|track| track.as_ref().map_or(0.0, |track| track.lift(along).0))
+}
+
+/// How wet the road is for this race: 0 dry, 1 in the rain (D-068).
+#[unsafe(no_mangle)]
+pub extern "C" fn track_wet(wet: f32) {
+    TRACK.with_borrow_mut(|track| *track = track.take().map(|track| track.with_wet(wet)));
 }
 
 /// 1 once the track is ready, 0 if it has fewer than three points.

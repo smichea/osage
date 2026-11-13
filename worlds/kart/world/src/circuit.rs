@@ -21,6 +21,8 @@ pub struct About {
     pub about: String,
     pub sky: String,
     pub scenery: String,
+    /// The chance of rain in a race on it (D-068); the world's to roll.
+    pub rain: f32,
 }
 
 pub struct Circuit {
@@ -51,6 +53,7 @@ impl Circuit {
             about: def.about.clone(),
             sky: def.sky.clone(),
             scenery: def.scenery.clone(),
+            rain: def.rain,
         };
         Self { track, start, about }
     }
@@ -69,6 +72,7 @@ impl Circuit {
             about: track.about.clone(),
             sky: track.sky.clone(),
             scenery: track.scenery.clone(),
+            rain: 0.0,
         };
         Self { track: Track::new(points, track.half_width, track.verge).with_crests(crests), start: track.start, about }
     }

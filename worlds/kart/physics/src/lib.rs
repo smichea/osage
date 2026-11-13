@@ -116,6 +116,10 @@ const WHEEL_ALONG: f32 = 0.52;
 /// Grip kept with all four wheels on kerbs, and on grass.
 const KERB_GRIP: f32 = 0.65;
 const GRASS_GRIP: f32 = 0.5;
+/// A wet road (D-068): the tyres' grip and the brakes as shares of a dry
+/// road's. A slide takes longer to scrub off, a stop longer to make.
+pub const WET_GRIP: f32 = 0.6;
+pub const WET_BRAKING: f32 = 0.7;
 /// Grass drags the wheels in it: with a side's two wheels in it, the kart
 /// turns towards it by this many rad/s per m/s.
 const GRASS_PULL: f32 = 0.02;
@@ -274,6 +278,9 @@ pub struct Track {
     pub half_width: f32,
     pub verge: f32,
     crests: Vec<Crest>,
+    /// How wet the road is, 0 (dry) to 1 (rain): it grips and brakes less
+    /// (D-068). Set by the world for a race.
+    pub wet: f32,
 }
 
 /// Where a position is relative to the track.
@@ -296,12 +303,18 @@ impl Track {
             distances.push(length);
             length += distance(points[i], points[(i + 1) % points.len()]);
         }
-        Self { points, distances, length, half_width, verge, crests: Vec::new() }
+        Self { points, distances, length, half_width, verge, crests: Vec::new(), wet: 0.0 }
     }
 
     /// The same track with crests across its road.
     pub fn with_crests(mut self, crests: Vec<Crest>) -> Self {
         self.crests = crests;
+        self
+    }
+
+    /// The same track, `wet` (0 dry, 1 in the rain).
+    pub fn with_wet(mut self, wet: f32) -> Self {
+        self.wet = if wet.is_finite() { wet.clamp(0.0, 1.0) } else { 0.0 };
         self
     }
 
@@ -475,6 +488,9 @@ pub fn step(kart: &mut Kart, controls: Controls, track: &Track) {
     };
     let top = fastest - (fastest - OFF_ROAD_SPEED) * grass;
     let footing = 1.0 - (1.0 - KERB_GRIP) * kerb - (1.0 - GRASS_GRIP) * grass;
+    // Rain takes grip from every tyre (D-068); a dry road, nothing (×1).
+    let wet = track.wet.clamp(0.0, 1.0);
+    let footing = footing * (1.0 - (1.0 - WET_GRIP) * wet);
 
     // Along the kart: wheels in the air neither drive nor brake.
     if flying {
@@ -483,7 +499,7 @@ pub fn step(kart: &mut Kart, controls: Controls, track: &Track) {
             kart.speed = (kart.speed + throttle * (ACCELERATION * build.accel) * DT).min(top);
         }
     } else if throttle < 0.0 {
-        let rate = if kart.speed > 0.0 { BRAKING } else { ACCELERATION / 2.0 };
+        let rate = if kart.speed > 0.0 { BRAKING * (1.0 - (1.0 - WET_BRAKING) * wet) } else { ACCELERATION / 2.0 };
         kart.speed = (kart.speed + throttle * rate * DT).max(-REVERSE_SPEED);
     } else {
         let roll = (ROLLING * DT).min(fabsf(kart.speed));
@@ -988,6 +1004,33 @@ mod tests {
         assert!(kart.speed > BOOST_SPEED + 3.0 && kart.speed <= ROCKET_SPEED, "{kart:?}");
         drive(&mut kart, FULL, 3.0, &track);
         assert!(kart.rocket == 0.0 && kart.speed < MAX_SPEED + 0.5, "back to top speed: {kart:?}");
+    }
+
+    /// D-068: on a wet road the brakes take longer and a slide lasts.
+    #[test]
+    fn a_wet_road_brakes_later_and_slides_longer() {
+        let dry = track();
+        let wet = track().with_wet(1.0);
+        let stop = |track: &Track| {
+            let mut kart = Kart { z: 10.0, speed: MAX_SPEED, ..Kart::default() };
+            let brake = Controls { throttle: -1.0, ..FULL };
+            let mut steps = 0;
+            while kart.speed > 0.0 {
+                step(&mut kart, brake, track);
+                steps += 1;
+            }
+            (steps, kart.z)
+        };
+        let ((dry_steps, dry_z), (wet_steps, wet_z)) = (stop(&dry), stop(&wet));
+        assert!(wet_steps > dry_steps && wet_z > dry_z + 2.0, "dry {dry_steps} {dry_z}, wet {wet_steps} {wet_z}");
+        let slid = |track: &Track| {
+            let mut kart = Kart { z: 10.0, speed: MAX_SPEED, slide: 6.0, ..Kart::default() };
+            drive(&mut kart, FULL, 0.3, track);
+            kart.slide
+        };
+        assert!(slid(&wet) > slid(&dry) * 2.0, "dry {}, wet {}", slid(&dry), slid(&wet));
+        assert_eq!(track().with_wet(f32::NAN).wet, 0.0);
+        assert_eq!(track().with_wet(3.0).wet, 1.0);
     }
 
     #[test]

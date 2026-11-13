@@ -16,6 +16,7 @@ mod race;
 mod records;
 mod roster;
 mod trial;
+mod weather;
 
 use bevy::prelude::*;
 use osage_kart_physics::Kart;
@@ -24,6 +25,7 @@ use osage_world_module_api::{Discrete, EntityIds, RegionSet, Schema, TypeSpec, V
 pub use circuit::Circuit;
 pub use cup::events;
 pub use driving::autopilot;
+pub use weather::Weather;
 
 /// Generated from `proto/kart/v1/kart.proto`.
 pub mod proto {
@@ -102,6 +104,9 @@ pub struct KartWorld {
     /// What it races (D-057): a cup (`cup:ID`), a track (`track:ID`) or a
     /// time trial on one (`trial:ID`, D-062); none, `track` race after race.
     pub event: Option<String>,
+    /// What the weather follows (D-068): each track's chance of rain, or
+    /// always dry, or always wet.
+    pub weather: Weather,
     /// The port where the host shares their music, announced to the
     /// players; none when nothing is shared.
     pub music_port: Option<u16>,
@@ -126,6 +131,7 @@ impl Default for KartWorld {
             host_starts: true,
             records: None,
             ghosts: None,
+            weather: Weather::Track,
             track: paddock(),
             event: None,
             music_port: None,
@@ -143,6 +149,7 @@ impl KartWorld {
             host_starts: false,
             records: None,
             ghosts: None,
+            weather: Weather::Track,
             track: paddock(),
             event: None,
             music_port: None,
@@ -167,6 +174,8 @@ impl Plugin for KartWorld {
             .insert_resource(cups)
             .insert_resource(Beside { music: self.music_port.unwrap_or(0), voice: self.voice_port.unwrap_or(0) })
             .init_resource::<race::Calls>()
+            .insert_resource(self.weather)
+            .init_resource::<weather::Forecast>()
             .insert_resource(Course(Circuit::of(&track)))
             .init_resource::<race::Race>()
             .init_resource::<race::Drivers>()
@@ -181,6 +190,7 @@ impl Plugin for KartWorld {
                     race::sessions,
                     driving::intents,
                     race::flow,
+                    weather::forecast,
                     driving::drive,
                     driving::collide,
                     paddock::items,
@@ -236,7 +246,8 @@ impl WorldModule for KartWorld {
                 types::RACE,
                 "Race",
                 false,
-                "The race: phase (waiting, ready, countdown, racing, finished), when it ends, laps, order, host; \
+                "The race: phase (waiting, ready, countdown, racing, finished), when it ends, laps, order, host, \
+                 rain (a wet road grips and brakes less); \
                  the cup being raced with its standings, the event chosen next, votes and the events there are \
                  (cup:ID, track:ID, trial:ID — a time trial: alone against the clock and the ghosts of the \
                  best runs, see Racer.ghost — or battle:ARENA: three lives each, every hit takes one, the last \

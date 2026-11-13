@@ -309,6 +309,10 @@ message Race {
   // last kart in wins, or the one with most lives when time is up. While
   // racing, phase_ends_us is when time is up.
   bool battle = 14;
+  // Added with D-068. The race is run in the rain: the road grips and
+  // brakes less (osage-kart-physics' Track.wet = 1). A client predicting
+  // its kart steps it on a wet road.
+  bool rain = 15;
 }
 
 message Cup {

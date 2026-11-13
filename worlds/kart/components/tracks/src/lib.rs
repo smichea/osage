@@ -17,6 +17,7 @@
 //! about A club circuit in the hills.
 //! sky noon
 //! scenery meadow
+//! rain 0.15
 //! half-width 7
 //! verge 4
 //! point 0 -90
@@ -65,6 +66,9 @@ pub struct TrackDef {
     pub sky: String,
     /// What surrounds it: `meadow`, `coast`, `forest`, `town`.
     pub scenery: String,
+    /// The chance that a race on it is run in the rain, 0 to 1 (D-068):
+    /// `rain 0.3`. None unless said.
+    pub rain: f32,
     pub half_width: f32,
     pub verge: f32,
     /// Control points of the closed centre line, metres, in racing order.
@@ -119,6 +123,7 @@ impl TrackDef {
             about: String::new(),
             sky: "noon".to_owned(),
             scenery: "meadow".to_owned(),
+            rain: 0.0,
             half_width: 7.0,
             verge: 4.0,
             points: Vec::new(),
@@ -145,6 +150,13 @@ impl TrackDef {
                 "about" => def.about = rest.to_owned(),
                 "sky" => def.sky = rest.to_owned(),
                 "scenery" => def.scenery = rest.to_owned(),
+                "rain" => {
+                    let chance = count(1)?[0];
+                    if !(0.0..=1.0).contains(&chance) {
+                        return Err(fail(n, "rain is a chance, 0 to 1"));
+                    }
+                    def.rain = chance;
+                }
                 "half-width" => def.half_width = count(1)?[0],
                 "verge" => def.verge = count(1)?[0],
                 "point" => {

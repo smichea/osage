@@ -764,6 +764,20 @@ fn photographed(
     let gravel = grain(set.gravel.material(2.4), 2.4, Ground::none(), ground_untiled);
     let painted = materials.add(StandardMaterial { perceptual_roughness: 0.75, ..set.paint.material(2.0) });
     let concrete = materials.add(set.concrete.material(3.0));
+    // What the rain wets (D-068): the road, the painted kerbs and walls.
+    let dry = |m: &StandardMaterial| (m.base_color.to_linear(), m.perceptual_roughness);
+    let mut wets = crate::rain::Surfaces::default();
+    if let Some(m) = grounds.get(&road) {
+        let (colour, rough) = dry(&m.base);
+        wets.grounds.push((road.clone(), colour, rough));
+    }
+    for handle in [&painted, &concrete] {
+        if let Some(m) = materials.get(handle) {
+            let (colour, rough) = dry(m);
+            wets.plain.push((handle.clone(), colour, rough));
+        }
+    }
+    commands.insert_resource(wets);
     let mut flat = |mesh: Mesh, material: &Handle<StandardMaterial>| {
         commands.spawn((Part, Mesh3d(meshes.add(mesh)), MeshMaterial3d(material.clone()), NotShadowCaster));
     };
