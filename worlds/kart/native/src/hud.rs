@@ -259,7 +259,8 @@ fn caption(words: &str, size: f32) -> impl Bundle {
     (Text::new(words), TextFont { font_size: FontSize::Px(size), ..default() }, TextColor(theme::MUTED))
 }
 
-fn setup(mut commands: Commands, faces: Res<Faces>, arrows: Res<Arrows>) {
+fn setup(mut commands: Commands, faces: Res<Faces>, arrows: Res<Arrows>, split: Option<Res<crate::scene::Split>>) {
+    let split = split.is_some_and(|split| split.0);
     let absolute = |node: Node| Node { position_type: PositionType::Absolute, ..node };
 
     // Top left: the place, the lap and the clock.
@@ -479,8 +480,15 @@ fn setup(mut commands: Commands, faces: Res<Faces>, arrows: Res<Arrows>) {
                 .with_children(|bar| {
                     let start = theme::hint(bar, &[Key::Word("ENTER")], "START", &arrows);
                     bar.commands().entity(start).insert(StartHint);
-                    theme::hint(bar, &[Key::Arrow(3), Key::Arrow(1)], "DRIVER", &arrows);
-                    theme::hint(bar, &[Key::Arrow(0), Key::Arrow(2)], "KART", &arrows);
+                    // On a split screen the arrows are the second player's (D-086).
+                    if split {
+                        theme::hint(bar, &[Key::Word("A"), Key::Word("D")], "DRIVER", &arrows);
+                        theme::hint(bar, &[Key::Word("W"), Key::Word("S")], "KART", &arrows);
+                        theme::hint(bar, &[Key::Arrow(3), Key::Arrow(1), Key::Arrow(0), Key::Arrow(2)], "P2", &arrows);
+                    } else {
+                        theme::hint(bar, &[Key::Arrow(3), Key::Arrow(1)], "DRIVER", &arrows);
+                        theme::hint(bar, &[Key::Arrow(0), Key::Arrow(2)], "KART", &arrows);
+                    }
                     theme::hint(bar, &[Key::Word("P")], "PAINT", &arrows);
                     theme::hint(bar, &[Key::Word("T")], "EVENT", &arrows);
                     theme::hint(bar, &[Key::Word("R")], "REPLAY", &arrows);
@@ -663,7 +671,7 @@ fn write(
                     });
                     let between = matches!(view.stage, Lights::Waiting | Lights::Ready(_) | Lights::Results(_));
                     if between {
-                        format!("P2   {}   ARROWS: DRIVER / KART", second.pick.to_uppercase())
+                        format!("P2   {}   ARROWS: DRIVER / KART   .: PAINT", second.pick.to_uppercase())
                     } else {
                         format!("P2   {place}   {progress}   {:.0} KM/H{item}", second.speed.abs() * 3.6)
                     }

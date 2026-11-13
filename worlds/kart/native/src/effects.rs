@@ -390,7 +390,15 @@ pub fn update(
     // In a slowed replay, the particles slow with the karts: else a
     // rocket's fire, launched at nearly the kart's speed, would overtake it.
     let seconds = time.delta_secs() * pace.map_or(1.0, |pace| pace.0);
-    let facing = camera.iter().next().map_or(Quat::IDENTITY, |camera| camera.rotation);
+    // Each faces the camera nearest it: on a split screen (D-086), the
+    // player whose kart made it sees it close; the other, from afar.
+    let cameras: Vec<(Vec3, Quat)> = camera.iter().map(|c| (c.translation, c.rotation)).collect();
+    let facing = |at: Vec3| {
+        cameras
+            .iter()
+            .min_by(|a, b| a.0.distance_squared(at).total_cmp(&b.0.distance_squared(at)))
+            .map_or(Quat::IDENTITY, |c| c.1)
+    };
     for (entity, mut particle, mut place, mut shown) in &mut particles {
         if particle.life <= 0.0 {
             continue;
@@ -412,6 +420,6 @@ pub fn update(
         // Born small, then its size; it fades by shrinking at the end.
         let fade = (age * 8.0).min(1.0) * ((1.0 - age) * 3.0).min(1.0);
         place.scale = Vec3::splat(particle.size * (1.0 + particle.growth * age) * fade);
-        place.rotation = facing;
+        place.rotation = facing(place.translation);
     }
 }

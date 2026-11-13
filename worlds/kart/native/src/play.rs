@@ -74,6 +74,7 @@ impl Plugin for PlayPlugin {
                 controls_type: None,
                 choice_type: None,
                 chosen: None,
+                paint: None,
                 mine: None,
                 followed: None,
                 driver: Driver::default(),
@@ -685,6 +686,8 @@ pub struct Second {
     /// picked (indices into the roster).
     choice_type: Option<u32>,
     chosen: Option<(usize, usize)>,
+    /// Their paint: one of those this computer's profile has won.
+    paint: Option<u32>,
     /// Their kart in the world, its model here.
     pub mine: Option<u64>,
     followed: Option<Entity>,
@@ -843,6 +846,18 @@ fn choose(
             keys.just_pressed(KeyCode::ArrowDown) || pad(1, GamepadButton::DPadDown),
             keys.just_pressed(KeyCode::ArrowUp) || pad(1, GamepadButton::DPadUp),
         );
+        // `.` or the second gamepad's West: the next paint this computer has
+        // won (the profile is the first player's, the paints the household's).
+        if keys.just_pressed(KeyCode::Period) || pad(1, GamepadButton::West) {
+            let paints = kept.profile.paints();
+            second.paint = match second.paint.and_then(|p| paints.iter().position(|q| *q == p)) {
+                None => paints.first().copied(),
+                Some(at) => paints.get(at + 1).copied(),
+            };
+            // On the wire: 0 the driver's own colour, N the palette's N-1.
+            let choice = proto::Choice { paint: Some(second.paint.map_or(0, |p| p + 1)), ..default() };
+            let _ = second.outbox.send(intent(0, theirs, their_type, &choice));
+        }
         if driver != 0 || kart != 0 {
             let (now_driver, now_kart) = second.chosen.unwrap_or((0, 0));
             let picked = (turn(now_driver, driver, roster.drivers.len()), turn(now_kart, kart, roster.karts.len()));
