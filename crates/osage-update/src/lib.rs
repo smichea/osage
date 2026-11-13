@@ -49,6 +49,18 @@ impl Release {
     pub fn asset(&self, name: &str) -> Option<&Asset> {
         self.assets.iter().find(|a| a.name == name)
     }
+
+    /// The patch that brings content installed from a package whose digest
+    /// was `installed` up to this release's `package`: an asset named
+    /// `<package stem>-from-<the first 16 hex digits of installed>.zip`,
+    /// holding only the files added or changed since. None if there is
+    /// none for that content (it is then downloaded whole).
+    pub fn patch(&self, package: &str, installed: &str) -> Option<&Asset> {
+        let hex = installed.strip_prefix("sha256:").unwrap_or(installed);
+        let short = hex.get(..16)?;
+        let stem = package.strip_suffix(".zip").unwrap_or(package);
+        self.asset(&format!("{stem}-from-{short}.zip"))
+    }
 }
 
 /// The newest release (by publication) whose tag starts with `prefix`,
@@ -250,6 +262,24 @@ pub fn tidy(dir: &Path) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_patch_is_found_by_the_content_it_starts_from() {
+        let asset = |name: &str| Asset { name: name.into(), digest: "sha256:ff".into(), size: 1, url: String::new() };
+        let release = Release {
+            tag: "kart-v0.10.0".into(),
+            assets: vec![
+                asset("osage-kart-content.zip"),
+                asset("osage-kart-content-from-0123456789abcdef.zip"),
+                asset("osage-kart-content-from-fedcba9876543210.zip"),
+            ],
+        };
+        let installed = "sha256:0123456789abcdef0011223344556677";
+        let found = release.patch("osage-kart-content.zip", installed).map(|a| a.name.as_str());
+        assert_eq!(found, Some("osage-kart-content-from-0123456789abcdef.zip"));
+        assert!(release.patch("osage-kart-content.zip", "sha256:aaaaaaaaaaaaaaaa00").is_none());
+        assert!(release.patch("osage-kart-content.zip", "sha256:0123").is_none(), "too short to tell");
+    }
 
     const RELEASES: &str = r#"[
       {"tag_name": "kart-v0.2.0", "draft": true, "published_at": "2026-12-01T00:00:00Z", "assets": []},

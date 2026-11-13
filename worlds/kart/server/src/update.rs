@@ -9,8 +9,11 @@
 //!   one in `release.txt`, its Windows zip is downloaded, checked against
 //!   the digest GitHub publishes, and unpacked over the folder.
 //! - The content (photographed textures, recorded sounds): when the
-//!   folder has none, or the release's content zip is not the one installed.
-//!   A folder installed by hand takes the published content as its own.
+//!   folder has none, or the release's content zip is not the one installed:
+//!   only the files that changed when the release has a patch from the
+//!   content installed (`osage-kart-content-from-<digest>.zip`), else all
+//!   of it. A folder installed by hand takes the published content as its
+//!   own.
 //! - Offline, or anything failing: it says so, and the game starts as it is.
 //! - `OSAGE_NO_UPDATE=1`, or a file named `no-update` in the folder, turns
 //!   it off.
@@ -91,9 +94,19 @@ fn update(dir: &Path) -> Result<()> {
         match record.get("content") {
             None if has_content => record.set("content", &asset.digest),
             Some(installed) if has_content && installed == asset.digest => {}
-            _ => {
-                println!("  New content (textures and sounds, {} MB): downloading...", asset.size / 1_000_000);
-                install(asset, &aside, dir)?;
+            installed => {
+                // Only what changed, when the release has a patch from the
+                // content installed; else all of it.
+                match installed.filter(|_| has_content).and_then(|from| release.patch(CONTENT, from)) {
+                    Some(patch) => {
+                        println!("  New content ({} MB of changes): downloading...", (patch.size / 1_000_000).max(1));
+                        install(patch, &aside, dir)?;
+                    }
+                    None => {
+                        println!("  New content (textures and sounds, {} MB): downloading...", asset.size / 1_000_000);
+                        install(asset, &aside, dir)?;
+                    }
+                }
                 record.set("content", &asset.digest);
                 println!("  Content updated.");
             }

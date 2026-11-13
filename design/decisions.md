@@ -769,3 +769,12 @@ Date: 2026-11-13 · design/04 M4 (whole-race replays), toward the maintainer's g
 - **Rejected:** keeping it on disk and an editor (later: the tape is a few megabytes, and the photo mode already frames shots); replaying the things on the track (their tape would be the world's).
 - **Consequences:** a few megabytes of memory for a long race (eight karts, six minutes). Only in a game, not on the bench.
 
+## D-083 — Content updates download what changed
+
+Date: 2026-11-13 · two content changes in a day (the fonts of D-078, the concrete and rock of D-080) would each have had every player download 234 MB again.
+
+- **Decision:** a release may carry, beside its whole content zip, patches named `osage-kart-content-from-<the first 16 hex digits of an earlier content zip's digest>.zip`, each holding the files added or changed since that content (the manifest among them). `kart-update` takes the patch for the content it installed when there is one, else the whole zip; either way it records the whole zip's digest. Patches are made at release time from the earlier content zips kept.
+- **Why:** content grows by a few sets at a time; the friends playing should download megabytes, not the whole library.
+- **Rejected:** fetching each file from its source (the manifest's URLs): some sources ask a person to download, others are derived files, and a player's game would depend on a dozen sites; deleting files a patch no longer has (content only grows; a stale file is harmless).
+- **Consequences:** an updater from before this decision still downloads the whole zip once; patches serve from the next update on.
+

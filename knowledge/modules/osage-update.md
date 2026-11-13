@@ -23,7 +23,7 @@ Let people who play from a downloaded zip (Windows, no package manager) get each
 
 A library of small steps — `newest`, `api`, `download`, `unpack`, `copy_over`, `tidy`, `Record`, `digest` — and no policy. Downloads use the system's `curl`, unpacking Windows' `tar` (bsdtar; `bsdtar` or `unzip` elsewhere): Windows 10 has both since 2018, so the crate carries no HTTP, TLS or archive code.
 
-`kart-update` (in `worlds/kart/server`) is the kart's policy: repository `smichea/osage`, prefix `kart-v`, the Windows zip when the release's commit (`GET /commits/{tag}`) differs from the record's, the content zip when the folder has none or the published digest changed (a folder installed by hand adopts the published digest). Offline or failing, it says so and the game starts as it is. `OSAGE_NO_UPDATE=1` or a file `no-update` turns it off.
+`kart-update` (in `worlds/kart/server`) is the kart's policy: repository `smichea/osage`, prefix `kart-v`, the Windows zip when the release's commit (`GET /commits/{tag}`) differs from the record's, the content zip when the folder has none or the published digest changed (a folder installed by hand adopts the published digest) — only a patch of the files that changed when the release has one from the content installed (`Release::patch`: `osage-kart-content-from-<first 16 hex digits of the installed digest>.zip`, D-083), else the whole zip. Offline or failing, it says so and the game starts as it is. `OSAGE_NO_UPDATE=1` or a file `no-update` turns it off.
 
 # Interfaces
 
