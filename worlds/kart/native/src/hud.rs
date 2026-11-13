@@ -41,6 +41,8 @@ pub struct RaceView {
     /// The whole race shown again (D-082): what is followed and the keys;
     /// empty when it is not.
     pub watching: String,
+    /// The second player at this computer, on a split screen (D-086).
+    pub second: Option<SecondLine>,
     /// A battle (D-065): lives, not laps; the clock counts down.
     pub battle: bool,
     /// The photo mode's help, while it shows (D-066).
@@ -115,6 +117,17 @@ pub enum Lights {
     Results(i64),
 }
 
+/// The second player's place, lap, speed and item, for their line.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct SecondLine {
+    pub position: u32,
+    pub lap: u32,
+    pub finish_ms: u64,
+    pub speed: f32,
+    pub held: Option<Item>,
+    pub count: u8,
+}
+
 pub struct Entry {
     pub id: u64,
     pub name: String,
@@ -140,7 +153,8 @@ impl Plugin for HudPlugin {
         }
         app.init_resource::<RaceView>().init_resource::<Dots>().add_systems(Startup, setup).add_systems(
             Update,
-            (draw_map.run_if(resource_exists_and_changed::<Course>), write, board, place_dots).after(Stage::Simulate),
+            (draw_map.run_if(resource_exists_and_changed::<Course>), write, board, place_dots, second_panel)
+                .after(Stage::Simulate),
         );
     }
 }
@@ -163,6 +177,8 @@ enum Label {
     Cup,
     /// Who drives the player's kart and in what.
     Pick,
+    /// The second player's line, on a split screen (D-086).
+    Second,
 }
 
 /// A row of the standings, `0` the leader, and its cells.
@@ -180,6 +196,18 @@ enum Cell {
 /// The item's panel, shown while the kart holds one.
 #[derive(Component)]
 struct ItemPanel;
+
+/// The second player's line (D-086).
+#[derive(Component)]
+struct SecondPanel;
+
+/// Shows the second player's line on a split screen.
+fn second_panel(view: Res<RaceView>, mut panels: Query<&mut Visibility, With<SecondPanel>>) {
+    let wanted = if view.second.is_some() { Visibility::Inherited } else { Visibility::Hidden };
+    for mut visibility in &mut panels {
+        visibility.set_if_neq(wanted);
+    }
+}
 
 /// The start key's hint: only for the host, on the grid.
 #[derive(Component)]
@@ -276,6 +304,30 @@ fn setup(mut commands: Commands, faces: Res<Faces>, arrows: Res<Arrows>) {
                 item.spawn(caption("ITEM", 11.0));
                 item.spawn(text(Label::Held, 20.0));
             });
+        });
+    // Between the two halves of a split screen, a dark rule (D-086).
+    commands.spawn((
+        SecondPanel,
+        absolute(Node {
+            top: percent(50),
+            left: px(0),
+            right: px(0),
+            height: px(4),
+            margin: UiRect::top(px(-2)),
+            ..default()
+        }),
+        BackgroundColor(Color::srgb(0.02, 0.025, 0.035)),
+        Visibility::Hidden,
+    ));
+    // The second player's line, at the top of their half (D-086).
+    commands
+        .spawn((
+            SecondPanel,
+            theme::panel(absolute(Node { top: percent(50), left: px(14), margin: UiRect::top(px(10)), ..default() })),
+            Visibility::Hidden,
+        ))
+        .with_children(|panel| {
+            panel.spawn(text(Label::Second, 16.0));
         });
     // Top right: the standings, a row each kart.
     commands
@@ -591,6 +643,26 @@ fn write(
                 tint = Some(Color::srgb(1.0, 0.85, 0.3));
                 view.photo.clone()
             }
+            Label::Second => match &view.second {
+                Some(second) => {
+                    let place = if second.position > 0 {
+                        format!("{}{}", second.position, ordinal(second.position).to_uppercase())
+                    } else {
+                        "-".to_owned()
+                    };
+                    let progress = if second.finish_ms > 0 {
+                        format!("FINISHED {}", clock(second.finish_ms as i64))
+                    } else {
+                        format!("LAP {}/{}", second.lap.clamp(1, view.laps.max(1)), view.laps.max(1))
+                    };
+                    let item = second.held.map_or(String::new(), |held| {
+                        let count = if second.count > 1 { format!(" x{}", second.count) } else { String::new() };
+                        format!("   {}{count} [RIGHT CTRL]", format!("{held:?}").to_uppercase())
+                    });
+                    format!("P2   {place}   {progress}   {:.0} KM/H{item}", second.speed.abs() * 3.6)
+                }
+                None => String::new(),
+            },
             Label::Prompt => match view.stage {
                 _ if !view.watching.is_empty() => view.watching.clone(),
                 Lights::Ready(true) => {

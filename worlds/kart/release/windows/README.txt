@@ -14,10 +14,20 @@ To play
    "More info", then "Run anyway".
    The race starts with you and the bots; the next race follows.
 
+Two players on one computer
+---------------------------
+Double-click play-two.bat: the screen is split, player 1 above, player 2
+below.
+  Player 1: W A S D to drive, Space or left Shift to drift, F or left Ctrl
+            for the item, and the first gamepad.
+  Player 2: the arrows to drive, right Shift to drift, right Ctrl or / for
+            the item, and the second gamepad.
+Between races, R replays the whole race as television would.
+
 Updates
 -------
-play.bat, host.bat and join.bat first look for a newer version on GitHub
-and install it (checked against the published digest) before the game
+play.bat, play-two.bat, host.bat and join.bat first look for a newer
+version on GitHub and install it (checked against the published digest) before the game
 starts. Offline, the game starts as it is. To turn this off, create an
 empty file named  no-update  in this folder.
 

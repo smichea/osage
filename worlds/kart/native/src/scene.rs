@@ -284,6 +284,22 @@ pub struct Photographed;
 #[derive(Component)]
 pub struct Followed;
 
+/// The kart the second player's camera follows, on a split screen (D-086).
+#[derive(Component)]
+pub struct FollowedSecond;
+
+/// The first player's camera: the one there is but on a split screen.
+pub type FirstCamera = (With<OsageCamera>, Without<SecondCamera>);
+
+/// The second player's camera, drawing the lower half of the picture.
+#[derive(Component)]
+pub struct SecondCamera;
+
+/// Two players at this computer: the picture split in two, one above the
+/// other (D-086).
+#[derive(Resource, Default, Clone, Copy)]
+pub struct Split(pub bool);
+
 /// A piece of the circuit or of its scenery: rebuilt when the circuit changes.
 #[derive(Component)]
 pub struct Part;
@@ -318,6 +334,7 @@ impl Plugin for ScenePlugin {
                     track::flow,
                     choose_view,
                     follow,
+                    split_view,
                     sky_loaded.run_if(resource_exists::<SkyLoading>),
                 )
                     .chain()
@@ -414,11 +431,37 @@ pub fn wobble(t: f32, seed: f32) -> f32 {
         .clamp(-1.0, 1.0)
 }
 
-fn setup(mut commands: Commands) {
-    if osage_content::root().is_some() {
-        commands.insert_resource(Photographed);
+/// On a split screen (D-086), the first player's camera draws the upper
+/// half of the picture and the second's the lower; their lenses keep the
+/// shape of their half.
+fn split_view(
+    split: Option<Res<Split>>,
+    picture: Option<Res<osage_render::resolution::Picture>>,
+    mut cameras: Query<(&mut Camera, Has<SecondCamera>), With<Chase>>,
+) {
+    let (Some(split), Some(picture)) = (split, picture) else { return };
+    if !split.0 {
+        return;
     }
-    commands.spawn((
+    let size = picture.size;
+    let half = UVec2::new(size.x, (size.y / 2).max(1));
+    for (mut camera, is_second) in &mut cameras {
+        let wanted = bevy::camera::Viewport {
+            physical_position: UVec2::new(0, if is_second { size.y - half.y } else { 0 }),
+            physical_size: half,
+            ..default()
+        };
+        if camera.viewport.as_ref().is_none_or(|now| {
+            now.physical_position != wanted.physical_position || now.physical_size != wanted.physical_size
+        }) {
+            camera.viewport = Some(wanted);
+        }
+    }
+}
+
+/// A chase camera, before it has anything to follow.
+fn chase_camera() -> impl Bundle {
+    (
         Camera3d::default(),
         OsageCamera,
         Projection::Perspective(PerspectiveProjection { fov: 62f32.to_radians(), far: 6000.0, ..default() }),
@@ -433,7 +476,23 @@ fn setup(mut commands: Commands) {
             time: 0.0,
             glance: 0.0,
         },
-    ));
+    )
+}
+
+fn setup(mut commands: Commands, split: Option<Res<Split>>) {
+    if osage_content::root().is_some() {
+        commands.insert_resource(Photographed);
+    }
+    commands.spawn(chase_camera());
+    // The second player's (D-086): drawn after the first's into the same
+    // picture, its lower half, without clearing the first's.
+    if split.is_some_and(|split| split.0) {
+        commands.spawn((
+            chase_camera(),
+            SecondCamera,
+            Camera { order: 1, clear_color: ClearColorConfig::None, ..default() },
+        ));
+    }
     // A sun of mid-morning, behind the grid's right shoulder.
     commands.spawn((
         DirectionalLight::default(),
@@ -452,18 +511,44 @@ fn follow(
     glance: Option<Res<Glance>>,
     viewpoint: Option<Res<Viewpoint>>,
     followed: Query<&Pose, With<Followed>>,
-    mut camera: Query<(&mut Transform, &mut Chase, &mut Projection)>,
+    second: Query<&Pose, With<FollowedSecond>>,
+    mut cameras: Query<(&mut Transform, &mut Chase, &mut Projection, Has<SecondCamera>)>,
 ) {
-    if let (Some(viewpoint), Ok((mut camera, mut chase, _))) = (viewpoint, camera.single_mut()) {
-        *camera = Transform::from_translation(viewpoint.from).looking_at(viewpoint.to, Vec3::Y);
-        // When the viewpoint goes, the chase camera eases from here.
-        (chase.place, chase.look, chase.roll) = (viewpoint.from, viewpoint.to, 0.0);
-        return;
+    for (mut camera, mut chase, mut projection, is_second) in &mut cameras {
+        // A viewpoint is the first player's camera's (the show, the photo mode).
+        if let (Some(viewpoint), false) = (viewpoint.as_deref(), is_second) {
+            *camera = Transform::from_translation(viewpoint.from).looking_at(viewpoint.to, Vec3::Y);
+            // When the viewpoint goes, the chase camera eases from here.
+            (chase.place, chase.look, chase.roll) = (viewpoint.from, viewpoint.to, 0.0);
+            continue;
+        }
+        let pose = if is_second { second.iter().next() } else { followed.iter().next() };
+        let Some(pose) = pose else { continue };
+        chase_one(
+            &time,
+            course.as_deref(),
+            view.as_deref(),
+            glance.as_deref(),
+            pose,
+            &mut camera,
+            &mut chase,
+            &mut projection,
+        );
     }
-    let (Some(pose), Ok((mut camera, mut chase, mut projection))) = (followed.iter().next(), camera.single_mut())
-    else {
-        return;
-    };
+}
+
+/// One chase camera after its kart.
+#[allow(clippy::too_many_arguments)]
+fn chase_one(
+    time: &Time,
+    course: Option<&Course>,
+    view: Option<&View>,
+    glance: Option<&Glance>,
+    pose: &Pose,
+    camera: &mut Transform,
+    chase: &mut Chase,
+    projection: &mut Projection,
+) {
     let (kart, seconds) = (&pose.kart, time.delta_secs());
     let forward = Vec3::new(kart.heading.sin(), 0.0, kart.heading.cos());
     // The kart's left: it faces +Z with its left at +X.
@@ -481,7 +566,7 @@ fn follow(
         chase.jolt = (chase.jolt + slowing / 80.0).min(1.0);
     }
     chase.jolt *= (-step * 5.0).exp();
-    let surface = roughness(course.as_deref(), kart.x, kart.z);
+    let surface = roughness(course, kart.x, kart.z);
     let pace = (kart.speed.abs() / MAX_SPEED).clamp(0.0, 1.3);
     let view = view.map_or(View::Chase, |view| *view);
     let wanted_glance = glance.map_or(0.0, |glance| glance.0);
@@ -525,7 +610,7 @@ fn follow(
     let bank = (turning * 0.03 + kart.slide * 0.004).clamp(-0.045, 0.045);
     chase.roll += (bank - chase.roll) * (1.0 - (-seconds * 4.0).exp());
     camera.rotate_local_z(chase.roll);
-    if let Projection::Perspective(lens) = &mut *projection {
+    if let Projection::Perspective(lens) = projection {
         let pace = (kart.speed / MAX_SPEED).clamp(0.0, 1.4);
         let base = match view {
             View::Chase => 56.0,

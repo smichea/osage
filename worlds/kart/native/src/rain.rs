@@ -178,7 +178,7 @@ fn fall(
     mut rain: ResMut<Rain>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
-    camera: Query<&GlobalTransform, With<OsageCamera>>,
+    camera: Query<&GlobalTransform, crate::scene::FirstCamera>,
     mut shown: Query<(&mut Visibility, &MeshMaterial3d<StandardMaterial>), With<Drops>>,
     look: Option<Res<osage_render::Look>>,
 ) {

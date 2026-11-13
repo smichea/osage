@@ -796,3 +796,12 @@ Date: 2026-11-13 · design/04 M6 (time of day), toward the maintainer's "qualit�
 - **Rejected:** shadows from the floodlights (twenty-odd spot shadow maps: later, the nearest few at T3); street lamps' sodium orange (a race circuit is lit white).
 - **Consequences:** the T2 bench on Eagle Ridge at night: 23 ms a frame on the Iris Xe laptop, against 19 by day (the pacing lowers the picture to hold the rate chosen). The content gains the night sky (22 MB).
 
+## D-086 — Two players on one computer: a split screen
+
+Date: 2026-11-13 · design/04 M4 (split screen), toward the maintainer's "tous les extras" of Mario Kart.
+
+- **Decision:** `kart-native --players 2` (and `play-two.bat`) splits the screen, one player above the other. The second player opens a connection of their own to the world: to the world they are another player, with their own kart and their own controls; the first's connection keeps the world's state, which serves both. Each kart is predicted at this computer (D-031, D-076) and followed by its own chase camera; the two cameras draw into the same off-screen picture, the second after the first without clearing it. Keys: player 1 W A S D, Space or left Shift to drift, F or left Ctrl for the item, the first gamepad; player 2 the arrows, right Shift, right Ctrl or /, the second gamepad. Whichever of them is the world's host starts the race. Player 2's place, lap, speed and item are a line at the top of their half. The replay, the flyover and the photo mode keep to player 1's camera; sound is heard from player 1's kart. `--headless` with `--screenshot-after` plays a game without a window, for checks like this one.
+- **Why:** racing a friend on the same sofa is half of what a kart game is for.
+- **Rejected:** a second kart driven through the first's connection (the world gives one kart per player: a second identity is the world's own rule, and it keeps the two players' records, places and points apart).
+- **Consequences:** player 2 drives the roster's first driver and kart (their pick and paint between races are the next step); particles face player 1's camera; two predicted karts and two cameras cost about a second view's rendering.
+

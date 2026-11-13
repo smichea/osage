@@ -391,7 +391,10 @@ struct Heard {
 }
 
 /// The camera listens.
-fn listen(mut commands: Commands, cameras: Query<Entity, (With<OsageCamera>, Without<SpatialListener>)>) {
+/// The first player's camera, not listening yet.
+type Unheard = (With<OsageCamera>, Without<SpatialListener>, Without<crate::scene::SecondCamera>);
+
+fn listen(mut commands: Commands, cameras: Query<Entity, Unheard>) {
     for camera in &cameras {
         commands.entity(camera).insert(SpatialListener::new(0.25));
     }
@@ -429,7 +432,7 @@ fn voice(
 /// is heard in every view and the others come and go around it.
 fn hear(
     view: Option<Res<crate::scene::View>>,
-    camera: Query<&GlobalTransform, With<OsageCamera>>,
+    camera: Query<&GlobalTransform, crate::scene::FirstCamera>,
     followed: Query<&Pose, With<crate::scene::Followed>>,
     karts: Query<(Entity, &Pose, &Heard)>,
     own: Query<Entity, With<crate::scene::Followed>>,

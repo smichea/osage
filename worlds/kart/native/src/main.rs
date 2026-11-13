@@ -87,6 +87,8 @@ fn main() -> Result<()> {
     let mut raining = false;
     // The interface over the bench's race, in states set by hand (D-078).
     let mut ui_preview = false;
+    // Players at this computer: 2 splits the screen (D-086).
+    let mut players = 1u8;
     let mut args = std::env::args().skip(1);
     while let Some(arg) = args.next() {
         let mut value = || args.next().with_context(|| format!("{arg} needs a value"));
@@ -116,6 +118,9 @@ fn main() -> Result<()> {
             }
             "--rain" => raining = true,
             "--ui-preview" => ui_preview = true,
+            "--players" => {
+                players = value()?.parse().ok().filter(|n| (1..=2).contains(n)).context("--players takes 1 or 2")?
+            }
             "--focus" => focus = Some(value()?.parse::<f32>().context("--focus takes metres")?),
             "--fps" => fps = Some(settings::parse_fps(&value()?).map_err(anyhow::Error::msg)?),
             "--frames" => frames = value()?.parse().context("--frames")?,
@@ -142,7 +147,7 @@ fn main() -> Result<()> {
 
     // Crash reports (D-073): a game watches its run, and finds what went
     // wrong in the last one; the bench does not.
-    let last_report = if bench { None } else { report::begin() };
+    let last_report = if bench || headless { None } else { report::begin() };
     // The tier: the command line's, else (a game) chosen for the machine
     // (D-075), else T2 (the bench's default).
     let chosen = tier.is_none() && !bench;
@@ -155,8 +160,10 @@ fn main() -> Result<()> {
             tier
         }
     };
-    if headless && !bench {
-        bail!("--headless goes with --bench: playing needs a window");
+    // Playing without a window is for checking a game end to end: it takes
+    // pictures (`--screenshot-after`), drawn off screen.
+    if headless && !bench && screenshot_after.is_empty() {
+        bail!("--headless goes with --bench, or with --screenshot-after when playing");
     }
     let mut window = Window { title: format!("osage kart · {tier}"), ..Default::default() };
     let (width, height) = resolution.unwrap_or(tier.bench_resolution());
@@ -269,15 +276,23 @@ fn main() -> Result<()> {
             Tier::T3 => v0::Tier::T3High,
             Tier::T4 => v0::Tier::T4Ultra,
         };
-        app.add_plugins(play::PlayPlugin { url, tier, autodrive, screenshot_after })
+        if headless {
+            // Off screen: the picture at a fixed size, and the pictures taken of it.
+            app.insert_resource(osage_render::resolution::Output(Some(bevy::math::UVec2::new(width, height))))
+                .insert_resource(play::OffScreen);
+        }
+        app.add_plugins(play::PlayPlugin { url, tier, autodrive, screenshot_after, players })
             .add_plugins(settings::SettingsPlugin { fps })
             .insert_resource(report::Pending(last_report))
             .add_plugins((report::ReportPlugin, graphics::GraphicsPlugin));
         if chosen {
             app.insert_resource(graphics::Chosen);
         }
+        // Music and voice need the sound a window's game has.
         #[cfg(feature = "sound")]
-        app.add_plugins((music::MusicPlugin, voice::VoicePlugin));
+        if !headless {
+            app.add_plugins((music::MusicPlugin, voice::VoicePlugin));
+        }
     }
     app.run();
     report::finish();

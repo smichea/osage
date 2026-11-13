@@ -97,7 +97,7 @@ fn photograph(
     mut photo: ResMut<Photo>,
     mut view: ResMut<crate::hud::RaceView>,
     mut karts: Query<(Entity, &mut Pose)>,
-    mut camera: Query<(Entity, &Transform, &mut Projection), With<OsageCamera>>,
+    mut camera: Query<(Entity, &Transform, &mut Projection), crate::scene::FirstCamera>,
     mut roots: Query<&mut Visibility, (With<Node>, Without<ChildOf>)>,
 ) {
     let toggled = !menu.0

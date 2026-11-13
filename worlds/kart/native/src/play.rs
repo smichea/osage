@@ -45,6 +45,8 @@ pub struct PlayPlugin {
     pub autodrive: bool,
     /// Saves a screenshot at each of these many seconds after the start.
     pub screenshot_after: Vec<f32>,
+    /// Players at this computer: 2 splits the screen (D-086).
+    pub players: u8,
 }
 
 impl Plugin for PlayPlugin {
@@ -56,6 +58,26 @@ impl Plugin for PlayPlugin {
             .name("osage-net".to_owned())
             .spawn(move || network(url, tier, tx, out_rx))
             .expect("network thread");
+        // A second player: a connection of their own (D-086).
+        if self.players >= 2 {
+            let (tx, rx) = crossbeam_channel::unbounded();
+            let (out_tx, out_rx) = tokio::sync::mpsc::unbounded_channel();
+            let (url, tier) = (self.url.clone(), self.tier);
+            thread::Builder::new()
+                .name("osage-net-2".to_owned())
+                .spawn(move || network(url, tier, tx, out_rx))
+                .expect("network thread");
+            app.insert_resource(Second {
+                inbox: rx,
+                outbox: out_tx,
+                me: String::new(),
+                controls_type: None,
+                mine: None,
+                followed: None,
+                driver: Driver::default(),
+            })
+            .insert_resource(crate::scene::Split(true));
+        }
 
         app.insert_resource(Time::<Fixed>::from_hz(60.0))
             .insert_resource(NetInbox(rx))
@@ -143,13 +165,14 @@ impl Replica {
     }
 
     /// Every kart on the track, and which of them is this player's.
-    fn field(&self, circuit: &Circuit) -> (Vec<Spot>, Option<usize>) {
+    /// Where every kart is on the circuit, and which of them is `mine`.
+    fn field_of(&self, circuit: &Circuit, mine: u64) -> (Vec<Spot>, Option<usize>) {
         let Some(world) = &self.world else { return (Vec::new(), None) };
         let mut spots = Vec::new();
         let mut me = None;
         for &id in self.karts.keys() {
             let Some(state) = world.get::<proto::KartState>(id, types::STATE) else { continue };
-            if Some(id) == self.mine {
+            if id == mine {
                 me = Some(spots.len());
             }
             spots.push(circuit.track.locate(state.x, state.z));
@@ -274,8 +297,21 @@ fn receive(
     inbox: Res<NetInbox>,
     mut replica: ResMut<Replica>,
     mut driver: ResMut<Driver>,
+    mut second: Option<ResMut<Second>>,
     poses: Query<&Pose>,
 ) {
+    // The second player's connection (D-086): who they are; the world's
+    // state comes through the first's.
+    if let Some(second) = second.as_deref_mut() {
+        for net in second.inbox.try_iter() {
+            if let Net::Welcome(welcome, _) = net {
+                let world = World::new(&welcome);
+                second.me = welcome.identity.as_ref().map(|i| i.per_world_id.clone()).unwrap_or_default();
+                second.controls_type = world.types().id(types::CONTROLS);
+                second.mine = None;
+            }
+        }
+    }
     for net in inbox.0.try_iter() {
         let message = match net {
             Net::Welcome(welcome, transport) => {
@@ -308,6 +344,30 @@ fn receive(
         }
         let Replica { world: Some(world), me, circuit, karts, mine, .. } = &mut *replica else { continue };
         for event in world.apply(&message) {
+            // The second player's kart, kept as the first's is.
+            if let Some(second) = second.as_deref_mut() {
+                match &event {
+                    WorldEvent::Left(entity) if second.mine == Some(*entity) => second.mine = None,
+                    WorldEvent::Changed { entity, type_name }
+                        if second.mine == Some(*entity) && *type_name == types::STATE =>
+                    {
+                        if let (Some(state), Some(circuit)) =
+                            (world.get::<proto::KartState>(*entity, types::STATE), &circuit)
+                        {
+                            let racer = world.get::<proto::Racer>(*entity, types::RACER);
+                            second.driver.predictor.reconcile(
+                                built(&state, racer.as_ref()),
+                                state.applied,
+                                &circuit.track,
+                            );
+                        }
+                    }
+                    WorldEvent::Changed { type_name, .. } if *type_name == types::TRACK => {
+                        second.driver.predictor = Predictor::default();
+                    }
+                    _ => {}
+                }
+            }
             match event {
                 WorldEvent::Entered(entity) => {
                     if let Some(track) = world.get::<proto::Track>(entity, types::TRACK) {
@@ -391,6 +451,26 @@ fn receive(
             }
         }
     }
+    // The second player's kart, once both the world and who they are are known.
+    if let (Some(second), Some(world)) = (second.as_deref_mut(), replica.world.as_ref())
+        && second.mine.is_none()
+        && !second.me.is_empty()
+    {
+        let theirs = world.entities().find(|&entity| {
+            world.get::<proto::KartState>(entity, types::STATE).is_some()
+                && world
+                    .get::<components::Controller>(entity, core::CONTROLLER)
+                    .is_some_and(|c| c.per_world_id == second.me)
+        });
+        if let (Some(entity), Some(circuit)) = (theirs, &replica.circuit)
+            && let Some(state) = world.get::<proto::KartState>(entity, types::STATE)
+        {
+            second.mine = Some(entity);
+            second.driver.predictor = Predictor::default();
+            let racer = world.get::<proto::Racer>(entity, types::RACER);
+            second.driver.predictor.reconcile(built(&state, racer.as_ref()), state.applied, &circuit.track);
+        }
+    }
     // The road is as wet as the race says (D-068): the prediction steps on it.
     let wet = if replica.race().is_some_and(|race| race.rain) { 1.0 } else { 0.0 };
     if let Some(circuit) = &mut replica.circuit
@@ -400,37 +480,61 @@ fn receive(
     }
 }
 
-/// One physics step of this player's kart: read the controls, predict.
-#[allow(clippy::too_many_arguments)]
-fn drive(
-    time: Res<Time>,
-    keys: Res<ButtonInput<KeyCode>>,
-    gamepads: Query<&Gamepad>,
-    replica: Res<Replica>,
-    menu: Res<Menu>,
-    photo: Res<crate::photo::Photo>,
-    mut driver: ResMut<Driver>,
-    mut paddock: ResMut<PaddockView>,
-) {
-    let (Some(mine), Some(circuit)) = (replica.mine, &replica.circuit) else { return };
-    // While the settings are open, or a picture is taken, the keys are theirs.
-    let menu = &Menu(menu.0 || photo.is_on());
-    let keys = if menu.0 { &ButtonInput::default() } else { &*keys };
-    if replica.finished(mine) {
-        return;
-    }
-    let key = |codes: &[KeyCode]| if keys.any_pressed(codes.iter().copied()) { 1.0 } else { 0.0 };
-    let mut throttle = key(&[KeyCode::ArrowUp, KeyCode::KeyW]) - key(&[KeyCode::ArrowDown, KeyCode::KeyS]);
-    let wanted = key(&[KeyCode::ArrowRight, KeyCode::KeyD]) - key(&[KeyCode::ArrowLeft, KeyCode::KeyA]);
-    let mut drift = keys.any_pressed([KeyCode::Space, KeyCode::ShiftLeft, KeyCode::ShiftRight]);
-    let mut using = keys.any_pressed([KeyCode::KeyF, KeyCode::ControlLeft, KeyCode::ControlRight]);
-    let swing = STEER_RATE * time.delta_secs();
-    driver.steer += (wanted - driver.steer).clamp(-swing, swing);
+/// Which player at this computer (D-086): the first, or the second of a
+/// split screen.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+enum Seat {
+    First,
+    Second,
+}
 
-    if let Some(pad) = gamepads.iter().next().filter(|_| !menu.0) {
+/// A player's controls from the keyboard and their gamepad. Alone, the
+/// player has every key; on a split screen the first has W A S D, Space or
+/// left Shift to drift, F or left Ctrl for the item, and the first gamepad;
+/// the second the arrows, right Shift to drift, right Ctrl or / for the item,
+/// and the second gamepad.
+#[allow(clippy::type_complexity)]
+fn controls_for(
+    seat: Seat,
+    split: bool,
+    keys: &ButtonInput<KeyCode>,
+    pad: Option<&Gamepad>,
+    steer: &mut f32,
+    seconds: f32,
+) -> (Controls, bool) {
+    use KeyCode as K;
+    let (up, down, left, right, drifts, items): (&[K], &[K], &[K], &[K], &[K], &[K]) = match (split, seat) {
+        (false, _) => (
+            &[K::ArrowUp, K::KeyW],
+            &[K::ArrowDown, K::KeyS],
+            &[K::ArrowLeft, K::KeyA],
+            &[K::ArrowRight, K::KeyD],
+            &[K::Space, K::ShiftLeft, K::ShiftRight],
+            &[K::KeyF, K::ControlLeft, K::ControlRight],
+        ),
+        (true, Seat::First) => {
+            (&[K::KeyW], &[K::KeyS], &[K::KeyA], &[K::KeyD], &[K::Space, K::ShiftLeft], &[K::KeyF, K::ControlLeft])
+        }
+        (true, Seat::Second) => (
+            &[K::ArrowUp],
+            &[K::ArrowDown],
+            &[K::ArrowLeft],
+            &[K::ArrowRight],
+            &[K::ShiftRight],
+            &[K::ControlRight, K::Slash],
+        ),
+    };
+    let key = |codes: &[K]| if keys.any_pressed(codes.iter().copied()) { 1.0 } else { 0.0 };
+    let mut throttle = key(up) - key(down);
+    let wanted = key(right) - key(left);
+    let mut drift = key(drifts) > 0.0;
+    let mut using = key(items) > 0.0;
+    let swing = STEER_RATE * seconds;
+    *steer += (wanted - *steer).clamp(-swing, swing);
+    if let Some(pad) = pad {
         let stick = pad.get(GamepadAxis::LeftStickX).unwrap_or(0.0);
         if stick.abs() > 0.15 {
-            driver.steer = stick.clamp(-1.0, 1.0);
+            *steer = stick.clamp(-1.0, 1.0);
         }
         let value = |button| pad.get(button).unwrap_or(0.0);
         let triggers = value(GamepadButton::RightTrigger2) - value(GamepadButton::LeftTrigger2);
@@ -442,14 +546,73 @@ fn drive(
         drift |= pad.any_pressed([GamepadButton::RightTrigger, GamepadButton::LeftTrigger, GamepadButton::West]);
         using |= pad.pressed(GamepadButton::North);
     }
-    let mut controls = Controls { throttle, steer: driver.steer, drift };
-    if let (true, Some(kart)) = (driver.autodrive, driver.predictor.kart) {
+    (Controls { throttle, steer: *steer, drift }, using)
+}
+
+/// One physics step of each player's kart at this computer: read the
+/// controls, predict.
+#[allow(clippy::too_many_arguments)]
+fn drive(
+    time: Res<Time>,
+    keys: Res<ButtonInput<KeyCode>>,
+    gamepads: Query<&Gamepad>,
+    replica: Res<Replica>,
+    menu: Res<Menu>,
+    photo: Res<crate::photo::Photo>,
+    mut driver: ResMut<Driver>,
+    second: Option<ResMut<Second>>,
+    mut paddock: ResMut<PaddockView>,
+) {
+    let Some(circuit) = &replica.circuit else { return };
+    // While the settings are open, or a picture is taken, the keys are theirs.
+    let menu = menu.0 || photo.is_on();
+    let none = ButtonInput::default();
+    let keys = if menu { &none } else { &*keys };
+    let split = second.is_some();
+    let seconds = time.delta_secs();
+    if let Some(mine) = replica.mine {
+        let autodrive = driver.autodrive;
+        let mut steer = driver.steer;
+        let pad = gamepads.iter().next();
+        let (controls, using) = controls_for(Seat::First, split, keys, pad, &mut steer, seconds);
+        driver.steer = steer;
+        step_seat(&mut driver, mine, autodrive, controls, using, &replica, circuit, &mut paddock);
+    }
+    if let Some(mut second) = second
+        && let Some(mine) = second.mine
+    {
+        let autodrive = driver.autodrive;
+        let mut steer = second.driver.steer;
+        // The second gamepad is the second player's.
+        let pad = gamepads.iter().nth(1);
+        let (controls, using) = controls_for(Seat::Second, split, keys, pad, &mut steer, seconds);
+        second.driver.steer = steer;
+        step_seat(&mut second.driver, mine, autodrive, controls, using, &replica, circuit, &mut paddock);
+    }
+}
+
+/// One step of the kart `mine`, driven by `driver` from `controls`.
+#[allow(clippy::too_many_arguments)]
+fn step_seat(
+    driver: &mut Driver,
+    mine: u64,
+    autodrive: bool,
+    mut controls: Controls,
+    mut using: bool,
+    replica: &Replica,
+    circuit: &Circuit,
+    paddock: &mut PaddockView,
+) {
+    if replica.finished(mine) {
+        return;
+    }
+    if let (true, Some(kart)) = (autodrive, driver.predictor.kart) {
         controls = autopilot(&kart, &proto::Autopilot { pace: 0.9, line: 0.0, drift: true, use_items: false }, circuit);
         // And uses what it picks up as the world's drivers do.
         let racer = replica.racer(mine);
         let held = racer.as_ref().and_then(|racer| item(racer.held()));
         let trailing = racer.as_ref().is_some_and(|racer| racer.trailing);
-        let (spots, me) = replica.field(circuit);
+        let (spots, me) = replica.field_of(circuit, mine);
         let standings = replica.standings(&spots);
         using = held.zip(me).is_some_and(|(held, me)| {
             let wanted = wants(held, me, &spots, &standings, &kart, &circuit.track);
@@ -501,6 +664,23 @@ fn drive(
         }
         _ => driver.trailing = false,
     }
+}
+
+/// The second player of a split screen (D-086): a connection of their own
+/// to the world — they are a player of it, with their own kart — whose
+/// messages are not needed for the world's state, which the first's
+/// connection keeps; their kart predicted as the first's is.
+#[derive(Resource)]
+pub struct Second {
+    inbox: Receiver<Net>,
+    outbox: UnboundedSender<client_message::Message>,
+    /// Who they are in the world, and the type of the controls they send.
+    me: String,
+    controls_type: Option<u32>,
+    /// Their kart in the world, its model here.
+    pub mine: Option<u64>,
+    followed: Option<Entity>,
+    driver: Driver,
 }
 
 /// The player's profile (D-064, [`osage_kart_profile`]), kept in
@@ -749,6 +929,7 @@ fn pick(roster: Option<proto::Roster>, racer: Option<&proto::Racer>, chosen: Opt
 }
 
 /// The frame's steps to the world, in one message.
+#[allow(clippy::too_many_arguments)]
 fn send(
     replica: Res<Replica>,
     outbox: Res<NetOutbox>,
@@ -757,7 +938,33 @@ fn send(
     menu: Res<Menu>,
     mut wanted: ResMut<CallWanted>,
     mut driver: ResMut<Driver>,
+    second: Option<ResMut<Second>>,
 ) {
+    // The second player's steps, through their own connection (D-086);
+    // the second player may be the host, whom the world lets start the race.
+    if let Some(mut second) = second {
+        let fresh = std::mem::take(&mut second.driver.fresh);
+        if let (Some(mine), Some(controls_type)) = (second.mine, second.controls_type) {
+            let race = replica.race();
+            let hosting = race.as_ref().is_some_and(|race| race.phase() == Phase::Ready && race.host == mine);
+            let pressed =
+                keys.just_pressed(KeyCode::Enter) || gamepads.iter().any(|pad| pad.just_pressed(GamepadButton::North));
+            if hosting && (pressed || driver.autodrive) && !menu.0 && second.driver.calls_left == 0 {
+                (second.driver.call, second.driver.calls_left) = (proto::RaceCall::Start, CALL_SENDS);
+            }
+            let mut steps = second.driver.predictor.to_send(fresh);
+            if second.driver.calls_left > 0 && fresh > 0 {
+                second.driver.calls_left -= 1;
+                if let Some(last) = steps.last_mut() {
+                    last.call = second.driver.call.into();
+                }
+            }
+            if let (true, Some(last)) = (fresh > 0, steps.last()) {
+                let message = intent(last.sequence, mine, controls_type, &proto::Controls { steps: steps.clone() });
+                let _ = second.outbox.send(message);
+            }
+        }
+    }
     let fresh = std::mem::take(&mut driver.fresh);
     let (Some(mine), Some(controls_type)) = (replica.mine, replica.controls_type) else { return };
     // On the grid, the host starts the race: Enter, or a gamepad's North.
@@ -791,10 +998,14 @@ fn poses(
     fixed: Res<Time<Fixed>>,
     replica: Res<Replica>,
     mut driver: ResMut<Driver>,
+    mut second: Option<ResMut<Second>>,
     mut karts: Query<(&Remote, &mut Pose)>,
 ) {
     let Some(world) = &replica.world else { return };
     driver.predictor.fade(time.delta_secs());
+    if let Some(second) = second.as_deref_mut() {
+        second.driver.predictor.fade(time.delta_secs());
+    }
     let glide = 1.0 - (-time.delta_secs() * 14.0).exp();
     // The others are drawn where they are at the moment the player's kart
     // is (D-076): the world's state stepped on, with the controls of its
@@ -804,9 +1015,14 @@ fn poses(
     for (remote, mut pose) in &mut karts {
         let Some(state) = world.get::<proto::KartState>(remote.0, types::STATE) else { continue };
         let server = kart_of(&state);
-        let predicted = (replica.mine == Some(remote.0) && !replica.finished(remote.0))
-            .then(|| driver.predictor.shown(fixed.overstep_fraction()))
-            .flatten();
+        let theirs = second.as_deref().filter(|second| second.mine == Some(remote.0));
+        let predicted = match theirs {
+            // The second player's kart, from their prediction (D-086).
+            Some(second) if !replica.finished(remote.0) => second.driver.predictor.shown(fixed.overstep_fraction()),
+            _ => (replica.mine == Some(remote.0) && !replica.finished(remote.0))
+                .then(|| driver.predictor.shown(fixed.overstep_fraction()))
+                .flatten(),
+        };
         let racer = replica.racer(remote.0);
         let there = match (&replica.circuit, racer.as_ref().is_some_and(|r| r.ghost)) {
             (Some(circuit), false) => {
@@ -830,8 +1046,21 @@ fn poses(
     }
 }
 
-/// The camera follows this player's kart, or the leader's when watching.
-fn follow_someone(mut commands: Commands, mut replica: ResMut<Replica>) {
+/// The camera follows this player's kart, or the leader's when watching;
+/// the second player's camera theirs (D-086).
+fn follow_someone(mut commands: Commands, mut replica: ResMut<Replica>, second: Option<ResMut<Second>>) {
+    if let Some(mut second) = second {
+        let wanted = second.mine.and_then(|kart| replica.karts.get(&kart).copied());
+        if wanted != second.followed {
+            if let Some(old) = second.followed.filter(|old| replica.karts.values().any(|k| k == old)) {
+                commands.entity(old).remove::<crate::scene::FollowedSecond>();
+            }
+            if let Some(new) = wanted {
+                commands.entity(new).insert(crate::scene::FollowedSecond);
+            }
+            second.followed = wanted;
+        }
+    }
     let leader = replica.race().and_then(|race| race.order.first().copied());
     let wanted = replica.mine.or(leader).and_then(|kart| replica.karts.get(&kart).copied());
     if wanted != replica.followed {
@@ -847,14 +1076,31 @@ fn follow_someone(mut commands: Commands, mut replica: ResMut<Replica>) {
 
 /// F12, or the delay asked on the command line, saves what the window shows
 /// to `kart-native-<time>.png` in the current directory.
-fn screenshots(mut commands: Commands, time: Res<Time>, keys: Res<ButtonInput<KeyCode>>, mut shots: ResMut<Shots>) {
+/// Playing without a window (`--headless` with `--screenshot-after`): the
+/// pictures are taken of the off-screen picture, the scene without the
+/// interface.
+#[derive(Resource)]
+pub struct OffScreen;
+
+fn screenshots(
+    mut commands: Commands,
+    time: Res<Time>,
+    keys: Res<ButtonInput<KeyCode>>,
+    mut shots: ResMut<Shots>,
+    off_screen: Option<Res<OffScreen>>,
+    picture: Option<Res<osage_render::resolution::Picture>>,
+) {
     let elapsed = time.elapsed_secs();
     let before = shots.after.len();
     shots.after.retain(|after| elapsed < *after);
     let due = shots.after.len() < before;
     if due || keys.just_pressed(KeyCode::F12) {
         let name = format!("kart-native-{}.png", now_us() / 1_000);
-        commands.spawn(Screenshot::primary_window()).observe(save_to_disk(name));
+        let shot = match (off_screen, picture) {
+            (Some(_), Some(picture)) => Screenshot::image(picture.image.clone()),
+            _ => Screenshot::primary_window(),
+        };
+        commands.spawn(shot).observe(save_to_disk(name));
     }
 }
 
@@ -897,6 +1143,7 @@ fn summarise(
     karts: Query<(&Remote, &Pose)>,
     mut view: ResMut<RaceView>,
     mut paddock: ResMut<PaddockView>,
+    second: Option<Res<Second>>,
 ) {
     if let Some(now) = replica.paddock().filter(|now| *now != paddock.paddock) {
         paddock.paddock = now;
@@ -984,6 +1231,18 @@ fn summarise(
         })
         .collect();
     view.me = replica.mine.and_then(|mine| view.karts.iter().position(|kart| kart.id == mine));
+    // The second player's line (D-086).
+    view.second = second.as_deref().map(|second| {
+        let theirs = second.mine.and_then(|mine| replica.racer(mine));
+        crate::hud::SecondLine {
+            position: theirs.as_ref().map_or(0, |racer| racer.position),
+            lap: theirs.as_ref().map_or(0, |racer| racer.lap),
+            finish_ms: theirs.as_ref().map_or(0, |racer| racer.finish_ms),
+            speed: second.driver.predictor.kart.map_or(0.0, |kart| kart.speed),
+            held: theirs.as_ref().and_then(|racer| item(racer.held())),
+            count: theirs.as_ref().map_or(0, |racer| racer.held_count.min(9) as u8),
+        }
+    });
     let host = race_host.and_then(|host| view.karts.iter().find(|kart| kart.id == host)).map(|kart| kart.name.clone());
     view.host = host.unwrap_or_default();
     view.alone = view.me.is_some() && view.karts.iter().filter(|kart| !kart.bot).count() == 1;
@@ -1011,7 +1270,24 @@ fn summarise(
 
 #[cfg(test)]
 mod tests {
-    use super::host_of;
+    use super::{ButtonInput, KeyCode, Seat, controls_for, host_of};
+
+    #[test]
+    fn on_a_split_screen_each_player_has_their_own_keys() {
+        let mut keys = ButtonInput::<KeyCode>::default();
+        keys.press(KeyCode::KeyW);
+        keys.press(KeyCode::ArrowLeft);
+        keys.press(KeyCode::ControlRight);
+        let (mut first, mut second) = (0.0, 0.0);
+        let (one, one_item) = controls_for(Seat::First, true, &keys, None, &mut first, 1.0);
+        let (two, two_item) = controls_for(Seat::Second, true, &keys, None, &mut second, 1.0);
+        assert_eq!((one.throttle, one.steer, one_item), (1.0, 0.0, false), "W is the first's");
+        assert_eq!((two.throttle, two.steer, two_item), (0.0, -1.0, true), "the arrows and right Ctrl the second's");
+        // Alone, the player has every key.
+        let mut alone = 0.0;
+        let (all, item) = controls_for(Seat::First, false, &keys, None, &mut alone, 1.0);
+        assert_eq!((all.throttle, all.steer, item), (1.0, -1.0, true));
+    }
 
     #[test]
     fn the_worlds_machine_is_read_from_its_address() {
