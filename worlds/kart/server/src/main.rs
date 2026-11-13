@@ -46,6 +46,13 @@ fn main() -> anyhow::Result<()> {
                 Some("rain") => osage_world_kart::Weather::Rain,
                 _ => anyhow::bail!("--weather takes track, dry or rain"),
             };
+        } else if arg == "--time" {
+            world.time = match args.next().as_deref() {
+                Some("track") => osage_world_kart::TimeOfDay::Track,
+                Some("day") => osage_world_kart::TimeOfDay::Day,
+                Some("night") => osage_world_kart::TimeOfDay::Night,
+                _ => anyhow::bail!("--time takes track, day or night"),
+            };
         } else if arg == "--ghosts" {
             world.ghosts = Some(args.next().context("--ghosts needs a folder")?.into());
         } else if arg == "--track" {

@@ -787,3 +787,12 @@ Date: 2026-11-13 · the browser client drew neither the crates and things the wo
 - **And the items:** the browser sends the item button with each step (F or Ctrl, a gamepad's North button, an ITEM button on a touch screen) and shows the item held; a player in a browser races with items as the native client's do.
 - **Consequences:** the browser draws things at the world's time, not as far ahead as its prediction.
 
+## D-085 — Races at night, under floodlights
+
+Date: 2026-11-13 · design/04 M6 (time of day), toward the maintainer's "qualité GTA V".
+
+- **Decision:** a track may say how often it is raced at night (`night 0.25` in its file); the world rolls it for each race as it rolls the rain, with a roll of its own, and says so in `Race.night` (`--time track|day|night` on the server forces it). Only the look changes. The native client then shows Poly Haven's `kloppenheim_02_puresky` (CC0), its sky brightened to 0.6 cd/m² overhead so that it reads deep blue with its stars and its moon a faint moonlight, exposed 7.5 stops over a sunny day for floodlights; a mast every 40 m round the circuit on alternate sides, 13 m tall beyond the barrier, its spot light (2.4·10⁶ lm, without shadows) aimed at the road 14 m ahead — about 500 lux where it lands, a club circuit's night lighting — none in a tunnel (its own lamps) nor on a bridge; a lamp under each kart's nose and a red glow at its back. The browser darkens its sky and lights. The built-in tracks are raced at night 10 to 30 % of the time.
+- **Why:** night under lights is half of what a racing game shows of its light — pools of white on the asphalt, karts' lamps in the dark, the sky's stars — and every circuit gets a second face.
+- **Rejected:** shadows from the floodlights (twenty-odd spot shadow maps: later, the nearest few at T3); street lamps' sodium orange (a race circuit is lit white).
+- **Consequences:** the T2 bench on Eagle Ridge at night: 23 ms a frame on the Iris Xe laptop, against 19 by day (the pacing lowers the picture to hold the rate chosen). The content gains the night sky (22 MB).
+

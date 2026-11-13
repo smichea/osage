@@ -67,6 +67,9 @@ pub enum Sky {
     /// Grey cloud from end to end, no sun: the sky of a race in the rain
     /// (D-069).
     Overcast,
+    /// A clear night, stars and a little moon: the sky of a race under
+    /// floodlights (D-085).
+    Night,
 }
 
 impl Sky {
@@ -80,13 +83,23 @@ impl Sky {
             Sky::Evening => 2.0,
             // No sun: the light of a grey day, about a twelfth of a sunny one.
             Sky::Overcast => 3.4,
+            // Exposed for the floodlights: a few hundred lux on the road,
+            // as a camera at a lit circuit at night.
+            Sky::Night => NIGHT_EXPOSURE,
         }
     }
 
     /// How bright the sky is overhead, cd/m², for a sky with no sun to
     /// scale it by: a heavy overcast, rain falling from it.
     fn overhead(self) -> Option<f32> {
-        (self == Sky::Overcast).then_some(2_200.0)
+        match self {
+            Sky::Overcast => Some(2_200.0),
+            // A night sky is far darker than any camera at a lit circuit
+            // shows it: it is brightened to read as deep blue with its
+            // stars, and its moon to a moonlight that only grazes the land.
+            Sky::Night => Some(NIGHT_SKY),
+            _ => None,
+        }
     }
 
     fn panorama(self) -> (&'static str, f32) {
@@ -96,9 +109,20 @@ impl Sky {
             // catches the warm light, shadows stretch ahead.
             Sky::Evening => ("table_mountain_2_puresky", 2.73),
             Sky::Overcast => ("kloofendal_overcast_puresky", 0.0),
+            Sky::Night => ("kloppenheim_02_puresky", 0.0),
         }
     }
 }
+
+/// The exposure of a night race, stops over a sunny day's (D-085).
+pub const NIGHT_EXPOSURE: f32 = 7.5;
+/// How bright the night sky is shown overhead, cd/m².
+const NIGHT_SKY: f32 = 0.6;
+
+/// The race is run at night (D-085): floodlights along the track, lights on
+/// the karts, the night sky.
+#[derive(Resource, Default, Clone, Copy, PartialEq, Eq)]
+pub struct Night(pub bool);
 
 impl std::str::FromStr for Sky {
     type Err = String;
@@ -107,7 +131,8 @@ impl std::str::FromStr for Sky {
             "noon" => Ok(Sky::Noon),
             "evening" => Ok(Sky::Evening),
             "overcast" => Ok(Sky::Overcast),
-            other => Err(format!("unknown sky {other}: noon, evening or overcast")),
+            "night" => Ok(Sky::Night),
+            other => Err(format!("unknown sky {other}: noon, evening, overcast or night")),
         }
     }
 }
@@ -156,13 +181,21 @@ fn follow_the_sky(
     mut commands: Commands,
     course: Res<Course>,
     rain: Res<crate::rain::Rain>,
+    night: Res<Night>,
     mut shown: ResMut<SkyShown>,
 ) {
-    if !course.is_changed() && !rain.is_changed() {
+    if !course.is_changed() && !rain.is_changed() && !night.is_changed() {
         return;
     }
-    // In the rain, an overcast sky (D-069); else the track's.
-    let wanted = if rain.falling { Ok(Sky::Overcast) } else { course.0.about.sky.parse::<Sky>() };
+    // At night, the night sky (D-085); in the rain, an overcast one
+    // (D-069); else the track's.
+    let wanted = if night.0 {
+        Ok(Sky::Night)
+    } else if rain.falling {
+        Ok(Sky::Overcast)
+    } else {
+        course.0.about.sky.parse::<Sky>()
+    };
     let Ok(wanted) = wanted else { return };
     if !shown.follows || wanted == shown.sky {
         return;
@@ -262,6 +295,8 @@ impl Plugin for ScenePlugin {
         app.configure_sets(Update, (Stage::Simulate, Stage::Draw).chain())
             .init_resource::<View>()
             .init_resource::<Glance>()
+            .init_resource::<Night>()
+            .add_plugins(crate::lights::LightsPlugin)
             .init_resource::<marks::Marks>()
             .add_plugins(crate::rain::RainPlugin)
             .add_systems(Startup, (setup, karts::setup, effects::setup, scenery::load_roadside))

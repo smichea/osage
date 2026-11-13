@@ -5,6 +5,7 @@ id yard
 name The Yard
 about A battle arena: a wide stadium bowl of asphalt round a grassy island, crates all the way round, nowhere to hide.
 sky evening
+night 0.3
 scenery meadow
 half-width 12
 verge 6

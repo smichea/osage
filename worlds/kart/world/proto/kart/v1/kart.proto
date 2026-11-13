@@ -340,6 +340,9 @@ message Race {
   // brakes less (osage-kart-physics' Track.wet = 1). A client predicting
   // its kart steps it on a wet road.
   bool rain = 15;
+  // Added with D-085. The race is run at night, under floodlights along
+  // the track: only how it looks; the driving is the same.
+  bool night = 16;
 }
 
 message Cup {

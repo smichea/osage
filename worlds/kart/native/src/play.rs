@@ -893,6 +893,7 @@ fn summarise(
     chosen_event: Res<ChosenEvent>,
     mut kept: ResMut<Kept>,
     mut rain: ResMut<crate::rain::Rain>,
+    mut night: ResMut<crate::scene::Night>,
     karts: Query<(&Remote, &Pose)>,
     mut view: ResMut<RaceView>,
     mut paddock: ResMut<PaddockView>,
@@ -937,6 +938,11 @@ fn summarise(
     let raining = race.as_ref().is_some_and(|race| race.rain);
     if rain.falling != raining {
         rain.falling = raining;
+    }
+    // And the time of day (D-085).
+    let dark = race.as_ref().is_some_and(|race| race.night);
+    if night.0 != dark {
+        night.0 = dark;
     }
     view.battle = race.as_ref().is_some_and(|race| race.battle);
     view.clock_ms = race.as_ref().map_or(0, |race| match race.phase() {

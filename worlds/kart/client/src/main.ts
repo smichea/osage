@@ -57,9 +57,12 @@ document.body.prepend(renderer.domElement);
 const scene = new THREE.Scene();
 /** The sky and haze of a dry day; the rain greys them (D-068, D-084). */
 const DRY = new THREE.Color("#87b5e0");
+/** The sky of a race at night (D-085): the track lit, the sky deep blue. */
+const NIGHT = new THREE.Color("#0b1222");
 scene.background = DRY.clone();
 scene.fog = new THREE.Fog("#87b5e0", 120, 420);
-scene.add(new THREE.HemisphereLight("#dbeaff", "#4f6b3a", 1.4));
+const skyLight = new THREE.HemisphereLight("#dbeaff", "#4f6b3a", 1.4);
+scene.add(skyLight);
 const sun = new THREE.DirectionalLight("#ffffff", 2.2);
 sun.position.set(60, 120, 40);
 scene.add(sun);
@@ -412,7 +415,12 @@ try {
       camera.lookAt(look);
     }
     paddockView.update(paddock(), performance.now() / 1000, 0, (x, z) => physics.roadHeightAt(x, z));
-    rainView.update(race()?.rain ?? false, seconds, camera, scene, DRY);
+    // At night (D-085) the sky is dark and the light the floodlights': cooler,
+    // dimmer, from above; the karts' lamps stand out.
+    const night = race()?.night ?? false;
+    skyLight.intensity = night ? 0.55 : 1.4;
+    sun.intensity = night ? 0.5 : 2.2;
+    rainView.update(race()?.rain ?? false, seconds, camera, scene, night ? NIGHT : DRY);
     renderer.render(scene, camera);
   }
 

@@ -31,6 +31,7 @@ mod graphics;
 mod hud;
 mod karts;
 mod landmarks;
+mod lights;
 mod marks;
 #[cfg(feature = "sound")]
 mod music;

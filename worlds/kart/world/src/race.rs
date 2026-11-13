@@ -604,6 +604,7 @@ pub fn publish(
         trial: cups.trial(),
         battle: cups.battle(),
         rain: forecast.rain,
+        night: forecast.night,
     };
     if let Ok((mut board, mut volatile)) = board.single_mut() {
         if let Some(paddock) = paddock {
@@ -626,6 +627,7 @@ pub fn publish(
                 && c.trial == summary.trial
                 && c.battle == summary.battle
                 && c.rain == summary.rain
+                && c.night == summary.night
                 && c.phase_ends_us.abs_diff(summary.phase_ends_us) < 50_000
                 && c.started_us.abs_diff(summary.started_us) < 50_000
         });

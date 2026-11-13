@@ -23,6 +23,8 @@ pub struct About {
     pub scenery: String,
     /// The chance of rain in a race on it (D-068); the world's to roll.
     pub rain: f32,
+    /// The chance of a race on it at night (D-085); the world's to roll.
+    pub night: f32,
 }
 
 pub struct Circuit {
@@ -57,6 +59,7 @@ impl Circuit {
             sky: def.sky.clone(),
             scenery: def.scenery.clone(),
             rain: def.rain,
+            night: def.night,
         };
         let spans = def.spans_on(&track, start);
         Self { track, start, about, spans }
@@ -77,6 +80,7 @@ impl Circuit {
             sky: track.sky.clone(),
             scenery: track.scenery.clone(),
             rain: 0.0,
+            night: 0.0,
         };
         let spans = track
             .spans

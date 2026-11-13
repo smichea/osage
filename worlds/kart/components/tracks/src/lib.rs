@@ -18,6 +18,7 @@
 //! sky noon
 //! scenery meadow
 //! rain 0.15
+//! night 0.25
 //! half-width 7
 //! verge 4
 //! point 0 -90
@@ -75,6 +76,9 @@ pub struct TrackDef {
     /// The chance that a race on it is run in the rain, 0 to 1 (D-068):
     /// `rain 0.3`. None unless said.
     pub rain: f32,
+    /// The chance that a race on it is run at night, under floodlights, 0
+    /// to 1 (D-085): `night 0.25`. None unless said.
+    pub night: f32,
     pub half_width: f32,
     pub verge: f32,
     /// Control points of the closed centre line, metres, in racing order.
@@ -156,6 +160,7 @@ impl TrackDef {
             sky: "noon".to_owned(),
             scenery: "meadow".to_owned(),
             rain: 0.0,
+            night: 0.0,
             half_width: 7.0,
             verge: 4.0,
             points: Vec::new(),
@@ -190,6 +195,13 @@ impl TrackDef {
                         return Err(fail(n, "rain is a chance, 0 to 1"));
                     }
                     def.rain = chance;
+                }
+                "night" => {
+                    let chance = count(1)?[0];
+                    if !(0.0..=1.0).contains(&chance) {
+                        return Err(fail(n, "night is a chance, 0 to 1"));
+                    }
+                    def.night = chance;
                 }
                 "half-width" => def.half_width = count(1)?[0],
                 "verge" => def.verge = count(1)?[0],
@@ -465,6 +477,17 @@ mod tests {
         assert!(steep.problems().iter().any(|p| p.contains("steeper")), "{:?}", steep.problems());
         let off = TrackDef::parse(&hilly.replace("tunnel 420 80", "tunnel 780 80")).unwrap();
         assert!(off.problems().iter().any(|p| p.contains("Tunnel")), "{:?}", off.problems());
+    }
+
+    #[test]
+    fn a_track_says_how_often_it_is_raced_at_night() {
+        let file = "kart-track/1\nid lit\nnight 0.4\npoint 0 0 start\npoint 200 0\npoint 200 200\npoint 0 200\n";
+        assert_eq!(TrackDef::parse(file).unwrap().night, 0.4);
+        let never = file.replace("night 0.4\n", "");
+        assert_eq!(TrackDef::parse(&never).unwrap().night, 0.0, "never unless said");
+        let wrong = file.replace("night 0.4", "night 2");
+        assert_eq!(TrackDef::parse(&wrong).unwrap_err().message, "night is a chance, 0 to 1");
+        assert!(built_in().iter().any(|t| t.night > 0.0), "some tracks are raced at night");
     }
 
     #[test]

@@ -8,6 +8,10 @@
 //! the clients, which predict on the same wet road. Time trials are run
 //! dry, so that their ghosts compare; a world may also be always dry or
 //! always wet.
+//!
+//! And the time of day (D-085): night or not, rolled the same way from the
+//! track's chance of night (`night`), with a roll of its own. Only the
+//! look changes: the clients light the track with floodlights.
 
 use bevy::prelude::*;
 
@@ -23,10 +27,21 @@ pub enum Weather {
     Rain,
 }
 
+/// What the world's time of day follows (D-085).
+#[derive(Resource, Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum TimeOfDay {
+    /// Each track's chance of night, rolled for every race.
+    #[default]
+    Track,
+    Day,
+    Night,
+}
+
 /// The race's weather, as decided.
 #[derive(Resource, Default, Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Forecast {
     pub rain: bool,
+    pub night: bool,
     /// The race and track it was decided for.
     race: u32,
 }
@@ -45,6 +60,7 @@ pub fn rolled(id: &str, chance: f32, race: u32) -> bool {
 /// Decides each race's weather as it lines up, and wets the road.
 pub fn forecast(
     weather: Res<Weather>,
+    time: Res<TimeOfDay>,
     race: Res<Race>,
     cups: Res<Cups>,
     mut course: ResMut<Course>,
@@ -62,6 +78,13 @@ pub fn forecast(
             Weather::Rain => true,
         };
     forecast.rain = rain;
+    // Night has a roll of its own: the track's id salted, so that rain and
+    // night do not always come together.
+    forecast.night = match *time {
+        TimeOfDay::Track => rolled(&format!("{}/night", about.id), about.night, race.races()),
+        TimeOfDay::Day => false,
+        TimeOfDay::Night => true,
+    };
     let wet = if rain { 1.0 } else { 0.0 };
     if course.0.track.wet != wet {
         course.0.track.wet = wet;
@@ -71,6 +94,16 @@ pub fn forecast(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn night_comes_as_often_as_the_track_says_and_not_with_the_rain() {
+        let nights: Vec<bool> = (0..2000).map(|race| rolled("coast/night", 0.3, race)).collect();
+        let count = nights.iter().filter(|n| **n).count();
+        assert!((500..700).contains(&count), "about 30 %: {count} of 2000");
+        // Its own roll: rain and night with the same chance do not agree every race.
+        let same = (0..2000).filter(|race| rolled("coast", 0.3, *race) == nights[*race as usize]).count();
+        assert!(same < 1800, "independent of the rain: {same} of 2000 agree");
+    }
 
     #[test]
     fn rain_falls_as_often_as_the_track_says_and_the_same_everywhere() {

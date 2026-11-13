@@ -25,7 +25,7 @@ use osage_world_module_api::{Discrete, EntityIds, RegionSet, Schema, TypeSpec, V
 pub use circuit::Circuit;
 pub use cup::events;
 pub use driving::autopilot;
-pub use weather::Weather;
+pub use weather::{TimeOfDay, Weather};
 
 /// Generated from `proto/kart/v1/kart.proto`.
 pub mod proto {
@@ -108,6 +108,9 @@ pub struct KartWorld {
     /// What the weather follows (D-068): each track's chance of rain, or
     /// always dry, or always wet.
     pub weather: Weather,
+    /// What the time of day follows (D-085): each track's chance of night,
+    /// or always day, or always night.
+    pub time: TimeOfDay,
     /// The port where the host shares their music, announced to the
     /// players; none when nothing is shared.
     pub music_port: Option<u16>,
@@ -133,6 +136,7 @@ impl Default for KartWorld {
             records: None,
             ghosts: None,
             weather: Weather::Track,
+            time: TimeOfDay::Track,
             track: paddock(),
             event: None,
             music_port: None,
@@ -151,6 +155,7 @@ impl KartWorld {
             records: None,
             ghosts: None,
             weather: Weather::Track,
+            time: TimeOfDay::Track,
             track: paddock(),
             event: None,
             music_port: None,
@@ -177,6 +182,7 @@ impl Plugin for KartWorld {
             .init_resource::<race::Calls>()
             .insert_resource(self.weather)
             .init_resource::<weather::Forecast>()
+            .insert_resource(self.time)
             .insert_resource(Course(Circuit::of(&track)))
             .init_resource::<race::Race>()
             .init_resource::<race::Drivers>()
