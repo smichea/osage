@@ -78,6 +78,11 @@ pub fn double(mesh: &Mesh) -> Option<Mesh> {
         Some(indices) => indices.iter().map(|i| i as u32).collect(),
         None => (0..count as u32).collect(),
     };
+    // Solari builds a structure for every mesh it can trace, and one of no
+    // triangles is none it can build (it panics): an empty mesh is not doubled.
+    if count == 0 || indices.len() < 3 {
+        return None;
+    }
     let mut double = Mesh::new(PrimitiveTopology::TriangleList, mesh.asset_usage)
         .with_inserted_attribute(Mesh::ATTRIBUTE_POSITION, positions)
         .with_inserted_indices(Indices::U32(indices));
@@ -193,5 +198,9 @@ mod tests {
         assert!(matches!(double.indices(), Some(Indices::U32(i)) if i == &vec![0, 2, 1]));
         let lines = Mesh::new(PrimitiveTopology::LineList, RenderAssetUsages::default());
         assert!(super::double(&lines).is_none());
+        let empty = Mesh::new(PrimitiveTopology::TriangleList, RenderAssetUsages::default())
+            .with_inserted_attribute(Mesh::ATTRIBUTE_POSITION, Vec::<[f32; 3]>::new())
+            .with_inserted_indices(Indices::U32(Vec::new()));
+        assert!(super::double(&empty).is_none(), "no double of an empty mesh: Solari cannot build it");
     }
 }
