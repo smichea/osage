@@ -72,6 +72,66 @@ impl Temper {
     }
 }
 
+/// How hard the bots race (D-088): their temperaments drawn as ever, then
+/// tempered.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum Difficulty {
+    /// Slower on the straights, timid in bends, more mistakes, no drifts.
+    Easy,
+    #[default]
+    Normal,
+    /// Faster, bolder, steadier; every one drifts.
+    Hard,
+}
+
+impl Difficulty {
+    pub const ALL: [Self; 3] = [Self::Easy, Self::Normal, Self::Hard];
+
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::Easy => "easy",
+            Self::Normal => "normal",
+            Self::Hard => "hard",
+        }
+    }
+
+    pub fn parse(name: &str) -> Option<Self> {
+        Self::ALL.into_iter().find(|d| d.name() == name)
+    }
+
+    /// The next, round again: what the host's key steps through.
+    pub fn next(self) -> Self {
+        match self {
+            Self::Easy => Self::Normal,
+            Self::Normal => Self::Hard,
+            Self::Hard => Self::Easy,
+        }
+    }
+
+    /// A temperament as this difficulty has it.
+    pub fn temper(self, t: Temper) -> Temper {
+        match self {
+            Self::Easy => Temper {
+                pace: 0.78 + (t.pace - 0.83) * 0.5,
+                nerve: t.nerve * 0.6,
+                aggression: t.aggression * 0.5,
+                consistency: t.consistency * 0.85,
+                drifts: false,
+                ..t
+            },
+            Self::Normal => t,
+            Self::Hard => Temper {
+                pace: (t.pace + 0.04).min(0.97),
+                nerve: (t.nerve + 0.2).min(1.0),
+                aggression: (t.aggression + 0.2).min(1.0),
+                consistency: t.consistency.max(0.9),
+                drifts: true,
+                ..t
+            },
+        }
+    }
+}
+
 /// An integer hash with good mixing (a "lowbias32" finaliser).
 fn hash(mut x: u32) -> u32 {
     x ^= x >> 16;
@@ -675,6 +735,27 @@ mod tests {
         let (a, ..) = race(&track, &tempers, &grid, 15.0);
         let (b, ..) = race(&track, &tempers, &grid, 15.0);
         assert_eq!(a, b);
+    }
+
+    #[test]
+    fn harder_bots_go_further_in_the_same_time() {
+        let track = stadium(6.0);
+        // Alone on the track, a minute, the same temperaments drawn: how far round.
+        let distance = |difficulty: Difficulty| {
+            (1..=4)
+                .map(|seed| {
+                    let temper = difficulty.temper(Temper::of(seed));
+                    let (_, minds, _) = race(&track, &[temper], &[start(0.0, 10.0)], 60.0);
+                    minds[0].bends
+                })
+                .sum::<u32>()
+        };
+        let (easy, normal, hard) =
+            (distance(Difficulty::Easy), distance(Difficulty::Normal), distance(Difficulty::Hard));
+        assert!(easy < normal && normal <= hard, "bends taken: easy {easy}, normal {normal}, hard {hard}");
+        assert_eq!(Difficulty::parse("hard"), Some(Difficulty::Hard));
+        assert_eq!(Difficulty::Hard.next(), Difficulty::Easy);
+        assert_eq!(Difficulty::Normal.temper(Temper::STEADY), Temper::STEADY, "normal changes nothing");
     }
 
     #[test]

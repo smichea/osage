@@ -46,6 +46,10 @@ fn main() -> anyhow::Result<()> {
                 Some("rain") => osage_world_kart::Weather::Rain,
                 _ => anyhow::bail!("--weather takes track, dry or rain"),
             };
+        } else if arg == "--bots" {
+            let wanted = args.next().unwrap_or_default();
+            world.bots =
+                osage_kart_racecraft::Difficulty::parse(&wanted).context("--bots takes easy, normal or hard")?;
         } else if arg == "--time" {
             world.time = match args.next().as_deref() {
                 Some("track") => osage_world_kart::TimeOfDay::Track,

@@ -111,6 +111,8 @@ pub struct KartWorld {
     /// What the time of day follows (D-085): each track's chance of night,
     /// or always day, or always night.
     pub time: TimeOfDay,
+    /// How the bots race (D-088).
+    pub bots: osage_kart_racecraft::Difficulty,
     /// The port where the host shares their music, announced to the
     /// players; none when nothing is shared.
     pub music_port: Option<u16>,
@@ -137,6 +139,7 @@ impl Default for KartWorld {
             ghosts: None,
             weather: Weather::Track,
             time: TimeOfDay::Track,
+            bots: osage_kart_racecraft::Difficulty::Normal,
             track: paddock(),
             event: None,
             music_port: None,
@@ -156,6 +159,7 @@ impl KartWorld {
             ghosts: None,
             weather: Weather::Track,
             time: TimeOfDay::Track,
+            bots: osage_kart_racecraft::Difficulty::Normal,
             track: paddock(),
             event: None,
             music_port: None,
@@ -176,7 +180,7 @@ impl Plugin for KartWorld {
             Some(event) => cup::Cups::new(event),
             None => (cup::Cups::single(&self.track), self.track.clone()),
         };
-        app.insert_resource(Rules { grid: self.grid, laps: self.laps, host_starts: self.host_starts })
+        app.insert_resource(Rules { grid: self.grid, laps: self.laps, host_starts: self.host_starts, bots: self.bots })
             .insert_resource(cups)
             .insert_resource(Beside { music: self.music_port.unwrap_or(0), voice: self.voice_port.unwrap_or(0) })
             .init_resource::<race::Calls>()
@@ -303,6 +307,8 @@ struct Rules {
     grid: usize,
     laps: u32,
     host_starts: bool,
+    /// How the bots race (D-088): the host may change it between races.
+    bots: osage_kart_racecraft::Difficulty,
 }
 
 #[derive(Resource)]

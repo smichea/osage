@@ -813,3 +813,11 @@ Date: 2026-11-13 · design/04 M5 (animated drivers), toward Mario Kart's charact
 - **Why:** a character who answers what happens to them is what turns a kart with a figure on it into a driver.
 - **Consequences:** the bench's drivers never cheer (no one finishes there); hands off the wheel are drawn, not felt: the kart coasts as before.
 
+## D-088 — How hard the bots race: easy, normal, hard
+
+Date: 2026-11-13 · toward Mario Kart's playability: a race should be winnable by a child and hard for a regular.
+
+- **Decision:** the world has a difficulty for its bots (`osage-kart-racecraft`'s `Difficulty`): their temperaments are drawn as ever, then tempered — easy: slower on the straights, timid in bends, gentler on others, more mistakes, no drifts; hard: faster, bolder, steadier, every one drifting. The host chooses it between races (L in the native client; `Choice.bots`), from the next line-up; `--bots easy|normal|hard` sets it on the server; `Race.bots` says it, and the event card shows it. Normal is what the bots were.
+- **Why:** with one strength of bots, a race is either too hard for a newcomer or too easy for the friends who play every evening.
+- **Rejected:** rubber-banding (bots that speed up behind and slow down ahead): the items already help the back of the field (D-052), and a bot that cheats is felt; engine classes (50 to 200 cc) — another decision, as they change the physics every client predicts with.
+

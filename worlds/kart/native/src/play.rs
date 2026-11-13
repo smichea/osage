@@ -810,6 +810,12 @@ fn choose(
     if !between || menu.0 || roster.drivers.is_empty() || roster.karts.is_empty() {
         return;
     }
+    // L: how hard the bots race (D-088), the host's to say.
+    if keys.just_pressed(KeyCode::KeyL) && race.host == mine {
+        let now = osage_kart_racecraft::Difficulty::parse(&race.bots).unwrap_or_default();
+        let choice = proto::Choice { bots: now.next().name().to_owned(), ..default() };
+        let _ = outbox.0.send(intent(0, mine, choice_type, &choice));
+    }
     // T: the next event, a cup or a track alone; the host's is raced, the
     // others' are votes.
     if keys.just_pressed(KeyCode::KeyT) && !race.events.is_empty() {
@@ -977,6 +983,11 @@ fn cup_lines(
     };
     if !votes.is_empty() && !event.is_empty() {
         event.push_str(&format!("\nVotes: {}", votes.join(", ")));
+    }
+    // How the bots race (D-088): the host changes it with L.
+    if !race.bots.is_empty() {
+        let key = if hosting { "  (L to change)" } else { "" };
+        event.push_str(&format!("\nBots: {}{key}", race.bots));
     }
     (cup, event)
 }

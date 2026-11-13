@@ -90,6 +90,7 @@ impl Pilot {
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn intents(
     ids: Res<Ids>,
     race: Res<Race>,
@@ -97,6 +98,8 @@ pub fn intents(
     mut calls: ResMut<Calls>,
     mut choices: ResMut<Choices>,
     mut cups: ResMut<crate::cup::Cups>,
+    mut rules: ResMut<crate::Rules>,
+    drivers: Res<crate::race::Drivers>,
     mut pilots: Query<(&mut Pilot, Option<&osage_world_module_api::Owner>, &mut Body, &mut Progress)>,
 ) {
     for intent in intents.read() {
@@ -110,6 +113,12 @@ pub fn intents(
             let pair = choices.take(owner.0, &choice);
             if !choice.event.is_empty() {
                 cups.choose(owner.0, &choice.event);
+            }
+            // How the bots race (D-088): the host's to say, from the next race.
+            if let Some(bots) = osage_kart_racecraft::Difficulty::parse(&choice.bots)
+                && (drivers.host() == Some(owner.0) || !rules.host_starts)
+            {
+                rules.bots = bots;
             }
             if matches!(race.phase, Phase::Ready | Phase::Countdown | Phase::Waiting) {
                 body.0.build = osage_kart_roster::build(pair.0, pair.1);

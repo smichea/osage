@@ -415,7 +415,7 @@ fn line_up(
             per_world_id: format!("bot-{}", name.to_lowercase()),
             ..default()
         };
-        let pilot = Pilot::bot(temper.unwrap_or(Temper::of(i as u32)), i as u32 + 1);
+        let pilot = Pilot::bot(rules.bots.temper(temper.unwrap_or(Temper::of(i as u32))), i as u32 + 1);
         (None, name.to_string(), controller, pilot, crate::roster::bot(name, i))
     });
     let people = drivers.0.iter().map(|(session, controller)| {
@@ -605,6 +605,7 @@ pub fn publish(
         battle: cups.battle(),
         rain: forecast.rain,
         night: forecast.night,
+        bots: rules.bots.name().to_owned(),
     };
     if let Ok((mut board, mut volatile)) = board.single_mut() {
         if let Some(paddock) = paddock {
@@ -628,6 +629,7 @@ pub fn publish(
                 && c.battle == summary.battle
                 && c.rain == summary.rain
                 && c.night == summary.night
+                && c.bots == summary.bots
                 && c.phase_ends_us.abs_diff(summary.phase_ends_us) < 50_000
                 && c.started_us.abs_diff(summary.started_us) < 50_000
         });

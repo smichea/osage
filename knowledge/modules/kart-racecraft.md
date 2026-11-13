@@ -35,11 +35,12 @@ Opponents that race as people do, each in their own way: one brakes late and div
 
 # Interfaces
 
-`Temper::{STEADY, HOTHEAD, CAUTIOUS, ROOKIE, VETERAN, of}`, `Mind::{new, plan, mistake, mistakes, shaken}`, `Plan`, `Mistake`, `Rival`, `Hazard`, `field`, `drive`, `drive_among`, `follow`.
+`Temper::{STEADY, HOTHEAD, CAUTIOUS, ROOKIE, VETERAN, of}`, `Difficulty::{Easy, Normal, Hard, temper, next, parse, name}` (D-088: easy — pace 0.78 to 0.84, nerve ×0.6, aggression ×0.5, consistency ×0.85, no drifts; normal as drawn; hard — pace +0.04 up to 0.97, nerve and aggression +0.2, consistency at least 0.9, every one drifts), `Mind::{new, plan, mistake, mistakes, shaken}`, `Plan`, `Mistake`, `Rival`, `Hazard`, `field`, `drive`, `drive_among`, `follow`.
 
 # Invariants
 
 - Deterministic: the same race twice is the same, bit for bit (no clock, no random numbers but a hash, `libm`). Tested.
+- With the same temperaments drawn, easy bots take fewer bends in a minute than normal ones, which take no fewer than hard ones. Tested.
 - A driver who never errs laps a circuit of hairpins without a wheel on the grass; hairpins are taken slower than straights. Tested.
 - The aggressive take a narrow gap the cautious wait behind; on a wide road both pass; a fast driver gets past a slow one. Tested.
 - A driver steers round oil on its line, which it drives over when the oil is not there. Tested.

@@ -36,6 +36,7 @@ Controls
 --------
   Arrows or WASD      drive            Space / Shift   drift
   F or Ctrl           use the item     C               change view
+  L (the host, between races)  how hard the bots race: easy, normal, hard
   Q / E / X (held)    look left, right, back           F12  screenshot
   A gamepad works too: triggers or South/East to drive, West to drift,
   North to use the item, the right stick to look round.
