@@ -155,8 +155,15 @@ fn main() -> Result<()> {
         Some(tier) => tier,
         None if bench => Tier::T2,
         None => {
-            let (tier, adapter) = graphics::choose(last_report.is_some());
-            eprintln!("graphics: {adapter}: {tier}");
+            let (tier, trimmed, adapter) = graphics::choose(last_report.is_some());
+            let names: Vec<&str> = trimmed.iter().map(|t| t.name()).collect();
+            eprintln!("graphics: {adapter}: {tier} without [{}]", names.join(", "));
+            // What this machine leaves out of the tier, after failures (D-090).
+            for technique in trimmed {
+                if !without.contains(&technique) {
+                    without.push(technique);
+                }
+            }
             tier
         }
     };

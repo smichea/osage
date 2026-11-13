@@ -14,8 +14,15 @@
 //!   machine (`failed`) and a lower one is used from then on.
 //! - Ten seconds into the race the game looks at one frame: a picture of
 //!   one colour (the grey screen of T3 on a Direct3D 12 RTX PC) is a tier
-//!   that does not work here. It is marked failed, noted for the report,
-//!   and the game starts again one tier lower.
+//!   that does not work here. It fails, is noted for the report, and the
+//!   game starts again (D-090: with a suspect technique left out, as
+//!   below).
+//! - A tier that fails is not given up at once (D-090): the next start
+//!   tries it again without one technique more, the likeliest culprits
+//!   first — the sky as a light, then post-processing (temporal
+//!   anti-aliasing, motion blur), ambient occlusion, shadows — and keeps
+//!   the first set that works (`trimmed`); only with every suspect left
+//!   out does it go a tier lower.
 
 use std::path::PathBuf;
 
@@ -23,7 +30,7 @@ use bevy::{
     prelude::*,
     render::view::screenshot::{Screenshot, ScreenshotCaptured},
 };
-use osage_render::Tier;
+use osage_render::{Technique, Tier};
 
 use crate::hud::{Lights, RaceView};
 
@@ -61,6 +68,80 @@ fn lower(tier: Tier) -> Tier {
     }
 }
 
+/// The techniques a tier tries without, one more after each failure,
+/// likeliest culprit first (D-090).
+const SUSPECTS: [Technique; 4] =
+    [Technique::SkyLight, Technique::Post, Technique::AmbientOcclusion, Technique::Shadows];
+
+/// What this machine leaves out of each tier, after failures there: lines
+/// `T3 sky-light post`.
+fn trimmed() -> Vec<(Tier, Vec<Technique>)> {
+    let text = folder().and_then(|f| std::fs::read_to_string(f.join("trimmed")).ok()).unwrap_or_default();
+    parse_trimmed(&text)
+}
+
+fn parse_trimmed(text: &str) -> Vec<(Tier, Vec<Technique>)> {
+    text.lines()
+        .filter_map(|line| {
+            let mut words = line.split_whitespace();
+            let tier = words.next()?.parse().ok()?;
+            Some((tier, words.filter_map(|w| w.parse().ok()).collect()))
+        })
+        .collect()
+}
+
+/// What `tier` is run without on this machine.
+fn without(tier: Tier) -> Vec<Technique> {
+    trimmed().into_iter().find(|(t, _)| *t == tier).map(|(_, w)| w).unwrap_or_default()
+}
+
+/// After a failure with `left_out` left out: the next suspect to leave
+/// out, or none when every one is out already (then the tier fails).
+fn next_suspect(left_out: &[Technique]) -> Option<Technique> {
+    SUSPECTS.into_iter().find(|t| !left_out.contains(t))
+}
+
+/// A failure at `tier`: one technique more left out of it, or, with
+/// every suspect out, the tier marked failed. `why` is noted.
+pub fn step_down(tier: Tier, why: &str) {
+    let left_out = without(tier);
+    let Some(next) = next_suspect(&left_out) else {
+        fail(tier, why);
+        return;
+    };
+    let Some(folder) = folder() else { return };
+    let _ = std::fs::create_dir_all(&folder);
+    let mut lines: Vec<(Tier, Vec<Technique>)> = trimmed().into_iter().filter(|(t, _)| *t != tier).collect();
+    let mut now = left_out;
+    now.push(next);
+    lines.push((tier, now.clone()));
+    let text: String = lines
+        .iter()
+        .map(|(t, w)| format!("{t} {}\n", w.iter().map(|t| t.name()).collect::<Vec<_>>().join(" ")))
+        .collect();
+    let _ = std::fs::write(folder.join("trimmed"), text);
+    warn!("graphics: {tier} {why}; next, without {}", now.iter().map(|t| t.name()).collect::<Vec<_>>().join(", "));
+}
+
+/// A tier marked failed before the search existed (D-090) is tried again,
+/// once, as a failure that starts the search: without the first suspect.
+fn reopen_old_failures() {
+    let Some(folder) = folder() else { return };
+    if folder.join("searched").exists() {
+        return;
+    }
+    let old = failed();
+    let _ = std::fs::create_dir_all(&folder);
+    let _ = std::fs::write(folder.join("searched"), "D-090\n");
+    if old.is_empty() || !trimmed().is_empty() {
+        return;
+    }
+    let _ = std::fs::remove_file(folder.join("failed"));
+    for tier in old {
+        step_down(tier, "failed before the search (D-090)");
+    }
+}
+
 /// The tiers that failed on this machine.
 fn failed() -> Vec<Tier> {
     let text = folder().and_then(|f| std::fs::read_to_string(f.join("failed")).ok()).unwrap_or_default();
@@ -79,12 +160,14 @@ pub fn fail(tier: Tier, why: &str) {
 }
 
 /// The tier to start with, chosen here, given whether the last run went
-/// wrong (a report, D-073): its tier, if chosen here, is marked failed.
-pub fn choose(last_went_wrong: bool) -> (Tier, String) {
+/// wrong (a report, D-073) — its tier, if chosen here, steps down (D-090)
+/// — and the techniques this machine leaves out of it.
+pub fn choose(last_went_wrong: bool) -> (Tier, Vec<Technique>, String) {
+    reopen_old_failures();
     let previous: Option<Tier> =
         folder().and_then(|f| std::fs::read_to_string(f.join("tier")).ok()).and_then(|t| t.trim().parse().ok());
     if last_went_wrong && let Some(tier) = previous.filter(|tier| *tier > Tier::T2) {
-        fail(tier, "the run at this tier went wrong");
+        step_down(tier, "the run at this tier went wrong");
     }
     let adapter = adapter();
     let mut tier = tier_for(adapter.as_ref().map(|a| a.device_type));
@@ -100,7 +183,7 @@ pub fn choose(last_went_wrong: bool) -> (Tier, String) {
         || "no adapter found".to_owned(),
         |a| format!("{} ({:?}, {:?})", a.name, a.device_type, a.backend),
     );
-    (tier, name)
+    (tier, without(tier), name)
 }
 
 /// Whether a picture is of one colour, near enough: RGBA8 pixels, sampled.
@@ -158,14 +241,14 @@ fn judge(captured: On<ScreenshotCaptured>, tier: Res<Tier>, mut exit: MessageWri
         return;
     }
     warn!("graphics: the picture is of one colour at {}: this tier does not work here", *tier);
-    fail(*tier, "the picture stayed of one colour");
+    step_down(*tier, "the picture stayed of one colour");
     // For the report at the next start (D-073).
     if let Some(folder) = folder() {
         let _ = std::fs::write(folder.join("hung.txt"), format!("the picture stayed of one colour at {}\n", *tier));
         let _ = std::fs::write(folder.join("running"), "starting\n");
     }
     crate::report::keep_for_next();
-    // Again, one tier lower.
+    // Again, without one technique more, or a tier lower (D-090).
     if let Ok(exe) = std::env::current_exe() {
         let _ = std::process::Command::new(exe).args(std::env::args().skip(1)).spawn();
     }
@@ -183,6 +266,19 @@ mod tests {
         assert_eq!(tier_for(None), Tier::T1);
         assert_eq!(lower(Tier::T3), Tier::T2);
         assert_eq!(lower(Tier::T1), Tier::T1);
+    }
+
+    #[test]
+    fn a_failing_tier_drops_its_suspects_one_by_one_before_it_fails() {
+        let mut left_out = Vec::new();
+        let mut order = Vec::new();
+        while let Some(next) = next_suspect(&left_out) {
+            left_out.push(next);
+            order.push(next);
+        }
+        assert_eq!(order, SUSPECTS.to_vec(), "the likeliest culprit first, each once");
+        let read = parse_trimmed("T3 sky-light post\nT2\nnonsense line\n");
+        assert_eq!(read, vec![(Tier::T3, vec![Technique::SkyLight, Technique::Post]), (Tier::T2, Vec::new())]);
     }
 
     #[test]

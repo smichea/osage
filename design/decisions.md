@@ -829,3 +829,11 @@ Date: 2026-11-13 · toward Mario Kart's playability: a slow class to learn a tra
 - **Why:** speed is the difficulty a player feels most, and the one that grows with them.
 - **Rejected:** scaling the karts' builds (they are kept within ±15 %, a flavour, D-055); faster turning at 200 cc (the handling a player has learnt should not change with the class).
 
+## D-090 — A failing tier loses one technique at a time, not all of them
+
+Date: 2026-11-13 · the reference RTX PC shows a grey screen at T3 and has raced at T2 since (D-075), its report not yet sent: it lost ambient occlusion, temporal anti-aliasing and sharp shadows for what is likely one technique.
+
+- **Decision:** after a failure at a tier (a run that went wrong, or a picture of one colour), the next start runs the same tier without one technique more, the likeliest culprit first — the sky as a light (an atmosphere computed on the GPU), post-processing (temporal anti-aliasing, motion blur, which need a depth prepass), ambient occlusion, shadows — and keeps the first set that works for the machine (`kart-reports/trimmed`, e.g. `T3 sky-light`); only with all four left out is the tier marked failed and the next lower one used. A tier marked failed before this is tried again once in this way. The log says what is left out.
+- **Why:** each failed start costs ten seconds; four of them buy the machine the best picture it can draw, and tell us, through the report, which technique fails on which hardware.
+- **Rejected:** trying each technique alone (more starts for the same answer when one is the culprit); asking the player (they cannot know).
+
