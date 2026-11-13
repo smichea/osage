@@ -1,6 +1,7 @@
 # Knowledge Update Log
 
 ## 2026-11-13
+* **Update**: [osage-kart-native](/modules/kart-native.md) has a photo mode (D-066): the picture frozen, a free camera, zoom and depth of field.
 * **Update**: battles (D-065): [osage-kart-tracks](/modules/kart-tracks.md) has arenas, the Yard among them; [osage-kart-items](/modules/kart-items.md) has a battle's paddock; [osage-kart-cup](/modules/kart-cup.md)'s events gain `battle:ARENA`; [osage-kart-native](/modules/kart-native.md) shows lives.
 * **Creation**: Added the module [osage-kart-profile](/modules/kart-profile.md): the player's profile on their computer, paints won in cups (D-064); [osage-kart-native](/modules/kart-native.md) keeps it and paints with P; the world carries `Choice.paint`.
 * **Update**: [osage-kart-native](/modules/kart-native.md) presents the race (D-063): a flyover of the circuit on the grid, the player's finish again in slow motion.

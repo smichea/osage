@@ -618,3 +618,12 @@ Date: 2026-11-13 · design/04 G4.2.
 - **Why:** the genre's second mode, made from what is already there: the items, their hits, the bots who use them, the arena as data. A loop of wide road keeps the physics' one rule of walls (distance from a centre line) and lets the bots drive it as they drive a circuit.
 - **Rejected:** an open arena with no centre line (a second wall model in the physics, and bots that cannot drive it); losing a life to a kart's knock (a battle of rams, not of items); eliminated karts removed from the world (the player would lose their kart and their view of the end).
 - **Consequences:** bots alone take about one life each in 150 s: a battle between bots ends by the clock; players make it shorter. A loop sends everyone the same way round; an arena with crossings waits for a physics of open spaces. No records and no cup points come from battles.
+
+## D-066 — A photo mode: the picture frozen here, a free camera with a full-frame lens
+
+Date: 2026-11-13 · design/04 G4.7 (its photo half; whole-race replays are left for later).
+
+- **Decision:** in the native client, O (a pad's right stick pressed) freezes the picture — every kart where it was drawn — and frees the camera: W A S D move it, E and Q raise and lower it, the arrows turn it, Shift goes faster, R and F zoom (8° to 75°, 17 to 160 mm), Z and X move the focus, 1 and 2 open and close the lens (f/1.4 to f/16); the depth of field is Bevy's, computed for a full-frame sensor (24 mm). The help shows for four seconds, then the interface goes, for F12 to save a clean picture. O again goes back. The world goes on: the player's kart coasts meanwhile. `--focus METRES` with `--camera` puts the same lens, wide open, on the bench's held camera, for pictures of it.
+- **Why:** a game that looks like this is photographed by its players, and a long lens wide open is what makes a picture look taken rather than rendered. Freezing the picture locally needs nothing from the world, so it works in any event, alone or with friends.
+- **Rejected:** pausing the world for a photo (four friends in one race: nobody else would want it); a camera of the game's own size of sensor (the default, Super 35, gives little blur at the wide angles players start from).
+- **Consequences:** a photo taken in a race costs the race. The particles go on while the karts are frozen. A race replay — the world's ticks recorded and stepped again — is still to do (G4.7's other half).

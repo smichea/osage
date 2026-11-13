@@ -35,6 +35,8 @@ pub struct RaceView {
     pub replay: bool,
     /// A battle (D-065): lives, not laps; the clock counts down.
     pub battle: bool,
+    /// The photo mode's help, while it shows (D-066).
+    pub photo: String,
     /// Race time, milliseconds.
     pub clock_ms: i64,
     /// Every kart, in race order.
@@ -445,6 +447,10 @@ fn write(
                 Lights::Ready(_) => "READY".to_owned(),
                 _ => String::new(),
             },
+            Label::Prompt if !view.photo.is_empty() => {
+                tint = Some(Color::srgb(1.0, 0.85, 0.3));
+                view.photo.clone()
+            }
             Label::Prompt => match view.stage {
                 Lights::Ready(true) => {
                     tint = Some(Color::srgb(1.0, 0.85, 0.3));

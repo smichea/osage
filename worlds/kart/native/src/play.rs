@@ -68,7 +68,7 @@ impl Plugin for PlayPlugin {
             .init_resource::<Chosen>()
             .init_resource::<ChosenEvent>()
             .insert_resource(Kept::load())
-            .add_plugins((HudPlugin, PaddockPlugin, crate::show::ShowPlugin))
+            .add_plugins((HudPlugin, PaddockPlugin, crate::show::ShowPlugin, crate::photo::PhotoPlugin))
             .add_systems(FixedUpdate, drive)
             .add_systems(
                 Update,
@@ -390,10 +390,12 @@ fn drive(
     gamepads: Query<&Gamepad>,
     replica: Res<Replica>,
     menu: Res<Menu>,
+    photo: Res<crate::photo::Photo>,
     mut driver: ResMut<Driver>,
 ) {
     let (Some(mine), Some(circuit)) = (replica.mine, &replica.circuit) else { return };
-    // While the settings are open, the keys are theirs.
+    // While the settings are open, or a picture is taken, the keys are theirs.
+    let menu = &Menu(menu.0 || photo.is_on());
     let keys = if menu.0 { &ButtonInput::default() } else { &*keys };
     if replica.finished(mine) {
         return;
@@ -539,10 +541,14 @@ fn choose(
     mut chosen: ResMut<Chosen>,
     mut chosen_event: ResMut<ChosenEvent>,
     mut kept: ResMut<Kept>,
+    photo: Res<crate::photo::Photo>,
 ) {
     let (Some(mine), Some(choice_type), Some(roster)) = (replica.mine, replica.choice_type, replica.roster()) else {
         return;
     };
+    if photo.is_on() {
+        return;
+    }
     // Once a connection: the driver, kart and paint the player raced with
     // last (D-064).
     if kept.sent != replica.connections {

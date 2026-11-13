@@ -83,6 +83,15 @@ shown between races (NEW! when you just set one). They are kept in
 kart-records.txt in this folder, on the computer that hosts; updates leave
 the file alone.
 
+Photo mode
+----------
+O freezes the picture and frees the camera: W, A, S, D move it, E and Q
+up and down, the arrow keys turn it (hold Shift to go faster), R and F
+zoom in and out, Z and X move the focus nearer and further, 1 and 2 open
+and close the lens. The interface goes after a few seconds; F12 saves
+the picture in the game's folder. O again to go back. The race goes on
+meanwhile, without you.
+
 Sound and music
 ---------------
 N switches the game's sounds on or off, M the music; B goes to the next

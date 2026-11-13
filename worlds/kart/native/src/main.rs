@@ -33,6 +33,7 @@ mod landmarks;
 #[cfg(feature = "sound")]
 mod music;
 mod paddock;
+mod photo;
 mod play;
 mod predict;
 mod scene;
@@ -71,6 +72,8 @@ fn main() -> Result<()> {
     let (mut autodrive, mut screenshot_after, mut viewpoint, mut headless) = (false, Vec::new(), None, false);
     let (mut sky, mut track) = (None, None);
     let mut fps = None;
+    // A lens focused this far, f/2.8, as the photo mode has it (D-066).
+    let mut focus = None;
     let mut args = std::env::args().skip(1);
     while let Some(arg) = args.next() {
         let mut value = || args.next().with_context(|| format!("{arg} needs a value"));
@@ -98,6 +101,7 @@ fn main() -> Result<()> {
                 };
                 track = Some(def);
             }
+            "--focus" => focus = Some(value()?.parse::<f32>().context("--focus takes metres")?),
             "--fps" => fps = Some(settings::parse_fps(&value()?).map_err(anyhow::Error::msg)?),
             "--frames" => frames = value()?.parse().context("--frames")?,
             "--out" => out = Some(PathBuf::from(value()?)),
@@ -194,6 +198,9 @@ fn main() -> Result<()> {
         .add_plugins(scene::ScenePlugin);
     if let Some(viewpoint) = viewpoint {
         app.insert_resource(viewpoint);
+    }
+    if let Some(focus) = focus {
+        app.add_systems(bevy::app::Update, photo::focus(focus));
     }
     if bench {
         let now = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).map_or(0, |d| d.as_secs());

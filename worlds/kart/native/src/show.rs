@@ -36,9 +36,14 @@ pub struct ShowPlugin;
 
 impl Plugin for ShowPlugin {
     fn build(&self, app: &mut App) {
-        app.init_resource::<Show>().add_systems(Update, present.in_set(Stage::Simulate).after(crate::play::Summarised));
+        app.init_resource::<Show>()
+            .add_systems(Update, present.in_set(Stage::Simulate).in_set(Shown).after(crate::play::Summarised));
     }
 }
+
+/// After the show: what overrides it (the photo mode) runs after.
+#[derive(SystemSet, Debug, Clone, PartialEq, Eq, Hash)]
+pub struct Shown;
 
 /// Where every kart was, frame by frame: (seconds, each kart).
 type Tape = VecDeque<(f32, Vec<(Entity, Kart)>)>;
@@ -112,9 +117,14 @@ fn present(
     mut view: ResMut<RaceView>,
     mut karts: Query<(Entity, &mut Pose)>,
     followed: Query<Entity, With<crate::scene::Followed>>,
+    photo: Res<crate::photo::Photo>,
 ) {
     let now = time.elapsed_secs();
     let Some(course) = course else { return };
+    // The photo mode has the camera, and the picture is frozen.
+    if photo.is_on() {
+        return;
+    }
     // A viewpoint the show did not set is the player's: no show.
     if viewpoint.is_some() && !show.owns_view {
         return;
