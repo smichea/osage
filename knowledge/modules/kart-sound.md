@@ -33,7 +33,7 @@ Every kart heard as it drives: from recordings when the content has them, played
 - **Buzz:** a drone's four rotors, apart from any kart: softened saws at 172 to 192 blade passes a second, swaying a little, and band-passed air, as loud as the gain the client sets from distance and flight.
 - **Mix:** a soft limiter (a rational curve, as smooth as `tanh` and cheaper, 1 at 3 and beyond).
 
-With recordings: the engine plays the two loops either side of the revs, crossfaded at equal power on a scale of ratios, each read faster or slower (×0.5 to ×1.25, interpolated: faster, a recording sounds like a tape sped up) so that its note follows the revs, through a low-pass that moves down as the loop is played faster, so that its timbre stays an engine's; louder with the throttle. At top speed the engine turns at `CRUISE_RPM` (11 800), not the limiter, which only a boost reaches; under way the revs sway by up to 1 % in two slow waves (a held note is what tires the ear). The mix rides the engine (D-058): 30 % lower high in the revs, and a further quarter lower once it has held its revs flat out for a few seconds, back at once when they change. The squeal loop plays faster as the slide grows, the ground loop with the speed; a knock plays one of the knock clips, picked by a seeded hash, over the synthesised thump. Their levels are set to match the synthesised layers' (measured RMS).
+With recordings: the engine plays the two loops either side of the revs, crossfaded at equal power on a scale of ratios, each as grains (D-070: pieces of 120 ms from anywhere in the loop, two overlapping by half under half-sine windows, so that a loop a second long keeps its sound and loses its period), each read faster or slower (×0.5 to ×1.25, interpolated: faster, a recording sounds like a tape sped up) so that its note follows the revs, through a low-pass that moves down as the loop is played faster, so that its timbre stays an engine's; louder with the throttle. At top speed the engine turns at `CRUISE_RPM` (11 800), not the limiter, which only a boost reaches; under way the revs sway by up to 1 % in two slow waves (a held note is what tires the ear). The mix rides the engine (D-058): 30 % lower high in the revs, and a further quarter lower once it has held its revs flat out for a few seconds, back at once when they change. The squeal loop plays faster as the slide grows, the ground loop with the speed; a knock plays one of the knock clips, picked by a seeded hash, over the synthesised thump. Their levels are set to match the synthesised layers' (measured RMS).
 
 Filters are a state-variable band-pass (topology preserving) and one-pole low-passes; the noise is a seeded xorshift. What changes slowly — the eased drive, filter coefficients, gains — is computed every 32 samples (0.7 ms), not every sample: a voice costs about 0.2 µs a sample on a laptop core, where the audio callback runs.
 
@@ -47,6 +47,7 @@ Filters are a state-variable band-pass (topology preserving) and one-pole low-pa
 - The throttle makes it louder; every sample is finite and within −1…1. Tested.
 - Tyres squeal only when they slide; kerbs drum at the rate their blocks pass; a knock is heard, then dies back to the engine. Tested.
 - The same voice twice is the same. Tested.
+- Played as grains, a loop a second long does not repeat from one second to the next. Tested.
 - A recorded engine plays at the revs' speed (one loop at 100 Hz recorded at 6 000 turns a minute plays at 120 Hz at 7 200), never faster than 1.25 times its own; flat out and steady it eases down, a change of revs brings it back, and high revs are mixed lower than middle ones; top speed is cruising, a boost reaches the limiter; between two loops the level holds; recorded tyres and knocks play only when the kart slides or is hit. Tested.
 - A cue sounds and ends; a drone buzzes with its gain and is silent without. Tested.
 
@@ -62,4 +63,4 @@ Any small single-cylinder engine (scooters, mowers, motocross): the firing rate,
 
 # Limits
 
-The synthesis does not sound recorded; the recordings stretch further from their speed the further the revs are (×2.5 at most). Mono, one engine type; no gearbox, no doppler of its own (the client's spatial audio places it but does not shift it).
+The synthesis does not sound recorded; the recordings stretch further from their speed the further the revs are (×2.5 at most). Mono, one engine type; no gearbox, the Doppler shift and the placing are the client's (D-070, `osage-kart-native`'s `sound::heard`).

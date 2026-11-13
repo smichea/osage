@@ -69,7 +69,8 @@ use osage_render::{OsageRenderPlugin, Tier};
 use osage_sdk::v0;
 
 fn main() -> Result<()> {
-    let (mut url, mut tier, mut bench) = ("ws://127.0.0.1:7878".to_owned(), Tier::T2, false);
+    // The tier: the command line's, else the settings' (a game), else T2.
+    let (mut url, mut tier, mut bench) = ("ws://127.0.0.1:7878".to_owned(), None, false);
     let (mut frames, mut resolution, mut out, mut without) = (2400u32, None, None, Vec::new());
     let (mut autodrive, mut screenshot_after, mut viewpoint, mut headless) = (false, Vec::new(), None, false);
     let (mut sky, mut track) = (None, None);
@@ -92,7 +93,7 @@ fn main() -> Result<()> {
                     .collect::<Result<_, _>>()
                     .context("--screenshot-after takes seconds, comma-separated")?
             }
-            "--tier" => tier = value()?.parse().map_err(anyhow::Error::msg)?,
+            "--tier" => tier = Some(value()?.parse::<Tier>().map_err(anyhow::Error::msg)?),
             "--sky" => sky = Some(value()?.parse::<scene::Sky>().map_err(anyhow::Error::msg)?),
             "--track" => {
                 let wanted = value()?;
@@ -130,6 +131,7 @@ fn main() -> Result<()> {
         }
     }
 
+    let tier = tier.or_else(|| if bench { None } else { settings::kept_quality() }).unwrap_or(Tier::T2);
     if headless && !bench {
         bail!("--headless goes with --bench: playing needs a window");
     }

@@ -25,6 +25,11 @@ use crate::{
     scene::{Course, Photographed, Pose},
 };
 
+/// How fast the picture's time runs against the game's: 1, or less in a
+/// slowed replay ([`crate::show`]).
+#[derive(Resource, Clone, Copy)]
+pub struct Pace(pub f32);
+
 /// Particles alive at once, at most.
 const POOL: usize = 1200;
 
@@ -377,11 +382,14 @@ pub fn prewarm(
 
 pub fn update(
     time: Res<Time>,
+    pace: Option<Res<Pace>>,
     mut pool: ResMut<Pool>,
     camera: Query<&Transform, (With<OsageCamera>, Without<Particle>)>,
     mut particles: Query<(Entity, &mut Particle, &mut Transform, &mut Visibility)>,
 ) {
-    let seconds = time.delta_secs();
+    // In a slowed replay, the particles slow with the karts: else a
+    // rocket's fire, launched at nearly the kart's speed, would overtake it.
+    let seconds = time.delta_secs() * pace.map_or(1.0, |pace| pace.0);
     let facing = camera.iter().next().map_or(Quat::IDENTITY, |camera| camera.rotation);
     for (entity, mut particle, mut place, mut shown) in &mut particles {
         if particle.life <= 0.0 {

@@ -27,7 +27,10 @@
 use std::path::PathBuf;
 
 use bevy::{prelude::*, text::FontSize};
-use osage_render::pace::{FrameTarget, LADDER, Pace};
+use osage_render::{
+    Tier,
+    pace::{FrameTarget, LADDER, Pace},
+};
 use osage_world_kart::proto;
 
 use crate::{
@@ -58,12 +61,29 @@ struct Settings {
     /// The kind of music asked of the radio directory; none: not asked.
     directory: Option<usize>,
     voice: VoiceMode,
+    /// The picture's quality, a tier (T1 to T4), from the next start; none:
+    /// the game's default (T2) or the command line's.
+    quality: Option<Tier>,
 }
 
 impl Default for Settings {
     fn default() -> Self {
-        Self { fps: DEFAULT, sound: true, music: true, from: MusicFrom::Auto, directory: None, voice: VoiceMode::Off }
+        Self {
+            fps: DEFAULT,
+            sound: true,
+            music: true,
+            from: MusicFrom::Auto,
+            directory: None,
+            voice: VoiceMode::Off,
+            quality: None,
+        }
     }
+}
+
+/// The quality the player chose in the settings, for the next start: what
+/// `main` starts with when the command line says no `--tier`.
+pub fn kept_quality() -> Option<Tier> {
+    load().and_then(|settings| settings.quality)
 }
 
 /// Whether the player's microphone is heard by the others.
@@ -181,7 +201,7 @@ impl Audio {
 #[derive(Resource, Default)]
 struct Row(usize);
 
-const ROWS: usize = 7;
+const ROWS: usize = 8;
 
 #[derive(Component)]
 struct Panel;
@@ -200,7 +220,7 @@ impl Plugin for SettingsPlugin {
             .init_resource::<Voices>()
             .init_resource::<Row>()
             .add_systems(Startup, setup)
-            .add_systems(Update, (toggle, quick, choose, show).chain());
+            .add_systems(Update, (toggle, quick, choose, show, meter).chain());
     }
 }
 
@@ -252,6 +272,12 @@ fn parse(text: &str) -> Option<Settings> {
                     (settings.voice, any) = (mode, true);
                 }
             }
+            ("quality", _) if value.eq_ignore_ascii_case("auto") => (settings.quality, any) = (None, true),
+            ("quality", _) => {
+                if let Ok(tier) = value.parse::<Tier>() {
+                    (settings.quality, any) = (Some(tier), true);
+                }
+            }
             ("radio-directory", Some(false)) => (settings.directory, any) = (None, true),
             ("radio-directory", _) => {
                 if let Some(kind) = KINDS.iter().position(|k| k.eq_ignore_ascii_case(value)) {
@@ -286,12 +312,13 @@ fn save(settings: Settings) {
     let value = settings.fps.map_or_else(|| "off".to_owned(), |n| n.to_string());
     let on = |on: bool| if on { "on" } else { "off" };
     let text = format!(
-        "# osage kart settings\nfps = {value}\nsound = {}\nmusic = {}\nmusic-from = {}\nradio-directory = {}\nvoice = {}\n",
+        "# osage kart settings\nfps = {value}\nsound = {}\nmusic = {}\nmusic-from = {}\nradio-directory = {}\nvoice = {}\nquality = {}\n",
         on(settings.sound),
         on(settings.music),
         settings.from.name(),
         settings.directory.map_or("off", |kind| KINDS[kind % KINDS.len()]),
         settings.voice.name(),
+        settings.quality.map_or_else(|| "auto".to_owned(), |tier| tier.to_string()),
     );
     let written = path.parent().map_or(Ok(()), std::fs::create_dir_all).and_then(|()| std::fs::write(&path, text));
     if let Err(error) = written {
@@ -318,6 +345,14 @@ fn setup(mut commands: Commands) {
             GlobalZIndex(10),
         ))
         .with_child((Lines, Text::default(), TextFont { font_size: FontSize::Px(18.0), ..default() }));
+    commands.spawn((
+        Meter,
+        Text::default(),
+        TextFont { font_size: FontSize::Px(13.0), ..default() },
+        TextColor(Color::srgba(1.0, 1.0, 1.0, 0.7)),
+        Node { position_type: PositionType::Absolute, bottom: px(6), right: px(10), ..default() },
+        GlobalZIndex(9),
+    ));
 }
 
 fn toggle(
@@ -423,6 +458,12 @@ fn choose(
             voices.picked = (voices.picked as i32 + step).rem_euclid(n) as usize;
             return;
         }
+        7 => {
+            // Auto, then T1 to T4; from the next start.
+            let all = [None, Some(Tier::T1), Some(Tier::T2), Some(Tier::T3), Some(Tier::T4)];
+            let at = all.iter().position(|q| *q == settings.quality).unwrap_or(0) as i32;
+            settings.quality = all[(at + step).rem_euclid(all.len() as i32) as usize];
+        }
         _ => {
             // Off, then each kind: the directory is asked only once one is chosen.
             let n = KINDS.len() as i32 + 1;
@@ -433,6 +474,29 @@ fn choose(
     }
     *audio = Audio::of(&settings);
     save(*settings);
+}
+
+/// A tier as the settings name it.
+fn quality_name(tier: Tier) -> &'static str {
+    match tier {
+        Tier::T1 => "T1 (old integrated graphics)",
+        Tier::T2 => "T2 (integrated graphics)",
+        Tier::T3 => "T3 (graphics card)",
+        Tier::T4 => "T4 (ray tracing card)",
+    }
+}
+
+/// The frame rate and the tier, small, in a corner, always.
+#[derive(Component)]
+struct Meter;
+
+fn meter(pace: Res<Pace>, tier: Res<Tier>, mut texts: Query<&mut Text, With<Meter>>) {
+    let wanted = format!("{:.0} fps  {}", pace.fps, *tier);
+    for mut text in &mut texts {
+        if text.0 != wanted {
+            text.0.clone_from(&wanted);
+        }
+    }
 }
 
 /// The choice beside `now`; a rate from the command line that is not among
@@ -446,6 +510,7 @@ fn next(now: Option<u32>, step: i32) -> Option<u32> {
     CHOICES[(at as i32 + step).clamp(0, last) as usize]
 }
 
+#[allow(clippy::too_many_arguments)]
 fn show(
     menu: Res<Menu>,
     row: Res<Row>,
@@ -453,6 +518,7 @@ fn show(
     pace: Res<Pace>,
     view: Res<RaceView>,
     voices: Res<Voices>,
+    tier: Res<Tier>,
     mut lines: Query<&mut Text, With<Lines>>,
 ) {
     if !menu.0 {
@@ -482,7 +548,7 @@ fn show(
     let mark = |r: usize| if row.0 == r { ">" } else { " " };
     let on = |on: bool| if on { "on" } else { "off" };
     let content = format!(
-        "SETTINGS\n\n{} Frame rate wanted   <  {wanted}  >\n  Now {:.0} fps\n  Picture: {picture}\n\n{} Sound   <  {}  >   (N)\n{} Music   <  {}  >   (M, B next)\n{} Music from   <  {}  >\n{} Radio directory   <  {}  >\n  (off: radio-browser.info is not asked)\n{} Voice   <  {}  >\n{} Mute   <  {}  >   (Space)\n{end}\n↑ ↓ choose    ← → change    Esc close",
+        "SETTINGS\n\n{} Frame rate wanted   <  {wanted}  >\n  Now {:.0} fps\n  Picture: {picture}\n\n{} Sound   <  {}  >   (N)\n{} Music   <  {}  >   (M, B next)\n{} Music from   <  {}  >\n{} Radio directory   <  {}  >\n  (off: radio-browser.info is not asked)\n{} Voice   <  {}  >\n{} Mute   <  {}  >   (Space)\n{} Quality   <  {}  >\n  now {tier}; a change takes effect at the next start\n{end}\n↑ ↓ choose    ← → change    Esc close",
         mark(0),
         pace.fps,
         mark(1),
@@ -500,6 +566,9 @@ fn show(
             || "nobody else talking".to_owned(),
             |(name, muted, _)| format!("{name}: {}", if *muted { "muted" } else { "heard" })
         ),
+        mark(7),
+        settings.quality.map_or_else(|| "auto (T2)".to_owned(), |tier| quality_name(tier).to_owned()),
+        tier = *tier,
     );
     for mut text in &mut lines {
         if text.0 != content {
@@ -526,10 +595,13 @@ mod tests {
                 music: true,
                 from: MusicFrom::Radio,
                 directory: Some(3),
-                voice: VoiceMode::Off
+                voice: VoiceMode::Off,
+                quality: None
             }
         );
         assert_eq!(parse("voice = push-to-talk").map(|s| s.voice), Some(VoiceMode::PushToTalk));
+        assert_eq!(parse("quality = t4").map(|s| s.quality), Some(Some(Tier::T4)));
+        assert_eq!(parse("quality = auto").map(|s| s.quality), Some(None));
         assert_eq!(
             parse("radio-directory = off\nmusic-from = nowhere").map(|s| (s.directory, s.from)),
             Some((None, MusicFrom::Auto))

@@ -5,9 +5,11 @@
 //! ([osage-kart-sound](osage_kart_sound)) — the engine following its revs,
 //! tyres squealing as it slides, kerbs and grass under its wheels, wind, a
 //! knock when it is hit, a bumper's air bag and a pit-crew push from the
-//! kart that uses them — placed where the kart is and heard from the
-//! camera; each drone's rotors where it flies; and the crowd in the
-//! grandstand. A voice plays recordings where
+//! kart that uses them — heard from the player's kart (D-070): its own
+//! engine as loud in every view, the others by their distance, to the left
+//! or the right as the camera looks, higher as they come and lower as they
+//! go (Doppler); each drone's rotors where it flies and the crowd in the
+//! grandstand, heard from the camera. A voice plays recordings where
 //! the content has them (`freesound/kart/`, made by `tools/make-sounds.py`
 //! from the asset manifest's originals) and synthesises the rest. Not in
 //! the bench: it measures pictures.
@@ -48,7 +50,10 @@ impl Plugin for SoundPlugin {
             .add_audio_source::<Clip>()
             .add_audio_source::<Rotors>()
             .add_systems(Startup, load)
-            .add_systems(Update, (listen, voice, drive, crowd, rotors, hush.run_if(resource_exists::<Audio>)).chain());
+            .add_systems(
+                Update,
+                (listen, voice, drive, hear, crowd, rotors, hush.run_if(resource_exists::<Audio>)).chain(),
+            );
     }
 }
 
@@ -93,6 +98,52 @@ struct Shared {
     drive: Drive,
     knocks: Vec<f32>,
     cues: Vec<Cue>,
+    ear: Ear,
+}
+
+/// How a voice is heard: its loudness in each ear, and how much higher it
+/// sounds than it is (a Doppler shift).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Ear {
+    pub left: f32,
+    pub right: f32,
+    pub pitch: f32,
+}
+
+impl Default for Ear {
+    fn default() -> Self {
+        Self { left: 0.0, right: 0.0, pitch: 1.0 }
+    }
+}
+
+/// The speed of sound, m/s.
+const SOUND: f32 = 343.0;
+/// At this distance another kart is heard at half its loudness, m.
+const HALF_AT: f32 = 9.0;
+/// Further than this, not at all, m.
+const FARTHEST: f32 = 220.0;
+
+/// How a kart at `at` going at `velocity` is heard by an ear at `ear`
+/// going at `moving`, whose right is `right`; `own`: the player's own kart,
+/// heard as from its seat.
+pub fn heard(at: Vec3, velocity: Vec3, ear: Vec3, moving: Vec3, right: Vec3, own: bool) -> Ear {
+    if own {
+        let centre = std::f32::consts::FRAC_1_SQRT_2;
+        return Ear { left: centre, right: centre, pitch: 1.0 };
+    }
+    let apart = (at - ear).with_y(0.0);
+    let distance = apart.length().max(0.5);
+    let towards = apart / distance;
+    // An inverse-distance roll-off, gentler than a square: a kart is heard
+    // coming, then fades to nothing at the far side of a circuit.
+    let fade = (1.0 - distance / FARTHEST).clamp(0.0, 1.0);
+    let loud = HALF_AT / (HALF_AT + distance) * fade;
+    // Equal-power panning by where it is across the view.
+    let across = towards.dot(right.with_y(0.0).normalize_or_zero()).clamp(-1.0, 1.0);
+    let angle = (across + 1.0) * std::f32::consts::FRAC_PI_4;
+    // Approaching, higher; going away, lower.
+    let pitch = ((SOUND + moving.dot(towards)) / (SOUND + velocity.dot(towards))).clamp(0.8, 1.25);
+    Ear { left: loud * angle.cos(), right: loud * angle.sin(), pitch }
 }
 
 /// The recordings found, shared by every voice.
@@ -147,7 +198,7 @@ impl Decodable for Synth {
     type Decoder = Stream;
 
     fn decoder(&self) -> Stream {
-        Stream { voice: Voice::with(self.seed, self.recordings.clone()), shared: self.shared.clone(), count: 0 }
+        Stream::new(Voice::with(self.seed, self.recordings.clone()), self.shared.clone())
     }
 }
 
@@ -224,17 +275,46 @@ fn crowd(
     ));
 }
 
-/// The samples of a voice, endless.
+/// The samples of a voice, endless: stereo, each ear at its loudness, the
+/// voice played faster or slower by its Doppler shift.
 pub struct Stream {
     voice: Voice,
     shared: Arc<Mutex<Shared>>,
     count: u32,
+    /// How it is to be heard, and how it is heard now (eased to it).
+    ear: Ear,
+    now: Ear,
+    /// The voice's last two samples and how far between them the output is.
+    before: f32,
+    after: f32,
+    at: f32,
+    /// The right ear's sample, after the left one's.
+    right: Option<f32>,
+}
+
+impl Stream {
+    fn new(voice: Voice, shared: Arc<Mutex<Shared>>) -> Self {
+        Self {
+            voice,
+            shared,
+            count: 0,
+            ear: Ear::default(),
+            now: Ear::default(),
+            before: 0.0,
+            after: 0.0,
+            at: 0.0,
+            right: None,
+        }
+    }
 }
 
 impl Iterator for Stream {
     type Item = Sample;
 
     fn next(&mut self) -> Option<Sample> {
+        if let Some(right) = self.right.take() {
+            return Some(right);
+        }
         // Every 5 ms, what the game wants now; never wait for it.
         if self.count.is_multiple_of(240)
             && let Ok(mut shared) = self.shared.try_lock()
@@ -246,9 +326,23 @@ impl Iterator for Stream {
             for cue in shared.cues.drain(..) {
                 self.voice.cue(cue);
             }
+            self.ear = shared.ear;
         }
         self.count = self.count.wrapping_add(1);
-        Some(self.voice.sample())
+        // Eased over about 20 ms: no clicks as karts move.
+        let ease = 1.0 / 960.0;
+        self.now.left += (self.ear.left - self.now.left) * ease;
+        self.now.right += (self.ear.right - self.now.right) * ease;
+        self.now.pitch += (self.ear.pitch - self.now.pitch) * ease;
+        self.at += self.now.pitch;
+        while self.at >= 1.0 {
+            self.before = self.after;
+            self.after = self.voice.sample();
+            self.at -= 1.0;
+        }
+        let s = self.before + (self.after - self.before) * self.at;
+        self.right = Some(s * self.now.right);
+        Some(s * self.now.left)
     }
 }
 
@@ -258,7 +352,7 @@ impl Source for Stream {
     }
 
     fn channels(&self) -> ChannelCount {
-        NonZero::<u16>::MIN
+        NonZero::new(2).unwrap()
     }
 
     fn sample_rate(&self) -> SampleRate {
@@ -311,8 +405,38 @@ fn voice(
                 guard: pose.guard,
             },
             AudioPlayer(synth),
-            PlaybackSettings::LOOP.with_spatial(true),
+            // Heard as `hear` places it, not by the engine's own panning.
+            PlaybackSettings::LOOP,
         ));
+    }
+}
+
+/// Where each kart is heard from (D-070): the ear is in the player's kart
+/// — the followed one — turned as the camera looks, so that its own engine
+/// is as loud in every view and the others come and go around it.
+fn hear(
+    camera: Query<&GlobalTransform, With<OsageCamera>>,
+    followed: Query<&Pose, With<crate::scene::Followed>>,
+    karts: Query<(Entity, &Pose, &Heard)>,
+    own: Query<Entity, With<crate::scene::Followed>>,
+) {
+    let Ok(camera) = camera.single() else { return };
+    let mine = own.iter().next();
+    let velocity = |kart: &osage_kart_physics::Kart| {
+        let (x, z) = kart.velocity();
+        Vec3::new(x, 0.0, z)
+    };
+    let (ear, moving) = match followed.iter().next() {
+        Some(pose) => (Vec3::new(pose.kart.x, pose.kart.height, pose.kart.z), velocity(&pose.kart)),
+        None => (camera.translation(), Vec3::ZERO),
+    };
+    let right = camera.right().as_vec3();
+    for (entity, pose, heard) in &karts {
+        let at = Vec3::new(pose.kart.x, pose.kart.height, pose.kart.z);
+        let placed = self::heard(at, velocity(&pose.kart), ear, moving, right, Some(entity) == mine);
+        if let Ok(mut shared) = heard.shared.lock() {
+            shared.ear = placed;
+        }
     }
 }
 

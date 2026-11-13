@@ -189,6 +189,8 @@ fn present(
         _ => {}
     }
     view.replay = matches!(show.mode, Mode::Replay { .. });
+    // The particles slow with the replay (they are made at the karts' real speeds).
+    commands.insert_resource(crate::effects::Pace(if view.replay { SLOW } else { 1.0 }));
     // On the grid, waiting: the circuit flown over.
     if wanted.is_none() && matches!(view.stage, Lights::Waiting | Lights::Ready(_)) {
         show.flown += FLY * time.delta_secs();

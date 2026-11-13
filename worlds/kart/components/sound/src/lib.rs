@@ -170,6 +170,56 @@ impl std::fmt::Debug for Recordings {
     }
 }
 
+/// Grains of a loop, each this many samples (120 ms), two at a time.
+const GRAIN: f32 = 0.12 * RATE as f32;
+
+/// A loop played as grains (D-070): short pieces taken from anywhere in
+/// it, each faded in and out, overlapping by half at equal power. A loop
+/// of an engine a second long, played as it is, repeats every second —
+/// a pattern the ear finds and will not let go of; played as grains, it
+/// keeps its sound and loses its period.
+#[derive(Clone, Debug)]
+struct Grains {
+    /// Where each grain is in the loop, and how far through itself.
+    grains: [(f32, f32); 2],
+    noise: Noise,
+}
+
+impl Grains {
+    fn new(seed: u32, clip: &[f32]) -> Self {
+        let mut noise = Noise(seed | 1);
+        let mut at = || ((noise.next() * 0.5 + 0.5) * clip.len() as f32).floor();
+        let (a, b) = (at(), at());
+        Self { grains: [(a, 0.0), (b, GRAIN / 2.0)], noise }
+    }
+
+    /// The next sample of `clip` at `rate` times its speed.
+    fn play(&mut self, clip: &[f32], rate: f32) -> f32 {
+        let n = clip.len();
+        if n < 2 {
+            return 0.0;
+        }
+        let mut s = 0.0;
+        for (at, age) in &mut self.grains {
+            if *age >= GRAIN {
+                // A new grain, from anywhere in the loop.
+                // On a sample: interpolating a noise at a fixed fraction
+                // would take some of its power.
+                *at = ((self.noise.next() * 0.5 + 0.5) * n as f32).floor();
+                *age -= GRAIN;
+            }
+            let i = *at as usize;
+            let f = *at - i as f32;
+            let x = clip[i % n] * (1.0 - f) + clip[(i + 1) % n] * f;
+            // A half sine: two grains half a grain apart keep the power.
+            s += x * (PI * *age / GRAIN).sin();
+            *at = (*at + rate) % n as f32;
+            *age += 1.0;
+        }
+        s
+    }
+}
+
 /// A loop played at a varying speed.
 #[derive(Clone, Debug, Default)]
 struct Tape {
@@ -221,7 +271,7 @@ struct Engine {
     misfire: f32,
     /// Recorded: the loops' tapes, and the two playing — which, how loud,
     /// how fast.
-    tapes: Vec<Tape>,
+    tapes: Vec<Grains>,
     playing: [(usize, f32, f32); 2],
     /// Takes off the brightness a loop gains when played faster, so that
     /// its timbre stays an engine's.
@@ -268,10 +318,12 @@ impl Engine {
     fn sample(&mut self, recorded: &[(Arc<[f32]>, f32)]) -> f32 {
         if !recorded.is_empty() {
             let mut s = 0.0;
-            for (k, gain, rate) in self.playing {
-                // Keep both tapes turning, so that a loop fades in where it should be.
-                let x = self.tapes[k].play(&recorded[k].0, rate);
-                s += x * gain;
+            let [(i, a, ra), (j, b, rb)] = self.playing;
+            // Keep both tapes turning, so that a loop fades in where it
+            // should be — each once, when both are the same.
+            s += self.tapes[i].play(&recorded[i].0, ra) * a;
+            if j != i {
+                s += self.tapes[j].play(&recorded[j].0, rb) * b;
             }
             return self.tone.pass(s) * TAPE_ENGINE * (0.4 + 0.6 * self.load);
         }
@@ -419,7 +471,12 @@ impl Voice {
         crack.tune(1_100.0, 2.0);
         // Karts start their loops at different places.
         let start = |clip: &[f32], salt: u32| Tape { at: ((seed ^ salt) % clip.len().max(1) as u32) as f32 };
-        let tapes = recordings.engine.iter().enumerate().map(|(k, (clip, _))| start(clip, k as u32)).collect();
+        let tapes = recordings
+            .engine
+            .iter()
+            .enumerate()
+            .map(|(k, (clip, _))| Grains::new(seed ^ (k as u32 * 0x2545), clip))
+            .collect();
         Self {
             engine: Engine {
                 phase: 0.0,
@@ -725,6 +782,31 @@ mod tests {
         (0..n).map(|i| (TAU * 20.0 * i as f32 / n as f32).sin() * 0.14).collect()
     }
 
+    /// A loop of noise, as an engine's recording mostly is: `seconds` long,
+    /// seamless (a noise has no seam to hear).
+    fn rumble(seconds: f32) -> Arc<[f32]> {
+        // Low: an engine's sound is mostly below a few kHz.
+        let (mut noise, mut low) = (Noise(77), Low::default());
+        low.tune(1_500.0);
+        (0..(seconds * RATE as f32) as usize).map(|_| low.pass(noise.next()) * 0.6).collect()
+    }
+
+    /// D-070: played as grains, a loop a second long no longer repeats
+    /// every second.
+    #[test]
+    fn a_short_loop_is_played_without_its_period() {
+        let loop_ = rumble(1.0);
+        let n = loop_.len();
+        let tapes = Arc::new(Recordings { engine: vec![(loop_, 9_000.0)], ..Recordings::default() });
+        let revs = (9_000.0 - IDLE_RPM) / (MAX_RPM - IDLE_RPM);
+        let s = run(&mut Voice::with(5, tapes), Drive { revs, throttle: 1.0, speed: 20.0, ..Drive::default() }, 3.2);
+        let (a, b) = (&s[RATE as usize / 5..][..n], &s[RATE as usize / 5 + n..][..n]);
+        let dot: f32 = a.iter().zip(b).map(|(x, y)| x * y).sum();
+        let norm = (a.iter().map(|x| x * x).sum::<f32>() * b.iter().map(|y| y * y).sum::<f32>()).sqrt();
+        assert!(dot / norm < 0.2, "one second like the next: {}", dot / norm);
+        assert!(rms(a) > 0.05, "and heard: {}", rms(a));
+    }
+
     #[test]
     fn a_recorded_engine_follows_the_revs() {
         // One loop at 100 Hz, recorded at 6 000 turns a minute: at 7 200 it
@@ -740,7 +822,7 @@ mod tests {
     #[test]
     fn recorded_engine_loops_crossfade_between_their_speeds() {
         let tapes = Arc::new(Recordings {
-            engine: vec![(tone(100.0), 4_000.0), (tone(100.0), 8_000.0)],
+            engine: vec![(rumble(1.3), 4_000.0), (rumble(1.1), 8_000.0)],
             ..Recordings::default()
         });
         let level = |rpm: f32| {
@@ -816,7 +898,7 @@ mod tests {
 
     #[test]
     fn flat_out_and_steady_the_engine_eases_down_and_comes_back_on_a_change() {
-        let tapes = Arc::new(Recordings { engine: vec![(tone(100.0), 9_000.0)], ..Recordings::default() });
+        let tapes = Arc::new(Recordings { engine: vec![(rumble(1.1), 9_000.0)], ..Recordings::default() });
         let flat_out = Drive { revs: 0.77, throttle: 1.0, speed: 22.0, ..Drive::default() };
         let mut voice = Voice::with(4, tapes.clone());
         let first = rms(&run(&mut voice, flat_out, 1.0)[RATE as usize / 2..]);
