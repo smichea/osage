@@ -46,6 +46,7 @@ What osage knows about its own modules: their architecture, the algorithms and t
 * [Ground that varies](techniques/ground-variation.md) - A ground texture that never repeats — its grain sampled by hexagonal cells shifted and turned by where they are, multiplied by clumps and patches, and on a road by its history along its length (seams, patches, cracks, stains); octaves smaller than a few pixels fade out.
 * [Light from the sky](techniques/sky-light.md) - How the sky and the ground light what the sun does not, chosen per tier because lighting from a cubemap costs 2 to 3 ms on an integrated GPU whatever its size.
 * [Ray-traced light](techniques/ray-traced-light.md) - At T4, direct and indirect light traced by Bevy Solari on hardware with ray queries, meshes doubled for the rays, hidden ones left out.
+* [Traced-light denoising](techniques/traced-light-denoising.md) - At T4, the traced light's grain filtered by an edge-avoiding à-trous wavelet over the light divided by surface colour.
 * [Sun shadows](techniques/sun-shadows.md) - Cascaded shadow maps for the sun, with cascades, reach and resolution chosen per tier from measurements.
 * [Ambient occlusion](techniques/ambient-occlusion.md) - Screen-space ambient occlusion from T3, kept out of T2 by its measured cost and by a defect on integrated graphics.
 * [Post-processing and anti-aliasing](techniques/post-processing.md) - HDR, exposure, the world's look, anti-aliasing and bloom, chosen per tier so that the lower tiers need no depth prepass.

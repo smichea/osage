@@ -23,6 +23,8 @@
 //! measured.
 
 pub mod ambient_occlusion;
+#[cfg(feature = "raytracing")]
+pub mod denoise;
 pub mod ground;
 pub mod pace;
 pub mod panorama;

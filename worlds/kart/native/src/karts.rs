@@ -33,8 +33,9 @@ use crate::scene::{Course, PAINTS, Pose, roughness, wobble};
 
 /// A hop into a drift lasts this long, seconds.
 const HOP: f32 = 0.28;
-/// Seconds a trick's roll takes.
-const TRICK_ROLL: f32 = 0.45;
+/// The fastest a trick rolls the kart, rad/s: two turns a second. A jump
+/// too short for a whole turn at that lands the kart tilted (D-096).
+const TRICK_SPIN: f32 = 2.0 * TAU;
 
 /// The rockets of a rocket item (paddock objects), strapped either side
 /// behind the seat, pointing back: where each sits, and its nozzle.
@@ -133,8 +134,14 @@ pub struct Rig {
     seed: f32,
     /// The nose up a crest and through the air, radians (down is positive).
     attitude: f32,
-    /// How far through its roll a trick is, 0 to 1.
-    trick: f32,
+    /// The body's roll across a slope it stands on sideways, rad.
+    bank: f32,
+    /// The body rolling over a trick and bouncing on landing.
+    tumble: Tumble,
+    /// Whether the kart was doing a trick last frame.
+    tricking: bool,
+    /// How high it was over the road last frame, m, and how fast it climbed.
+    was: (f32, f32),
     /// The glow of a pit-crew push, and a bumper's wave with its age (s;
     /// none running when negative), and what the kart held last frame.
     bubble: Entity,
@@ -524,13 +531,133 @@ pub fn dress(
                 time: 0.0,
                 seed: (kart.index_u32() % 97) as f32 * 0.61,
                 attitude: 0.0,
-                trick: 0.0,
+                bank: 0.0,
+                tumble: Tumble::default(),
+                tricking: false,
+                was: (0.0, 0.0),
                 bubble,
                 wave,
                 waved: -1.0,
                 held: None,
             },
         ));
+    }
+}
+
+/// The slope a kart lies on, as rises per metre along its nose and across
+/// it towards its left (+X): on the road, the road's; in the air, its path's.
+/// Also how high the kart is above the road, m.
+fn lie(course: Option<&Course>, kart: &osage_kart_physics::Kart) -> (f32, f32, f32) {
+    let (sin, cos) = kart.heading.sin_cos();
+    let (nose, left) = (Vec2::new(sin, cos), Vec2::new(cos, -sin));
+    let (grade, above) = match course {
+        Some(course) => {
+            let track = &course.0.track;
+            let along = track.locate(kart.x, kart.z).along;
+            let (road, slope) = track.lift(along);
+            let above = (kart.height - road).max(0.0);
+            if above <= 0.02 {
+                let (_, heading) = track.at(along);
+                (Vec2::new(heading.sin(), heading.cos()) * slope, above)
+            } else {
+                (flown(kart), above)
+            }
+        }
+        None => (flown(kart), kart.height),
+    };
+    (grade.dot(nose), grade.dot(left), above)
+}
+
+/// A flying kart's path, as a rise per metre in the direction it moves.
+fn flown(kart: &osage_kart_physics::Kart) -> Vec2 {
+    let (vx, vz) = kart.velocity();
+    let v = Vec2::new(vx, vz);
+    v * (kart.climb / v.length_squared().max(16.0))
+}
+
+/// The kart's centre of mass over the road, m: the body rolls about it.
+const MASS_HEIGHT: f32 = 0.35;
+/// The kart and driver's moment of inertia about their long axis, per
+/// unit of mass, m²: about 160 kg, 1.4 m wide and 1 m tall, a slab.
+const ROLL_INERTIA: f32 = 0.25;
+/// How hard a body lying on the road is rocked back towards its wheels,
+/// rad/s² per rad: more than its weight holds it on its side with — the
+/// physics drives on, and a kart drives on its wheels.
+const RIGHTING: f32 = 40.0;
+/// How much of its speed into the road a tyre gives back on a bounce.
+const BOUNCE: f32 = 0.3;
+
+/// The kart's outline across, (half width, height) m: the tyres' outer
+/// edges, the driver's shoulders, the helmet's top.
+const OUTLINE: [(f32, f32); 4] = [(0.7, 0.0), (0.7, 0.28), (0.26, 0.66), (0.15, 0.97)];
+
+/// The body as a rigid slab rolling about the kart's long axis over the
+/// road, apart from the kart's own path (which the physics keeps): it
+/// turns freely through the air, and its outline, meeting the road, is
+/// pushed out and bounced — a tyre landing first rights it or tips it,
+/// as the speed and angle make it (D-096).
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+struct Tumble {
+    /// Roll, rad (0 upright).
+    roll: f32,
+    /// Rate of roll, rad/s.
+    turning: f32,
+    /// How far the body is lifted over where the kart is, m, and how fast.
+    lift: f32,
+    rising: f32,
+}
+
+impl Tumble {
+    /// Where a point of the outline is, relative to the kart, and how fast
+    /// it moves up.
+    fn point(&self, (x, y): (f32, f32)) -> (f32, f32, f32) {
+        let (sin, cos) = self.roll.sin_cos();
+        let (rx, ry) = (x * cos - (y - MASS_HEIGHT) * sin, x * sin + (y - MASS_HEIGHT) * cos);
+        (rx, MASS_HEIGHT + self.lift + ry, self.rising + self.turning * rx)
+    }
+
+    /// One step of `dt` s over a road `above` m under the kart.
+    fn step(&mut self, dt: f32, above: f32) {
+        self.rising -= osage_kart_physics::GRAVITY * dt;
+        self.lift += self.rising * dt;
+        self.roll += self.turning * dt;
+        let mut touching = false;
+        for (x, y) in OUTLINE.iter().flat_map(|&(x, y)| [(x, y), (-x, y)]) {
+            let (rx, height, up) = self.point((x, y));
+            let depth = -above - height;
+            if depth <= 0.0 {
+                continue;
+            }
+            touching = true;
+            self.lift += depth;
+            if up < 0.0 {
+                // An impulse at the point, along the road's normal.
+                let push = -(1.0 + BOUNCE) * up / (1.0 + rx * rx / ROLL_INERTIA);
+                self.rising += push;
+                self.turning += push * rx / ROLL_INERTIA;
+            }
+        }
+        // Resting on the road the body cannot hang below the kart, and
+        // tyres scrubbing the road slow a roll; a kart on its side or its
+        // back is rocked over onto its wheels.
+        if self.lift < 0.0 && touching {
+            self.lift = 0.0;
+            self.rising = self.rising.max(0.0);
+        }
+        if touching {
+            self.turning *= (-3.0 * dt).exp();
+            self.turning -= RIGHTING * wrap(self.roll) * dt;
+        }
+        if self.lift <= 0.0 && above <= 0.02 {
+            self.lift = 0.0;
+            self.rising = self.rising.max(0.0);
+        }
+        self.roll = wrap(self.roll);
+    }
+
+    /// Settled upright on its wheels.
+    fn settled(&self) -> bool {
+        self.roll.abs() < 1e-3 && self.turning.abs() < 1e-2 && self.lift.abs() < 1e-3 && self.rising.abs() < 1e-2
     }
 }
 
@@ -581,23 +708,45 @@ pub fn animate(
         rig.torso += sway * step;
         let lean = Quat::from_rotation_x(rig.torso.y) * Quat::from_rotation_z(rig.torso.x);
 
-        // Up a crest and through the air, the nose follows the path (D-050);
-        // a trick is a full roll of the body while it flies.
-        let path = -(kart.climb / kart.speed.abs().max(4.0)).atan().clamp(-0.5, 0.5);
-        rig.attitude += (path - rig.attitude) * ease(14.0);
-        if kart.trick > 0.0 {
-            rig.trick = (rig.trick + seconds / TRICK_ROLL).min(1.0);
-        } else {
-            rig.trick = 0.0;
+        // On the road the kart lies on it, whichever way it points: the
+        // road's rise, taken along the kart's nose, pitches it, and taken
+        // across, rolls it (spun round on a crest, it stood on one wheel
+        // and sank the other). Through the air the nose follows the path
+        // (D-050); a trick is a full roll of the body while it flies.
+        let (rise, across, above) = lie(course.as_deref(), kart);
+        rig.attitude += (-rise.atan().clamp(-0.5, 0.5) - rig.attitude) * ease(14.0);
+        rig.bank += (across.atan().clamp(-0.5, 0.5) - rig.bank) * ease(14.0);
+        // A trick throws the body into a roll timed to land upright, if
+        // the jump is long enough; landing, the body keeps falling as the
+        // kart fell, onto the road the physics has put the kart back on.
+        let tricking = kart.trick > 0.0;
+        if tricking && !rig.tricking {
+            let g = osage_kart_physics::GRAVITY;
+            let flight = (kart.climb + (kart.climb * kart.climb + 2.0 * g * above).sqrt()) / g;
+            let side = if (rig.seed as i32) % 2 == 0 { 1.0 } else { -1.0 };
+            rig.tumble.turning = side * (TAU / flight.max(0.05)).min(TRICK_SPIN);
         }
-        let eased = rig.trick * rig.trick * (3.0 - 2.0 * rig.trick);
-        let roll = TAU * eased * if (rig.seed as i32) % 2 == 0 { 1.0 } else { -1.0 };
+        rig.tricking = tricking;
+        let (was_above, was_climbing) = rig.was;
+        if was_above > 0.02 && above <= 0.02 {
+            rig.tumble.lift += was_above - above;
+            rig.tumble.rising += was_climbing.min(0.0);
+        }
+        rig.was = (above, kart.climb);
+        if !rig.tumble.settled() {
+            for _ in 0..8 {
+                rig.tumble.step(seconds.min(0.05) / 8.0, above);
+            }
+        }
+        let tumble = rig.tumble;
         if let Ok(mut place) = transforms.get_mut(entity) {
-            *place = Transform::from_xyz(kart.x, kart.height + hop, kart.z)
-                .with_rotation(Quat::from_rotation_y(kart.heading) * Quat::from_rotation_x(rig.attitude))
-                * Transform::from_xyz(0.0, 0.5, 0.0)
-                * Transform::from_rotation(Quat::from_rotation_z(roll))
-                * Transform::from_xyz(0.0, -0.5, 0.0);
+            *place = Transform::from_xyz(kart.x, kart.height + hop + tumble.lift, kart.z).with_rotation(
+                Quat::from_rotation_y(kart.heading)
+                    * Quat::from_rotation_x(rig.attitude)
+                    * Quat::from_rotation_z(rig.bank),
+            ) * Transform::from_xyz(0.0, MASS_HEIGHT, 0.0)
+                * Transform::from_rotation(Quat::from_rotation_z(tumble.roll))
+                * Transform::from_xyz(0.0, -MASS_HEIGHT, 0.0);
         }
         // What it holds, on its back — or, held behind it, on the road
         // behind its tail (D-052).
@@ -701,5 +850,49 @@ pub fn animate(
                 tyre.rotation = facing * Quat::from_rotation_x(spin);
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The lowest point of the body's outline over the road, m.
+    fn lowest(tumble: &Tumble, above: f32) -> f32 {
+        OUTLINE
+            .iter()
+            .flat_map(|&(x, y)| [(x, y), (-x, y)])
+            .map(|p| tumble.point(p).1 + above)
+            .fold(f32::INFINITY, f32::min)
+    }
+
+    /// The body falling from `above` m onto the road, rolled by `roll`.
+    fn land(roll: f32, turning: f32, falling: f32) -> Vec<Tumble> {
+        let mut tumble = Tumble { roll, turning, lift: 0.4, rising: -falling };
+        (0..240 * 8)
+            .map(|_| {
+                tumble.step(1.0 / 240.0, 0.0);
+                tumble
+            })
+            .collect()
+    }
+
+    #[test]
+    fn a_kart_landing_tilted_bounces_back_onto_its_wheels_never_into_the_road() {
+        for (roll, turning) in [(0.0, 0.0), (0.6, 4.0), (-1.2, -6.0), (1.6, 2.0), (2.6, 9.0)] {
+            let path = land(roll, turning, 6.0);
+            let sunk = path.iter().map(|t| lowest(t, 0.0)).fold(f32::INFINITY, f32::min);
+            assert!(sunk > -0.03, "landing at {roll} rad: the outline sank {sunk} m into the road");
+            let end = path.last().unwrap();
+            assert!(end.roll.abs() < 0.05 && end.lift.abs() < 0.02, "landing at {roll} rad: ended at {end:?}");
+        }
+    }
+
+    #[test]
+    fn a_kart_landing_tilted_tips_over_its_wheel_before_it_settles() {
+        let path = land(0.6, 0.0, 6.0);
+        let bounced = path.iter().map(|t| t.lift).fold(0.0f32, f32::max);
+        assert!(bounced > 0.0, "the tyre's impulse throws the body up");
+        assert!(path.iter().any(|t| t.roll < 0.6 && t.turning < 0.0), "the impulse turns it back towards upright");
     }
 }

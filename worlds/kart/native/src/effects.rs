@@ -339,13 +339,20 @@ pub fn emit(
                 launch(&mut pool, Kind::Spray, place.transform_point(contact) + Vec3::Y * 0.15, throw * wet);
             }
         }
-        let off_road = course.as_ref().is_some_and(|course| {
-            course.0.track.locate(kart.x, kart.z).lateral.abs() > course.0.track.half_width + 0.8
-        });
-        if off_road && speed.abs() > 3.0 && frame.is_multiple_of(2) {
+        // Dust where a wheel itself bites the grass: two wheels off, two
+        // clouds, not four.
+        if let Some(course) = course.as_ref()
+            && speed.abs() > 3.0
+            && frame.is_multiple_of(2)
+        {
+            let track = &course.0.track;
             for contact in REAR_CONTACTS {
+                let at = place.transform_point(contact);
+                if track.ground(track.locate(at.x, at.z).lateral) != osage_kart_physics::Ground::Grass {
+                    continue;
+                }
                 let puff = Vec3::Y * 0.8 + pool.spread(0.7);
-                launch(&mut pool, Kind::Dust, place.transform_point(contact), behind * 0.1 + puff);
+                launch(&mut pool, Kind::Dust, at, behind * 0.1 + puff);
             }
         }
     }

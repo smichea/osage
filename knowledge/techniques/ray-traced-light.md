@@ -27,7 +27,8 @@ Light as it is: the sun and the lamps reach a surface only where nothing stands 
 2. **Hidden things stay out.** Solari traces every double, shown or not: a hidden mesh's double is taken out of the traced scene and put back when the mesh is shown — else a kart's hidden guard bubble, round kart and driver, shaded them black.
 3. **The camera.** Solari draws every opaque material deferred: the camera has the deferred, depth and motion-vector prepasses, no multisampling, and a main texture it can write to. The custom ground material has its deferred shader (the same source, writing the G-buffer).
 4. **Lamps.** Solari has no punctual lights: only the sun, the sky and shining surfaces light the scene. A drawn mesh marked a lamp (`Emitter`, a luminance in cd/m²) gets a traced double shining at that luminance, beside its drawn face — whose glow is set for the eye, far dimmer (D-094); the raster's spot and point lights are left to the raster.
-5. **The light.** Solari's realtime lighting shades each pixel of the G-buffer with direct light sampled from the scene's lights and indirect light traced through it, a world-space cache of irradiance between frames; ReSTIR[^restir] reuses light samples between neighbouring pixels and frames, which, without a learned denoiser, is what keeps sunlit asphalt from sparkling.
+5. **Glows.** The raster draws a glow unexposed (a value on the screen); Solari exposes every glow as a luminance. Each opaque glowing material's glow is set, while traced, to the luminance the camera shows as the raster does, again when the exposure changes (D-095); a lamp's traced double keeps its own luminance.
+6. **The light.** Solari's realtime lighting shades each pixel of the G-buffer with direct light sampled from the scene's lights and indirect light traced through it, a world-space cache of irradiance between frames; ReSTIR[^restir] reuses light samples between neighbouring pixels and frames, which, without a learned denoiser, is what keeps sunlit asphalt from sparkling.
 
 # Settings per tier
 
@@ -39,7 +40,7 @@ The cloud bench on an NVIDIA L4 at 2560×1440, the kart bench, 2026-11-14: witho
 
 # Limits
 
-Spot and point lights are not traced: a lamp lights T4 only if it is marked. No learned denoiser (DLSS ray reconstruction is not built): some noise remains in motion. Skinned meshes (the drivers) are traced in their rest pose. The ground's stand-in is one colour: its bounce light has none of the meadow's variety. Vertex colours (paint, grime) do not reach the rays, only the picture.
+Spot and point lights are not traced: a lamp lights T4 only if it is marked. No learned denoiser (DLSS ray reconstruction is a proprietary SDK): [an edge-avoiding filter](traced-light-denoising.md) smooths the grain. Skinned meshes (the drivers) are traced in their rest pose. The ground's stand-in is one colour: its bounce light has none of the meadow's variety. Vertex colours (paint, grime) do not reach the rays, only the picture.
 
 # Oracle
 

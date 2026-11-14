@@ -78,7 +78,14 @@ fn camera(mut commands: Commands, tier: Res<Tier>, look: Res<Look>, cameras: Que
                 camera.insert((Fxaa::default(), Bloom::NATURAL));
             }
             Tier::T3 | Tier::T4 => {
-                camera.insert((TemporalAntiAliasing::default(), Bloom::NATURAL, MotionBlur::default()));
+                // Four samples each way: with one (Bevy's default), dithered,
+                // a spinning wheel's blur showed the road through its tyre
+                // like a wire mesh (2026-11-14).
+                camera.insert((
+                    TemporalAntiAliasing::default(),
+                    Bloom::NATURAL,
+                    MotionBlur { samples: 4, ..default() },
+                ));
                 if look.vignette > 0.0 {
                     camera.insert(Vignette { intensity: look.vignette, radius: 0.85, smoothness: 2.5, ..default() });
                 }

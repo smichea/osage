@@ -14,10 +14,10 @@
 //! ground drawn with the ground material gets a stand-in for the rays: its
 //! double, under a standard material of the ground's colour.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use bevy::{
-    camera::CameraMainTextureUsages,
+    camera::{CameraMainTextureUsages, Exposure},
     mesh::{Indices, PrimitiveTopology, VertexAttributeValues},
     prelude::*,
     render::render_resource::TextureUsages,
@@ -33,9 +33,10 @@ impl Plugin for RayTracingPlugin {
         if app.world().get_resource::<Tier>().is_none_or(|tier| *tier < Tier::T4) {
             return;
         }
-        app.add_plugins(SolariPlugins)
+        app.add_plugins((SolariPlugins, crate::denoise::DenoisePlugin))
             .init_resource::<Doubles>()
-            .add_systems(Update, (camera, doubles, stand_ins, emitters))
+            .init_resource::<Glows>()
+            .add_systems(Update, (camera, doubles, stand_ins, emitters, glows))
             .add_systems(PostUpdate, hidden.after(bevy::camera::visibility::VisibilitySystems::VisibilityPropagate));
     }
 }
@@ -43,6 +44,16 @@ impl Plugin for RayTracingPlugin {
 /// The double made for each mesh, once.
 #[derive(Resource, Default)]
 struct Doubles(HashMap<AssetId<Mesh>, Option<Handle<Mesh>>>);
+
+/// Each opaque glowing material's glow as the raster shows it, and the
+/// glow set for the traced picture; the traced lamps' own materials, left
+/// as they are; the exposure the glows were set for.
+#[derive(Resource, Default)]
+struct Glows {
+    raster: HashMap<AssetId<StandardMaterial>, (LinearRgba, LinearRgba)>,
+    lamps: HashSet<AssetId<StandardMaterial>>,
+    exposure: f32,
+}
 
 /// A mesh drawn with the ground material, given its stand-in for the rays.
 #[derive(Component)]
@@ -69,6 +80,7 @@ fn camera(mut commands: Commands, cameras: Query<Entity, Added<OsageCamera>>) {
             // denoiser (DLSS's, not built here) the sunlit asphalt sparkled
             // with noise; the L4 had the frame time for it (16.7 ms of 33).
             SolariLighting { restir: true, ..default() },
+            crate::denoise::Denoised,
             Msaa::Off,
             CameraMainTextureUsages::default().with(TextureUsages::STORAGE_BINDING),
         ));
@@ -217,6 +229,54 @@ fn stand_ins(
     }
 }
 
+/// A glow seen as the raster shows it. The raster draws a material's glow
+/// unexposed (by its `emissive_exposure_weight`, 0 by default: a value on
+/// the screen); traced light takes every glow as a luminance and exposes
+/// it — at night's exposure a lamp's face, a tunnel's lamps, a screen in
+/// the paddock went dark (D-095). Each opaque glowing material's glow is
+/// set to the luminance the camera shows as the raster does, again when
+/// the exposure changes. The traced lamps' (`Emitter`) are luminances
+/// already.
+fn glows(
+    cameras: Query<Option<&Exposure>, With<OsageCamera>>,
+    mut materials: ResMut<Assets<StandardMaterial>>,
+    mut glows: ResMut<Glows>,
+) {
+    let Some(exposure) = cameras.iter().next().map(|e| e.copied().unwrap_or_default().exposure()) else { return };
+    let moved = exposure != glows.exposure;
+    glows.exposure = exposure;
+    let mut due = Vec::new();
+    for (id, material) in materials.iter() {
+        if glows.lamps.contains(&id) || !matches!(material.alpha_mode, AlphaMode::Opaque | AlphaMode::Mask(_)) {
+            continue;
+        }
+        let now = material.emissive;
+        match glows.raster.get(&id) {
+            // Set by this system, and the exposure unchanged.
+            Some(&(_, set)) if set == now && !moved => {}
+            Some(&(raster, set)) if set == now => due.push((id, raster, material.emissive_exposure_weight)),
+            // New, or changed by its owner: its glow as the raster shows it.
+            _ if now == LinearRgba::BLACK => {}
+            _ => due.push((id, now, material.emissive_exposure_weight)),
+        }
+    }
+    for (id, raster, weight) in due {
+        let set = traced_glow(raster, weight, exposure);
+        glows.raster.insert(id, (raster, set));
+        if let Some(mut material) = materials.get_mut(id) {
+            material.emissive = set;
+        }
+    }
+}
+
+/// The luminance that, exposed, the camera shows as the raster shows a
+/// glow of `raster` and exposure weight `weight`.
+fn traced_glow(raster: LinearRgba, weight: f32, exposure: f32) -> LinearRgba {
+    let shown = (1.0 - weight) + weight * exposure;
+    let by = shown / exposure.max(f32::MIN_POSITIVE);
+    LinearRgba::new(raster.red * by, raster.green * by, raster.blue * by, raster.alpha)
+}
+
 /// A lamp's light for the rays: its double, shining at the lamp's
 /// luminance, beside the drawn face (whose glow is set for the eye).
 fn emitters(
@@ -224,6 +284,7 @@ fn emitters(
     mut meshes: ResMut<Assets<Mesh>>,
     mut doubles: ResMut<Doubles>,
     mut materials: ResMut<Assets<StandardMaterial>>,
+    mut glows: ResMut<Glows>,
     lamps: Query<(Entity, &Mesh3d, &Emitter), Without<StoodIn>>,
 ) {
     for (entity, mesh, emitter) in &lamps {
@@ -231,6 +292,7 @@ fn emitters(
         commands.entity(entity).insert(StoodIn);
         let Some(double) = found else { continue };
         let light = materials.add(StandardMaterial { base_color: Color::BLACK, emissive: emitter.0, ..default() });
+        glows.lamps.insert(light.id());
         commands.entity(entity).with_child((RaytracingMesh3d(double), MeshMaterial3d(light), Transform::default()));
     }
 }
@@ -269,5 +331,15 @@ mod tests {
             .with_inserted_attribute(Mesh::ATTRIBUTE_POSITION, Vec::<[f32; 3]>::new())
             .with_inserted_indices(Indices::U32(Vec::new()));
         assert!(super::double(&empty).is_none(), "no double of an empty mesh: Solari cannot build it");
+    }
+
+    #[test]
+    fn a_glow_traced_shows_as_the_raster_shows_it() {
+        let night = Exposure { ev100: 7.5 }.exposure();
+        let screen = LinearRgba::rgb(9.0, 7.8, 5.4);
+        let traced = traced_glow(screen, 0.0, night);
+        assert!((traced.red * night - screen.red).abs() < 1e-3, "unexposed in the raster: the same on the screen");
+        let exposed = traced_glow(screen, 1.0, night);
+        assert!((exposed.red - screen.red).abs() < 1e-3, "exposed in the raster: already a luminance");
     }
 }
