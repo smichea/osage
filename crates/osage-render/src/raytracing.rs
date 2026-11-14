@@ -65,7 +65,10 @@ struct HiddenDouble(Handle<Mesh>);
 fn camera(mut commands: Commands, cameras: Query<Entity, Added<OsageCamera>>) {
     for camera in &cameras {
         commands.entity(camera).insert((
-            SolariLighting::default(),
+            // ReSTIR: samples reused between pixels and frames. Without a
+            // denoiser (DLSS's, not built here) the sunlit asphalt sparkled
+            // with noise; the L4 had the frame time for it (16.7 ms of 33).
+            SolariLighting { restir: true, ..default() },
             Msaa::Off,
             CameraMainTextureUsages::default().with(TextureUsages::STORAGE_BINDING),
         ));
