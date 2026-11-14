@@ -876,7 +876,8 @@ Date: 2026-11-14 · after the night-and-rain cloud run of D-094: the rear lamps 
 
 - **Decision:** (1) while light is traced, each opaque glowing standard material's glow is set to the luminance that the camera, exposing it, shows as the raster does (the raster draws a glow by its `emissive_exposure_weight`, unexposed by default; Solari exposes every glow), recomputed when the camera's exposure changes; the traced lamps of D-094 are luminances already and are left alone. (2) An edge-avoiding à-trous filter (osage's own, `denoise.wesl`: three passes of a 3 × 3 kernel 1, 2, 4 pixels apart, weighted by facing, plane and the light's local spread as SVGF weighs them) smooths the traced light divided by each surface's colour, after the opaque pass and before see-through things; temporal anti-aliasing steadies it. `OSAGE_DENOISE=0` turns it off, `=force` runs it on hardware without ray queries.
 - **Why:** with the camera exposed for the sun (night's exposure, D-085, is a grade after it), Solari showed a lamp's glow 40 000 times darker than the raster. DLSS ray reconstruction, Solari's denoiser, is a proprietary SDK (AGENTS.md rule 2); a filter of published methods is not.
-- **Consequences:** a world's glows look the same at T3 and T4. The filter's cost comes out of T4's 3 ms of headroom on the L4 (D-094: 30.5 ms of 33.3).
+- **Measured** on the cloud bench's L4 at 2560×1440, night and rain: 34.3 ms a frame with the filter decoding every tap (3.7 ms, over the 33.3 budget), 32.4 ms once each workgroup decodes its pixels once into workgroup memory (1.9 ms). The kart is no longer speckled; low, blotchy grain remains on the wet asphalt.
+- **Consequences:** a world's glows look the same at T3 and T4. T4 at night in the rain has under 1 ms left on the L4.
 
 ## D-096 — A kart's body tumbles: lies on the road's slope, rolls through a trick, bounces on landing
 
