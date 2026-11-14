@@ -932,3 +932,12 @@ Date: 2026-11-14 · daylight photorealism: between the track and the woods the h
 - **Decision:** at T3 and above, the roadside places up to 90 thickets (fewer in sparse scenery) 60 to 160 m from the track, each three to eight bushes within 3 m, where a slow noise (34 m) says the ground was left to grow; none elsewhere.
 - **Why:** a hillside is never evenly sown: scrub gathers in thickets, and their patches give distant slopes depth and scale.
 - **Consequences:** a few hundred more bushes, drawn up to 260 m with coarser meshes far off; to be measured on the cloud bench.
+
+## D-103 — A crowd that follows the race, each spectator their own way
+
+Date: 2026-11-14 · the maintainer: "il sera aussi important que les NPC (spectateurs) soient animés et réagissent aux événements de la route"; then, seeing it, "ça fait plus troupeau de moutons qu'humains", "les humains s'assoient de façon trop rapide", "tous ne doivent pas lever le même bras et de la même façon".
+
+- **Decision:** every spectator in the grandstand and along the fences is a figure of its own, built calm and cheering, and moved as a whole by the client (`crowd`), from the karts' poses: excitement from the karts near (the faster, the more; a spin or a jump most); eyes on the nearest kart within 45 m (a quarter of them the one behind it), as far as their own reach; past their own threshold they cheer — standing up over half a second (the seated figure lifting and leaning, then the standing one straightening) and sitting back over one, or cheering from the seat, or not at all; cheering standing they wave, raise both arms, pump a fist, point or clap, half of them with the other arm. Each has a temper of their own — reaction time 0.2 to 1.5 s, threshold, how long they keep cheering, turning speed, bounce and sway — drawn anew for each race from the clock, the same on the bench. The crowd crate gains poses: standing with both arms up, a fist, pointing, clapping; seated clapping and pointing.
+- **Why:** a crowd that does nothing reads as scenery; one that moves in step reads as a flock. People differ in when, how and how long they react.
+- **Rejected:** animating in a vertex shader (a full vertex shader for the main pass and the prepass, with Bevy's vertex compression: fragile); arms swinging between poses (no skeleton on the figures).
+- **Consequences:** a few hundred more entities and two meshes per spectator; to be measured on the cloud bench.

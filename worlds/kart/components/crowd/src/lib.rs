@@ -25,10 +25,18 @@ pub enum Pose {
     ArmsFolded,
     /// Upright, one arm raised: cheering a kart that passes.
     Cheering,
+    /// Clapping, hands together before the chest.
+    Clapping,
+    /// One arm out, pointing at the track.
+    Pointing,
 }
 
 impl Pose {
-    pub const ALL: [Pose; 3] = [Pose::HandsOnKnees, Pose::ArmsFolded, Pose::Cheering];
+    pub const ALL: [Pose; 5] = [Pose::HandsOnKnees, Pose::ArmsFolded, Pose::Cheering, Pose::Clapping, Pose::Pointing];
+    /// Watching quietly.
+    pub const CALM: [Pose; 2] = [Pose::HandsOnKnees, Pose::ArmsFolded];
+    /// Cheering from the seat, each their own way.
+    pub const CHEERING: [Pose; 3] = [Pose::Cheering, Pose::Clapping, Pose::Pointing];
 }
 
 /// How someone stands.
@@ -43,10 +51,30 @@ pub enum Stance {
     /// The left hand forward at waist height, holding a flag's staff (the
     /// world adds the flag): a marshal.
     HoldingFlag,
+    /// Both arms up.
+    ArmsUp,
+    /// A fist pumped: the elbow out at the shoulder's height, the fist up.
+    Fist,
+    /// One arm out, pointing at the track.
+    Pointing,
+    /// Clapping, hands together before the chest.
+    Clapping,
 }
 
 impl Stance {
-    pub const ALL: [Stance; 4] = [Stance::Watching, Stance::ArmsFolded, Stance::Waving, Stance::HoldingFlag];
+    pub const ALL: [Stance; 8] = [
+        Stance::Watching,
+        Stance::ArmsFolded,
+        Stance::Waving,
+        Stance::HoldingFlag,
+        Stance::ArmsUp,
+        Stance::Fist,
+        Stance::Pointing,
+        Stance::Clapping,
+    ];
+    /// Cheering standing, each their own way.
+    pub const CHEERING: [Stance; 5] =
+        [Stance::Waving, Stance::ArmsUp, Stance::Fist, Stance::Pointing, Stance::Clapping];
     /// Where the hand holding a flag closes, for [`Stance::HoldingFlag`].
     pub const FLAG_HAND: Vec3 = Vec3::new(0.34, 1.08, -0.2);
 }
@@ -70,7 +98,8 @@ const CELL: f32 = 0.035;
 
 /// The figure of a seated spectator in `pose`, as one shape per part.
 pub fn seated(pose: Pose) -> &'static [(Wear, Shape)] {
-    static FIGURES: [OnceLock<Vec<(Wear, Shape)>>; 3] = [OnceLock::new(), OnceLock::new(), OnceLock::new()];
+    static FIGURES: [OnceLock<Vec<(Wear, Shape)>>; 5] =
+        [OnceLock::new(), OnceLock::new(), OnceLock::new(), OnceLock::new(), OnceLock::new()];
     let slot = Pose::ALL.iter().position(|p| *p == pose).unwrap_or(0);
     FIGURES[slot].get_or_init(|| {
         sculpt(pose).shapes(CELL).into_iter().map(|(group, shape)| (WEAR[group.min(WEAR.len() - 1)], shape)).collect()
@@ -79,8 +108,7 @@ pub fn seated(pose: Pose) -> &'static [(Wear, Shape)] {
 
 /// The figure of someone standing in `stance`, as one shape per part.
 pub fn standing(stance: Stance) -> &'static [(Wear, Shape)] {
-    static FIGURES: [OnceLock<Vec<(Wear, Shape)>>; 4] =
-        [OnceLock::new(), OnceLock::new(), OnceLock::new(), OnceLock::new()];
+    static FIGURES: [OnceLock<Vec<(Wear, Shape)>>; 8] = [const { OnceLock::new() }; 8];
     let slot = Stance::ALL.iter().position(|s| *s == stance).unwrap_or(0);
     FIGURES[slot].get_or_init(|| {
         sculpt_standing(stance)
@@ -119,6 +147,24 @@ fn sculpt_standing(stance: Stance) -> Sculpture {
             (Stance::HoldingFlag, false) => {
                 (Vec3::new(0.12, 1.16, side * 0.24), Vec3::new(0.3, 1.1, side * 0.21), Stance::FLAG_HAND)
             }
+            (Stance::ArmsUp, _) => (
+                Vec3::new(-0.02, 1.72, side * 0.33),
+                Vec3::new(0.01, 1.96, side * 0.31),
+                Vec3::new(0.02, 2.03, side * 0.3),
+            ),
+            (Stance::Fist, true) => (
+                Vec3::new(0.04, 1.42, side * 0.34),
+                Vec3::new(0.06, 1.72, side * 0.33),
+                Vec3::new(0.07, 1.79, side * 0.32),
+            ),
+            (Stance::Pointing, true) => {
+                (Vec3::new(0.2, 1.42, side * 0.25), Vec3::new(0.42, 1.5, side * 0.21), Vec3::new(0.5, 1.52, side * 0.2))
+            }
+            (Stance::Clapping, _) => (
+                Vec3::new(0.1, 1.2, side * 0.23),
+                Vec3::new(0.28, 1.34, side * 0.06),
+                Vec3::new(0.31, 1.36, side * 0.025),
+            ),
             _ => down,
         };
         let hip = Vec3::new(0.0, 0.92, side * 0.1);
@@ -170,7 +216,17 @@ fn sculpt(pose: Pose) -> Sculpture {
                 Vec3::new(0.02, 1.08, side * 0.26),
                 Vec3::new(0.03, 1.15, side * 0.25),
             ),
-            (Pose::Cheering, false) => (
+            (Pose::Clapping, _) => (
+                Vec3::new(0.1, 0.33, side * 0.23),
+                Vec3::new(0.28, 0.47, side * 0.06),
+                Vec3::new(0.31, 0.49, side * 0.025),
+            ),
+            (Pose::Pointing, true) => (
+                Vec3::new(0.2, 0.55, side * 0.25),
+                Vec3::new(0.42, 0.63, side * 0.21),
+                Vec3::new(0.5, 0.65, side * 0.2),
+            ),
+            (Pose::Cheering | Pose::Pointing, false) => (
                 Vec3::new(0.12, 0.34, side * 0.22),
                 Vec3::new(0.3, 0.13, side * 0.17),
                 Vec3::new(0.36, 0.11, side * 0.16),

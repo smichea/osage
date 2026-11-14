@@ -254,19 +254,35 @@ fn grandstand(set: &mut Set, stand: Transform, shape: (f32, f32, f32, usize, f32
             // A whole figure, in one of a few poses, dressed at random.
             let (shirt, skin) = (set.dice.pick(&CLOTHES), set.dice.pick(&SKINS));
             let (trousers, hair, shoe) = (set.dice.pick(&CLOTHES), set.dice.pick(&HAIRS), set.dice.pick(&SHOES));
-            let pose = set.dice.pick(&osage_kart_crowd::Pose::ALL);
+            let pose = set.dice.pick(&osage_kart_crowd::Pose::CALM);
             let turn = Quat::from_rotation_y(set.dice.between(-0.25, 0.25));
             let seated = at * Transform::from_xyz(-0.05, 0.06, 0.0).with_rotation(turn);
-            for (wear, shape) in osage_kart_crowd::seated(pose) {
-                let paint = match wear {
-                    Wear::Shirt => Paint::shaded(shirt.0, shirt.1, shirt.2, 0.2),
-                    Wear::Trousers => Paint::plain(trousers.0 * 0.8, trousers.1 * 0.8, trousers.2 * 0.8),
-                    Wear::Skin => Paint::plain(skin.0, skin.1, skin.2),
-                    Wear::Hair => Paint::plain(hair.0, hair.1, hair.2),
-                    Wear::Shoes => Paint::plain(shoe.0, shoe.1, shoe.2),
-                };
-                set.crowd.add_within(stand.translation, shape, seated, paint);
-            }
+            let dress = Dress { shirt, trousers, skin, hair, shoe };
+            // Each figure on its own, calm and cheering, to follow the race (D-103).
+            let calm = dress.figure(osage_kart_crowd::seated(pose));
+            // Cheering, not all alike (D-103): most stand up — a standing
+            // figure, its feet on the tier in front of the seat, 0.45 m
+            // lower — waving or only looking; some wave from their seat;
+            // some never stir.
+            // Not all the same arm, nor the same way: each picks a way to
+            // cheer, and half of them are their mirror image (the other arm).
+            let side = if set.dice.roll() < 0.5 { 1.0 } else { -1.0 };
+            let up = Transform::from_xyz(0.18, -0.45, 0.0).with_scale(Vec3::new(1.0, 1.0, side));
+            let mirror = Transform::from_scale(Vec3::new(1.0, 1.0, side));
+            let roll = set.dice.roll();
+            let stands = roll < 0.65;
+            let cheer = if roll < 0.4 {
+                let stance = set.dice.pick(&Stance::CHEERING);
+                Some(dress.placed(osage_kart_crowd::standing(stance), up))
+            } else if roll < 0.65 {
+                Some(dress.placed(osage_kart_crowd::standing(Stance::Watching), up))
+            } else if roll < 0.85 {
+                let pose = set.dice.pick(&osage_kart_crowd::Pose::CHEERING);
+                Some(dress.placed(osage_kart_crowd::seated(pose), mirror))
+            } else {
+                None
+            };
+            set.spectators.push(crate::crowd::Spectator { place: seated, seated: true, calm, cheer, stands });
         }
     }
     // A handrail along the front.
@@ -620,6 +636,56 @@ fn facing(towards: Vec2) -> Quat {
     Quat::from_rotation_y((-towards.y).atan2(towards.x))
 }
 
+/// What a figure wears, sRGB.
+struct Dress {
+    shirt: (f32, f32, f32),
+    trousers: (f32, f32, f32),
+    skin: (f32, f32, f32),
+    hair: (f32, f32, f32),
+    shoe: (f32, f32, f32),
+}
+
+impl Dress {
+    fn paint(&self, wear: Wear) -> Paint {
+        let Dress { shirt, trousers, skin, hair, shoe } = *self;
+        match wear {
+            Wear::Shirt => Paint::shaded(shirt.0, shirt.1, shirt.2, 0.2),
+            Wear::Trousers => Paint::plain(trousers.0 * 0.8, trousers.1 * 0.8, trousers.2 * 0.8),
+            Wear::Skin => Paint::plain(skin.0, skin.1, skin.2),
+            Wear::Hair => Paint::plain(hair.0, hair.1, hair.2),
+            Wear::Shoes => Paint::plain(shoe.0, shoe.1, shoe.2),
+        }
+    }
+
+    /// A figure dressed, in its own space, as one mesh.
+    fn figure(&self, parts: &[(Wear, osage_procedural::Shape)]) -> Mesh {
+        self.placed(parts, Transform::IDENTITY)
+    }
+
+    /// A figure dressed, at `place` in its own space, as one mesh.
+    fn placed(&self, parts: &[(Wear, osage_procedural::Shape)], place: Transform) -> Mesh {
+        let mut batch = osage_procedural::Batch::default();
+        for (wear, shape) in parts {
+            batch.add(shape, place, self.paint(*wear));
+        }
+        batch.merged()
+    }
+}
+
+/// A spectator standing at `place` who follows the race (D-103), calm in
+/// `stance`, waving when a kart passes.
+fn onlooker(set: &mut Set, stance: Stance, place: Transform, shirt: (f32, f32, f32), trousers: (f32, f32, f32)) {
+    let (skin, hair, shoe) = (set.dice.pick(&SKINS), set.dice.pick(&HAIRS), set.dice.pick(&SHOES));
+    let dress = Dress { shirt, trousers, skin, hair, shoe };
+    let calm = dress.figure(osage_kart_crowd::standing(stance));
+    // Some cheer a kart that passes, each their own way and with either
+    // arm; others only watch it go.
+    let (stance, side) = (set.dice.pick(&Stance::CHEERING), if set.dice.roll() < 0.5 { 1.0 } else { -1.0 });
+    let mirror = Transform::from_scale(Vec3::new(1.0, 1.0, side));
+    let cheer = (set.dice.roll() < 0.6).then(|| dress.placed(osage_kart_crowd::standing(stance), mirror));
+    set.spectators.push(crate::crowd::Spectator { place, seated: false, calm, cheer, stands: false });
+}
+
 /// Someone standing at `place`, dressed in `shirt` and `trousers`, the rest
 /// picked by the set's dice.
 fn person(set: &mut Set, stance: Stance, place: Transform, shirt: (f32, f32, f32), trousers: (f32, f32, f32)) {
@@ -665,7 +731,7 @@ pub fn onlookers(set: &mut Set, circuit: &Circuit, land: &Land, frames: &[Frame]
                 let turn = facing(towards) * Quat::from_rotation_y(set.dice.between(-0.4, 0.4));
                 let place = Transform::from_xyz(at.x, land.height(at), at.y).with_rotation(turn);
                 let (shirt, trousers) = (set.dice.pick(&CLOTHES), set.dice.pick(&CLOTHES));
-                person(set, stance, place, shirt, trousers);
+                onlooker(set, stance, place, shirt, trousers);
                 set.clear(at, 2.5);
             }
         }

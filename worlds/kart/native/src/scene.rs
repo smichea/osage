@@ -315,6 +315,7 @@ impl Plugin for ScenePlugin {
             .init_resource::<Glance>()
             .init_resource::<Night>()
             .add_plugins(crate::lights::LightsPlugin)
+            .add_plugins(crate::crowd::CrowdPlugin)
             .init_resource::<marks::Marks>()
             .add_plugins(crate::rain::RainPlugin)
             .add_systems(Startup, (setup, karts::setup, effects::setup, scenery::load_roadside))

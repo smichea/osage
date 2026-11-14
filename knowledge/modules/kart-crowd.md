@@ -35,7 +35,7 @@ Each pose is a [blended solid](/algorithms/blended-solids.md) of 22 pieces: pelv
 
 # Knowledge
 
-- Built on [osage-procedural](/modules/osage-procedural.md) ([blended solids](/algorithms/blended-solids.md)); used by [osage-kart-native](/modules/kart-native.md), whose grandstand seats one in each seat out of two or so, turned a little, in clothes, skin, hair and shoes picked by its seeded generator. The crowd is its own batch, in a cloth material without grain, casting no shadow: under the grandstand's roof its shadows showed little and cost as much as the crowd (measured at T3 on the Iris Xe, 2026-11-11, the start view: 127 ms without the sculpted crowd, 146 ms with it at 2.5 cm and casting shadows, 127 ms at 3.5 cm without).
+- Built on [osage-procedural](/modules/osage-procedural.md) ([blended solids](/algorithms/blended-solids.md)); used by [osage-kart-native](/modules/kart-native.md), whose grandstand seats one in each seat out of two or so, turned a little, in clothes, skin, hair and shoes picked by its seeded generator. Since D-103 each spectator is a figure of its own, calm and cheering — standing up to wave both arms, pump a fist, point or clap, standing only to see, or cheering from the seat, half of them mirrored (the other arm) — moved by the client's `crowd` module from the karts' poses. The crowd casts no shadow under the roof: under the grandstand's roof its shadows showed little and cost as much as the crowd (measured at T3 on the Iris Xe, 2026-11-11, the start view: 127 ms without the sculpted crowd, 146 ms with it at 2.5 cm and casting shadows, 127 ms at 3.5 cm without).
 - Oracle: the crate's tests and [the render bench](/oracles/render-bench.md) screenshots.
 
 # Reuse
@@ -44,4 +44,4 @@ Any world with seats: the poses and parts are generic; clothes and skin are the 
 
 # Limits
 
-Seven poses, all still: no animation. Faces have no features: the crowd is seen from the track.
+Twelve poses, each still: a figure moves only as a whole (the kart client turns, lifts and swaps them, D-103); arms do not swing between poses. Faces have no features: the crowd is seen from the track.

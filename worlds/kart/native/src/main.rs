@@ -26,6 +26,7 @@
 //!   it is not the sanctioned bench, and its report says so.
 
 mod bench;
+mod crowd;
 mod effects;
 mod graphics;
 mod hud;

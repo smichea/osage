@@ -101,6 +101,9 @@ pub struct Set {
     pub dice: Dice,
     /// Places kept clear of trees.
     pub clearings: Vec<Site>,
+    /// Spectators who follow the race (D-103): each its own figure, calm
+    /// and cheering, moved by [`crate::crowd`].
+    pub spectators: Vec<crate::crowd::Spectator>,
 }
 
 impl Set {
@@ -188,6 +191,7 @@ pub fn build(
         concrete: Batch::default(),
         dice: Dice(7),
         clearings: Vec::new(),
+        spectators: Vec::new(),
     };
     let mut props = Props {
         commands: &mut commands,
@@ -313,6 +317,9 @@ fn spawn(
     }
     for mesh in set.crowd.meshes() {
         commands.spawn((Part, Mesh3d(meshes.add(mesh)), MeshMaterial3d(cloth.clone()), NotShadowCaster));
+    }
+    for (k, spectator) in set.spectators.into_iter().enumerate() {
+        crate::crowd::spawn(commands, meshes, spectator, &cloth, k);
     }
     for mesh in set.bright.meshes() {
         commands.spawn((Part, Mesh3d(meshes.add(mesh)), MeshMaterial3d(matte.clone()), NotShadowCaster));

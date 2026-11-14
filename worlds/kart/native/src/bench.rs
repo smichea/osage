@@ -71,7 +71,8 @@ impl Plugin for BenchPlugin {
     fn build(&self, app: &mut App) {
         // Screenshots at fixed frames spread over the run.
         let shots = [1, 3, 5, 7].map(|eighths| self.frames * eighths / 8).to_vec();
-        app.insert_resource(TimeUpdateStrategy::ManualDuration(Duration::from_secs_f32(DT)))
+        app.insert_resource(crate::crowd::CrowdSeed(0))
+            .insert_resource(TimeUpdateStrategy::ManualDuration(Duration::from_secs_f32(DT)))
             .insert_resource(Output(Some(self.resolution.into())))
             .insert_resource(Bench {
                 tier: self.tier,
