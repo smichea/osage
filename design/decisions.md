@@ -964,3 +964,10 @@ Date: 2026-11-14 · daylight photorealism: the red and white walls read as new, 
 
 - **Decision:** the painted face of the walls is drawn in two bands; the lower 30 cm fades from a browner, darker tone at the ground (the track's spray and dust) to the paint, more on some stretches than others (a 9 m noise) and most on the outside of the bends, where karts brush the wall.
 - **Why:** a circuit's walls are washed by every rain and sprayed by every kart: their feet are never the paint's colour.
+
+## D-107 — A nearer haze: the landscape recedes into the air
+
+Date: 2026-11-14 · daylight photorealism: the hills and the woods 300 m off were as crisp and as green as the verge.
+
+- **Decision:** the photographed sky's haze has a visibility of 1.6 km (from 3 km): the land a few hundred metres off takes a little of the air's colour.
+- **Why:** aerial perspective is how the eye reads distance; a circuit's landscape is compressed into a few hundred metres, so its haze must be nearer than the real air's for the hills to read as far.

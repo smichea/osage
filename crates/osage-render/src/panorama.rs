@@ -32,9 +32,11 @@ use crate::{Look, OsageCamera, Sun, Tier, sky_light};
 
 /// What the panorama's sun gives a surface facing it, lux.
 pub const SUN: f32 = lux::DIRECT_SUNLIGHT;
-/// Distance at which the land has faded halfway into the haze, metres: a
-/// summer day's, which blues the hills a kilometre off.
-const VISIBILITY: f32 = 3000.0;
+/// The haze's visibility, metres (D-107): nearer than a summer day's
+/// (3 km and more), since a circuit's landscape is compressed — its hills
+/// and woods 100 to 500 m off — and must recede into the air as hills a few
+/// kilometres off do.
+const VISIBILITY: f32 = 1600.0;
 /// Around the sun's centre, what is the sun: degrees.
 const SUN_RADIUS: f32 = 2.5;
 /// The light from the sky is at most this many times the sky's median.
