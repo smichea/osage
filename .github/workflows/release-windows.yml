@@ -41,7 +41,8 @@ jobs:
       # The browser client runs the world's physics compiled to WebAssembly.
       - run: rustup toolchain install stable --profile minimal --target wasm32-unknown-unknown && rustup default stable
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
-      - run: cargo build --release -p osage-kart-native -p osage-kart-server
+      # With the traced light (D-093): T4 on an RTX card, with --tier T4.
+      - run: cargo build --release -p osage-kart-native -p osage-kart-server --features osage-kart-native/raytracing
       # The browser client, for phones and tablets on the host's network (kart-web).
       - run: npm ci
       - run: npm run build -w @osage/sdk
