@@ -131,6 +131,11 @@ pub struct Rig {
     /// How far the driver's arm is raised, cheering a place on the podium
     /// (D-087): eased from 0 to 1.
     cheer: f32,
+    /// A knock taken (D-111): 1 at the moment, fading; and the spin and
+    /// speed of the frame before, to tell one.
+    flinch: f32,
+    was_spinning: f32,
+    was_going: f32,
     /// Seconds driven, and this kart's own offset, for its rumble.
     time: f32,
     seed: f32,
@@ -530,6 +535,9 @@ pub fn dress(
                 torso: Vec2::ZERO,
                 sway: Vec2::ZERO,
                 cheer: 0.0,
+                flinch: 0.0,
+                was_spinning: 0.0,
+                was_going: 0.0,
                 time: 0.0,
                 seed: (kart.index_u32() % 97) as f32 * 0.61,
                 attitude: 0.0,
@@ -706,6 +714,18 @@ pub fn animate(
         let (stiff, damped, step) = (55.0, 2.0 * 0.55 * 55f32.sqrt(), seconds.min(0.05));
         let pull = stiff * (wanted - rig.torso) - damped * rig.sway + rattle * 18.0;
         rig.sway += pull * step;
+        // A knock — an item or a kart setting it spinning, or a stop harder
+        // than any brake — throws the trunk aside and forward, and the
+        // hands come off the wheel a moment (D-111).
+        let spun = (kart.spin - rig.was_spinning).abs();
+        let stopped = rig.was_going - kart.speed.abs();
+        if (spun > 2.5 || stopped > 5.0) && rig.flinch < 0.5 {
+            rig.flinch = 1.0;
+            let side = if kart.spin.abs() > 0.1 { kart.spin.signum() } else { 1.0 };
+            rig.sway += Vec2::new(-side * 2.4, 1.6);
+        }
+        (rig.was_spinning, rig.was_going) = (kart.spin, kart.speed.abs());
+        rig.flinch = (rig.flinch - seconds * 1.6).max(0.0);
         let sway = rig.sway;
         rig.torso += sway * step;
         let lean = Quat::from_rotation_x(rig.torso.y) * Quat::from_rotation_z(rig.torso.x);
@@ -840,7 +860,10 @@ pub fn animate(
         if let Ok(mut wheel) = transforms.get_mut(rig.bones.steering) {
             *wheel = steering_column() * Transform::from_rotation(Quat::from_rotation_y(turn));
         }
-        for (joint, bone) in rig.bones.joints.iter().zip(driver_cheering(turn, lean, [rig.cheer, 0.0], rig.time)) {
+        // Hands up off the wheel after a knock, both, halfway, then back.
+        let startled = 0.45 * (rig.flinch * 2.5).min(1.0) * rig.flinch.sqrt();
+        let raised = [rig.cheer.max(startled), startled];
+        for (joint, bone) in rig.bones.joints.iter().zip(driver_cheering(turn, lean, raised, rig.time)) {
             if let Ok(mut place) = transforms.get_mut(*joint) {
                 *place = bone;
             }

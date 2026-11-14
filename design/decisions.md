@@ -992,3 +992,10 @@ Date: 2026-11-14 · the kart programme's M5 (V1.3, "marshals waving flags").
 Date: 2026-11-14 · the maintainer, after D-109: the flag was not along its staff and moved as one solid ("il doit osciller"); the marshal's hair looked odd.
 
 - **Decision:** a marshal's flag is a staff pivoting in the hand and, hung along the staff's top, a cloth cut in 10 × 6 cells whose points follow a wave travelling out from the staff — a stir at rest, a flutter when waved, the free end sagging a little — seen from both sides. The crowd's figures have short hair painted on the top and back of the skull rather than a blended cap of matter, which bulged like a woollen hat.
+
+## D-111 — Drivers flinch when knocked
+
+Date: 2026-11-14 · the kart programme's M5 (V1.2, "hit reaction").
+
+- **Decision:** a knock — the kart's spin changing by more than 2.5 rad/s, or its speed dropping by more than 5 m/s, in one frame (an item, a kart, a wall) — throws the driver's trunk aside and forward on its spring, and both hands come off the wheel halfway for about half a second before going back; no second flinch while one is under way.
+- **Why:** a driver who does not react to being hit reads as a mannequin in a seat.
