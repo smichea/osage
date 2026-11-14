@@ -206,10 +206,28 @@ fn ribbon(
     facing: (f32, f32),
     colour: impl Fn(usize) -> Option<[f32; 4]>,
 ) -> Mesh {
+    ribbon_shaded(frames, from, to, facing, colour, |_| ([1.0; 3], [1.0; 3]))
+}
+
+/// A [`ribbon`] whose colour is multiplied along its `from` edge and its
+/// `to` edge by what `shade` gives each segment: grime at the foot of a
+/// wall, fading up it.
+fn ribbon_shaded(
+    frames: &[Frame],
+    from: (f32, f32),
+    to: (f32, f32),
+    facing: (f32, f32),
+    colour: impl Fn(usize) -> Option<[f32; 4]>,
+    shade: impl Fn(usize) -> ([f32; 3], [f32; 3]),
+) -> Mesh {
     let (mut positions, mut normals, mut uvs, mut colours) = (Vec::new(), Vec::new(), Vec::new(), Vec::new());
     let across = Vec2::new(to.0 - from.0, to.1 - from.1).length();
     for (i, a) in frames.iter().enumerate() {
         let Some(colour) = colour(i) else { continue };
+        let (low, high) = shade(i);
+        let tinted = |by: [f32; 3]| [colour[0] * by[0], colour[1] * by[1], colour[2] * by[2], colour[3]];
+        // Corners 0 and 1 lie on the `from` edge, 2 and 3 on the `to` edge.
+        let corner_colours = [tinted(low), tinted(low), tinted(high), tinted(high)];
         let b = &frames[(i + 1) % frames.len()];
         let length = a.at.distance(b.at);
         let pieces = a.pieces(length);
@@ -237,7 +255,7 @@ fn ribbon(
                 positions.push(quad[corner].to_array());
                 normals.push(normal.to_array());
                 uvs.push(quad_uvs[corner]);
-                colours.push(colour);
+                colours.push(corner_colours[corner]);
             }
         }
     }
@@ -952,11 +970,22 @@ fn photographed(
     for side in [-1.0f32, 1.0] {
         let (inner, outer, top) = (side * (half + verge + BARRIER), side * (half + verge + BARRIER + 0.7), 0.85);
         let face = |i: usize| Some(if (i / 2).is_multiple_of(2) { red } else { white });
+        // Grime at the foot of the face the karts see (D-106): the spray
+        // and dust of the track, browner and darker at the ground, fading
+        // out by a third of the way up; more on some stretches than on
+        // others, and most on the outside of the bends, where karts brush it.
+        let foot = 0.3;
+        let grime = |i: usize| {
+            let bend = if frames[i].bend.signum() == side { (frames[i].bend.abs() / 0.02).min(1.0) } else { 0.0 };
+            let patch = 0.5 + 0.5 * noise(frames[i].at / 9.0 + side * 13.0);
+            let dirt = (0.4 + 0.35 * patch + 0.25 * bend).min(0.9);
+            let tone = [1.0 - dirt * 0.66, 1.0 - dirt * 0.7, 1.0 - dirt * 0.76];
+            (tone, [1.0 - dirt * 0.12, 1.0 - dirt * 0.13, 1.0 - dirt * 0.15])
+        };
+        let clean = |i: usize| (grime(i).1, [1.0; 3]);
         for (wall, colours) in [
-            (
-                ribbon(frames, (inner, 0.0), (inner, top), (-side, 0.0), &face as &dyn Fn(usize) -> Option<[f32; 4]>),
-                true,
-            ),
+            (ribbon_shaded(frames, (inner, 0.0), (inner, foot), (-side, 0.0), face, grime), true),
+            (ribbon_shaded(frames, (inner, foot), (inner, top), (-side, 0.0), face, clean), true),
             (ribbon(frames, (inner, top), (outer, top), (0.0, 1.0), |_| Some(grey)), false),
             (ribbon(frames, (outer, top), (outer, 0.0), (side, 0.0), |_| Some(grey)), false),
         ] {

@@ -957,3 +957,10 @@ Date: 2026-11-14 · the maintainer: "peux-tu créer le site web qui sera sur Git
 - **Decision:** the project's public site is a static page in `site/` (HTML and CSS, no build step, no script; the game's own screenshots as WebP, about 0.5 MB), published by the `site` workflow on GitHub Pages whenever `site/` changes on `main`, under the domain osage-engine.org (the maintainer's, at Gandi; its DNS points at GitHub Pages). It presents the engine and its first world as they are — every picture rendered by the bench, every figure measured and dated in this log — links the releases, the source, the decisions and the knowledge, and carries the README's note about the name. Licence: CC BY-SA 4.0, as the documentation.
 - **Why:** a project that asks people to play, read and contribute needs one address that says what it is, with the proof beside each claim.
 - **Consequences:** a change that makes the site wrong (a figure, a feature, a tier's budget) updates it in the same change, as the knowledge cards are.
+
+## D-106 — Grime at the foot of the painted walls
+
+Date: 2026-11-14 · daylight photorealism: the red and white walls read as new, one clean colour from the ground up.
+
+- **Decision:** the painted face of the walls is drawn in two bands; the lower 30 cm fades from a browner, darker tone at the ground (the track's spray and dust) to the paint, more on some stretches than others (a 9 m noise) and most on the outside of the bends, where karts brush the wall.
+- **Why:** a circuit's walls are washed by every rain and sprayed by every kart: their feet are never the paint's colour.
