@@ -1,5 +1,8 @@
 # Knowledge Update Log
 
+## 2026-11-14
+* **Update**: [osage-update](/modules/osage-update.md): `kart-update` takes the programs' zip of its own system, Windows or a Mac with Apple silicon, and runs a Mac's `.command` launchers again with `exec` (D-113).
+
 ## 2026-11-13
 * **Update**: hills, bridges and tunnels (D-077): [osage-kart-physics](/modules/kart-physics.md) and [arcade kart physics](/algorithms/arcade-kart-physics.md) carry a road's height; [osage-kart-tracks](/modules/kart-tracks.md) has Eagle Ridge and Red Gorge; [osage-kart-land](/modules/kart-land.md) lays gorges, ridges, walls; [osage-kart-native](/modules/kart-native.md) draws bridges and tunnels; [osage-kart-cup](/modules/kart-cup.md) has High Roads.
 * **Update**: [exact client prediction](/algorithms/exact-client-prediction.md) knocks into the other karts, stepped on with the controls their states now carry (D-076); [osage-kart-native](/modules/kart-native.md) draws them at the player's moment.
