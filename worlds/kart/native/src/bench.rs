@@ -98,6 +98,7 @@ impl Plugin for BenchPlugin {
                 times: Vec::new(),
                 slowest: Vec::new(),
                 gpu: 0.0,
+                began: None,
                 warm_up_worst: 0.0,
                 skip: 0,
                 saved: Vec::new(),
@@ -106,6 +107,7 @@ impl Plugin for BenchPlugin {
                 settled: 0,
             })
             .add_systems(Startup, line_up)
+            .add_systems(First, main_begins)
             .add_systems(Update, simulate.in_set(Stage::Simulate).run_if(started))
             .add_systems(Last, (settle, measure.run_if(started)).chain());
         // A window paces frames: drawing waits for the screen, and the screen
@@ -118,6 +120,14 @@ impl Plugin for BenchPlugin {
             && let Some(render) = app.get_sub_app_mut(RenderApp)
         {
             render.init_resource::<InFlight>().add_systems(Render, keep_one_in_flight.in_set(RenderSystems::Cleanup));
+        }
+        // The render world's own processor time, from extraction to its
+        // cleanup (before waiting for the GPU), for the slowest frames.
+        if let Some(render) = app.get_sub_app_mut(RenderApp) {
+            render
+                .init_resource::<RenderBegan>()
+                .add_systems(bevy::render::ExtractSchedule, render_begins)
+                .add_systems(Render, render_ends.in_set(RenderSystems::Render).before(RenderSystems::Cleanup));
         }
     }
 }
@@ -140,9 +150,11 @@ struct Bench {
     /// The three slowest timed frames and their numbers: where a stall is;
     /// with the GPU's time in that frame's passes, to tell a GPU's stall
     /// from the processor's (D-123).
-    slowest: Vec<(u32, f32, f32)>,
+    slowest: Vec<(u32, f32, f32, f32, f32)>,
     /// The GPU's time in all passes, as last reported, ms.
     gpu: f32,
+    /// When this frame's main world began.
+    began: Option<Instant>,
     warm_up_worst: f32,
     skip: u32,
     saved: Vec<String>,
@@ -160,6 +172,28 @@ struct Bench {
 /// The race starts once the circuit is built and every model it places has
 /// loaded: loading takes its own time on each machine, the race must not.
 const SETTLED: u32 = 3;
+
+/// The render world's processor time in its last frame, ms, as f32 bits:
+/// from extraction to its cleanup (D-123).
+static RENDER_CPU: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
+
+#[derive(Resource, Default)]
+struct RenderBegan(Option<Instant>);
+
+fn render_begins(mut began: ResMut<RenderBegan>) {
+    began.0 = Some(Instant::now());
+}
+
+fn render_ends(began: Res<RenderBegan>) {
+    if let Some(began) = began.0 {
+        let ms = began.elapsed().as_secs_f32() * 1000.0;
+        RENDER_CPU.store(ms.to_bits(), std::sync::atomic::Ordering::Relaxed);
+    }
+}
+
+fn main_begins(mut bench: ResMut<Bench>) {
+    bench.began = Some(Instant::now());
+}
 
 fn settle(mut bench: ResMut<Bench>, waiting: Res<osage_props::Waiting>, parts: Query<(), With<Part>>) {
     if bench.settled < SETTLED {
@@ -333,7 +367,9 @@ fn measure(
         Some(ms) => {
             bench.times.push(ms);
             let gpu = bench.gpu;
-            bench.slowest.push((frame, ms, gpu));
+            let main = bench.began.map_or(0.0, |began| (now - began).as_secs_f32() * 1000.0);
+            let render = f32::from_bits(RENDER_CPU.load(std::sync::atomic::Ordering::Relaxed));
+            bench.slowest.push((frame, ms, gpu, main, render));
             bench.slowest.sort_by(|a, b| b.1.total_cmp(&a.1));
             bench.slowest.truncate(3);
         }
@@ -405,7 +441,9 @@ fn report(bench: &Bench, rendered: UVec2, adapter: &RenderAdapterInfo) -> anyhow
         "slowest": bench
             .slowest
             .iter()
-            .map(|&(frame, ms, gpu)| json!({ "frame": frame, "ms": round(ms), "gpu_ms": round(gpu) }))
+            .map(|&(frame, ms, gpu, main, render)| {
+                json!({ "frame": frame, "ms": round(ms), "gpu_ms": round(gpu), "main_ms": round(main), "render_cpu_ms": round(render) })
+            })
             .collect::<Vec<_>>(),
         "fps_mean": round(1000.0 / mean),
         "budget_ms": round(budget),
