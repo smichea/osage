@@ -37,6 +37,10 @@ on:
         description: Bench even if nothing drawn changed (still not twice within an hour)
         type: boolean
         default: false
+      now:
+        description: The maintainer asks for it now, within the hour if need be
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -77,11 +81,14 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           ALWAYS: ${{ inputs.always || false }}
+          NOW: ${{ inputs.now || false }}
         run: |
           read -r last when < <(gh api "repos/$GITHUB_REPOSITORY/actions/artifacts?name=bench-receipts&per_page=1" \
             --jq '.artifacts[0] // empty | "\(.workflow_run.head_sha) \(.created_at)"' 2>/dev/null) || true
           age=$(( $(date +%s) - $(date -d "${when:-1970-01-01}" +%s) ))
-          if [ "$age" -lt 3600 ]; then
+          if [ "$NOW" = true ]; then
+            echo "benching now by request"; bench=true
+          elif [ "$age" -lt 3600 ]; then
             echo "benched $((age / 60)) minutes ago: not twice within an hour"; bench=false
           elif [ "$ALWAYS" = true ]; then
             echo "benching by request"; bench=true
