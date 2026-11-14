@@ -36,6 +36,8 @@ const HOP: f32 = 0.28;
 /// The fastest a trick rolls the kart, rad/s: two turns a second. A jump
 /// too short for a whole turn at that lands the kart tilted (D-096).
 const TRICK_SPIN: f32 = 2.0 * TAU;
+/// The shortest flight a trick rolls the kart in, s.
+const MIN_FLIGHT: f32 = 0.2;
 
 /// The rockets of a rocket item (paddock objects), strapped either side
 /// behind the seat, pointing back: where each sits, and its nozzle.
@@ -724,7 +726,12 @@ pub fn animate(
             let g = osage_kart_physics::GRAVITY;
             let flight = (kart.climb + (kart.climb * kart.climb + 2.0 * g * above).sqrt()) / g;
             let side = if (rig.seed as i32) % 2 == 0 { 1.0 } else { -1.0 };
-            rig.tumble.turning = side * (TAU / flight.max(0.05)).min(TRICK_SPIN);
+            // A trick a hop off the road (the physics counts a kart a few
+            // centimetres up as flying) is no roll: it toppled karts on the
+            // grid.
+            if flight >= MIN_FLIGHT {
+                rig.tumble.turning = side * (TAU / flight).min(TRICK_SPIN);
+            }
         }
         rig.tricking = tricking;
         let (was_above, was_climbing) = rig.was;
