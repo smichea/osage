@@ -979,3 +979,10 @@ Date: 2026-11-14 · the kart programme's M6 (V2.3, "clouds that move and shade t
 - **Decision:** the ground material darkens the ground under the shadows of fair-weather clouds — soft-edged patches of about 180 m, covering about a third of the land — carried by the wind (4.8 m/s), which the world advances every frame. 30 % darker by day; none at night or in the rain. The still shade painted into the meadows goes.
 - **Why:** moving cloud shadows are among the strongest cues that a landscape is alive and outdoors.
 - **Limits:** only the ground takes them, not the karts, walls or woods; the shadows do not follow the photographed sky's own clouds.
+
+## D-109 — Marshals wave their flags at the karts
+
+Date: 2026-11-14 · the kart programme's M5 (V1.3, "marshals waving flags").
+
+- **Decision:** each marshal and their flag stand apart from the static scenery; the flag, in the hand, is waved side to side when a kart comes within 45 m — harder at a kart spinning round — easing off as the karts go, each marshal at their own rhythm.
+- **Why:** marshals at their posts are the circuit's people closest to the race; still, they read as statues.

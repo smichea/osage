@@ -88,7 +88,7 @@ pub struct CrowdPlugin;
 
 impl Plugin for CrowdPlugin {
     fn build(&self, app: &mut App) {
-        app.init_resource::<CrowdSeed>().add_systems(Update, (temper, react).chain().in_set(Stage::Draw));
+        app.init_resource::<CrowdSeed>().add_systems(Update, ((temper, react).chain(), wave).in_set(Stage::Draw));
     }
 }
 
@@ -323,5 +323,82 @@ mod tests {
         let thresholds: Vec<f32> = (0..20).map(|k| hashed(k, 2)).collect();
         let spread = thresholds.iter().cloned().fold(0.0, f32::max) - thresholds.iter().cloned().fold(1.0, f32::min);
         assert!(spread > 0.5, "{thresholds:?}");
+    }
+}
+
+/// A marshal at a post, gathered by the scenery: the figure, the flag in
+/// the hand's own space, and where the hand is (D-109).
+pub struct Flagman {
+    pub place: Transform,
+    pub figure: Mesh,
+    pub flag: Mesh,
+    pub hand: Vec3,
+}
+
+/// A marshal in the world: their flag, how hard they wave it now, their own rhythm.
+#[derive(Component)]
+pub struct Marshal {
+    flag: Entity,
+    at: Vec2,
+    waving: f32,
+    rate: f32,
+    phase: f32,
+}
+
+pub fn spawn_marshal(
+    commands: &mut Commands,
+    meshes: &mut Assets<Mesh>,
+    marshal: Flagman,
+    cloth: &Handle<StandardMaterial>,
+    k: usize,
+) {
+    let flag = commands
+        .spawn((
+            Mesh3d(meshes.add(marshal.flag)),
+            MeshMaterial3d(cloth.clone()),
+            Transform::from_translation(marshal.hand),
+        ))
+        .id();
+    let at = Vec2::new(marshal.place.translation.x, marshal.place.translation.z);
+    debug!(?at, height = marshal.place.translation.y, "a marshal");
+    commands
+        .spawn((
+            Part,
+            Mesh3d(meshes.add(marshal.figure)),
+            MeshMaterial3d(cloth.clone()),
+            marshal.place,
+            Marshal { flag, at, waving: 0.0, rate: 5.0 + 2.5 * hashed(k, 31), phase: hashed(k, 32) * TAU },
+        ))
+        .add_child(flag);
+}
+
+/// Marshals wave their flags at karts coming by: side to side, the staff
+/// pivoting in the hand, harder at a kart spinning round, easing off as
+/// the karts go.
+fn wave(
+    time: Res<Time>,
+    karts: Query<&Pose>,
+    mut marshals: Query<&mut Marshal>,
+    mut flags: Query<&mut Transform, Without<Marshal>>,
+) {
+    let (t, seconds) = (time.elapsed_secs(), time.delta_secs().min(0.1));
+    for mut marshal in &mut marshals {
+        let wanted = karts
+            .iter()
+            .filter(|pose| !pose.ghost)
+            .map(|pose| {
+                let d = Vec2::new(pose.kart.x, pose.kart.z).distance(marshal.at);
+                let near = 1.0 - ((d - 10.0) / 35.0).clamp(0.0, 1.0);
+                near * if pose.kart.spin.abs() > 2.0 { 1.6 } else { 1.0 }
+            })
+            .fold(0.0f32, f32::max)
+            .min(1.6);
+        let ease = if wanted > marshal.waving { 4.0 } else { 0.8 };
+        marshal.waving += (wanted - marshal.waving) * (seconds * ease).min(1.0);
+        if let Ok(mut flag) = flags.get_mut(marshal.flag) {
+            // Facing +X, waving side to side is a turn about X.
+            let swing = 0.65 * marshal.waving * (t * marshal.rate + marshal.phase).sin();
+            flag.rotation = Quat::from_rotation_x(swing);
+        }
     }
 }

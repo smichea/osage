@@ -785,22 +785,24 @@ pub fn marshals(set: &mut Set, circuit: &Circuit, land: &Land, frames: &[Frame])
         // The marshal beside the post, in orange, the flag raised.
         let marshal = post * Transform::from_xyz(0.1, 0.0, -1.1);
         let orange = (0.95, 0.45, 0.08);
-        person(set, Stance::HoldingFlag, marshal, orange, orange);
-        let hand = Stance::FLAG_HAND;
-        let top = hand + Vec3::new(0.3, 0.95, 0.0);
-        set.satin.add_within(
-            post.translation,
-            &rod(hand - Vec3::new(0.05, 0.15, 0.0), top, 0.012),
-            marshal,
-            Paint::plain(0.2, 0.2, 0.2),
-        );
+        // The marshal and the flag, apart from the static scenery: the flag
+        // is waved when karts come by (D-109), pivoting in the hand.
+        let (skin, hair, shoe) = (set.dice.pick(&SKINS), set.dice.pick(&HAIRS), set.dice.pick(&SHOES));
+        let dress = Dress { shirt: orange, trousers: orange, skin, hair, shoe };
+        let figure = dress.figure(osage_kart_crowd::standing(Stance::HoldingFlag));
+        // The flag in the hand's own space: the staff through the fist, the
+        // cloth at its top.
+        let top = Vec3::new(0.3, 0.95, 0.0);
+        let mut flag = osage_procedural::Batch::default();
+        flag.add(&rod(Vec3::new(-0.05, -0.15, 0.0), top, 0.012), Transform::IDENTITY, Paint::plain(0.2, 0.2, 0.2));
         let cloth = Shape::block(Vec3::new(0.0, -0.42, -0.005), Vec3::new(0.55, 0.0, 0.005));
-        set.matte.add_within(
-            post.translation,
-            &cloth,
-            marshal * Transform::from_translation(top),
-            Paint::plain(0.97, 0.82, 0.05),
-        );
+        flag.add(&cloth, Transform::from_translation(top), Paint::plain(0.97, 0.82, 0.05));
+        set.marshals.push(crate::crowd::Flagman {
+            place: marshal,
+            figure,
+            flag: flag.merged(),
+            hand: Stance::FLAG_HAND,
+        });
     }
 }
 

@@ -104,6 +104,8 @@ pub struct Set {
     /// Spectators who follow the race (D-103): each its own figure, calm
     /// and cheering, moved by [`crate::crowd`].
     pub spectators: Vec<crate::crowd::Spectator>,
+    /// Marshals with their flags, waved when karts come by (D-109).
+    pub marshals: Vec<crate::crowd::Flagman>,
 }
 
 impl Set {
@@ -192,6 +194,7 @@ pub fn build(
         dice: Dice(7),
         clearings: Vec::new(),
         spectators: Vec::new(),
+        marshals: Vec::new(),
     };
     let mut props = Props {
         commands: &mut commands,
@@ -320,6 +323,9 @@ fn spawn(
     }
     for (k, spectator) in set.spectators.into_iter().enumerate() {
         crate::crowd::spawn(commands, meshes, spectator, &cloth, k);
+    }
+    for (k, marshal) in set.marshals.into_iter().enumerate() {
+        crate::crowd::spawn_marshal(commands, meshes, marshal, &cloth, k);
     }
     for mesh in set.bright.meshes() {
         commands.spawn((Part, Mesh3d(meshes.add(mesh)), MeshMaterial3d(matte.clone()), NotShadowCaster));
