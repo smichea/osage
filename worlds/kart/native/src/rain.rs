@@ -235,6 +235,7 @@ fn wetten(
     mut suns: Query<&mut DirectionalLight, With<Sun>>,
     mut cameras: Query<(Option<&mut Skybox>, Option<&mut DistanceFog>), With<OsageCamera>>,
     shown: Option<Res<crate::scene::SkyShown>>,
+    look: Option<Res<osage_render::Look>>,
 ) {
     let target = if rain.falling { 1.0 } else { 0.0 };
     let step = time.delta_secs() / WETTING;
@@ -277,7 +278,12 @@ fn wetten(
                 rain.fog = Some((fog.clone(), fog.color));
             }
             if let Some((dry, written)) = &mut rain.fog {
-                let colour = dry.color.mix(&Color::srgb(0.52, 0.55, 0.58), haze);
+                // The rain's grey, lit as the scene is: a night's camera,
+                // wide open for floodlights, made a day's grey glow white
+                // (D-085, D-093).
+                let lit = look.as_ref().map_or(1.0, |look| crate::scene::unlit(look)).min(1.0);
+                let grey = LinearRgba::from(Color::srgb(0.52, 0.55, 0.58)) * lit;
+                let colour = dry.color.mix(&Color::from(grey), haze);
                 fog.falloff = if haze > 0.0 {
                     let visibility = 1.0 / (1.0 / 3000.0 + haze / HAZE);
                     FogFalloff::from_visibility_colors(visibility, colour, colour)

@@ -24,7 +24,7 @@ use bevy::{
     solari::prelude::{RaytracingMesh3d, SolariLighting, SolariPlugins},
 };
 
-use crate::{OsageCamera, Tier, ground::GroundMaterial};
+use crate::{Emitter, OsageCamera, Tier, ground::GroundMaterial};
 
 pub struct RayTracingPlugin;
 
@@ -35,7 +35,7 @@ impl Plugin for RayTracingPlugin {
         }
         app.add_plugins(SolariPlugins)
             .init_resource::<Doubles>()
-            .add_systems(Update, (camera, doubles, stand_ins))
+            .add_systems(Update, (camera, doubles, stand_ins, emitters))
             .add_systems(PostUpdate, hidden.after(bevy::camera::visibility::VisibilitySystems::VisibilityPropagate));
     }
 }
@@ -141,7 +141,13 @@ fn doubles(
     materials: Res<Assets<StandardMaterial>>,
     drawn: Query<
         (Entity, &Mesh3d, &MeshMaterial3d<StandardMaterial>),
-        (With<MeshMaterial3d<StandardMaterial>>, Without<RaytracingMesh3d>, Without<Untraced>, Without<HiddenDouble>),
+        (
+            With<MeshMaterial3d<StandardMaterial>>,
+            Without<RaytracingMesh3d>,
+            Without<Untraced>,
+            Without<HiddenDouble>,
+            Without<Emitter>,
+        ),
     >,
 ) {
     for (entity, mesh, material) in &drawn {
@@ -208,6 +214,24 @@ fn stand_ins(
             ..default()
         });
         commands.entity(entity).with_child((RaytracingMesh3d(double), MeshMaterial3d(stand_in), Transform::default()));
+    }
+}
+
+/// A lamp's light for the rays: its double, shining at the lamp's
+/// luminance, beside the drawn face (whose glow is set for the eye).
+fn emitters(
+    mut commands: Commands,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut doubles: ResMut<Doubles>,
+    mut materials: ResMut<Assets<StandardMaterial>>,
+    lamps: Query<(Entity, &Mesh3d, &Emitter), Without<StoodIn>>,
+) {
+    for (entity, mesh, emitter) in &lamps {
+        let Some(found) = double_of(&mesh.0, &mut meshes, &mut doubles) else { continue };
+        commands.entity(entity).insert(StoodIn);
+        let Some(double) = found else { continue };
+        let light = materials.add(StandardMaterial { base_color: Color::BLACK, emissive: emitter.0, ..default() });
+        commands.entity(entity).with_child((RaytracingMesh3d(double), MeshMaterial3d(light), Transform::default()));
     }
 }
 

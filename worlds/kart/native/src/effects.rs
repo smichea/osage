@@ -168,7 +168,7 @@ pub fn setup(
 }
 
 /// How dark the smoke was made last, and its materials' dry colours.
-type Shaded = (f32, Vec<(Handle<StandardMaterial>, LinearRgba)>);
+type Shaded = (f32, Vec<(Handle<StandardMaterial>, LinearRgba, bool)>);
 
 /// Unlit smoke glows in the gloom of a rain: as the sky darkens (D-068),
 /// the smoke, the veil, the dust and the soot darken with it.
@@ -181,12 +181,19 @@ pub fn gloom(
 ) {
     // Veiled by the rain, and exposed like the rest (D-069).
     let veiled = rain.map_or(0.0, |rain| rain.veiled * rain.wet());
-    let shade = (1.0 - 0.6 * veiled) * look.map_or(1.0, |look| crate::scene::unlit(&look));
+    let shade = (1.0 - 0.6 * veiled) * look.as_ref().map_or(1.0, |look| crate::scene::unlit(look));
+    // Flames and sparks are lights: brighter than what they light at night,
+    // as a camera opened for floodlights sees them, but not by the whole of
+    // its opening (D-085): their share of the exposure is two thirds.
+    let glow = look.as_ref().map_or(1.0, |look| crate::scene::unlit(look)).powf(2.0 / 3.0);
     let (done, dry) = shaded.get_or_insert_with(|| {
-        let handles = [&pool.smoke, &pool.veil, &pool.dust, &pool.soot, &pool.wind];
-        let dry = handles
+        let lit = [&pool.smoke, &pool.veil, &pool.dust, &pool.soot, &pool.wind];
+        let glowing = pool.sparks.iter().chain([&pool.flame]);
+        let dry = lit
             .into_iter()
-            .filter_map(|h| materials.get(h).map(|m| (h.clone(), m.base_color.to_linear())))
+            .map(|h| (h, false))
+            .chain(glowing.map(|h| (h, true)))
+            .filter_map(|(h, glows)| materials.get(h).map(|m| (h.clone(), m.base_color.to_linear(), glows)))
             .collect();
         (1.0, dry)
     });
@@ -194,10 +201,11 @@ pub fn gloom(
         return;
     }
     *done = shade;
-    for (handle, colour) in dry.iter() {
+    for (handle, colour, glows) in dry.iter() {
+        let by = if *glows { glow } else { shade };
         if let Some(mut material) = materials.get_mut(handle) {
             material.base_color =
-                LinearRgba::new(colour.red * shade, colour.green * shade, colour.blue * shade, colour.alpha).into();
+                LinearRgba::new(colour.red * by, colour.green * by, colour.blue * by, colour.alpha).into();
         }
     }
 }

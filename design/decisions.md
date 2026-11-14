@@ -861,3 +861,11 @@ Date: 2026-11-14 · the maintainer's choice for the next step toward "GTA V" lig
 - **Measured** on the cloud bench's NVIDIA L4 at 2560×1440 (2026-11-14): the first run stopped on an empty mesh (no double is made of one now); the second had black karts — Solari traces hidden meshes too, and each kart's hidden guard bubble enclosed it (hidden meshes now leave the traced scene); the third, 16.7 ms a frame but the sunlit asphalt sparkling with noise; with ReSTIR on, 26.3 ms (the 30-frame budget is 33.3) and a soft, sky-lit picture. T3 on the same machine: 12.9 ms.
 - **Consequences:** the Windows build has the feature: on an RTX card `play.bat --tier T4` shows it; the game does not choose T4 by itself until a machine like the testers' has run it. Skinned drivers are traced in their rest pose; no learned denoiser.
 
+
+## D-094 — Night under traced light: lamps are shining surfaces
+
+Date: 2026-11-14 · after the cloud bench's first night-and-rain run of T3 and T4 (D-093).
+
+- **Decision:** a drawn mesh can be marked a lamp (`osage_render::Emitter`, a luminance in cd/m²): traced light counts it as a light source of that luminance — its double, shining, beside the drawn face — whatever the drawn material shows. The floodlights' faces shine at 500 lux on the road 20 m off (about 1.8 × 10⁵ cd/m² over 1.6 × 0.7 m); each kart gets lenses — white at its nose, 30 lux 10 m ahead, red at its tail — drawn as dim glowing faces. A raster picture keeps lighting with the spot and point lights (D-085) and ignores the mark. Two fixes from the same run: the rain's haze is exposed like the rest (it glowed grey at night), and the flames' and sparks' glow takes two thirds of the night's exposure (it was the full daylight value, blown out).
+- **Why:** Solari has no punctual lights — only the sun, the sky and emissive surfaces: the night picture at T4 was black but for the lamps' faces. A lamp's face that lit the road would be far too bright for the eye at night's exposure, so the eye and the rays get different faces.
+- **Consequences:** a world's lamps light T4 only if it marks them. The headlamps add two small meshes per kart at night.

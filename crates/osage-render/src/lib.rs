@@ -133,6 +133,14 @@ pub struct OsageCamera;
 #[derive(Component, Default)]
 pub struct Sun;
 
+/// A drawn mesh that is a lamp: traced light (T4, D-093) counts it as a
+/// light source of this luminance, cd/m², whatever its drawn material
+/// shows. A raster picture lights the scene with a punctual light beside
+/// the lamp instead, and draws the lamp's face far dimmer, for its glow;
+/// traced light has no punctual lights, only shining surfaces.
+#[derive(Component, Clone, Copy, Debug)]
+pub struct Emitter(pub LinearRgba);
+
 /// A rendering technique: one module, one plugin.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Technique {

@@ -27,6 +27,12 @@ const MAST_EVERY: f32 = 40.0;
 const MAST: f32 = 13.0;
 /// A floodlight's light, lumens: about 500 lux on the road 20 m away.
 const FLOOD: f32 = 2.4e6;
+/// A floodlight's face as traced light sees it (D-094), cd/m²: 500 lux on
+/// the road 20 m away from a face of 1.6 × 0.7 m (E = L·A/d²).
+const FACE: f32 = 500.0 * 20.0 * 20.0 / (1.6 * 0.7);
+/// A headlamp's lens as traced light sees it, cd/m²: 30 lux on the road
+/// 10 m ahead from a lens of 0.22 × 0.08 m.
+const LENS: f32 = 30.0 * 10.0 * 10.0 / (0.22 * 0.08);
 /// A kart's lamp, lumens.
 const HEADLAMP: f32 = 1.2e5;
 
@@ -42,6 +48,14 @@ impl Plugin for LightsPlugin {
 /// (not the circuit's parts, which a rebuild removes after them).
 #[derive(Component)]
 struct Floodlit;
+
+/// The lenses' meshes and materials, made once.
+struct Lenses {
+    front: Handle<Mesh>,
+    back: Handle<Mesh>,
+    white: Handle<StandardMaterial>,
+    red: Handle<StandardMaterial>,
+}
 
 /// A kart's lamps, as children of its model.
 #[derive(Component)]
@@ -130,6 +144,7 @@ fn floodlights(
             Floodlit,
             Mesh3d(face.clone()),
             MeshMaterial3d(lamp.clone()),
+            osage_render::Emitter(LinearRgba::rgb(FACE, FACE * 0.95, FACE * 0.83)),
             Transform::from_translation(top + facing.forward() * 0.2).looking_at(*aim, Vec3::Y),
         ));
         commands.spawn((
@@ -153,6 +168,9 @@ fn floodlights(
 fn headlamps(
     mut commands: Commands,
     shown: Option<Res<SkyShown>>,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut materials: ResMut<Assets<StandardMaterial>>,
+    mut glass: Local<Option<Lenses>>,
     karts: Query<(Entity, &Pose, Option<&Children>)>,
     lamps: Query<Entity, With<Headlamp>>,
 ) {
@@ -163,6 +181,20 @@ fn headlamps(
         }
         return;
     }
+    let lenses = glass.get_or_insert_with(|| Lenses {
+        front: meshes.add(Cuboid::new(0.22, 0.08, 0.02)),
+        back: meshes.add(Cuboid::new(0.18, 0.05, 0.02)),
+        white: materials.add(StandardMaterial {
+            base_color: Color::WHITE,
+            emissive: LinearRgba::rgb(40.0, 39.0, 37.0),
+            ..default()
+        }),
+        red: materials.add(StandardMaterial {
+            base_color: Color::srgb(0.6, 0.05, 0.03),
+            emissive: LinearRgba::rgb(4.0, 0.45, 0.3),
+            ..default()
+        }),
+    });
     for (kart, pose, children) in &karts {
         if pose.ghost || children.is_some_and(|children| children.iter().any(|c| lamps.contains(c))) {
             continue;
@@ -192,6 +224,22 @@ fn headlamps(
                     ..default()
                 },
                 Transform::from_xyz(0.0, 0.4, -1.05),
+            ));
+            // The lenses: glowing faces for the eye, light sources for the
+            // rays (which have no punctual lights, D-094).
+            kart.spawn((
+                Headlamp,
+                Mesh3d(lenses.front.clone()),
+                MeshMaterial3d(lenses.white.clone()),
+                osage_render::Emitter(LinearRgba::rgb(LENS, LENS * 0.97, LENS * 0.92)),
+                Transform::from_xyz(0.0, 0.45, 1.06),
+            ));
+            kart.spawn((
+                Headlamp,
+                Mesh3d(lenses.back.clone()),
+                MeshMaterial3d(lenses.red.clone()),
+                osage_render::Emitter(LinearRgba::rgb(LENS * 0.02, LENS * 0.0024, LENS * 0.0016)),
+                Transform::from_xyz(0.0, 0.4, -1.06),
             ));
         });
     }
