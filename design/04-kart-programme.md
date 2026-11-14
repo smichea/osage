@@ -1,6 +1,6 @@
 # 04 — Kart programme: arcade play of the best of the genre, a GTA 5–class look
 
-Date: 2026-11-12 · Status: **proposed** · Rendering bar: [03-rendering](03-rendering.md)
+Date: 2026-11-12 · Status: **under way** (progress in §5, updated 2026-11-14) · Rendering bar: [03-rendering](03-rendering.md)
 
 The kart world plays well enough for friends on a network (0.2.0), but it is one track, one kart, one mode, and its picture is good materials on simple shapes. This programme takes it to two bars at once:
 
@@ -88,3 +88,18 @@ M1 and M2 first: little work, and what players feel first. Two pieces of the loo
 ## 4. Done
 
 The programme is done when every task above has passed its oracle, the knowledge cards and decision log are up to date, and the responsible person has played a playtest build of each milestone with friends.
+
+## 5. Progress (2026-11-14)
+
+Each line points at the decisions that did the work; "partly" says what is missing.
+
+| Milestone | State |
+| --- | --- |
+| **M1 Driving** | Done: three-level drift boosts, perfect starts and stalls, tricks over crests, slipstream (D-050, D-051); contacts with momentum (D-045); a trick's roll as a rigid body that bounces on landing (D-096). |
+| **M2 Items** | Done: ten paddock items drawn by place and gap, some held behind, bots using them (D-046, D-052); thrown tyres and cones as bodies (D-079); oil takes grip (D-072); a player's own items drawn at once (D-071). |
+| **M3 Drivers, karts, tracks, cups** | Done: eight drivers and four bodies (D-055); tracks as data (D-056); six tracks with their places — paddock, forest, coast, harbour town, canyon, mountain — hills, bridges and tunnels (D-061, D-077, D-080, D-081); cups (D-057). |
+| **M4 Modes and presentation** | Done: time trials with ghosts (D-062); battles (D-065); two players on one screen (D-086 — two, not yet four); flyover and slow-motion finish (D-063); the whole race shown again as television would (D-082); records and a leaderboard page (D-053, D-091); profiles and paints won (D-064); photo mode (D-066); bot difficulty and engine classes (D-088, D-089). |
+| **M5 People and detail** | Partly. Done: nothing repeats (D-054); marks on the track (D-067); drivers who steer, lean, look into bends, cheer, get dizzy (D-087); a crowd that follows the race (D-103); karts that look raced (D-098 to D-100); mown grass, scrub, grime, birds and animals (D-101 to D-104, D-106). Missing: marshals waving flags, hit reactions, crowd impostors far off, modelled buildings and barriers beyond what the procedural kit makes, wind in the vegetation. |
+| **M6 Light and weather** | Partly. Done: ray-traced light and reflections at T4 with osage's denoiser (D-093 to D-097); rain (D-068, D-069); night under floodlights (D-085); a nearer haze (D-107); tree cards for the far woods. Missing: global illumination at T3, volumetric fog and moving clouds, a time of day that moves, streaming of tracks larger than memory. |
+
+Releases so far: pre-releases up to kart 0.13.3, Windows builds updating themselves (D-047, D-083). Measured on the cloud bench's NVIDIA L4 at 2560×1440: T3 14.4 ms, T4 29.9 ms by day and 32.8 ms at night in the rain.

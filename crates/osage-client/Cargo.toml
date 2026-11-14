@@ -3,7 +3,7 @@
 
 [package]
 name = "osage-client"
-description = "osage native client (Bevy), phase 1"
+description = "osage native client (Bevy)"
 license-file = "../../LICENSE-EXCEPTIONS.md"
 publish = false
 version.workspace = true

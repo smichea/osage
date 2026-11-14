@@ -1,6 +1,6 @@
 # osage protocol specification
 
-Status: **v0, draft** — grows with the phase-1 vertical slice. Design and reasons: [ADR-0002](../design/adr/0002-protocol-v0.md).
+Status: **v0, in use** — spoken by the engine's server, its native and browser clients, the SDKs, agents, bridges and the kart world; still a draft, changed only through the decision log. Design and reasons: [ADR-0002](../design/adr/0002-protocol-v0.md).
 
 | Part | Path | Licence |
 |---|---|---|

@@ -1,6 +1,6 @@
 # 03 — Rendering programme: towards the GTA 6 bar, together
 
-Date: 2026-11-10 · Status: **proposed** · Bar and gap analysis: [research/04](../research/04-rendering-vs-rage.md)
+Date: 2026-11-10 · Status: **under way** (state in §4, updated 2026-11-14) · Bar and gap analysis: [research/04](../research/04-rendering-vs-rage.md)
 
 osage aims at rendering in the class of RAGE / GTA 6 and at scaling down to old hardware. No single team gets there in one go: this programme organises the work so that many people and AI agents can advance it **in parallel, measurably, without stepping on each other**. The kart world is its testbed.
 

@@ -3,7 +3,7 @@
 
 [package]
 name = "osage-server"
-description = "osage replication gateway and region server (single binary, phase 1)"
+description = "osage replication gateway and region server (one binary for now)"
 license-file = "../../LICENSE-EXCEPTIONS.md"
 publish = false
 version.workspace = true

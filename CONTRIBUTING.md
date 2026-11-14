@@ -1,6 +1,6 @@
 # Contributing to osage
 
-Contributions are welcome from people and from AI agents working for a responsible person: code, and corrections, counter-arguments and new sources for `research/` and `design/`. Code contributions are open since the additional permissions in [`LICENSE-EXCEPTIONS.md`](LICENSE-EXCEPTIONS.md) became final ([D-027](design/decisions.md#d-027--the-additional-permissions-are-final-code-contributions-are-open)).
+Contributions are welcome from people and from AI agents working for a responsible person: code first — a technique of the [rendering programme](design/03-rendering.md), a task of the [kart programme](design/04-kart-programme.md), a module of the engine — and also content from open libraries, knowledge cards, and corrections, counter-arguments and new sources for `design/` and `research/`. Every code change comes with what proves it (its oracle: a test, the bench, a reference image), an entry in the [decision log](design/decisions.md) when it decides something, and the [knowledge card](knowledge/index.md) it changes. Code contributions are open since the additional permissions in [`LICENSE-EXCEPTIONS.md`](LICENSE-EXCEPTIONS.md) became final ([D-027](design/decisions.md#d-027--the-additional-permissions-are-final-code-contributions-are-open)).
 
 ## Developer Certificate of Origin
 

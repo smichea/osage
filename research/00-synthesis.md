@@ -1,5 +1,7 @@
 # 00 — Synthesis and recommendation
 
+> **A dated survey.** This synthesis chose osage's direction on 2026-11-09, before any code. The project has been in implementation since: what was built, and every decision taken since, are in the [README](../README.md) and the [decision log](../design/decisions.md), which supersede this document where they differ.
+
 Date: **2026-11-09**. Built on the four surveys in this folder:
 [01 native engines](01-native-engines.md) · [02 browser clients](02-web-engines-webgpu.md) · [03 world server & replication](03-world-server-replication.md) · [04 rendering vs RAGE](04-rendering-vs-rage.md) · [05 mixed-reality standards](05-mixed-reality-standards.md).
 

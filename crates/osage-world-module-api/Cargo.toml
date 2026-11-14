@@ -3,7 +3,7 @@
 
 [package]
 name = "osage-world-module-api"
-description = "World Module Interface of osage (phase 1): what a world's rules see of its region"
+description = "World Module Interface of osage: what a world's rules see of its region"
 license = "MIT OR Apache-2.0"
 publish = false
 version.workspace = true

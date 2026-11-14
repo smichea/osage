@@ -1,5 +1,5 @@
 // SPDX-FileCopyrightText: The osage contributors
-// SPDX-License-Identifier: LicenseRef-osage-AGPL-3.0-or-later-with-exceptions
+// SPDX-License-Identifier: MIT OR Apache-2.0
 
 //! The crowd follows the race (D-103). Every spectator in the grandstand
 //! and along the fences is a figure of its own, built twice — calm, and

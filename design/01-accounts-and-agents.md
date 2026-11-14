@@ -1,6 +1,8 @@
 # Design 01 — Accounts, uniqueness and the agent mesh
 
-Status: **proposed** · Date: 2026-11-09
+Status: **implemented in part** · Date: 2026-11-09, state updated 2026-11-14
+
+> **Where it stands.** Built: credentials (identity as VC 2.0 signed ES256 JWS, assurance levels), delegations to agents and bridges each answering to a responsible human, agents in the world through MCP (`osage-agent`), trust in issuers configured per world ([README](../README.md#the-engines-core); D-006, D-013, D-026, D-029, D-040). To come: the nexlink and ameesh adapters, per-world identifiers against ban evasion in production worlds, the agent mesh across regions. Decisions since this note supersede it where they differ.
 
 Two things are built into the world-server mesh **from the first version**, because retrofitting them later would mean changing the protocol, the persistence model and every client:
 

@@ -1,5 +1,5 @@
 // SPDX-FileCopyrightText: The osage contributors
-// SPDX-License-Identifier: LicenseRef-osage-AGPL-3.0-or-later-with-exceptions
+// SPDX-License-Identifier: MIT OR Apache-2.0
 
 //! Life in the country round the circuit (D-104): birds and a few animals,
 //! sculpted by the program ([`Sculpture`]), each moving on its own and

@@ -1,6 +1,8 @@
 # Design 02 — Mixed worlds: real places, real devices, and OpenDeviceDB
 
-Status: **proposed** · Date: 2026-11-09
+Status: **implemented in part** · Date: 2026-11-09, state updated 2026-11-14
+
+> **Where it stands.** Built: the device bridge (`osage-bridge`) mirroring a machine's sensors into a world, and actuation with the owner's explicit opening of a function, checked and made safe by the bridge itself ([README](../README.md#the-engines-core); D-009, D-014). To come: captured and geo-anchored places, AR participants, OpenDeviceDB components. Decisions since this note supersede it where they differ.
 
 An osage world may be purely virtual, or **mixed**: real places captured and anchored in it, real devices living in it as entities, people present physically through AR, and in-world actions driving real devices. Like accounts and agents ([design/01](01-accounts-and-agents.md)), this has to be in the protocol from v0: device entities, timestamps and staleness, georeferencing and physical actuation cannot be bolted on later.
 
