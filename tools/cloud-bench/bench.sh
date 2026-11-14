@@ -41,7 +41,8 @@ for candidate in asia-southeast1-b asia-southeast1-a asia-southeast1-c; do
     --image-family osage-bench --image-project "$project" --boot-disk-type pd-balanced \
     --subnet bench --service-account "bench-vm@$project.iam.gserviceaccount.com" \
     --scopes https://www.googleapis.com/auth/devstorage.read_write \
-    --metadata "osage-run=$run,osage-tiers=$tiers,osage-args=${OSAGE_BENCH_ARGS:-}" \
+    `# '^@^' makes '@' the separator: the bench's arguments may hold commas (--camera X,Y,Z,...).` \
+    --metadata "^@^osage-run=$run@osage-tiers=$tiers@osage-args=${OSAGE_BENCH_ARGS:-}" \
     --metadata-from-file startup-script="$here/on-vm.sh" --labels osage=bench; then
     zone=$candidate
     break
