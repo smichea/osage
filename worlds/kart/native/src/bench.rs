@@ -65,12 +65,20 @@ pub struct BenchPlugin {
     pub headless: bool,
     /// The track it races on (`--track`, D-056).
     pub track: osage_kart_tracks::TrackDef,
+    /// A film (`--film FROM,TO,EVERY`): a picture of every `EVERY`th frame
+    /// from `FROM` to `TO`, in place of the four screenshots. The bench
+    /// steps time by a fixed amount, so the pictures are those of a smooth
+    /// film whatever the machine's speed; its timings are not a bench's.
+    pub film: Option<(u32, u32, u32)>,
 }
 
 impl Plugin for BenchPlugin {
     fn build(&self, app: &mut App) {
         // Screenshots at fixed frames spread over the run.
-        let shots = [1, 3, 5, 7].map(|eighths| self.frames * eighths / 8).to_vec();
+        let shots = match self.film {
+            Some((from, to, every)) => (from..=to).step_by(every.max(1) as usize).collect(),
+            None => [1, 3, 5, 7].map(|eighths| self.frames * eighths / 8).to_vec(),
+        };
         app.insert_resource(crate::crowd::CrowdSeed(0))
             .insert_resource(TimeUpdateStrategy::ManualDuration(Duration::from_secs_f32(DT)))
             .insert_resource(Output(Some(self.resolution.into())))

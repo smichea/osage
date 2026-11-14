@@ -89,6 +89,7 @@ fn main() -> Result<()> {
     let mut raining = false;
     // The interface over the bench's race, in states set by hand (D-078).
     let mut ui_preview = false;
+    let mut film = None;
     // Players at this computer: 2 splits the screen (D-086).
     let mut players = 1u8;
     let mut args = std::env::args().skip(1);
@@ -136,6 +137,15 @@ fn main() -> Result<()> {
                     .context("--camera takes six numbers")?;
                 let [x, y, z, tx, ty, tz] = numbers[..] else { bail!("--camera takes X,Y,Z,TX,TY,TZ") };
                 viewpoint = Some(scene::Viewpoint { from: [x, y, z].into(), to: [tx, ty, tz].into() });
+            }
+            "--film" => {
+                let numbers: Vec<u32> =
+                    value()?.split(',').map(str::parse).collect::<Result<_, _>>().context("--film takes frames")?;
+                film = Some(match numbers[..] {
+                    [from, to] => (from, to, 1),
+                    [from, to, every] => (from, to, every),
+                    _ => bail!("--film takes FROM,TO or FROM,TO,EVERY"),
+                });
             }
             "--resolution" => {
                 let value = value()?;
@@ -277,6 +287,7 @@ fn main() -> Result<()> {
             sky,
             headless,
             track,
+            film,
         });
     } else {
         let tier = match tier {
