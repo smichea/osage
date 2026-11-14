@@ -33,7 +33,10 @@ impl Plugin for RayTracingPlugin {
         if app.world().get_resource::<Tier>().is_none_or(|tier| *tier < Tier::T4) {
             return;
         }
-        app.add_plugins(SolariPlugins).init_resource::<Doubles>().add_systems(Update, (camera, doubles, stand_ins));
+        app.add_plugins(SolariPlugins)
+            .init_resource::<Doubles>()
+            .add_systems(Update, (camera, doubles, stand_ins))
+            .add_systems(PostUpdate, hidden.after(bevy::camera::visibility::VisibilitySystems::VisibilityPropagate));
     }
 }
 
@@ -48,6 +51,12 @@ struct StoodIn;
 /// A mesh that cannot be traced (not triangles): looked at once.
 #[derive(Component)]
 struct Untraced;
+
+/// A mesh's double, kept while the mesh is hidden: Solari traces every
+/// `RaytracingMesh3d`, shown or not, and a hidden shape — a kart's guard
+/// bubble round it, the items it may carry — would shade what it hides.
+#[derive(Component)]
+struct HiddenDouble(Handle<Mesh>);
 
 /// The scene's camera traces its light (Solari needs no multisampling and
 /// a main texture it can write to). Solari draws every opaque material
@@ -125,7 +134,7 @@ fn doubles(
     mut doubles: ResMut<Doubles>,
     drawn: Query<
         (Entity, &Mesh3d),
-        (With<MeshMaterial3d<StandardMaterial>>, Without<RaytracingMesh3d>, Without<Untraced>),
+        (With<MeshMaterial3d<StandardMaterial>>, Without<RaytracingMesh3d>, Without<Untraced>, Without<HiddenDouble>),
     >,
 ) {
     for (entity, mesh) in &drawn {
@@ -138,6 +147,28 @@ fn doubles(
                 commands.entity(entity).insert(Untraced);
             }
             None => {}
+        }
+    }
+}
+
+/// A hidden mesh leaves the traced scene; shown again, it comes back.
+#[allow(clippy::type_complexity)]
+fn hidden(
+    mut commands: Commands,
+    traced: Query<
+        (Entity, &InheritedVisibility, &RaytracingMesh3d),
+        Or<(Changed<InheritedVisibility>, Added<RaytracingMesh3d>)>,
+    >,
+    kept: Query<(Entity, &InheritedVisibility, &HiddenDouble), Changed<InheritedVisibility>>,
+) {
+    for (entity, visible, double) in &traced {
+        if !visible.get() {
+            commands.entity(entity).remove::<RaytracingMesh3d>().insert(HiddenDouble(double.0.clone()));
+        }
+    }
+    for (entity, visible, double) in &kept {
+        if visible.get() {
+            commands.entity(entity).remove::<HiddenDouble>().insert(RaytracingMesh3d(double.0.clone()));
         }
     }
 }
