@@ -27,7 +27,8 @@ Traced light with few rays a pixel is grainy: a wet road sparkles, a kart is spe
 2. **À-trous passes.** Three passes of a 3 × 3 kernel (¼ ½ ¼ in each direction) whose taps are 1, 2 then 4 pixels apart: a 15-pixel reach for 27 taps a pixel.
 3. **Edge-stopping weights**, as SVGF weighs them[^svgf]: a neighbour counts less the more its facing differs (normal dot product to the 32nd power), the farther it lies off the pixel's plane (relative to its distance from the camera), and the more its light differs, measured in standard deviations of the light over the nine taps: grain spreads, an edge of shadow stays.
 4. **Left as drawn:** the sky, meshes drawn forward (no G-buffer), glowing surfaces.
-5. **Where.** After the opaque pass, before see-through things are drawn; temporal anti-aliasing then steadies the result over frames.
+5. **Decoded once.** Each 8 × 8 workgroup decodes its pixels and, round them, those its taps reach (16 × 16 at most) into workgroup memory before filtering: a pixel is decoded about four times a pass, not nine.
+6. **Where.** After the opaque pass, before see-through things are drawn; temporal anti-aliasing then steadies the result over frames.
 
 # Settings per tier
 
@@ -35,7 +36,7 @@ T4 with ray-tracing hardware only. `OSAGE_DENOISE=0` leaves the grain (to compar
 
 # Cost
 
-Three compute passes of nine taps over the picture; measured on the cloud bench (D-095).
+Three compute passes of nine taps over the picture. On the cloud bench's L4 at 2560×1440, night and rain: 3.7 ms decoding every tap (34.3 ms a frame, over T4's 33.3), before the workgroup tiles.
 
 # Limits
 
