@@ -217,6 +217,26 @@ pub fn scatters(
             boulders.push(stand(at, 0.05, turn, dice.between(4.0, 11.0)));
         }
     }
+    // Scrub on the hills between the circuit and the woods (D-102): bushes
+    // in thickets where a slow noise says the ground was left to grow,
+    // none elsewhere — a hillside is never evenly sown.
+    if detail == Detail::Full {
+        let mut thickets = 0;
+        for _ in 0..1500 {
+            let at = beside(&mut dice, 60.0, 160.0);
+            if noise(at / 34.0 + 55.0) < 0.6 || !free(at, 6.0) || thickets >= (90.0 * trees.max(0.5)) as usize {
+                continue;
+            }
+            thickets += 1;
+            for _ in 0..(3 + (dice.roll() * 6.0) as usize) {
+                let near = at + Vec2::from_angle(dice.between(0.0, std::f32::consts::TAU)) * dice.between(0.0, 3.0);
+                if free(near, 5.0) {
+                    let turn = dice.between(0.0, std::f32::consts::TAU);
+                    bushes.push(stand(near, 0.15, turn, dice.between(0.8, 1.7)));
+                }
+            }
+        }
+    }
     all.push(scatter(&models.bush, bushes, Use::Variants, 260.0, true));
     all.push(scatter(&models.boulder, boulders, Use::Whole, 250.0, true));
 

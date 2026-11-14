@@ -924,3 +924,11 @@ Date: 2026-11-14 · daylight photorealism (the maintainer: "la tonte ne fait sen
 
 - **Decision:** the ground material gains mown stripes (`Ground::mown`: strength, width, the mower's direction), applied where the vertex colour's alpha says the grass is mown; each stripe is lighter or darker by whether its blades lean away from or towards the eye. The kart world mows the land out to 6 m past the barriers (fading over 3 m), not on shores or cliffs; beyond, meadow.
 - **Why:** the light and dark bands of a mown lawn, which swap as one walks round, are among the first cues that a venue is real and kept.
+
+## D-102 — Scrub on the hills between the circuit and the woods
+
+Date: 2026-11-14 · daylight photorealism: between the track and the woods the hills were bare, a few trees on smooth grass.
+
+- **Decision:** at T3 and above, the roadside places up to 90 thickets (fewer in sparse scenery) 60 to 160 m from the track, each three to eight bushes within 3 m, where a slow noise (34 m) says the ground was left to grow; none elsewhere.
+- **Why:** a hillside is never evenly sown: scrub gathers in thickets, and their patches give distant slopes depth and scale.
+- **Consequences:** a few hundred more bushes, drawn up to 260 m with coarser meshes far off; to be measured on the cloud bench.
