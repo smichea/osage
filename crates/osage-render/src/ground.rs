@@ -72,6 +72,12 @@ pub struct Ground {
     #[texture(108)]
     #[sampler(109)]
     pub rock_grain: Option<Handle<Image>>,
+    /// Mown grass in stripes (D-101): x how much lighter or darker a
+    /// stripe looks as its blades lean away from or towards the eye (0
+    /// none), y a stripe's width, m; z and w the direction the mower went.
+    /// Mown where the vertex colour's alpha says so (1 mown, 0 not).
+    #[uniform(110)]
+    pub mowing: Vec4,
 }
 
 impl Ground {
@@ -107,6 +113,7 @@ impl Ground {
             grain: None,
             rock: Vec4::new(0.0, 6.0, 0.0, 2.0),
             rock_grain: None,
+            mowing: Vec4::new(0.0, 4.0, 0.0, 1.0),
         }
     }
 
@@ -123,6 +130,15 @@ impl Ground {
     /// height.
     pub fn with_rock(self, colour: Handle<Image>, tile: f32, strata: f32, spacing: f32) -> Self {
         Self { rock: Vec4::new(1.0, tile, strata, spacing), rock_grain: Some(colour), ..self }
+    }
+
+    /// Mown in stripes `width` metres wide, the mower going along
+    /// `direction` and back, each stripe `strength` lighter or darker by
+    /// the way its blades lean from the eye — where the vertex colour's
+    /// alpha says the grass is mown.
+    pub fn mown(self, strength: f32, width: f32, direction: Vec2) -> Self {
+        let d = direction.normalize_or(Vec2::Y);
+        Self { mowing: Vec4::new(strength, width, d.x, d.y), ..self }
     }
 
     /// Draws a road's history on a mesh whose texture coordinates are

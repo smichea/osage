@@ -917,3 +917,10 @@ Date: 2026-11-14 · after D-099: the nose and the side pods looked inflated, lik
 
 - **Decision:** the nose's and the pods' pieces blend over 2 cm (from 5 and 4) with 2 cm corners (from 4 and 4.5): the crisp edges of moulded plastic. The visor is taller, wraps 140° of the shell (from 120°), its edges bevelled, smoked rather than black.
 - **Why:** rotomoulded kart bodywork has defined creases and flat faces; wide blends read as inflatable.
+
+## D-101 — Mown grass by the circuit, in stripes that change with the eye
+
+Date: 2026-11-14 · daylight photorealism (the maintainer: "la tonte ne fait sens que proche du circuit, à l'extérieur personne ne tond").
+
+- **Decision:** the ground material gains mown stripes (`Ground::mown`: strength, width, the mower's direction), applied where the vertex colour's alpha says the grass is mown; each stripe is lighter or darker by whether its blades lean away from or towards the eye. The kart world mows the land out to 6 m past the barriers (fading over 3 m), not on shores or cliffs; beyond, meadow.
+- **Why:** the light and dark bands of a mown lawn, which swap as one walks round, are among the first cues that a venue is real and kept.

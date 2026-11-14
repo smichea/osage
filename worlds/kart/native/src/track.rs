@@ -253,7 +253,9 @@ fn ribbon(
 /// The land as a grid, finer around the circuit than far from it, painted
 /// with the colour of the ground. `paint` scales that colour for the
 /// material that will cover it.
-fn land_mesh(land: &Land, paint: impl Fn(Vec2, f32) -> Vec3, rock: Option<Vec3>) -> Mesh {
+/// `mown` says where the grass is mown (1) or not (0), in the vertex
+/// colour's alpha (D-101).
+fn land_mesh(land: &Land, paint: impl Fn(Vec2, f32) -> Vec3, mown: impl Fn(Vec2) -> f32, rock: Option<Vec3>) -> Mesh {
     let n = CELLS;
     // Evenly spaced steps, bent so that the middle ones are five times smaller than the last.
     let along = |i: usize| {
@@ -279,13 +281,15 @@ fn land_mesh(land: &Land, paint: impl Fn(Vec2, f32) -> Vec3, rock: Option<Vec3>)
             uvs.push([here.x, here.z]);
             let normal = down.cross(across).normalize_or(Vec3::Y);
             let mut colour = paint(Vec2::new(here.x, here.z), here.y);
+            let mut cut = mown(Vec2::new(here.x, here.z));
             // In mountains and canyons the steep ground is bare rock (D-077).
             if let Some(rock) = rock {
                 let steep = smooth((1.0 - normal.y - 0.12) / 0.18);
                 let streak = 0.85 + 0.3 * noise(Vec2::new(here.x, here.z) / 7.0 + here.y / 9.0);
                 colour = colour.lerp(rock * streak, steep);
+                cut *= 1.0 - steep;
             }
-            colours.push(colour.extend(1.0).to_array());
+            colours.push(colour.extend(cut).to_array());
         }
     }
     let mut indices = Vec::with_capacity(n * n * 6);
@@ -447,7 +451,10 @@ pub fn build(
     // The land, and a plain beyond it down to the horizon: four strips
     // around the land, never under it, where the lake goes below the plain.
     let rock = rock_of(&course.0.about.scenery).map(|rock| rock * paint);
-    flat(with_tangents(land_mesh(&land, |at, height| colour(&land, at, height) * paint, rock)), &grass_material);
+    flat(
+        with_tangents(land_mesh(&land, |at, height| colour(&land, at, height) * paint, |_| 1.0, rock)),
+        &grass_material,
+    );
     let plain_material = plain(&mut materials, Color::srgb(0.3, 0.58, 0.18), 1.0);
     let (edge, horizon) = (LAND / 2.0 - 1.0, 3000.0);
     for (low, high) in [
@@ -807,7 +814,8 @@ fn photographed(
         }
         None => Ground::meadow(),
     };
-    let grass = grain(set.grass.material(2.6), 2.6, land_ground, ground_untiled);
+    // Mown in stripes 4.5 m wide, the mower going along the land's long side.
+    let grass = grain(set.grass.material(2.6), 2.6, land_ground.mown(0.2, 4.5, Vec2::new(0.6, 0.8)), ground_untiled);
     // Mown grass varies less: clumps only, and faint patches.
     let mown = Ground { variation: Vec4::new(0.3, 0.35, 1.2, 18.0), ..Ground::meadow() };
     let mown_grass = grain(set.grass.material(2.6), 2.6, mown, ground_untiled);
@@ -835,7 +843,15 @@ fn photographed(
     // Laid once `flat` is done with the commands.
     let mut grassed: Vec<(Mesh, &Handle<GroundMaterial>)> = Vec::new();
     let rock = rock_of(&circuit.about.scenery).map(|rock| rock / GRAIN);
-    grassed.push((with_tangents(land_mesh(land, |at, height| meadow(land, at, height), rock)), &grass));
+    // Near the circuit the grass is mown, in stripes (D-101); a few
+    // metres past the barriers no one mows: meadow. Not on a shore or a
+    // cliff.
+    let fenced = half + verge + BARRIER + 6.0;
+    let mown = |at: Vec2| {
+        let shore = land.shore(at).map_or(1.0, |shore| smooth((shore - 1.3) / 0.2));
+        smooth((fenced - land.distance_to_track(at)) / 3.0) * shore * (1.0 - cliff(land, at))
+    };
+    grassed.push((with_tangents(land_mesh(land, |at, height| meadow(land, at, height), mown, rock)), &grass));
     // Beyond the land, fields as far as the haze.
     let fields = materials.add(StandardMaterial {
         base_color: Color::srgb(0.2, 0.25, 0.12),

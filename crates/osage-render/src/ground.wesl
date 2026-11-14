@@ -13,6 +13,7 @@ import bevy_pbr::render::{
     pbr_fragment::pbr_input_from_standard_material,
     pbr_functions::alpha_discard,
 };
+import bevy_pbr::render::mesh_view_bindings::view;
 
 // Drawn forward, lit here; or into the deferred G-buffer (D-093: the
 // traced light's), lit after.
@@ -46,6 +47,9 @@ import bevy_pbr::render::{
 @group(constants::MATERIAL_BIND_GROUP) @binding(107) var<uniform> rock: vec4<f32>;
 @group(constants::MATERIAL_BIND_GROUP) @binding(108) var rock_texture: texture_2d<f32>;
 @group(constants::MATERIAL_BIND_GROUP) @binding(109) var rock_sampler: sampler;
+// Mown stripes (D-101): x strength, y a stripe's width (m), zw the
+// mower's direction; where the vertex colour's alpha is 1.
+@group(constants::MATERIAL_BIND_GROUP) @binding(110) var<uniform> mowing: vec4<f32>;
 
 // Hexagonal cells per repeat of the grain (ground.rs: HEX_CELLS).
 const HEX_CELLS: f32 = 1.6;
@@ -265,7 +269,27 @@ fn fragment(in: VertexOutput, @builtin(front_facing) is_front: bool) -> Fragment
         }
     }
 
-    pbr_input.material.base_color = vec4<f32>(pbr_input.material.base_color.rgb * tint, pbr_input.material.base_color.a);
+    // Mown stripes: the mower went one way, then back; a stripe's blades
+    // lean the way it went, and look lighter seen from behind (their lit
+    // sides) than from ahead (their tips and shade) — the light and dark
+    // bands of a sports ground, which swap as the eye goes round.
+    @if(VERTEX_COLORS) {
+        if (mowing.x > 0.0) {
+            let mown = in.color.a;
+            let way = mowing.zw;
+            let across = dot(at, vec2<f32>(-way.y, way.x)) / mowing.y;
+            let lean = select(-1.0, 1.0, fract(across * 0.5) < 0.5);
+            let eye = normalize((view.world_position.xz - at) + vec2<f32>(1e-4, 0.0));
+            // Soft edges between stripes, faded where a stripe is a few pixels.
+            let edge = smoothstep(0.0, 0.08, min(fract(across), 1.0 - fract(across)));
+            // Seen across the mower's way, the blades still show sides and
+            // tips unequally: a third of the contrast stays.
+            let facing = dot(eye, way);
+            let band = lean * (sign(facing) * 0.35 + 0.65 * facing) * edge * shows(mowing.y, footprint);
+            tint = tint * (1.0 + mowing.x * mown * band);
+        }
+    }
+    pbr_input.material.base_color = vec4<f32>(pbr_input.material.base_color.rgb * tint, 1.0);
     pbr_input.material.base_color = alpha_discard(
         pbr_input.material.flags,
         pbr_input.material.alpha_cutoff,
