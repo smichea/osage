@@ -790,17 +790,17 @@ pub fn marshals(set: &mut Set, circuit: &Circuit, land: &Land, frames: &[Frame])
         let (skin, hair, shoe) = (set.dice.pick(&SKINS), set.dice.pick(&HAIRS), set.dice.pick(&SHOES));
         let dress = Dress { shirt: orange, trousers: orange, skin, hair, shoe };
         let figure = dress.figure(osage_kart_crowd::standing(Stance::HoldingFlag));
-        // The flag in the hand's own space: the staff through the fist, the
-        // cloth at its top.
-        let top = Vec3::new(0.3, 0.95, 0.0);
-        let mut flag = osage_procedural::Batch::default();
-        flag.add(&rod(Vec3::new(-0.05, -0.15, 0.0), top, 0.012), Transform::IDENTITY, Paint::plain(0.2, 0.2, 0.2));
-        let cloth = Shape::block(Vec3::new(0.0, -0.42, -0.005), Vec3::new(0.55, 0.0, 0.005));
-        flag.add(&cloth, Transform::from_translation(top), Paint::plain(0.97, 0.82, 0.05));
+        // The staff in the hand's own space, through the fist; the cloth is
+        // the crowd module's, hung along the staff's top and moving.
+        let (foot, top) = (Vec3::new(-0.05, -0.15, 0.0), Vec3::new(0.3, 0.95, 0.0));
+        let mut staff = osage_procedural::Batch::default();
+        staff.add(&rod(foot, top, 0.012), Transform::IDENTITY, Paint::plain(0.2, 0.2, 0.2));
         set.marshals.push(crate::crowd::Flagman {
             place: marshal,
             figure,
-            flag: flag.merged(),
+            staff: staff.merged(),
+            foot,
+            top,
             hand: Stance::FLAG_HAND,
         });
     }

@@ -986,3 +986,9 @@ Date: 2026-11-14 · the kart programme's M5 (V1.3, "marshals waving flags").
 
 - **Decision:** each marshal and their flag stand apart from the static scenery; the flag, in the hand, is waved side to side when a kart comes within 45 m — harder at a kart spinning round — easing off as the karts go, each marshal at their own rhythm.
 - **Why:** marshals at their posts are the circuit's people closest to the race; still, they read as statues.
+
+## D-110 — A flag of cloth; hair painted on the skull
+
+Date: 2026-11-14 · the maintainer, after D-109: the flag was not along its staff and moved as one solid ("il doit osciller"); the marshal's hair looked odd.
+
+- **Decision:** a marshal's flag is a staff pivoting in the hand and, hung along the staff's top, a cloth cut in 10 × 6 cells whose points follow a wave travelling out from the staff — a stir at rest, a flutter when waved, the free end sagging a little — seen from both sides. The crowd's figures have short hair painted on the top and back of the skull rather than a blended cap of matter, which bulged like a woollen hat.

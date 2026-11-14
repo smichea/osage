@@ -326,60 +326,125 @@ mod tests {
     }
 }
 
-/// A marshal at a post, gathered by the scenery: the figure, the flag in
-/// the hand's own space, and where the hand is (D-109).
+/// A marshal at a post, gathered by the scenery: the figure, the staff in
+/// the hand's own space (from its foot to its top), and where the hand is
+/// (D-109).
 pub struct Flagman {
     pub place: Transform,
     pub figure: Mesh,
-    pub flag: Mesh,
+    pub staff: Mesh,
+    pub foot: Vec3,
+    pub top: Vec3,
     pub hand: Vec3,
 }
 
-/// A marshal in the world: their flag, how hard they wave it now, their own rhythm.
+/// The flag's cloth: its size, m, and how finely it is cut to move.
+const CLOTH: (f32, f32) = (0.55, 0.42);
+const CLOTH_CELLS: (usize, usize) = (10, 6);
+
+/// A marshal in the world: their flag (the hand's pivot and the cloth's
+/// mesh), how hard they wave it now, their own rhythm.
 #[derive(Component)]
 pub struct Marshal {
-    flag: Entity,
+    pivot: Entity,
+    cloth: Handle<Mesh>,
+    /// The staff's top and its direction, and across it, in the hand's space.
+    top: Vec3,
+    along: Vec3,
+    across: Vec3,
     at: Vec2,
     waving: f32,
     rate: f32,
     phase: f32,
 }
 
+impl Marshal {
+    /// Where the cloth's point (`u` out from the staff, `v` down it, both
+    /// 0..1) is at time `t`: a travelling wave out along the cloth, its
+    /// height growing away from the staff, a breeze at rest and a flutter
+    /// when waved; the cloth sags a little at its free end.
+    fn cloth_point(&self, u: f32, v: f32, t: f32) -> Vec3 {
+        let normal = self.across.cross(self.along).normalize_or(Vec3::Z);
+        let flutter = 0.02 + 0.09 * self.waving.min(1.4);
+        let speed = 6.0 + 6.0 * self.waving.min(1.0);
+        let wave = flutter * u * (7.0 * u - speed * t + self.phase + 1.3 * v).sin();
+        let sag = 0.05 * u * u * (1.0 - 0.6 * self.waving.min(1.0));
+        self.top + self.across * (CLOTH.0 * u) - self.along * (CLOTH.1 * v + sag) + normal * wave
+    }
+}
+
+/// The cloth as a grid of `CLOTH_CELLS`, its vertices placed by `point`.
+fn cloth_mesh(point: impl Fn(f32, f32) -> Vec3) -> Mesh {
+    let (nu, nv) = CLOTH_CELLS;
+    let mut positions = Vec::new();
+    for j in 0..=nv {
+        for i in 0..=nu {
+            positions.push(point(i as f32 / nu as f32, j as f32 / nv as f32).to_array());
+        }
+    }
+    let mut indices = Vec::new();
+    for j in 0..nv as u32 {
+        for i in 0..nu as u32 {
+            let a = j * (nu as u32 + 1) + i;
+            let (b, c, d) = (a + 1, a + nu as u32 + 1, a + nu as u32 + 2);
+            indices.extend([a, c, b, b, c, d]);
+        }
+    }
+    let count = positions.len();
+    let mut mesh = Mesh::new(bevy::mesh::PrimitiveTopology::TriangleList, bevy::asset::RenderAssetUsages::default())
+        .with_inserted_attribute(Mesh::ATTRIBUTE_POSITION, positions)
+        .with_inserted_attribute(Mesh::ATTRIBUTE_COLOR, vec![[0.93f32, 0.64, 0.004, 1.0]; count])
+        .with_inserted_indices(bevy::mesh::Indices::U32(indices));
+    mesh.compute_smooth_normals();
+    mesh
+}
+
 pub fn spawn_marshal(
     commands: &mut Commands,
     meshes: &mut Assets<Mesh>,
     marshal: Flagman,
-    cloth: &Handle<StandardMaterial>,
+    [cloth, flag_material]: [&Handle<StandardMaterial>; 2],
     k: usize,
 ) {
-    let flag = commands
-        .spawn((
-            Mesh3d(meshes.add(marshal.flag)),
-            MeshMaterial3d(cloth.clone()),
-            Transform::from_translation(marshal.hand),
-        ))
-        .id();
+    let along = (marshal.top - marshal.foot).normalize_or(Vec3::Y);
+    // Out from the staff towards the track the marshal faces (+X), square to the staff.
+    let across = (Vec3::X - along * along.dot(Vec3::X)).normalize_or(Vec3::X);
     let at = Vec2::new(marshal.place.translation.x, marshal.place.translation.z);
     debug!(?at, height = marshal.place.translation.y, "a marshal");
+    let mut state = Marshal {
+        pivot: Entity::PLACEHOLDER,
+        cloth: Handle::default(),
+        top: marshal.top,
+        along,
+        across,
+        at,
+        waving: 0.0,
+        rate: 5.0 + 2.5 * hashed(k, 31),
+        phase: hashed(k, 32) * TAU,
+    };
+    let fabric = cloth_mesh(|u, v| state.cloth_point(u, v, 0.0));
+    state.cloth = meshes.add(fabric);
+    let staff =
+        commands.spawn((Mesh3d(meshes.add(marshal.staff)), MeshMaterial3d(cloth.clone()), Transform::IDENTITY)).id();
+    let fabric =
+        commands.spawn((Mesh3d(state.cloth.clone()), MeshMaterial3d(flag_material.clone()), Transform::IDENTITY)).id();
+    let pivot = commands.spawn(Transform::from_translation(marshal.hand)).add_children(&[staff, fabric]).id();
+    state.pivot = pivot;
     commands
-        .spawn((
-            Part,
-            Mesh3d(meshes.add(marshal.figure)),
-            MeshMaterial3d(cloth.clone()),
-            marshal.place,
-            Marshal { flag, at, waving: 0.0, rate: 5.0 + 2.5 * hashed(k, 31), phase: hashed(k, 32) * TAU },
-        ))
-        .add_child(flag);
+        .spawn((Part, Mesh3d(meshes.add(marshal.figure)), MeshMaterial3d(cloth.clone()), marshal.place, state))
+        .add_child(pivot);
 }
 
 /// Marshals wave their flags at karts coming by: side to side, the staff
 /// pivoting in the hand, harder at a kart spinning round, easing off as
-/// the karts go.
+/// the karts go; the cloth flutters as it is waved, and stirs in a breeze
+/// at rest.
 fn wave(
     time: Res<Time>,
     karts: Query<&Pose>,
     mut marshals: Query<&mut Marshal>,
-    mut flags: Query<&mut Transform, Without<Marshal>>,
+    mut pivots: Query<&mut Transform, Without<Marshal>>,
+    mut meshes: ResMut<Assets<Mesh>>,
 ) {
     let (t, seconds) = (time.elapsed_secs(), time.delta_secs().min(0.1));
     for mut marshal in &mut marshals {
@@ -395,10 +460,14 @@ fn wave(
             .min(1.6);
         let ease = if wanted > marshal.waving { 4.0 } else { 0.8 };
         marshal.waving += (wanted - marshal.waving) * (seconds * ease).min(1.0);
-        if let Ok(mut flag) = flags.get_mut(marshal.flag) {
+        if let Ok(mut pivot) = pivots.get_mut(marshal.pivot) {
             // Facing +X, waving side to side is a turn about X.
             let swing = 0.65 * marshal.waving * (t * marshal.rate + marshal.phase).sin();
-            flag.rotation = Quat::from_rotation_x(swing);
+            pivot.rotation = Quat::from_rotation_x(swing);
+        }
+        if let Some(mut mesh) = meshes.get_mut(&marshal.cloth) {
+            let fabric = cloth_mesh(|u, v| marshal.cloth_point(u, v, t));
+            *mesh = fabric;
         }
     }
 }

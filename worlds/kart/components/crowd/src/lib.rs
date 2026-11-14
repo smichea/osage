@@ -127,7 +127,11 @@ fn sculpt_standing(stance: Stance) -> Sculpture {
         .ellipsoid(shirt, Vec3::new(-0.01, 1.34, 0.0), Vec3::new(0.12, 0.15, 0.19), Quat::IDENTITY)
         .cone(skin, Vec3::new(-0.01, 1.45, 0.0), Vec3::new(0.0, 1.57, 0.0), 0.052, 0.048)
         .ellipsoid(skin, Vec3::new(0.02, 1.67, 0.0), Vec3::new(0.1, 0.118, 0.084), Quat::IDENTITY)
-        .ellipsoid(hair, Vec3::new(-0.012, 1.7, 0.0), Vec3::new(0.098, 0.1, 0.09), Quat::IDENTITY);
+        // Short hair painted on the skull — its top, and its back down to
+        // the nape — the face bare: a cap of matter blended on read as a
+        // woollen hat.
+        .paint_box(hair, Vec3::new(0.0, 1.81, 0.0), Vec3::new(0.16, 0.085, 0.16), Quat::IDENTITY)
+        .paint_box(hair, Vec3::new(-0.12, 1.7, 0.0), Vec3::new(0.1, 0.1, 0.16), Quat::IDENTITY);
     for side in [-1.0f32, 1.0] {
         let shoulder = Vec3::new(-0.01, 1.43, side * 0.19);
         let down =
@@ -194,8 +198,8 @@ fn sculpt(pose: Pose) -> Sculpture {
         .ellipsoid(shirt, trunk(Vec3::new(-0.01, 0.47, 0.0)), Vec3::new(0.12, 0.15, 0.19), lean)
         .cone(skin, trunk(Vec3::new(-0.01, 0.58, 0.0)), trunk(Vec3::new(0.0, 0.7, 0.0)), 0.052, 0.048)
         .ellipsoid(skin, trunk(Vec3::new(0.02, 0.8, 0.0)), Vec3::new(0.1, 0.118, 0.084), lean)
-        // Hair: a cap over the top and the back of the head.
-        .ellipsoid(hair, trunk(Vec3::new(-0.012, 0.83, 0.0)), Vec3::new(0.098, 0.1, 0.09), lean);
+        .paint_box(hair, trunk(Vec3::new(0.0, 0.94, 0.0)), Vec3::new(0.16, 0.085, 0.16), lean)
+        .paint_box(hair, trunk(Vec3::new(-0.12, 0.83, 0.0)), Vec3::new(0.1, 0.1, 0.16), lean);
     for side in [-1.0f32, 1.0] {
         let shoulder = trunk(Vec3::new(-0.01, 0.56, side * 0.19));
         let (elbow, wrist, hand) = match (pose, side > 0.0) {

@@ -183,6 +183,13 @@ pub fn build(
     };
     let cloth = materials.add(StandardMaterial { perceptual_roughness: 0.9, ..default() });
     let glass = materials.add(StandardMaterial { perceptual_roughness: 0.05, reflectance: 0.5, ..default() });
+    // A flag's cloth, seen from both sides.
+    let flag = materials.add(StandardMaterial {
+        perceptual_roughness: 0.85,
+        cull_mode: None,
+        double_sided: true,
+        ..default()
+    });
     let mut set = Set {
         matte: Batch::default(),
         satin: Batch::default(),
@@ -249,7 +256,7 @@ pub fn build(
             Growth::Real
         };
         plant(&mut set, &land, track.half_width + track.verge, centre, look);
-        spawn(&mut commands, &mut meshes, set, [matte, satin, concrete], cloth, glass);
+        spawn(&mut commands, &mut meshes, set, [matte, satin, concrete], cloth, glass, flag);
         return;
     }
     landmarks::lighthouse(&mut set, &land, &frames);
@@ -286,7 +293,7 @@ pub fn build(
     let mountains = mountains(centre, &mut set.dice);
     commands.spawn((Part, Mesh3d(meshes.add(mountains)), MeshMaterial3d(ridge), NotShadowCaster));
 
-    spawn(&mut commands, &mut meshes, set, [matte, satin, concrete], cloth, glass);
+    spawn(&mut commands, &mut meshes, set, [matte, satin, concrete], cloth, glass, flag);
 }
 
 /// The static scenery gathered, as a few meshes.
@@ -297,6 +304,7 @@ fn spawn(
     [matte, satin, concrete]: [Handle<StandardMaterial>; 3],
     cloth: Handle<StandardMaterial>,
     glass: Handle<StandardMaterial>,
+    flag: Handle<StandardMaterial>,
 ) {
     // Tangents, for the grain's relief where there is one.
     let tangents = |mesh: Mesh| {
@@ -325,7 +333,7 @@ fn spawn(
         crate::crowd::spawn(commands, meshes, spectator, &cloth, k);
     }
     for (k, marshal) in set.marshals.into_iter().enumerate() {
-        crate::crowd::spawn_marshal(commands, meshes, marshal, &cloth, k);
+        crate::crowd::spawn_marshal(commands, meshes, marshal, [&cloth, &flag], k);
     }
     for mesh in set.bright.meshes() {
         commands.spawn((Part, Mesh3d(meshes.add(mesh)), MeshMaterial3d(matte.clone()), NotShadowCaster));
