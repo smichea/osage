@@ -165,7 +165,8 @@ Racing friends on the same Wi-Fi
    From a phone or a tablet (Safari on an iPad, Chrome on Android...):
    open  http://THAT-ADDRESS:8080  - the browser version of the game, with
    touch controls (left thumb steers, right thumb holds DRIFT or BRAKE).
-   From a Linux or Mac computer with the source:
+   From a Mac: join.command, in the macOS build of the same release.
+   From a Linux computer with the source:
    cargo run --release -p osage-kart-native -- ws://THAT-ADDRESS:7878
 3. Whoever arrives during the countdown takes a bot's place; whoever
    arrives during a race joins the next one.
