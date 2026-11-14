@@ -37,7 +37,7 @@ T4 with ray-tracing hardware only. `OSAGE_DENOISE=0` leaves the grain (to compar
 
 # Cost
 
-Three compute passes of nine taps over the picture. On the cloud bench's L4 at 2560×1440, night and rain: 3.7 ms decoding every tap (34.3 ms a frame, over T4's 33.3); with the workgroup tiles, 1.9 ms (32.4 ms a frame, within it).
+Three compute passes of nine taps over the picture. On the cloud bench's L4 at 2560×1440, night and rain: 3.7 ms decoding every tap (34.3 ms a frame, over T4's 33.3); with the workgroup tiles, 1.9 ms (32.4 ms a frame, within it). The temporal step adds 0.4 ms (32.8 ms a frame).
 
 # Limits
 
