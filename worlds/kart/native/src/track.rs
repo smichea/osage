@@ -1040,11 +1040,13 @@ const CLOUD_SHADE: f32 = 0.3;
 const WIND: Vec2 = Vec2::new(4.5, 1.6);
 
 /// The shadows of fair-weather clouds drift over the ground on the wind
-/// (D-108): every ground material is told how far the wind has carried
-/// them. None at night, and none in the rain, whose overcast sky casts no
-/// shadow of its own.
+/// (D-108): every ground material is told the wind and how dark the
+/// shadows are — none at night, and none in the rain, whose overcast sky
+/// casts no shadow of its own. A material is touched only when that
+/// changes (touching one makes the renderer prepare it again: doing it
+/// every frame lost the GPU at T3 on the Iris Xe); the shader moves the
+/// shadows by the engine's clock.
 pub fn drift_clouds(
-    time: Res<Time>,
     shown: Option<Res<crate::scene::SkyShown>>,
     rain: Option<Res<crate::rain::Rain>>,
     mut grounds: ResMut<Assets<osage_render::ground::GroundMaterial>>,
@@ -1052,8 +1054,15 @@ pub fn drift_clouds(
     let night = shown.is_some_and(|shown| shown.sky == crate::scene::Sky::Night);
     let wet = rain.map_or(0.0, |rain| rain.wet());
     let shade = if night { 0.0 } else { CLOUD_SHADE * (1.0 - wet) };
-    let carried = WIND * time.elapsed_secs();
-    for (_, ground) in grounds.iter_mut() {
-        ground.extension.clouds = Vec4::new(shade, 180.0, carried.x, carried.y);
+    let wanted = Vec4::new(shade, 180.0, WIND.x, WIND.y);
+    let stale: Vec<_> = grounds
+        .iter()
+        .filter(|(_, ground)| (ground.extension.clouds - wanted).abs().max_element() > 0.004)
+        .map(|(id, _)| id)
+        .collect();
+    for id in stale {
+        if let Some(mut ground) = grounds.get_mut(id) {
+            ground.extension.clouds = wanted;
+        }
     }
 }

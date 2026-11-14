@@ -14,6 +14,7 @@ import bevy_pbr::render::{
     pbr_functions::alpha_discard,
 };
 import bevy_pbr::render::mesh_view_bindings::view;
+import bevy_render::globals::Globals;
 
 // Drawn forward, lit here; or into the deferred G-buffer (D-093: the
 // traced light's), lit after.
@@ -26,7 +27,13 @@ import bevy_pbr::{
 import bevy_pbr::render::{
     forward_io::{VertexOutput, FragmentOutput},
     pbr_functions::{apply_pbr_lighting, main_pass_post_lighting_processing},
+    mesh_view_bindings::globals,
 };
+
+// The engine's clock, for what drifts (D-108). The forward pass has it
+// among the view's bindings (imported above); the prepass binds it here.
+@if(PREPASS_PIPELINE)
+@group(0) @binding(1) var<uniform> globals: Globals;
 
 // x: strength of the clumps, y: strength of the patches, z: size of a
 // clump in metres, w: size of a patch in metres.
@@ -50,8 +57,8 @@ import bevy_pbr::render::{
 // Mown stripes (D-101): x strength, y a stripe's width (m), zw the
 // mower's direction; where the vertex colour's alpha is 1.
 @group(constants::MATERIAL_BIND_GROUP) @binding(110) var<uniform> mowing: vec4<f32>;
-// Clouds' shadows (D-108): x strength, y a cloud's size (m), zw the wind's
-// offset so far (m).
+// Clouds' shadows (D-108): x strength, y a cloud's size (m), zw the wind
+// that carries them (m/s).
 @group(constants::MATERIAL_BIND_GROUP) @binding(111) var<uniform> clouds: vec4<f32>;
 
 // Hexagonal cells per repeat of the grain (ground.rs: HEX_CELLS).
@@ -295,7 +302,7 @@ fn fragment(in: VertexOutput, @builtin(front_facing) is_front: bool) -> Fragment
     // The shadows of clouds drifting over on the wind: wide soft patches,
     // ragged at their edges, darkening the ground they cross.
     if (clouds.x > 0.0) {
-        let p = (at - clouds.zw) / clouds.y;
+        let p = (at - clouds.zw * globals.time) / clouds.y;
         let n = noise(p) * 0.65 + noise(p * 2.7 + 13.0) * 0.35;
         let cover = smoothstep(0.5, 0.68, n);
         tint = tint * (1.0 - clouds.x * cover);

@@ -40,7 +40,7 @@ The cloud bench on an NVIDIA L4 at 2560×1440, the kart bench, 2026-11-14: witho
 
 # Limits
 
-Spot and point lights are not traced: a lamp lights T4 only if it is marked. No learned denoiser (DLSS ray reconstruction is a proprietary SDK): [an edge-avoiding filter](traced-light-denoising.md) smooths the grain. Skinned meshes (the drivers) are traced in their rest pose. The ground's stand-in is one colour: its bounce light has none of the meadow's variety. Vertex colours (paint, grime) do not reach the rays, only the picture.
+Building with the `raytracing` feature turns on Bevy's `dfg_lut` for every PBR shader, at every tier (Solari needs it). On an Intel Iris Xe under Mesa 26.2 that build loses the GPU at T3 within a minute when the sky lights the scene (D-113); a build without the feature does not, nor does T2, nor an NVIDIA L4. Spot and point lights are not traced: a lamp lights T4 only if it is marked. No learned denoiser (DLSS ray reconstruction is a proprietary SDK): [an edge-avoiding filter](traced-light-denoising.md) smooths the grain. Skinned meshes (the drivers) are traced in their rest pose. The ground's stand-in is one colour: its bounce light has none of the meadow's variety. Vertex colours (paint, grime) do not reach the rays, only the picture.
 
 # Oracle
 

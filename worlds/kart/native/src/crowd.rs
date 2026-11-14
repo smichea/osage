@@ -444,6 +444,7 @@ fn wave(
     karts: Query<&Pose>,
     mut marshals: Query<&mut Marshal>,
     mut pivots: Query<&mut Transform, Without<Marshal>>,
+    cameras: Query<&GlobalTransform, With<osage_render::OsageCamera>>,
     mut meshes: ResMut<Assets<Mesh>>,
 ) {
     let (t, seconds) = (time.elapsed_secs(), time.delta_secs().min(0.1));
@@ -465,7 +466,13 @@ fn wave(
             let swing = 0.65 * marshal.waving * (t * marshal.rate + marshal.phase).sin();
             pivot.rotation = Quat::from_rotation_x(swing);
         }
-        if let Some(mut mesh) = meshes.get_mut(&marshal.cloth) {
+        // The cloth is cut again only where a camera is near enough to see
+        // it move: a mesh changed is a mesh sent to the GPU again.
+        let seen = cameras.iter().any(|camera| {
+            let at = camera.translation();
+            Vec2::new(at.x, at.z).distance(marshal.at) < 120.0
+        });
+        if seen && let Some(mut mesh) = meshes.get_mut(&marshal.cloth) {
             let fabric = cloth_mesh(|u, v| marshal.cloth_point(u, v, t));
             *mesh = fabric;
         }

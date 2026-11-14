@@ -79,8 +79,9 @@ pub struct Ground {
     #[uniform(110)]
     pub mowing: Vec4,
     /// The shadows of clouds passing over (D-108): x how much a shadow
-    /// darkens the ground (0 none), y a cloud's size, m; z and w how far the
-    /// wind has carried them, m — the world moves them.
+    /// darkens the ground (0 none), y a cloud's size, m; z and w the wind
+    /// that carries them, m/s — the shader moves them by the engine's
+    /// clock, so that the material itself changes only with the weather.
     #[uniform(111)]
     pub clouds: Vec4,
 }
