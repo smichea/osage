@@ -1073,3 +1073,12 @@ Date: 2026-11-14 · T4 at night in the rain had gone over its budget (35.3 ms fo
 - **Decision:** a world marks what traced light leaves out (`osage_render::NotTraced`); the placed models say which level of detail each mesh is (`osage_props::Level`). The kart world leaves out what is seen no farther than 100 m (grass, flowers, ferns, stones) and, of a model with levels, all but the middle one.
 - **Measured** on the cloud's L4 at 2560×1440, night and rain, the same `race`: 35.27 → 31.40 ms a frame; the 95th percentile 57.7 → 47.9 ms.
 - **Consequences:** what is left out is drawn and lit as before but casts no traced shadow and bounces no light; a near tree's traced shadow is its thinned level's.
+
+## D-121 — Under traced light, the raster's own light and shade are not drawn; the bench says where the time goes
+
+Date: 2026-11-14 · the maintainer, of T4 over its budget at night in the rain: "il faut réfléchir aux vraies causes, GTA 5 le fait très bien lui".
+
+- **Found:** at T4 the raster's light was still drawn under the traced light, which reads none of it: four cascades of sun shadow maps at 4096² (twice T3's), contact shadows, and screen-space ambient occlusion at its highest quality.
+- **Decision:** where light is traced (`osage_render::TracedLight`, set when Solari's plugins load on hardware with ray queries), the sun casts no shadow maps, and the camera has neither contact shadows nor screen-space ambient occlusion. On hardware without ray queries, T4 keeps them all. The bench records the GPU time of each pass of the renderer (Bevy's render diagnostics) and writes it to its report (`passes_ms`).
+- **Measured** on the cloud's L4 at 2560×1440, night and rain, the same `race`: 31.40 → 27.36 ms a frame (35.27 before D-119); the 95th percentile 47.9 → 44.3 ms. Where T4's time goes now: Solari's lighting 17.4 ms, the deferred prepass 3.4 ms, Solari's world cache 0.8 ms, the rest under 0.5 ms each. T3 on the same run: 16.6 ms, its opaque pass 3.0 ms, its prepass 1.6 ms, ambient occlusion 0.9 ms.
+- **Next:** the traced lighting is two thirds of T4 and is done at every pixel of 1440p; games trace at a lower resolution and bring the picture up. And the 95th percentile stays far above the mean: one stretch of the lap (frames 900 to 925) costs half as much again.
