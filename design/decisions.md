@@ -903,3 +903,10 @@ Date: 2026-11-14 · the maintainer chose karts and drivers as the first step tow
 - **Decision:** the wheels get a cast rim (a lip, six spokes over the rim's dark well, a hub with three nuts, a valve) and a tyre whose tread is scrubbed grey between black walls; the livery breaks the bodywork's colour (a slash across each pod's flank, a chevron over the nose) on pieces meshed in 8 mm cells so the colours meet cleanly, with more stickers (pod tops, the nose's flanks); the body's and the tyres' vertex colours are soiled once built — tinted towards road dust lower down, mottled all over; the helmet gets a full-face chin bar in its lower colour, a chin vent and two brow slots.
 - **Why:** a used racing machine is never one clean colour; detail where the chasing camera looks (wheels, flanks, helmet) is what reads as real.
 - **Consequences:** building the moulded bodywork once takes longer (the model's tests 15 → 22 s in a debug build); the kart is unchanged to the physics and the network.
+
+## D-099 — The race suit cut as one: stripes down the limbs, not rings
+
+Date: 2026-11-14 · after D-098, up close: the driver's suit read as a toy's, its upper arms and knees coloured all round and the chest's band circling the arms.
+
+- **Decision:** the team's colour runs in a stripe down the outside of each sleeve (shoulder to wrist) and each leg (hip to ankle), with the panels down the trunk's sides; the second colour's band stays across the chest, no wider than the trunk.
+- **Why:** race suits are cut in long panels; coloured rings round the limbs are a cartoon's.

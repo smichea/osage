@@ -722,16 +722,21 @@ fn sculpted_driver() -> &'static [(usize, Mesh)] {
                 .cone(SUIT, knee, ankle, 0.056, 0.04)
                 .folded(0.0025)
                 .cone(BOOTS, ankle + Vec3::new(0.0, -0.01, 0.0), Vec3::new(side * 0.11, 0.12, 0.6), 0.045, 0.038);
-            // Painted on: panels down the sides and along the upper arms,
-            // over the knees, in the team's colour.
+            // Painted on, in the team's colour: panels down the trunk's
+            // sides, and a stripe down the outside of each sleeve and each
+            // leg, shoulder to wrist and hip to ankle, as race suits are cut
+            // (rings round the limbs read as a toy's).
+            let out = Vec3::X * side;
             body.paint_box(PANELS, Vec3::new(side * 0.17, 0.42, -0.3), Vec3::new(0.045, 0.22, 0.16), lean)
-                .paint_cone(PANELS, shoulder, elbow, 0.075, 0.062)
-                .paint_cone(PANELS, knee, knee, 0.07, 0.07);
+                .paint_cone(PANELS, shoulder + out * 0.055, elbow + out * 0.046, 0.032, 0.028)
+                .paint_cone(PANELS, elbow + out * 0.046, wrist + out * 0.034, 0.028, 0.022)
+                .paint_cone(PANELS, Vec3::new(side * 0.17, 0.17, -0.16), knee + out * 0.058, 0.04, 0.03)
+                .paint_cone(PANELS, knee + out * 0.058, ankle + out * 0.04, 0.03, 0.022);
         }
         // A band of the second colour across the chest and shoulders, the
         // collar in the team's colour, and a white patch on the back, where
         // the chasing camera sees it, for a sponsor's sticker ([`stickers`]).
-        body.paint_box(BAND, Vec3::new(0.0, 0.53, -0.31), Vec3::new(0.3, 0.035, 0.2), lean)
+        body.paint_box(BAND, Vec3::new(0.0, 0.53, -0.31), Vec3::new(0.16, 0.035, 0.2), lean)
             .paint_cone(PANELS, Vec3::new(0.0, 0.66, -0.3), Vec3::new(0.0, 0.7, -0.29), 0.075, 0.07)
             .paint_box(PATCH, Vec3::new(0.0, 0.46, -0.44), Vec3::new(0.09, 0.06, 0.08), lean);
         body.skinned(0.012, |_| [1.0; 4])
