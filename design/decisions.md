@@ -999,3 +999,11 @@ Date: 2026-11-14 · the kart programme's M5 (V1.2, "hit reaction").
 
 - **Decision:** a knock — the kart's spin changing by more than 2.5 rad/s, or its speed dropping by more than 5 m/s, in one frame (an item, a kart, a wall) — throws the driver's trunk aside and forward on its spring, and both hands come off the wheel halfway for about half a second before going back; no second flinch while one is under way.
 - **Why:** a driver who does not react to being hit reads as a mannequin in a seat.
+
+## D-112 — The site redesigned as an engine's home page
+
+Date: 2026-11-14 · the maintainer: "redesigner le site pour un niveau vraiment professionnel en t'inspirant du site de Unreal Engine".
+
+- **Decision:** osage-engine.org takes the structure of an engine vendor's home page, in osage's own identity (its mark, its amber, its pictures, its words): a split hero with a framed stage that cross-fades three bench pictures; what's new (releases and milestones, each linking to its release or card); the kart world as image tiles linking to the knowledge cards; light, with the same bench frame at T3 and T4; the four tiers as cards with their budgets and measures; how to play in three steps; the engine's pillars; the documentation and its counts; the community; the note about the name; a footer of links. Still static HTML and CSS with no script (D-105): the slideshow, the menu and the reveals are CSS.
+- **Why:** the first page showed the project honestly but read as a project page; people decide in seconds whether an engine is serious.
+- **Consequences:** "What's new" and the counts are written by hand: a release worth announcing updates them in the same change.
