@@ -99,6 +99,7 @@ impl Plugin for BenchPlugin {
                 slowest: Vec::new(),
                 gpu: 0.0,
                 began: None,
+                census: [0; 4],
                 warm_up_worst: 0.0,
                 skip: 0,
                 saved: Vec::new(),
@@ -155,6 +156,8 @@ struct Bench {
     gpu: f32,
     /// When this frame's main world began.
     began: Option<Instant>,
+    /// Entities, meshes, and meshes with a visibility range, at the end of the warm-up.
+    census: [usize; 4],
     warm_up_worst: f32,
     skip: u32,
     saved: Vec<String>,
@@ -308,6 +311,7 @@ fn simulate(course: Res<Course>, mut bench: ResMut<Bench>, mut racers: Query<(&m
         .fold(0xcbf2_9ce4_8422_2325u64, |hash, byte| (hash ^ u64::from(byte)).wrapping_mul(0x0000_0100_0000_01b3));
 }
 
+#[allow(clippy::too_many_arguments)]
 fn measure(
     mut commands: Commands,
     mut bench: ResMut<Bench>,
@@ -315,8 +319,20 @@ fn measure(
     composite: Option<Res<crate::preview::Composite>>,
     adapter: Res<RenderAdapterInfo>,
     diagnostics: Option<Res<bevy::diagnostic::DiagnosticsStore>>,
+    entities: Query<(Has<Mesh3d>, Has<bevy::camera::visibility::VisibilityRange>, Option<&osage_props::Level>)>,
     mut exit: MessageWriter<AppExit>,
 ) {
+    // What the engine walks every frame, counted once the race is under way (D-123).
+    if bench.frame == WARM_UP {
+        let (mut all, mut meshes, mut ranged, mut levelled) = (0, 0, 0, 0);
+        for (mesh, range, level) in &entities {
+            all += 1;
+            meshes += usize::from(mesh);
+            ranged += usize::from(mesh && range);
+            levelled += usize::from(level.is_some());
+        }
+        bench.census = [all, meshes, ranged, levelled];
+    }
     let now = Instant::now();
     let elapsed = bench.last.replace(now).map(|last| (now - last).as_secs_f32() * 1000.0);
     bench.frame += 1;
@@ -426,6 +442,7 @@ fn report(bench: &Bench, rendered: UVec2, adapter: &RenderAdapterInfo) -> anyhow
         // Whether the asset manifest's content was there: it changes the picture.
         "assets": osage_content::root().is_some(),
         "frames": { "total": bench.total, "timed": sorted.len(), "warm_up": WARM_UP },
+        "entities": { "all": bench.census[0], "meshes": bench.census[1], "meshes_with_range": bench.census[2], "placed_levels": bench.census[3] },
         // The GPU's time in each pass, ms: mean and worst, the costliest first (D-121).
         "passes_ms": passes(bench),
         // The race as a number: the same on every run that raced the same frames (D-115).

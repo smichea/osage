@@ -1090,3 +1090,11 @@ Date: 2026-11-14 · after D-121: T4's 95th percentile (44 ms by night, 38 by day
 - **Measured:** the bench's slowest frames now carry the GPU's time in their passes (the innermost spans, Solari's included), the main world's processor time (from `First` to `Last`) and the render world's (extraction to rendering). On the cloud's L4 at T4 by day (24.3 ms mean, the same `race`): frame 909, 50.0 ms — GPU 25.5, main world 33.6, render world 5.0; frames 890 and 928 alike. The time is the main world's.
 - **On the laptop** (T4 without ray queries, so with shadow maps), a Chrome trace of 960 frames (Bevy's `trace_chrome`, built apart, not committed) puts the main world's spikes in Bevy's `check_dir_light_mesh_visibility` (130–150 ms against 6 ms on most frames), on the same frames as the bench's slowest; the system walks every mesh entity against each shadow cascade.
 - **Next:** take the same trace on the cloud (where traced light leaves no shadow maps, D-121, so the cause there is another), and cut the number of entities the engine walks every frame — each placed model is three entities, one per level of detail (D-119), and the crowd, the wildlife and the marshals are each their own since D-103.
+
+## D-124 — One entity per placed model, its level swapped by distance: tried, slower, not kept
+
+Date: 2026-11-15 · D-123's next step: the bench now counts what the engine walks every frame — at T3 and T4, 65 400 entities, 56 100 meshes, 45 300 of them the levels of detail of placed models, three entities a mesh, one per level; at T2, 3 000.
+
+- **Tried:** one entity per placed mesh, drawing the level its distance calls for (5 % hysteresis), the traced light given the middle level. Entities 65 400 → 50 200, placed levels 45 300 → 7 600.
+- **Measured** on the laptop at T3, the same `race`, the same build otherwise: 119.9 ms a frame before, 149.7 after. A mesh swapped on an entity sends it back through the renderer's preparation (its specialisation and bins); the camera crossing the levels' boundaries swaps hundreds a frame. Entities culled by a range cost less than that.
+- **Not kept.** Fewer entities must come from merging what never moves — the far levels of a patch of woods into one mesh (as the woods' cards are, D-054), the crowd into a few skinned batches — not from swapping meshes.
