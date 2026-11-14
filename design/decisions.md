@@ -910,3 +910,10 @@ Date: 2026-11-14 · after D-098, up close: the driver's suit read as a toy's, it
 
 - **Decision:** the team's colour runs in a stripe down the outside of each sleeve (shoulder to wrist) and each leg (hip to ankle), with the panels down the trunk's sides; the second colour's band stays across the chest, no wider than the trunk.
 - **Why:** race suits are cut in long panels; coloured rings round the limbs are a cartoon's.
+
+## D-100 — Moulded bodywork with crisp edges; a wrapping visor
+
+Date: 2026-11-14 · after D-099: the nose and the side pods looked inflated, like cushions, and the visor a flat band.
+
+- **Decision:** the nose's and the pods' pieces blend over 2 cm (from 5 and 4) with 2 cm corners (from 4 and 4.5): the crisp edges of moulded plastic. The visor is taller, wraps 140° of the shell (from 120°), its edges bevelled, smoked rather than black.
+- **Why:** rotomoulded kart bodywork has defined creases and flat faces; wide blends read as inflatable.

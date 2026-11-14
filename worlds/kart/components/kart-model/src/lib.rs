@@ -531,8 +531,10 @@ fn moulded() -> &'static [(usize, Shape)] {
         use moulding::*;
         let flat = Quat::IDENTITY;
         let mut parts = Vec::new();
-        let mut nose = Sculpture::new(0.05);
-        nose.rounded(PAINT, Vec3::new(0.0, 0.1, 0.84), Vec3::new(0.46, 0.055, 0.15), 0.04, flat)
+        // Moulded plastic has crisp edges: small blends and corners (wide
+        // ones blew the bodywork up like cushions).
+        let mut nose = Sculpture::new(0.02);
+        nose.rounded(PAINT, Vec3::new(0.0, 0.1, 0.84), Vec3::new(0.46, 0.055, 0.15), 0.018, flat)
             .ellipsoid(PAINT, Vec3::new(0.0, 0.15, 0.78), Vec3::new(0.3, 0.065, 0.15), flat)
             .ellipsoid(PAINT, Vec3::new(0.0, 0.16, 0.62), Vec3::new(0.24, 0.07, 0.15), flat)
             .rounded(BLACK, Vec3::new(0.0, 0.065, 0.975), Vec3::new(0.42, 0.025, 0.035), 0.02, flat);
@@ -544,8 +546,8 @@ fn moulded() -> &'static [(usize, Shape)] {
         // Fine cells: the livery's colours meet along the cells' edges.
         parts.extend(nose.shapes(0.008));
         for side in [-1.0f32, 1.0] {
-            let mut pod = Sculpture::new(0.04);
-            pod.rounded(PAINT, Vec3::new(side * 0.5, 0.125, 0.0), Vec3::new(0.12, 0.07, 0.31), 0.045, flat)
+            let mut pod = Sculpture::new(0.018);
+            pod.rounded(PAINT, Vec3::new(side * 0.5, 0.125, 0.0), Vec3::new(0.12, 0.07, 0.31), 0.02, flat)
                 .rounded(PAINT, Vec3::new(side * 0.51, 0.065, 0.0), Vec3::new(0.13, 0.025, 0.33), 0.02, flat)
                 .ellipsoid(PAINT, Vec3::new(side * 0.48, 0.12, 0.3), Vec3::new(0.1, 0.06, 0.08), flat)
                 .paint_box(STRIPE, Vec3::new(side * 0.5, 0.195, 0.0), Vec3::new(0.07, 0.012, 0.29), flat)
@@ -820,8 +822,14 @@ fn helmet(livery: Livery) -> Part {
         part.add(Finish::Satin, &slot, shell * brow, BLACK);
     }
     // The visor: a band across the front, standing proud of the shell.
-    let visor = Shape::gore(&[(0.152, 0.1), (0.157, 0.145), (0.152, 0.19)], 14, FRAC_PI_2 - 1.05, 2.1);
-    part.add(Finish::Visor, &visor, shell * Transform::from_scale(Vec3::splat(1.02)), Vec3::splat(0.02));
+    // Taller and wrapping further than a band, its edges bevelled, smoked.
+    let visor = Shape::gore(
+        &[(0.146, 0.092), (0.154, 0.1), (0.159, 0.145), (0.155, 0.19), (0.146, 0.2)],
+        18,
+        FRAC_PI_2 - 1.2,
+        2.4,
+    );
+    part.add(Finish::Visor, &visor, shell * Transform::from_scale(Vec3::splat(1.02)), Vec3::new(0.02, 0.022, 0.03));
     // A small spoiler at the back of the crown, as karting helmets have,
     // its profile (back, up) drawn across.
     let lip = [Vec2::new(-0.13, 0.215), Vec2::new(-0.175, 0.232), Vec2::new(-0.168, 0.25), Vec2::new(-0.12, 0.248)];
