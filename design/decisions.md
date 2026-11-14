@@ -941,3 +941,11 @@ Date: 2026-11-14 · the maintainer: "il sera aussi important que les NPC (specta
 - **Why:** a crowd that does nothing reads as scenery; one that moves in step reads as a flock. People differ in when, how and how long they react.
 - **Rejected:** animating in a vertex shader (a full vertex shader for the main pass and the prepass, with Bevy's vertex compression: fragile); arms swinging between poses (no skeleton on the figures).
 - **Consequences:** a few hundred more entities and two meshes per spectator; to be measured on the cloud bench.
+
+## D-104 — Birds and animals in the country round the circuit
+
+Date: 2026-11-14 · the maintainer: "ce serait bien aussi qu'il y ait des oiseaux et quelques animaux dans la nature"; then "les ailes carrées c'est moyen".
+
+- **Decision:** the client (`wildlife`) sculpts and moves, from the circuit's seeded dice and the race's time: flocks of six to fourteen small birds wheeling 20 to 45 m over the hills, each on its own loop, wings beating; two birds of prey gliding in wide circles 60 to 85 m up, beating now and then; flocks feeding on the ground 14 to 45 m from the track, pecking and hopping, put up by a kart within 25 m, wheeling and settling again some seconds later; ten rabbits (hind feet flat under the haunches, thin forelegs) nibbling and hopping in the meadows, bolting in long bounds from a kart within 20 m; four deer grazing 70 to 140 m off, raising and turning their heads to a kart within 60 m, walking on now and then. Wings have a bird's outline (rounded leading edge, pointed tip), folded back along the body on the ground.
+- **Why:** an empty countryside reads as a set; animals that mind the race make it a place.
+- **Consequences:** a hundred or so small entities; drawn at every tier; no sound yet.

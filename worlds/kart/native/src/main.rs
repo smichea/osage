@@ -54,6 +54,7 @@ mod theme;
 mod track;
 #[cfg(feature = "sound")]
 mod voice;
+mod wildlife;
 
 use std::{
     path::PathBuf,
