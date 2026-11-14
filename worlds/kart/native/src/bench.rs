@@ -97,6 +97,7 @@ impl Plugin for BenchPlugin {
                 last: None,
                 times: Vec::new(),
                 slowest: Vec::new(),
+                gpu: 0.0,
                 warm_up_worst: 0.0,
                 skip: 0,
                 saved: Vec::new(),
@@ -136,8 +137,12 @@ struct Bench {
     last: Option<Instant>,
     /// Timed frames, milliseconds.
     times: Vec<f32>,
-    /// The three slowest timed frames and their numbers: where a stall is.
-    slowest: Vec<(u32, f32)>,
+    /// The three slowest timed frames and their numbers: where a stall is;
+    /// with the GPU's time in that frame's passes, to tell a GPU's stall
+    /// from the processor's (D-123).
+    slowest: Vec<(u32, f32, f32)>,
+    /// The GPU's time in all passes, as last reported, ms.
+    gpu: f32,
     warm_up_worst: f32,
     skip: u32,
     saved: Vec<String>,
@@ -305,13 +310,22 @@ fn measure(
             let pass = bench.passes.entry(name.to_owned()).or_insert((0.0, 0, 0.0));
             *pass = (pass.0 + ms, pass.1 + 1, pass.2.max(ms));
         }
+        // Top-level passes only: a pass's own spans ("fxaa/fxaa") are inside it.
+        bench.gpu = diagnostics
+            .iter()
+            .filter_map(|d| {
+                let name = d.path().as_str().strip_prefix("render/")?.strip_suffix("/elapsed_gpu")?;
+                (!name.contains('/')).then(|| d.value()).flatten()
+            })
+            .sum::<f64>() as f32;
     }
     match elapsed {
         Some(ms) if frame <= WARM_UP => bench.warm_up_worst = bench.warm_up_worst.max(ms),
         Some(_) if bench.skip > 0 => bench.skip -= 1,
         Some(ms) => {
             bench.times.push(ms);
-            bench.slowest.push((frame, ms));
+            let gpu = bench.gpu;
+            bench.slowest.push((frame, ms, gpu));
             bench.slowest.sort_by(|a, b| b.1.total_cmp(&a.1));
             bench.slowest.truncate(3);
         }
@@ -380,7 +394,11 @@ fn report(bench: &Bench, rendered: UVec2, adapter: &RenderAdapterInfo) -> anyhow
             "worst": round(sorted[sorted.len() - 1]),
             "warm_up_worst": round(bench.warm_up_worst),
         },
-        "slowest": bench.slowest.iter().map(|&(frame, ms)| json!({ "frame": frame, "ms": round(ms) })).collect::<Vec<_>>(),
+        "slowest": bench
+            .slowest
+            .iter()
+            .map(|&(frame, ms, gpu)| json!({ "frame": frame, "ms": round(ms), "gpu_ms": round(gpu) }))
+            .collect::<Vec<_>>(),
         "fps_mean": round(1000.0 / mean),
         "budget_ms": round(budget),
         "over_budget_percent": round(over),
@@ -407,7 +425,7 @@ fn report(bench: &Bench, rendered: UVec2, adapter: &RenderAdapterInfo) -> anyhow
         p95 = percentile(95),
         p99 = percentile(99),
         worst = sorted[sorted.len() - 1],
-        worst_at = bench.slowest.first().map_or(0, |&(frame, _)| frame),
+        worst_at = bench.slowest.first().map_or(0, |&(frame, ..)| frame),
         warm = bench.warm_up_worst,
         out = bench.out.display(),
     ))
