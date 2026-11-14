@@ -129,18 +129,27 @@ fn double_of(handle: &Handle<Mesh>, meshes: &mut Assets<Mesh>, doubles: &mut Dou
     Some(made)
 }
 
-/// Every mesh drawn with the standard material traced as its double.
+/// Every opaque mesh drawn with the standard material traced as its
+/// double. A see-through one (tyre marks over the road, smoke, glass) is
+/// not: Solari traces every surface as opaque, and a mark's double laid
+/// over the road shaded the asphalt under it.
 #[allow(clippy::type_complexity)]
 fn doubles(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
     mut doubles: ResMut<Doubles>,
+    materials: Res<Assets<StandardMaterial>>,
     drawn: Query<
-        (Entity, &Mesh3d),
+        (Entity, &Mesh3d, &MeshMaterial3d<StandardMaterial>),
         (With<MeshMaterial3d<StandardMaterial>>, Without<RaytracingMesh3d>, Without<Untraced>, Without<HiddenDouble>),
     >,
 ) {
-    for (entity, mesh) in &drawn {
+    for (entity, mesh, material) in &drawn {
+        let Some(material) = materials.get(&material.0) else { continue };
+        if !matches!(material.alpha_mode, AlphaMode::Opaque | AlphaMode::Mask(_)) {
+            commands.entity(entity).insert(Untraced);
+            continue;
+        }
         match double_of(&mesh.0, &mut meshes, &mut doubles) {
             Some(Some(double)) => {
                 commands.entity(entity).insert(RaytracingMesh3d(double));

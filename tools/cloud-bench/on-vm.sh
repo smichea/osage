@@ -18,6 +18,9 @@ metadata() {
 run=$(metadata osage-run)
 tiers=$(metadata osage-tiers)
 frames=$(metadata osage-frames || echo 2400)
+# The scene's options, if the run asks for others (a night, the rain: where
+# traced light shows, D-093); none: the bench's own.
+args=$(metadata osage-args || echo "")
 work=/var/tmp/osage
 rm -rf "$work" && mkdir -p "$work/out" && cd "$work"
 
@@ -38,7 +41,8 @@ vulkaninfo --summary >../out/vulkan.txt 2>&1 || finish "failed: no Vulkan (see o
 status=ok
 for tier in $tiers; do
   echo "osage bench: $tier"
-  ./kart-native --bench --headless --tier "$tier" --frames "$frames" --out "../out/$tier" >"../out/$tier.log" 2>&1 ||
+  # shellcheck disable=SC2086 # the options are words
+  ./kart-native --bench --headless --tier "$tier" --frames "$frames" $args --out "../out/$tier" >"../out/$tier.log" 2>&1 ||
     status="failed: the $tier bench stopped (see out/$tier.log)"
 done
 finish "$status"

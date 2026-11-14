@@ -41,6 +41,9 @@ on:
         description: The maintainer asks for it now, within the hour if need be
         type: boolean
         default: false
+      args:
+        description: The bench's scene options, e.g. "--sky night --rain" (none, the bench's own)
+        default: ""
 
 permissions:
   contents: read
@@ -152,6 +155,8 @@ jobs:
           service_account: ${{ vars.OSAGE_BENCH_SERVICE_ACCOUNT }}
       - uses: google-github-actions/setup-gcloud@aa5489c8933f4cc7a4f7d45035b3b1440c9c10db # v3.0.1
       - run: bash tools/cloud-bench/bench.sh "${{ vars.OSAGE_BENCH_PROJECT }}" kart.tar.gz out $TIERS
+        env:
+          OSAGE_BENCH_ARGS: ${{ inputs.args || '' }}
       - name: Attest
         run: |
           status=0
