@@ -60,10 +60,8 @@ fn meadow(land: &Land, at: Vec2, height: f32) -> Vec3 {
     let dry = smooth((noise(at / 38.0 + 40.0) - 0.55) / 0.2) * 0.6;
     colour = colour.lerp(tone(0.45, 0.42, 0.24), dry);
     colour = colour.lerp(tone(0.4, 0.42, 0.2), (height / HILLS).clamp(0.0, 1.0) * 0.5);
-    // Shade of the clouds passing over, in wide soft patches, as in any
-    // photograph of hills on a day of fair-weather clouds.
-    let cloud = smooth((noise(at / 190.0 + 31.0) - 0.55) / 0.2);
-    colour *= 1.0 - 0.28 * cloud;
+    // The clouds' shade is no longer painted here: their shadows drift
+    // over the ground on the wind (D-108, [`drift_clouds`]).
     // Further out, farmland: a patchwork of fields, each its own crop.
     let away = smooth((land.distance_to_track(at) - 150.0) / 80.0);
     if away > 0.0 {
@@ -1033,5 +1031,29 @@ fn photographed(
     }
     for (mesh, material) in grassed {
         commands.spawn((Part, Mesh3d(meshes.add(mesh)), MeshMaterial3d(material.clone()), NotShadowCaster));
+    }
+}
+
+/// How far a cloud's shadow darkens the ground on a fair day (D-108).
+const CLOUD_SHADE: f32 = 0.3;
+/// The wind that carries the clouds, m/s: a light breeze aloft.
+const WIND: Vec2 = Vec2::new(4.5, 1.6);
+
+/// The shadows of fair-weather clouds drift over the ground on the wind
+/// (D-108): every ground material is told how far the wind has carried
+/// them. None at night, and none in the rain, whose overcast sky casts no
+/// shadow of its own.
+pub fn drift_clouds(
+    time: Res<Time>,
+    shown: Option<Res<crate::scene::SkyShown>>,
+    rain: Option<Res<crate::rain::Rain>>,
+    mut grounds: ResMut<Assets<osage_render::ground::GroundMaterial>>,
+) {
+    let night = shown.is_some_and(|shown| shown.sky == crate::scene::Sky::Night);
+    let wet = rain.map_or(0.0, |rain| rain.wet());
+    let shade = if night { 0.0 } else { CLOUD_SHADE * (1.0 - wet) };
+    let carried = WIND * time.elapsed_secs();
+    for (_, ground) in grounds.iter_mut() {
+        ground.extension.clouds = Vec4::new(shade, 180.0, carried.x, carried.y);
     }
 }

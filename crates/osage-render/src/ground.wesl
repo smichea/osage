@@ -50,6 +50,9 @@ import bevy_pbr::render::{
 // Mown stripes (D-101): x strength, y a stripe's width (m), zw the
 // mower's direction; where the vertex colour's alpha is 1.
 @group(constants::MATERIAL_BIND_GROUP) @binding(110) var<uniform> mowing: vec4<f32>;
+// Clouds' shadows (D-108): x strength, y a cloud's size (m), zw the wind's
+// offset so far (m).
+@group(constants::MATERIAL_BIND_GROUP) @binding(111) var<uniform> clouds: vec4<f32>;
 
 // Hexagonal cells per repeat of the grain (ground.rs: HEX_CELLS).
 const HEX_CELLS: f32 = 1.6;
@@ -288,6 +291,14 @@ fn fragment(in: VertexOutput, @builtin(front_facing) is_front: bool) -> Fragment
             let band = lean * (sign(facing) * 0.35 + 0.65 * facing) * edge * shows(mowing.y, footprint);
             tint = tint * (1.0 + mowing.x * mown * band);
         }
+    }
+    // The shadows of clouds drifting over on the wind: wide soft patches,
+    // ragged at their edges, darkening the ground they cross.
+    if (clouds.x > 0.0) {
+        let p = (at - clouds.zw) / clouds.y;
+        let n = noise(p) * 0.65 + noise(p * 2.7 + 13.0) * 0.35;
+        let cover = smoothstep(0.5, 0.68, n);
+        tint = tint * (1.0 - clouds.x * cover);
     }
     pbr_input.material.base_color = vec4<f32>(pbr_input.material.base_color.rgb * tint, 1.0);
     pbr_input.material.base_color = alpha_discard(

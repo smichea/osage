@@ -971,3 +971,11 @@ Date: 2026-11-14 · daylight photorealism: the hills and the woods 300 m off wer
 
 - **Decision:** the photographed sky's haze has a visibility of 1.6 km (from 3 km): the land a few hundred metres off takes a little of the air's colour.
 - **Why:** aerial perspective is how the eye reads distance; a circuit's landscape is compressed into a few hundred metres, so its haze must be nearer than the real air's for the hills to read as far.
+
+## D-108 — Clouds' shadows drifting over the land
+
+Date: 2026-11-14 · the kart programme's M6 (V2.3, "clouds that move and shade the ground"); the clouds' shade was painted, still, into the meadows' colours.
+
+- **Decision:** the ground material darkens the ground under the shadows of fair-weather clouds — soft-edged patches of about 180 m, covering about a third of the land — carried by the wind (4.8 m/s), which the world advances every frame. 30 % darker by day; none at night or in the rain. The still shade painted into the meadows goes.
+- **Why:** moving cloud shadows are among the strongest cues that a landscape is alive and outdoors.
+- **Limits:** only the ground takes them, not the karts, walls or woods; the shadows do not follow the photographed sky's own clouds.

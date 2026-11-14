@@ -78,6 +78,11 @@ pub struct Ground {
     /// Mown where the vertex colour's alpha says so (1 mown, 0 not).
     #[uniform(110)]
     pub mowing: Vec4,
+    /// The shadows of clouds passing over (D-108): x how much a shadow
+    /// darkens the ground (0 none), y a cloud's size, m; z and w how far the
+    /// wind has carried them, m — the world moves them.
+    #[uniform(111)]
+    pub clouds: Vec4,
 }
 
 impl Ground {
@@ -114,6 +119,7 @@ impl Ground {
             rock: Vec4::new(0.0, 6.0, 0.0, 2.0),
             rock_grain: None,
             mowing: Vec4::new(0.0, 4.0, 0.0, 1.0),
+            clouds: Vec4::new(0.0, 180.0, 0.0, 0.0),
         }
     }
 

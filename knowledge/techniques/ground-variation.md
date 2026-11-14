@@ -51,6 +51,8 @@ The mean and the contrast stay the grain's; no period is left anywhere ([oracle]
 
 **Mown stripes** (`Ground::mown`, D-101). Where the vertex colour's alpha says the grass is mown, it lies in straight stripes (4.5 m on the kart circuit) the mower cut one way and back: each stripe's blades lean the way it went, and look lighter seen from behind them (their lit sides) than from ahead (their tips and shade). The colour is multiplied by `1 + k · s · (0.35 sign(e·d) + 0.65 e·d)`, with `s` ±1 by stripe, `d` the mower's direction, `e` the direction to the eye on the ground (`k` 0.2): the bands swap as the eye goes round, and a third of the contrast stays seen across them. Stripe edges are softened over 8 % of a stripe, and fade where a stripe is a few pixels. The kart world mows the land a few metres past the barriers; beyond, meadow.
 
+**Clouds' shadows** (D-108). Fair-weather clouds' shadows drift over the ground on the wind: two octaves of the same value noise, 180 m and 67 m across, carried by an offset the world advances each frame (`clouds.zw`, wind × time), cut at a soft threshold into patches covering about a third of the ground, each darkening it by the world's strength (0.3 by day; none at night or in the rain). Only the ground takes them: karts, walls and trees do not.
+
 # Settings per tier
 
 The variation is the same at every tier: a few noise lookups a pixel on the ground. Whether a grain is sampled untiled is the world's choice per material; the kart circuit untiles its road from T2 and its grass and gravel, which fill most of the picture, from T3; the road's history is drawn at every tier.
