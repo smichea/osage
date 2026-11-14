@@ -22,7 +22,7 @@ use std::f32::consts::{FRAC_PI_2, PI, TAU};
 
 pub mod decals;
 
-use bevy::prelude::*;
+use bevy::{mesh::VertexAttributeValues, prelude::*};
 use osage_procedural::{Batch, Paint, Sculpture, Shape};
 
 /// Radius of the front and of the rear tyres, metres: 10 and 11 inch slicks.
@@ -224,6 +224,8 @@ fn mirrored(path: &[Vec3]) -> Vec<Vec3> {
 // Colours in sRGB, as paint takes them.
 const BLACK: Vec3 = Vec3::new(0.09, 0.09, 0.1);
 const RUBBER: Vec3 = Vec3::new(0.11, 0.11, 0.115);
+/// A slick's tread after a few laps: scrubbed grey, a little warm.
+const SCRUBBED: Vec3 = Vec3::new(0.2, 0.19, 0.18);
 const ALLOY: Vec3 = Vec3::new(0.86, 0.86, 0.88);
 const CHROME: Vec3 = Vec3::new(0.97, 0.97, 0.98);
 const WHITE: Vec3 = Vec3::new(0.92, 0.92, 0.9);
@@ -354,8 +356,46 @@ fn body(livery: Livery) -> Part {
     bodywork(&mut kart, livery);
     engine(&mut kart);
     let mut part = kart.part();
+    for (finish, mesh) in &mut part {
+        if !matches!(finish, Finish::Chrome | Finish::Visor | Finish::Decal) {
+            soil(mesh, |p| 1.0 - smoothstep(0.03, 0.32, p.y));
+        }
+    }
     part.push((Finish::Decal, stickers(livery).mesh()));
     part
+}
+
+/// Dust thrown up from the track, on a part's vertex colours: tinted
+/// towards dust where `low` (0 to 1) says the road throws it, and mottled
+/// all over a little, as a used kart is — no surface of one is one even
+/// colour.
+fn soil(mesh: &mut Mesh, low: impl Fn(Vec3) -> f32) {
+    let Some(VertexAttributeValues::Float32x3(positions)) = mesh.attribute(Mesh::ATTRIBUTE_POSITION) else {
+        return;
+    };
+    let positions: Vec<Vec3> = positions.iter().map(|&p| Vec3::from(p)).collect();
+    let Some(VertexAttributeValues::Float32x4(colours)) = mesh.attribute_mut(Mesh::ATTRIBUTE_COLOR) else {
+        return;
+    };
+    // Dust in linear light: a pale grey-brown.
+    let dust = Vec3::new(0.28, 0.24, 0.19);
+    for (colour, p) in colours.iter_mut().zip(positions) {
+        let c = Vec3::new(colour[0], colour[1], colour[2]);
+        let mottle = 1.0 - 0.07 * hash(p * 23.0);
+        let c = c.lerp(dust, 0.32 * low(p).clamp(0.0, 1.0)) * mottle;
+        colour[..3].copy_from_slice(&c.to_array());
+    }
+}
+
+fn smoothstep(from: f32, to: f32, x: f32) -> f32 {
+    let t = ((x - from) / (to - from)).clamp(0.0, 1.0);
+    t * t * (3.0 - 2.0 * t)
+}
+
+/// A value in 0..1 that varies smoothly-enough across a part, from a point.
+fn hash(p: Vec3) -> f32 {
+    let s = (p.x.sin() * 1.7 + (p.y * 1.3).sin() + (p.z * 0.9).cos() * 1.3 + (p.x + p.z).sin() * 0.6) * 0.5;
+    (s * 0.5 + 0.5).clamp(0.0, 1.0)
 }
 
 /// Sponsors' stickers on the bodywork, a set of marks for each racing
@@ -390,6 +430,11 @@ fn stickers(livery: Livery) -> decals::Decals {
     let lean = Quat::from_rotation_x(-0.38);
     let back = Vec3::new(0.0, 0.5, -0.33) + lean * Vec3::NEG_Z * 0.114 + lean * Vec3::NEG_Y * 0.04;
     decals.add(next(), back, -Vec3::X, lean * Vec3::Y, 0.15);
+    // Along the top of each pod, read from beside, and on the nose's flanks.
+    for side in [-1.0f32, 1.0] {
+        decals.add(next(), Vec3::new(side * 0.5, 0.203, -0.12), Vec3::Z * -side, side * Vec3::X, 0.1);
+        decals.add(next(), Vec3::new(side * 0.47, 0.11, 0.86), Vec3::Z * -side, Vec3::Y, 0.09);
+    }
     // Along the rear bumper, facing back.
     decals.add(next(), Vec3::new(-0.26, 0.17, -0.962), -Vec3::X, Vec3::Y, 0.16);
     decals.add(next(), Vec3::new(0.26, 0.17, -0.962), -Vec3::X, Vec3::Y, 0.16);
@@ -491,14 +536,28 @@ fn moulded() -> &'static [(usize, Shape)] {
             .ellipsoid(PAINT, Vec3::new(0.0, 0.15, 0.78), Vec3::new(0.3, 0.065, 0.15), flat)
             .ellipsoid(PAINT, Vec3::new(0.0, 0.16, 0.62), Vec3::new(0.24, 0.07, 0.15), flat)
             .rounded(BLACK, Vec3::new(0.0, 0.065, 0.975), Vec3::new(0.42, 0.025, 0.035), 0.02, flat);
-        parts.extend(nose.shapes(0.012));
+        // A chevron of the second colour over the nose's crown, pointing ahead.
+        for side in [-1.0f32, 1.0] {
+            let swept = Quat::from_rotation_y(side * 0.5);
+            nose.paint_box(STRIPE, Vec3::new(side * 0.12, 0.16, 0.72), Vec3::new(0.035, 0.1, 0.16), swept);
+        }
+        // Fine cells: the livery's colours meet along the cells' edges.
+        parts.extend(nose.shapes(0.008));
         for side in [-1.0f32, 1.0] {
             let mut pod = Sculpture::new(0.04);
             pod.rounded(PAINT, Vec3::new(side * 0.5, 0.125, 0.0), Vec3::new(0.12, 0.07, 0.31), 0.045, flat)
                 .rounded(PAINT, Vec3::new(side * 0.51, 0.065, 0.0), Vec3::new(0.13, 0.025, 0.33), 0.02, flat)
                 .ellipsoid(PAINT, Vec3::new(side * 0.48, 0.12, 0.3), Vec3::new(0.1, 0.06, 0.08), flat)
-                .paint_box(STRIPE, Vec3::new(side * 0.5, 0.195, 0.0), Vec3::new(0.07, 0.012, 0.29), flat);
-            parts.extend(pod.shapes(0.01));
+                .paint_box(STRIPE, Vec3::new(side * 0.5, 0.195, 0.0), Vec3::new(0.07, 0.012, 0.29), flat)
+                // A slash of the second colour across the outer face, rising
+                // towards the back, as painters break a pod's flank.
+                .paint_box(
+                    STRIPE,
+                    Vec3::new(side * 0.6, 0.1, 0.12),
+                    Vec3::new(0.06, 0.022, 0.2),
+                    Quat::from_rotation_x(0.32),
+                );
+            parts.extend(pod.shapes(0.008));
         }
         let mut bumper = Sculpture::new(0.05);
         bumper.rounded(BLACK, Vec3::new(0.0, 0.17, -0.86), Vec3::new(0.4, 0.075, 0.1), 0.04, flat);
@@ -739,6 +798,22 @@ fn helmet(livery: Livery) -> Part {
         shell * Transform::from_scale(Vec3::splat(1.01)),
         livery.second,
     );
+    // The chin bar a full-face helmet pushes out under the visor, its vent
+    // dark; two slots on the brow above it.
+    let chin = Shape::new(Sphere::new(1.0).mesh().uv(24, 12));
+    part.add(
+        Finish::Varnish,
+        &chin,
+        shell * at(0.0, 0.062, 0.062) * Transform::from_scale(Vec3::new(0.128, 0.062, 0.088)),
+        livery.second,
+    );
+    let vent = Shape::block(Vec3::new(-0.035, -0.008, -0.01), Vec3::new(0.035, 0.008, 0.01));
+    part.add(Finish::Satin, &vent, shell * at(0.0, 0.05, 0.142), BLACK);
+    for side in [-1.0f32, 1.0] {
+        let slot = Shape::block(Vec3::new(-0.012, -0.004, -0.02), Vec3::new(0.012, 0.004, 0.02));
+        let brow = at(side * 0.04, 0.262, 0.1).with_rotation(Quat::from_rotation_x(-0.75));
+        part.add(Finish::Satin, &slot, shell * brow, BLACK);
+    }
     // The visor: a band across the front, standing proud of the shell.
     let visor = Shape::gore(&[(0.152, 0.1), (0.157, 0.145), (0.152, 0.19)], 14, FRAC_PI_2 - 1.05, 2.1);
     part.add(Finish::Visor, &visor, shell * Transform::from_scale(Vec3::splat(1.02)), Vec3::splat(0.02));
@@ -757,46 +832,80 @@ fn helmet(livery: Livery) -> Part {
     parts
 }
 
-/// A wheel for the left side: a slick tyre, an alloy rim with its bolts.
+/// A wheel for the left side: a slick tyre, its tread scrubbed matt and
+/// dusty and its walls black, on a cast rim — a lip, six spokes over the
+/// dark well of the rim, a hub with its three nuts, a valve.
 /// `axle` 0 is a front wheel, 1 a rear one.
 fn wheel(axle: usize, livery: Livery) -> Part {
     let mut part = Sorted::default();
     let (radius, width) = (WHEELS[axle], TREADS[axle]);
     let rim = radius * 0.62;
     let (half, shoulder) = (width / 2.0, 0.018);
-    // Profile of the tyre from its inner wall, round the tread, to the outer wall.
-    let tyre = [
-        (rim, -half + 0.004),
-        (radius - shoulder, -half),
+    // The axle is X: Y of the lathe turned onto X.
+    let onto_x = Transform::from_rotation(Quat::from_rotation_z(-FRAC_PI_2));
+    // The tyre, from its inner wall, round the tread, to the outer wall.
+    let inner = [(rim, -half + 0.004), (radius - shoulder, -half), (radius - 0.004, -half + 0.008)];
+    let tread = [
         (radius - 0.004, -half + 0.008),
         (radius, -half + shoulder),
         (radius, half - shoulder),
         (radius - 0.004, half - 0.008),
-        (radius - shoulder, half),
-        (rim, half - 0.004),
     ];
-    // The axle is X: Y of the lathe turned onto X.
-    let onto_x = Transform::from_rotation(Quat::from_rotation_z(-FRAC_PI_2));
-    part.add(Finish::Rubber, &Shape::lathe(&tyre, 36), onto_x, RUBBER);
-    let face = [
-        (0.0, half - 0.012),
-        (rim * 0.5, half - 0.006),
-        (rim, half - 0.012),
-        (rim, -half + 0.01),
-        (0.0, -half + 0.012),
-    ];
-    // Lathed from the outer face inwards: the outside faces out.
-    let face: Vec<(f32, f32)> = face.iter().rev().copied().collect();
+    let outer = [(radius - 0.004, half - 0.008), (radius - shoulder, half), (rim, half - 0.004)];
+    part.add(Finish::Rubber, &Shape::lathe(&inner, 36), onto_x, RUBBER);
+    part.add(Finish::Rubber, &Shape::lathe(&tread, 36), onto_x, SCRUBBED);
+    part.add(Finish::Rubber, &Shape::lathe(&outer, 36), onto_x, RUBBER);
     let rims = livery.frame.lerp(ALLOY, 0.7);
-    part.add(Finish::Alloy, &Shape::lathe(&face, 28), onto_x, rims);
-    let bolt = Shape::new(Cylinder::new(0.008, 0.012).mesh().resolution(8));
+    // The lip the tyre's bead sits on, standing proud of the wall.
+    let lip = [
+        (rim + 0.003, half - 0.002),
+        (rim - 0.002, half + 0.001),
+        (rim - 0.008, half - 0.004),
+        (rim - 0.008, -half + 0.01),
+    ];
+    part.add(Finish::Alloy, &Shape::lathe(&lip, 36), onto_x, rims);
+    // The well behind the spokes, in shadow: the rim's inside, dark.
+    let well = [(rim - 0.008, half - 0.03), (0.0, half - 0.034)];
+    part.add(Finish::Satin, &Shape::lathe(&well, 28), onto_x, Vec3::splat(0.06));
+    // Six spokes from the hub to the lip.
+    let (from, to) = (0.022, rim - 0.006);
+    let spoke = Shape::new(Cuboid::new(0.01, to - from, 0.013).mesh().build());
+    for k in 0..6 {
+        let angle = k as f32 / 6.0 * TAU;
+        let middle = (from + to) / 2.0;
+        let place = Transform::from_xyz(half - 0.016, angle.cos() * middle, angle.sin() * middle)
+            .with_rotation(Quat::from_rotation_x(angle));
+        part.add(Finish::Alloy, &spoke, place, rims);
+    }
+    // The hub and its three nuts.
+    let hub = Shape::new(Cylinder::new(0.026, 0.024).mesh().resolution(20).build());
+    part.add(
+        Finish::Alloy,
+        &hub,
+        Transform::from_xyz(half - 0.016, 0.0, 0.0).with_rotation(Quat::from_rotation_z(FRAC_PI_2)),
+        rims,
+    );
+    let nut = Shape::new(Cylinder::new(0.0065, 0.01).mesh().resolution(6).build());
     for k in 0..3 {
         let angle = k as f32 / 3.0 * TAU;
-        let place = Transform::from_xyz(half - 0.004, angle.sin() * 0.03, angle.cos() * 0.03)
+        let place = Transform::from_xyz(half - 0.002, angle.sin() * 0.015, angle.cos() * 0.015)
             .with_rotation(Quat::from_rotation_z(FRAC_PI_2));
-        part.add(Finish::Alloy, &bolt, place, CHROME);
+        part.add(Finish::Chrome, &nut, place, CHROME);
     }
-    part.part()
+    // The valve, between two spokes.
+    let valve = Shape::new(Cylinder::new(0.003, 0.016).mesh().resolution(6).build());
+    let angle = TAU / 12.0;
+    let place = Transform::from_xyz(half - 0.01, angle.cos() * (rim - 0.014), angle.sin() * (rim - 0.014))
+        .with_rotation(Quat::from_rotation_x(angle));
+    part.add(Finish::Steel, &valve, place, Vec3::splat(0.5));
+    let mut part = part.part();
+    // Dust on the tyre's tread and walls, none on the rim's face.
+    for (finish, mesh) in &mut part {
+        if *finish == Finish::Rubber {
+            soil(mesh, |p| 0.5 - 0.3 * smoothstep(radius * 0.7, radius, Vec2::new(p.y, p.z).length()));
+        }
+    }
+    part
 }
 
 #[cfg(test)]

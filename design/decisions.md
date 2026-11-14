@@ -895,3 +895,11 @@ Date: 2026-11-14 · after D-095: low, blotchy grain stayed on the wet asphalt at
 - **Why:** spatial filtering alone trades grain for blotches; a few frames of the same surface are samples for free (Schied et al. 2017's temporal accumulation, Salvi 2016's variance clipping).
 - **Measured** on the cloud bench's L4 at 2560×1440, night and rain: 32.8 ms a frame (0.4 ms for the step, within T4's 33.3); the blotches on the wet asphalt are gone, the floodlights' reflections smooth.
 - **Rejected:** feeding the anti-aliasing's history (clamped to the noisy neighbourhood, it kept the grain).
+
+## D-098 — A kart that looks raced: rims, scrubbed tyres, a broken livery, dust
+
+Date: 2026-11-14 · the maintainer chose karts and drivers as the first step towards a daylight picture "digne de GTA V"; up close the karts read as toys: plain disc rims, one-colour bodywork, a helmet that was a ball with a band.
+
+- **Decision:** the wheels get a cast rim (a lip, six spokes over the rim's dark well, a hub with three nuts, a valve) and a tyre whose tread is scrubbed grey between black walls; the livery breaks the bodywork's colour (a slash across each pod's flank, a chevron over the nose) on pieces meshed in 8 mm cells so the colours meet cleanly, with more stickers (pod tops, the nose's flanks); the body's and the tyres' vertex colours are soiled once built — tinted towards road dust lower down, mottled all over; the helmet gets a full-face chin bar in its lower colour, a chin vent and two brow slots.
+- **Why:** a used racing machine is never one clean colour; detail where the chasing camera looks (wheels, flanks, helmet) is what reads as real.
+- **Consequences:** building the moulded bodywork once takes longer (the model's tests 15 → 22 s in a debug build); the kart is unchanged to the physics and the network.
