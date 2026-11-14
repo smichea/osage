@@ -310,13 +310,21 @@ fn measure(
             let pass = bench.passes.entry(name.to_owned()).or_insert((0.0, 0, 0.0));
             *pass = (pass.0 + ms, pass.1 + 1, pass.2.max(ms));
         }
-        // Top-level passes only: a pass's own spans ("fxaa/fxaa") are inside it.
-        bench.gpu = diagnostics
+        // The innermost spans only: a span inside another ("fxaa/fxaa") is
+        // part of it, and some passes are only their spans ("solari_lighting/…").
+        let spans: Vec<(&str, f64)> = diagnostics
             .iter()
             .filter_map(|d| {
                 let name = d.path().as_str().strip_prefix("render/")?.strip_suffix("/elapsed_gpu")?;
-                (!name.contains('/')).then(|| d.value()).flatten()
+                Some((name, d.value()?))
             })
+            .collect();
+        bench.gpu = spans
+            .iter()
+            .filter(|(name, _)| {
+                !spans.iter().any(|(other, _)| other.len() > name.len() && other.starts_with(&format!("{name}/")))
+            })
+            .map(|(_, ms)| ms)
             .sum::<f64>() as f32;
     }
     match elapsed {
