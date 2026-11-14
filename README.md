@@ -2,7 +2,7 @@
 
 An open-source engine for large open worlds, built by a community of humans and AI agents.
 
-> **Status: research phase (November 2026).** There is no engine code yet. This repository holds the survey of what exists and the proposed direction. Corrections and counter-arguments are welcome — with sources.
+> **Status: pre-release (November 2026).** The engine's first world, **osage kart**, is playable — Windows builds in the [releases](https://github.com/smichea/osage/releases), from integrated graphics to ray tracing. The site: [osage-engine.org](https://osage-engine.org). Corrections and counter-arguments are welcome — with sources.
 
 ## Goals
 

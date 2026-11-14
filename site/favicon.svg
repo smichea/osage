@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <!-- SPDX-FileCopyrightText: The osage contributors -->
+  <!-- SPDX-License-Identifier: CC-BY-SA-4.0 -->
+  <rect x="1.5" y="1.5" width="29" height="29" rx="8" fill="#0b0d10" stroke="#e9edf2" stroke-width="3"/>
+  <path d="M9 21.5c0-6 3.6-11 8.5-11 3.4 0 5.5 2.2 5.5 5.2 0 3.6-3 5.8-7 5.8h-7" fill="none" stroke="#ffb833" stroke-width="3" stroke-linecap="round"/>
+</svg>

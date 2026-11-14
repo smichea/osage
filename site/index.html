@@ -1,0 +1,242 @@
+<!doctype html>
+<!-- SPDX-FileCopyrightText: The osage contributors -->
+<!-- SPDX-License-Identifier: CC-BY-SA-4.0 -->
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>osage — the open engine for living worlds</title>
+  <meta name="description" content="osage is an open-source game engine for large open worlds, built in the open by humans and AI agents on Bevy and wgpu. Its first world, osage kart, races from integrated graphics to ray tracing.">
+  <meta name="theme-color" content="#0b0d10">
+  <link rel="canonical" href="https://osage-engine.org/">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://osage-engine.org/">
+  <meta property="og:title" content="osage — the open engine for living worlds">
+  <meta property="og:description" content="An open-source engine for large open worlds. Its first world, osage kart, races from integrated graphics to ray tracing.">
+  <meta property="og:image" content="https://osage-engine.org/img/og.jpg">
+  <meta name="twitter:card" content="summary_large_image">
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Saira:wght@400;500;600;700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="nav">
+    <div class="wrap nav-inner">
+      <a class="brand" href="#top" aria-label="osage, home">
+        <svg viewBox="0 0 32 32" aria-hidden="true"><use href="#mark"/></svg>
+        <span>osage</span>
+      </a>
+      <nav aria-label="Main">
+        <a href="#kart">Kart</a>
+        <a href="#light">Light</a>
+        <a href="#tiers">Tiers</a>
+        <a href="#engine">Engine</a>
+        <a href="#open">In the open</a>
+      </nav>
+      <a class="button small" href="https://github.com/smichea/osage">GitHub</a>
+    </div>
+  </header>
+
+  <svg width="0" height="0" class="defs" aria-hidden="true">
+    <symbol id="mark" viewBox="0 0 32 32">
+      <rect x="1.5" y="1.5" width="29" height="29" rx="8" fill="none" stroke="currentColor" stroke-width="3"/>
+      <path d="M9 21.5c0-6 3.6-11 8.5-11 3.4 0 5.5 2.2 5.5 5.2 0 3.6-3 5.8-7 5.8h-7" fill="none" stroke="#ffb833" stroke-width="3" stroke-linecap="round"/>
+    </symbol>
+  </svg>
+
+  <main id="top">
+    <section class="hero">
+      <picture>
+        <source media="(max-width: 900px)" srcset="img/night-rain-t4-1200.webp">
+        <img src="img/night-rain-t4.webp" alt="A kart racing at night in the rain, the floodlights mirrored in the wet asphalt, rendered with ray-traced light" fetchpriority="high">
+      </picture>
+      <div class="hero-shade"></div>
+      <div class="wrap hero-copy">
+        <p class="eyebrow">Open source · Bevy &amp; wgpu · pre-release</p>
+        <h1>The open engine<br>for living worlds.</h1>
+        <p class="lede">osage is an open-source game engine for large open worlds, built in the open by people and AI agents. Its first world, <strong>osage kart</strong>, races on the same track from an integrated GPU to full ray tracing.</p>
+        <div class="actions">
+          <a class="button" href="https://github.com/smichea/osage/releases">Download osage kart for Windows</a>
+          <a class="button ghost" href="https://github.com/smichea/osage">Read the source</a>
+        </div>
+        <p class="caption">Ray-traced light at night in the rain — tier T4, 2560 × 1440, 32.8 ms a frame on an NVIDIA L4. Every picture on this page is the game, as the bench renders it.</p>
+      </div>
+    </section>
+
+    <section id="kart" class="section">
+      <div class="wrap">
+        <p class="eyebrow">The first world</p>
+        <h2>osage kart</h2>
+        <p class="intro">A racing game built to prove the engine: tight arcade handling, a living circuit around it, and the same race shared by every kind of client — native, browser, phone or AI agent.</p>
+        <figure class="showcase">
+          <picture>
+            <source media="(max-width: 700px)" srcset="img/start-t4-960.webp">
+            <img src="img/start-t4.webp" alt="Karts leaving the grid, flames from their exhausts and tyre smoke behind them" loading="lazy">
+          </picture>
+          <figcaption>Off the line: a boost from a perfect start, flames and tyre smoke — tier T4, 29.9 ms a frame on an NVIDIA L4.</figcaption>
+        </figure>
+        <div class="features">
+          <article>
+            <h3>Drive, drift, fly</h3>
+            <p>Drift for a three-level mini-turbo, throttle off the line for a perfect start, slipstream to a boost. Over a crest, a press of the button is a trick: the kart rolls through the air as a rigid body and bounces on the tyre that lands first.</p>
+          </article>
+          <article>
+            <h3>Items and battles</h3>
+            <p>Crates of amber glass hold nitro, tyres, cones, oil, rockets, smoke, drones, bumpers and a pit-crew push. Battle mode in an arena, three lives each.</p>
+          </article>
+          <article>
+            <h3>Six circuits, cups, ghosts</h3>
+            <p>Pinewood, Gull Point, Harbour Town, Red Gorge, Eagle Ridge and The Paddock — forest, coast, town, canyon, mountain, meadow — raced in cups, against the clock with ghosts, in four engine classes against bots of three skills.</p>
+          </article>
+          <article>
+            <h3>Together</h3>
+            <p>Online through WebTransport or WebSocket with exact client prediction, two players on one screen, or a phone's browser with touch controls. A live leaderboard any browser on the network can open.</p>
+          </article>
+          <article>
+            <h3>A circuit that lives</h3>
+            <p>The crowd stands up and cheers when a kart goes by — each spectator in their own way and time. Birds take off as you pass, rabbits bolt, deer raise their heads. Rain, night under floodlights, replays as television would shoot them, a photo mode with a real lens.</p>
+          </article>
+          <article>
+            <h3>Made of open parts</h3>
+            <p>Every piece is its own crate — physics, tracks, items, bots, crowd, roadside, sound — reusable by any world. Content comes from open libraries — CC0 photographs and models from Poly Haven — or is generated by the program.</p>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section id="light" class="section dark">
+      <div class="wrap">
+        <p class="eyebrow">Rendering</p>
+        <h2>Light, as light does</h2>
+        <p class="intro">At its highest tier osage kart traces its light with Bevy Solari: the sun, the sky and every lamp reach a surface only where nothing stands between, and every lit surface lights the others. osage adds its own denoiser — no proprietary SDK — that averages each surface over the frames before and filters along the scene's edges.</p>
+        <div class="gallery">
+          <figure class="wide">
+            <picture>
+              <source media="(max-width: 700px)" srcset="img/day-t4-960.webp">
+              <img src="img/day-t4.webp" alt="A kart in a sunlit bend, soft shadows of trees on the grass" loading="lazy">
+            </picture>
+            <figcaption><b>T4 · ray-traced</b> Soft shadows of the trees, the sky's light in the shade, the green of the grass bounced on the kerbs. 29.9 ms on an NVIDIA L4.</figcaption>
+          </figure>
+          <figure>
+            <picture>
+              <source media="(max-width: 700px)" srcset="img/day-t3-960.webp">
+              <img src="img/day-t3.webp" alt="The same circuit drawn without ray tracing" loading="lazy">
+            </picture>
+            <figcaption><b>T3 · raster</b> The same race on a GPU without ray tracing: cascaded shadows, ambient occlusion, a photographed sky as light. 14.4 ms.</figcaption>
+          </figure>
+          <figure>
+            <picture>
+              <source media="(max-width: 700px)" srcset="img/night-t4-960.webp">
+              <img src="img/night-t4.webp" alt="A wet track at night under floodlights" loading="lazy">
+            </picture>
+            <figcaption><b>T4 · night and rain</b> Floodlights as shining surfaces for the rays, true reflections in the wet road, tail lamps glowing.</figcaption>
+          </figure>
+        </div>
+      </div>
+    </section>
+
+    <section id="tiers" class="section">
+      <div class="wrap">
+        <p class="eyebrow">Any hardware</p>
+        <h2>One world, four tiers</h2>
+        <p class="intro">The same world, every technique chosen per tier, each tier with a frame-time budget that a bench measures on reference hardware. If the best picture fails on a machine, the game finds the best one that works, effect by effect.</p>
+        <div class="tiers">
+          <div class="tier">
+            <span class="badge">T1</span>
+            <h3>Old integrated GPUs</h3>
+            <p>WebGL2 and GLES3: a flat sky and fog, procedural trees, FXAA. Budget: 30 frames a second.</p>
+          </div>
+          <div class="tier">
+            <span class="badge">T2</span>
+            <h3>Today's integrated GPUs</h3>
+            <p>WebGPU: physical atmosphere, shadows, ambient occlusion, bloom, textured ground. Budget: 60 frames a second at 1080p, set on an Intel Iris Xe.</p>
+          </div>
+          <div class="tier">
+            <span class="badge">T3</span>
+            <h3>Discrete GPUs</h3>
+            <p>A photographed sky as light, modelled trees and grass, soft shadows, TAA and motion blur. Budget: 60 frames a second; 14.4 ms at 1440p on an NVIDIA L4.</p>
+          </div>
+          <div class="tier accent">
+            <span class="badge">T4</span>
+            <h3>Ray tracing</h3>
+            <p>Direct and indirect light traced by the GPU (Bevy Solari, ReSTIR) and osage's own denoiser. Budget: 30 frames a second at 1440p — met on an NVIDIA L4, rain and night included.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="engine" class="section dark">
+      <div class="wrap two">
+        <div>
+          <p class="eyebrow">The engine</p>
+          <h2>Built for worlds, not just games</h2>
+          <p class="intro">Neither a fork nor a rewrite from scratch: osage builds on Bevy and wgpu, gives back upstream what belongs there, and writes what nothing open provides yet.</p>
+        </div>
+        <ul class="pillars">
+          <li><b>An open world protocol.</b> Native, browser, phone, headless — every client joins the same world at its own fidelity.</li>
+          <li><b>Accountable AI agents.</b> An agent races, observes and acts through MCP tools, under a delegation from a responsible human.</li>
+          <li><b>Worlds as modules.</b> A world's rules and content live in their own crates, apart from the engine, under permissive licences.</li>
+          <li><b>Mixed worlds.</b> Real devices can mirror into a world, and in-world actions can drive them, with safety enforced next to the device.</li>
+          <li><b>Mechanisms, not policy.</b> The engine provides the tools; game rules and privacy belong to each world and its operator.</li>
+        </ul>
+      </div>
+    </section>
+
+    <section id="open" class="section">
+      <div class="wrap">
+        <p class="eyebrow">In the open</p>
+        <h2>Every change explains itself</h2>
+        <p class="intro">osage is organised so that many people and AI agents can work on it at once, and so that anyone can see why it is the way it is.</p>
+        <div class="stats">
+          <a href="https://github.com/smichea/osage/blob/main/design/decisions.md"><strong>101</strong><span>decisions, each with its why and what it measured</span></a>
+          <a href="https://github.com/smichea/osage/blob/main/knowledge/index.md"><strong>49</strong><span>knowledge cards — one per module, technique and algorithm</span></a>
+          <a href="https://github.com/smichea/osage/blob/main/design/03-rendering.md"><strong>14</strong><span>rendering workstreams, each with its oracle</span></a>
+          <a href="https://github.com/smichea/osage/tree/main/bench"><strong>1</strong><span>bench: the same frames on every machine, timed — locally and on a cloud GPU</span></a>
+        </div>
+        <div class="start">
+          <div>
+            <h3>Play</h3>
+            <p>Download the Windows build from the <a href="https://github.com/smichea/osage/releases">releases</a>, unzip, run <code>play.bat</code>. On an RTX card, try <code>play.bat --tier T4</code>.</p>
+          </div>
+          <div>
+            <h3>Build</h3>
+<pre><code>git clone https://github.com/smichea/osage
+cd osage
+cargo run --release -p osage-kart-server &amp;
+cargo run --release -p osage-kart-native</code></pre>
+          </div>
+          <div>
+            <h3>Contribute</h3>
+            <p>Read <a href="https://github.com/smichea/osage/blob/main/CONTRIBUTING.md">CONTRIBUTING</a> and, for AI agents, <a href="https://github.com/smichea/osage/blob/main/AGENTS.md">AGENTS</a>. Pick a workstream, measure before and after, and write down why.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="name" class="section name">
+      <div class="wrap narrow">
+        <h2>About the name</h2>
+        <p><strong>osage</strong> stands for <strong>O</strong>pen <strong>S</strong>ource <strong>A</strong>dvanced <strong>G</strong>ame <strong>E</strong>ngine. Osage is also the name of the <strong>Osage Nation</strong>, a sovereign Native American nation. This project is not affiliated with, endorsed by, or speaking for the Osage Nation. It uses none of the Nation's symbols, imagery, language or culture, unless the Nation chooses otherwise; the maintainer has written to the Nation to ask for its view, and its position will be published and respected.</p>
+      </div>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <div class="wrap footer-inner">
+      <div class="brand">
+        <svg viewBox="0 0 32 32" aria-hidden="true"><use href="#mark"/></svg>
+        <span>osage</span>
+      </div>
+      <p>Engine and clients under AGPL-3.0-or-later with exceptions; SDKs and the kart world's components under MIT or Apache-2.0; the protocol under the Community Specification licence; this site and the documentation under CC BY-SA 4.0. © The osage contributors.</p>
+      <nav aria-label="Footer">
+        <a href="https://github.com/smichea/osage">Source</a>
+        <a href="https://github.com/smichea/osage/releases">Releases</a>
+        <a href="https://github.com/smichea/osage/blob/main/design/decisions.md">Decisions</a>
+        <a href="https://github.com/smichea/osage/blob/main/knowledge/index.md">Knowledge</a>
+      </nav>
+    </div>
+  </footer>
+</body>
+</html>

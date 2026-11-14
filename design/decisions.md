@@ -949,3 +949,11 @@ Date: 2026-11-14 · the maintainer: "ce serait bien aussi qu'il y ait des oiseau
 - **Decision:** the client (`wildlife`) sculpts and moves, from the circuit's seeded dice and the race's time: flocks of six to fourteen small birds wheeling 20 to 45 m over the hills, each on its own loop, wings beating; two birds of prey gliding in wide circles 60 to 85 m up, beating now and then; flocks feeding on the ground 14 to 45 m from the track, pecking and hopping, put up by a kart within 25 m, wheeling and settling again some seconds later; ten rabbits (hind feet flat under the haunches, thin forelegs) nibbling and hopping in the meadows, bolting in long bounds from a kart within 20 m; four deer grazing 70 to 140 m off, raising and turning their heads to a kart within 60 m, walking on now and then. Wings have a bird's outline (rounded leading edge, pointed tip), folded back along the body on the ground.
 - **Why:** an empty countryside reads as a set; animals that mind the race make it a place.
 - **Consequences:** a hundred or so small entities; drawn at every tier; no sound yet.
+
+## D-105 — The project's site, osage-engine.org, on GitHub Pages
+
+Date: 2026-11-14 · the maintainer: "peux-tu créer le site web qui sera sur GitHub Pages accessible à osage-engine.org", "qualité pro".
+
+- **Decision:** the project's public site is a static page in `site/` (HTML and CSS, no build step, no script; the game's own screenshots as WebP, about 0.5 MB), published by the `site` workflow on GitHub Pages whenever `site/` changes on `main`, under the domain osage-engine.org (the maintainer's, at Gandi; its DNS points at GitHub Pages). It presents the engine and its first world as they are — every picture rendered by the bench, every figure measured and dated in this log — links the releases, the source, the decisions and the knowledge, and carries the README's note about the name. Licence: CC BY-SA 4.0, as the documentation.
+- **Why:** a project that asks people to play, read and contribute needs one address that says what it is, with the proof beside each claim.
+- **Consequences:** a change that makes the site wrong (a figure, a feature, a tier's budget) updates it in the same change, as the knowledge cards are.
