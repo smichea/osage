@@ -621,8 +621,6 @@ dependencies = [
 [[package]]
 name = "bevy_asset"
 version = "0.20.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f76f4e872ab1723c69dc069a9da605b1d07caeb64992a1e7a0d79ec09d1d8450"
 dependencies = [
  "async-broadcast",
  "async-channel",
