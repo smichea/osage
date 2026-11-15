@@ -25,6 +25,8 @@ The first world: an original arcade kart racer — drifts, tricks, items, six ci
 
 **On Windows**: download `osage-kart-windows-x64.zip` and `osage-kart-content.zip` from the [releases](https://github.com/smichea/osage/releases), unzip both into one folder and run `play.bat` (the folder updates itself before each game). `play-two.bat` splits the screen for two players; `host.bat` serves the race to the local network. On an RTX card, `play.bat --tier T4` traces the light.
 
+**On a Mac with Apple silicon**: download `osage-kart-macos-arm64.zip`, unzip it and double-click `play.command`; the first time, allow it in System Settings › Privacy & Security ("Open Anyway"), and the folder downloads its content by itself. `play-two.command`, `host.command` and `join.command` do as on Windows, and the folder updates itself the same way.
+
 **From source** (Rust ≥ 1.90, Node ≥ 22):
 
 ```sh

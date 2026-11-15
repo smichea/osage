@@ -4,7 +4,7 @@ version = 1
 
 # Documentation: research, design notes, decision log, knowledge bundle, README, guides
 [[annotations]]
-path = ["research/**", "design/**", "knowledge/**", "bench/**", "site/**", "README.md", "worlds/kart/release/windows/README.txt", "CONTRIBUTING.md", "AGENTS.md", "CLAUDE.md", "LICENSE-EXCEPTIONS.md"]
+path = ["research/**", "design/**", "knowledge/**", "bench/**", "site/**", "README.md", "worlds/kart/release/windows/README.txt", "worlds/kart/release/macos/README.txt", "CONTRIBUTING.md", "AGENTS.md", "CLAUDE.md", "LICENSE-EXCEPTIONS.md"]
 precedence = "aggregate"
 SPDX-FileCopyrightText = "The osage contributors"
 SPDX-License-Identifier = "CC-BY-SA-4.0"

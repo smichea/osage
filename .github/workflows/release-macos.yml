@@ -1,0 +1,75 @@
+# Builds the kart game for macOS on Apple silicon and attaches it to a
+# GitHub release: kart-native (the game), kart-server (the world),
+# play.command (race the bots), play-two.command (two players, the screen
+# split), host.command and join.command (race on the same network),
+# kart-web and the browser client (phones and tablets on that network, the
+# leaderboard page), kart-update and a README. The content (textures,
+# sounds) is the release's own zip, the same as Windows': the folder
+# downloads it at its first start.
+name: release-macos
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag to attach the build to
+        required: true
+
+permissions:
+  contents: write
+
+env:
+  CARGO_TERM_COLOR: always
+  # Every Mac with Apple silicon: they all came with macOS 11 or later. Also
+  # read by the C code built along (ring), which would otherwise target the
+  # runner's own macOS.
+  MACOSX_DEPLOYMENT_TARGET: "11.0"
+
+jobs:
+  macos:
+    name: macOS arm64 — kart game and world
+    # Apple silicon, like the players' Macs.
+    runs-on: macos-latest
+    env:
+      TAG: ${{ github.event.release.tag_name || inputs.tag }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ env.TAG }}
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+          cache: npm
+      # The browser client runs the world's physics compiled to WebAssembly.
+      - run: rustup toolchain install stable --profile minimal --target wasm32-unknown-unknown && rustup default stable
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+      # Without the traced light (D-093): wgpu offers ray queries on Metal,
+      # but no Mac has run Bevy Solari yet. The symbols stay in the programs,
+      # so that a crash report's trace names its functions (D-073).
+      - run: cargo build --release -p osage-kart-native -p osage-kart-server
+      # The browser client, for phones and tablets on the host's network (kart-web).
+      - run: npm ci
+      - run: npm run build -w @osage/sdk
+      - run: npm run build -w @osage/kart-client
+      - name: Package
+        run: |
+          mkdir -p dist/osage-kart
+          cp target/release/kart-native target/release/kart-server target/release/kart-web target/release/kart-update dist/osage-kart/
+          # Apple silicon runs only signed programs: the linker signs them
+          # (ad hoc, no developer identity); check that they still are.
+          codesign --verify --strict dist/osage-kart/kart-*
+          # What the folder holds, for kart-update.
+          printf '# What this folder holds, for its updater.\ncommit = %s\ntag = %s\n' "$(git rev-parse HEAD)" "$TAG" > dist/osage-kart/release.txt
+          cp -R worlds/kart/client/dist dist/osage-kart/web
+          cp worlds/kart/release/macos/*.command worlds/kart/release/macos/README.txt dist/osage-kart/
+          chmod +x dist/osage-kart/*.command
+          cp -R LICENSE LICENSE-EXCEPTIONS.md LICENSES dist/osage-kart/
+          # ditto keeps the programs' and launchers' execute permission;
+          # no resource forks or extended attributes in the zip.
+          cd dist && ditto -c -k --norsrc --noextattr --keepParent osage-kart osage-kart-macos-arm64.zip
+      - name: Attach to the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "$TAG" dist/osage-kart-macos-arm64.zip --clobber

@@ -3,11 +3,14 @@
 
 //! `kart-update [--then LAUNCHER ARGS...]`: brings the kart's folder (the
 //! one this program is in) up to the newest `kart-v…` release of osage on
-//! GitHub, then runs `LAUNCHER` (play.bat, host.bat, join.bat) with `ARGS`.
+//! GitHub, then runs `LAUNCHER` (play.bat, host.bat, join.bat on Windows;
+//! play.command, host.command, join.command on a Mac) with `ARGS`.
 //!
 //! - The programs: when the release was built from another commit than the
-//!   one in `release.txt`, its Windows zip is downloaded, checked against
-//!   the digest GitHub publishes, and unpacked over the folder.
+//!   one in `release.txt`, its zip for this system (Windows x64, or a Mac
+//!   with Apple silicon) is downloaded, checked against the digest GitHub
+//!   publishes, and unpacked over the folder. Elsewhere the programs are
+//!   built from source, and only the content is kept up to date.
 //! - The content (photographed textures, recorded sounds): when the
 //!   folder has none, or the release's content zip is not the one installed:
 //!   only the files that changed when the release has a patch from the
@@ -20,7 +23,10 @@
 //!
 //! Each launcher runs it as its first line and ends there; it runs the
 //! launcher again, updated, with `OSAGE_UPDATED=1` (a launcher being run
-//! must not change under cmd's feet).
+//! must not change under the shell's feet: cmd reads the whole line before
+//! running it; on a Mac the launcher hands over to kart-update with `exec`,
+//! and kart-update to the launcher again, so that no shell reads on in a
+//! file that has changed).
 
 use std::{path::Path, process::Command};
 
@@ -29,7 +35,14 @@ use osage_update::{Record, api, copy_over, download, newest, tidy, unpack};
 
 const REPOSITORY: &str = "smichea/osage";
 const PREFIX: &str = "kart-v";
-const PROGRAMS: &str = "osage-kart-windows-x64.zip";
+/// The programs' zip for this system, if the releases have one.
+const PROGRAMS: Option<&str> = if cfg!(windows) {
+    Some("osage-kart-windows-x64.zip")
+} else if cfg!(all(target_os = "macos", target_arch = "aarch64")) {
+    Some("osage-kart-macos-arm64.zip")
+} else {
+    None
+};
 const CONTENT: &str = "osage-kart-content.zip";
 /// The folder inside both zips.
 const ROOT: &str = "osage-kart";
@@ -50,15 +63,28 @@ fn main() {
         println!("  The game starts as it is.");
     }
     if let Some(launcher) = then {
-        let status = Command::new("cmd")
-            .arg("/c")
-            .arg(&launcher)
-            .args(&rest)
-            .env("OSAGE_UPDATED", "1")
-            .current_dir(&dir)
-            .status();
-        std::process::exit(status.ok().and_then(|s| s.code()).unwrap_or(1));
+        run_again(&launcher, &rest, &dir);
     }
+}
+
+/// Runs the launcher again, updated, with `OSAGE_UPDATED=1`, and ends
+/// with it.
+#[cfg(windows)]
+fn run_again(launcher: &str, args: &[String], dir: &Path) -> ! {
+    let status =
+        Command::new("cmd").arg("/c").arg(launcher).args(args).env("OSAGE_UPDATED", "1").current_dir(dir).status();
+    std::process::exit(status.ok().and_then(|s| s.code()).unwrap_or(1));
+}
+
+/// Runs the launcher again, updated, with `OSAGE_UPDATED=1`: `sh` takes
+/// this program's place, so that Ctrl+C and closing the Terminal's window
+/// reach the launcher, which stops the world it started.
+#[cfg(unix)]
+fn run_again(launcher: &str, args: &[String], dir: &Path) -> ! {
+    use std::os::unix::process::CommandExt;
+    let error = Command::new("/bin/sh").arg(launcher).args(args).env("OSAGE_UPDATED", "1").current_dir(dir).exec();
+    println!("  Could not run {launcher}: {error}");
+    std::process::exit(1);
 }
 
 fn update(dir: &Path) -> Result<()> {
@@ -76,7 +102,7 @@ fn update(dir: &Path) -> Result<()> {
 
     let commit = api(&format!("{base}/commits/{}", release.tag), AGENT, "application/vnd.github.sha")?;
     let commit = commit.trim();
-    let programs = release.asset(PROGRAMS);
+    let programs = PROGRAMS.and_then(|name| release.asset(name));
     match programs {
         Some(asset) if record.get("commit") != Some(commit) => {
             println!("  New version {} ({} MB): downloading...", release.tag, asset.size / 1_000_000);
