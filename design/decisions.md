@@ -1098,3 +1098,11 @@ Date: 2026-11-15 · D-123's next step: the bench now counts what the engine walk
 - **Tried:** one entity per placed mesh, drawing the level its distance calls for (5 % hysteresis), the traced light given the middle level. Entities 65 400 → 50 200, placed levels 45 300 → 7 600.
 - **Measured** on the laptop at T3, the same `race`, the same build otherwise: 119.9 ms a frame before, 149.7 after. A mesh swapped on an entity sends it back through the renderer's preparation (its specialisation and bins); the camera crossing the levels' boundaries swaps hundreds a frame. Entities culled by a range cost less than that.
 - **Not kept.** Fewer entities must come from merging what never moves — the far levels of a patch of woods into one mesh (as the woods' cards are, D-054), the crowd into a few skinned batches — not from swapping meshes.
+
+## D-125 — The farthest level merged by patch of land: tried, slower, not kept
+
+Date: 2026-11-15 · after D-124.
+
+- **Tried:** each scatter's farthest level of detail merged into one mesh per 32 m patch of land and mesh, ranged from the patch's centre. Entities 65 400 → 59 200 (most far levels are thinned foliage whose levels start within 70 m, few beyond).
+- **Measured** on the laptop at T3, the same `race`: 119.9 → 131.6 ms a frame. A patch is drawn whole as soon as any of it is in view and in range: more triangles than the trees it replaced, on a GPU-bound machine.
+- **Not kept.** What remains to try for T4's processor spikes (D-123) is to find, on the cloud's own trace, which system spends the 20 ms there: the laptop is bound by its GPU and by its shadow maps, and does not show the cloud's cause.
