@@ -44,5 +44,12 @@ for tier in $tiers; do
   # shellcheck disable=SC2086 # the options are words
   ./kart-native --bench --headless --tier "$tier" --frames "$frames" $args --out "../out/$tier" >"../out/$tier.log" 2>&1 ||
     status="failed: the $tier bench stopped (see out/$tier.log)"
+  # A build with Chrome tracing leaves a trace too large to bring back:
+  # it is summarised here (D-126).
+  for trace in trace-*.json; do
+    [ -e "$trace" ] || continue
+    python3 trace-summary.py "$trace" >"../out/$tier-trace.txt" 2>&1 || true
+    rm -f "$trace"
+  done
 done
 finish "$status"

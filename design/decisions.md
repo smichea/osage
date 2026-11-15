@@ -1106,3 +1106,9 @@ Date: 2026-11-15 · after D-124.
 - **Tried:** each scatter's farthest level of detail merged into one mesh per 32 m patch of land and mesh, ranged from the patch's centre. Entities 65 400 → 59 200 (most far levels are thinned foliage whose levels start within 70 m, few beyond).
 - **Measured** on the laptop at T3, the same `race`: 119.9 → 131.6 ms a frame. A patch is drawn whole as soon as any of it is in view and in range: more triangles than the trees it replaced, on a GPU-bound machine.
 - **Not kept.** What remains to try for T4's processor spikes (D-123) is to find, on the cloud's own trace, which system spends the 20 ms there: the laptop is bound by its GPU and by its shadow maps, and does not show the cloud's cause.
+
+## D-126 — The cloud bench can trace every system and summarise the trace where it ran
+
+Date: 2026-11-15 · D-123 and D-125: the laptop, bound by its GPU and its shadow maps, does not show the processor spikes the L4 shows at T4; a Chrome trace of 1 000 frames is 1.6 GB, too large to bring back.
+
+- **Decision:** the cloud bench takes a `profile` input: the game is then built with Bevy's `trace_chrome`, and on the bench machine `tools/cloud-bench/trace-summary.py` reduces the trace to every system's mean, 95th percentile and worst time over the race, and the systems that took longest in its slowest main-world frames; the summary comes back as `out/<tier>-trace.txt`, the trace is deleted there. Its timings are not a bench's (tracing costs time); only the summary is read.

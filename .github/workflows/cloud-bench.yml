@@ -44,6 +44,10 @@ on:
       args:
         description: The bench's scene options, e.g. "--sky night --rain" (none, the bench's own)
         default: ""
+      profile:
+        description: Trace every system (Bevy's trace_chrome) and bring back a summary; its timings are not a bench's
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -123,12 +127,13 @@ jobs:
           key: assets-${{ hashFiles('assets/manifest.toml') }}
       - run: python3 tools/fetch-assets.py
       # The receipt names the commit it measured; the bench machine has no checkout to ask.
-      - run: OSAGE_COMMIT=$(git rev-parse --short HEAD) cargo build --release -p osage-kart-native --no-default-features --features raytracing
+      - run: OSAGE_COMMIT=$(git rev-parse --short HEAD) cargo build --release -p osage-kart-native --no-default-features --features "raytracing${{ inputs.profile && ',bevy/trace_chrome' || '' }}"
       - run: |
           mkdir -p kart/assets
           cp target/release/kart-native kart/
           strip kart/kart-native
           cp -r assets/manifest.toml assets/polyhaven kart/assets/
+          cp tools/cloud-bench/trace-summary.py kart/
           tar czf kart.tar.gz kart
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
