@@ -48,6 +48,11 @@ on:
         description: Trace every system (Bevy's trace_chrome) and bring back a summary; its timings are not a bench's
         type: boolean
         default: false
+      machine:
+        description: The machine with the L4, g2-standard-4 (4 vCPUs, the reference) or larger (g2-standard-8, 8 vCPUs) to see what more processor cores change
+        type: choice
+        options: [g2-standard-4, g2-standard-8]
+        default: g2-standard-4
 
 permissions:
   contents: read
@@ -162,6 +167,7 @@ jobs:
       - run: bash tools/cloud-bench/bench.sh "${{ vars.OSAGE_BENCH_PROJECT }}" kart.tar.gz out $TIERS
         env:
           OSAGE_BENCH_ARGS: ${{ inputs.args || '' }}
+          OSAGE_BENCH_MACHINE: ${{ inputs.machine || 'g2-standard-4' }}
       - name: Attest
         run: |
           status=0

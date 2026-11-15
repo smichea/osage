@@ -35,7 +35,7 @@ trap delete EXIT
 gcloud storage cp "$build" "$run/kart.tar.gz"
 
 for candidate in asia-southeast1-b asia-southeast1-a asia-southeast1-c; do
-  if g compute instances create "$name" --zone "$candidate" --machine-type g2-standard-4 \
+  if g compute instances create "$name" --zone "$candidate" --machine-type "${OSAGE_BENCH_MACHINE:-g2-standard-4}" \
     --maintenance-policy TERMINATE --provisioning-model STANDARD \
     --max-run-duration 40m --instance-termination-action DELETE \
     --image-family osage-bench --image-project "$project" --boot-disk-type pd-balanced \
