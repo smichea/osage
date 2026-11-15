@@ -94,6 +94,7 @@ impl Plugin for PlayPlugin {
             .init_resource::<ChosenEvent>()
             .insert_resource(Kept::load())
             .add_plugins((HudPlugin, PaddockPlugin, crate::show::ShowPlugin, crate::photo::PhotoPlugin))
+            .add_plugins((crate::garage::GaragePlugin, crate::splash::SplashPlugin))
             .add_systems(FixedUpdate, drive)
             .add_systems(
                 Update,
@@ -795,7 +796,11 @@ fn choose(
     photo: Res<crate::photo::Photo>,
     show: Res<crate::show::Show>,
     mut second: Option<ResMut<Second>>,
+    mut garage: ResMut<crate::garage::Garage>,
+    mut pick: ResMut<crate::garage::Pick>,
 ) {
+    garage.open = false;
+    let clicked = pick.0.take();
     let (Some(mine), Some(choice_type), Some(roster)) = (replica.mine, replica.choice_type, replica.roster()) else {
         return;
     };
@@ -813,6 +818,36 @@ fn choose(
     let between = matches!(race.phase(), Phase::Waiting | Phase::Ready | Phase::Finished);
     if !between || menu.0 || roster.drivers.is_empty() || roster.karts.is_empty() {
         return;
+    }
+    // What the selection screen shows (D-131): the roster, the events, and
+    // what this player has picked.
+    let racer = replica.racer(mine).unwrap_or_default();
+    let at = |ids: Vec<&str>, id: &str| ids.iter().position(|i| *i == id).unwrap_or(0);
+    let current = chosen.0.unwrap_or_else(|| {
+        (
+            at(roster.drivers.iter().map(|d| d.id.as_str()).collect(), &racer.driver),
+            at(roster.karts.iter().map(|k| k.id.as_str()).collect(), &racer.kart),
+        )
+    });
+    garage.open = true;
+    garage.drivers.clone_from(&roster.drivers);
+    garage.karts.clone_from(&roster.karts);
+    garage.events.clone_from(&race.events);
+    garage.event.clone_from(&race.event);
+    garage.chosen = current;
+    garage.chosen_event = chosen_event.0.or_else(|| race.events.iter().position(|e| *e == race.event));
+    garage.hosting = race.host == mine || race.host == 0;
+    // A card clicked: an event, or a driver or a kart.
+    let mut clicked_pick = None;
+    match clicked {
+        Some(crate::garage::Picked::Event(i)) if i < race.events.len() => {
+            chosen_event.0 = Some(i);
+            let choice = proto::Choice { event: race.events[i].clone(), ..default() };
+            let _ = outbox.0.send(intent(0, mine, choice_type, &choice));
+        }
+        Some(crate::garage::Picked::Driver(i)) if i < roster.drivers.len() => clicked_pick = Some((i, current.1)),
+        Some(crate::garage::Picked::Kart(i)) if i < roster.karts.len() => clicked_pick = Some((current.0, i)),
+        _ => {}
     }
     // G: the engine class (D-089), the host's to say.
     if keys.just_pressed(KeyCode::KeyG) && race.host == mine {
@@ -907,18 +942,13 @@ fn choose(
             by(pressed(KeyCode::ArrowDown, GamepadButton::DPadDown), pressed(KeyCode::ArrowUp, GamepadButton::DPadUp)),
         )
     };
-    if driver == 0 && kart == 0 {
+    if driver == 0 && kart == 0 && clicked_pick.is_none() {
         return;
     }
-    let (now_driver, now_kart) = chosen.0.unwrap_or_else(|| {
-        let racer = replica.racer(mine).unwrap_or_default();
-        let at = |ids: Vec<&str>, id: &str| ids.iter().position(|i| *i == id).unwrap_or(0);
-        (
-            at(roster.drivers.iter().map(|d| d.id.as_str()).collect(), &racer.driver),
-            at(roster.karts.iter().map(|k| k.id.as_str()).collect(), &racer.kart),
-        )
-    });
-    let picked = (turn(now_driver, driver, roster.drivers.len()), turn(now_kart, kart, roster.karts.len()));
+    let (now_driver, now_kart) = current;
+    let picked = clicked_pick
+        .unwrap_or_else(|| (turn(now_driver, driver, roster.drivers.len()), turn(now_kart, kart, roster.karts.len())));
+    garage.chosen = picked;
     chosen.0 = Some(picked);
     let choice = proto::Choice {
         driver: roster.drivers[picked.0].id.clone(),

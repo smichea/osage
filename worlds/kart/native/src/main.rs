@@ -28,6 +28,7 @@
 mod bench;
 mod crowd;
 mod effects;
+mod garage;
 mod graphics;
 mod hud;
 mod karts;
@@ -50,6 +51,7 @@ mod show;
 #[cfg(feature = "sound")]
 mod sound;
 mod spans;
+mod splash;
 mod theme;
 mod track;
 #[cfg(feature = "sound")]

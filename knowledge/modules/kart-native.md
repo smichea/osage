@@ -31,6 +31,8 @@ Command line: a world's address to play, `--bench` to measure, `--tier`, `--sky 
 
 Races: on the grid (`PHASE_READY`) the host — the first human driver — starts the race with Enter or a gamepad's North (the others see whom they wait for); a player racing alone can end the race from the settings (Enter); both go to the world as `Step.call`, carried by a few messages. Settings: Escape (or a gamepad's Start) opens them; the frame rate wanted (off, 30 to 144; 30 by default, D-074) is kept in `osage/kart-settings.txt` under `%APPDATA%` or `~/.config`, and the engine [holds that rate](/techniques/frame-pacing.md). While they are open, the keys do not drive.
 
+Between races (D-131), a selection screen shows what is chosen by sight: events as cards with their circuits drawn from above (a cup's side by side) under tabs — cups, races, time trials, battles; drivers as portraits, each driver's kart filmed once by a camera of its own on a layer of its own, lit by a studio's lights and exposure whatever the circuit's sky; karts as cards with their character as bars. Cards are clicked; the keys still work and show their section; C hides the screen, and with it shown the records, map and speed panels step aside. While the circuit or its models load, a spinner turns; at start, a splash — osage's mark and name, then osage kart — covers the window until the circuit is there. Game sounds start muted when sound is off (they were muted a frame late, heard through a loading frame).
+
 # Invariants
 
 - The scene never reads the network, and the network code never draws.

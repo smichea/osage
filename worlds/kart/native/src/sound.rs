@@ -68,6 +68,13 @@ pub struct Music;
 #[derive(Component)]
 pub struct Speech;
 
+/// A game sound's settings, muted from its first sample when sound is off:
+/// muted only once its sink exists, it was heard until then — through a
+/// whole loading frame, seconds long.
+fn playing(audio: Option<&Audio>, settings: PlaybackSettings) -> PlaybackSettings {
+    PlaybackSettings { muted: audio.is_some_and(|audio| !audio.sound), ..settings }
+}
+
 /// Sound off: every sound of the game is muted, new ones as they start;
 /// on, they are heard again (settings, N).
 fn hush(
@@ -272,6 +279,7 @@ fn crowd(
     course: Option<Res<Course>>,
     mut clips: ResMut<Assets<Clip>>,
     mut placed: Local<bool>,
+    audio: Option<Res<Audio>>,
 ) {
     let (Some(course), Some(samples), false) = (course, tapes.crowd.clone(), *placed) else { return };
     *placed = true;
@@ -284,7 +292,7 @@ fn crowd(
     commands.spawn((
         Transform::from_translation(at),
         AudioPlayer(clips.add(Clip { samples, gain: CROWD })),
-        PlaybackSettings::LOOP.with_spatial(true),
+        playing(audio.as_deref(), PlaybackSettings::LOOP.with_spatial(true)),
     ));
 }
 
@@ -406,6 +414,7 @@ fn voice(
     tapes: Res<Tapes>,
     mut synths: ResMut<Assets<Synth>>,
     karts: Query<(Entity, &Pose), Without<Heard>>,
+    audio: Option<Res<Audio>>,
 ) {
     // A ghost makes no sound (D-062).
     for (entity, pose) in karts.iter().filter(|(_, pose)| !pose.ghost) {
@@ -422,7 +431,7 @@ fn voice(
             },
             AudioPlayer(synth),
             // Heard as `hear` places it, not by the engine's own panning.
-            PlaybackSettings::LOOP,
+            playing(audio.as_deref(), PlaybackSettings::LOOP),
         ));
     }
 }
@@ -578,6 +587,7 @@ fn rotors(
     mut sources: ResMut<Assets<Rotors>>,
     new: Query<Entity, (With<Drone>, Without<Loudness>)>,
     drones: Query<(&Visibility, &Loudness)>,
+    audio: Option<Res<Audio>>,
 ) {
     for (n, entity) in new.iter().enumerate() {
         let gain = Arc::new(Mutex::new(0.0));
@@ -585,7 +595,7 @@ fn rotors(
         commands.entity(entity).insert((
             Loudness(gain),
             AudioPlayer(source),
-            PlaybackSettings::LOOP.with_spatial(true),
+            playing(audio.as_deref(), PlaybackSettings::LOOP.with_spatial(true)),
         ));
     }
     for (visibility, loudness) in &drones {

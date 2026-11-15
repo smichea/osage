@@ -227,6 +227,10 @@ struct Gauge;
 #[derive(Component)]
 struct Map;
 
+/// What the selection screen covers between races: hidden while it shows.
+#[derive(Component)]
+struct RaceOnly;
+
 #[derive(Resource, Default)]
 struct Dots {
     /// The corner of the world drawn at the map's top left, and pixels per metre.
@@ -389,18 +393,22 @@ fn setup(mut commands: Commands, faces: Res<Faces>, arrows: Res<Arrows>, split: 
         });
     commands.spawn((
         Map,
+        RaceOnly,
         ImageNode::default(),
         absolute(Node { right: px(14), bottom: px(96), width: px(MAP), height: px(MAP), ..default() }),
     ));
     // Bottom right: the speed, and the mini-turbo charging.
     commands
-        .spawn(theme::panel(absolute(Node {
-            bottom: px(14),
-            right: px(14),
-            flex_direction: FlexDirection::Column,
-            row_gap: px(6),
-            ..default()
-        })))
+        .spawn((
+            RaceOnly,
+            theme::panel(absolute(Node {
+                bottom: px(14),
+                right: px(14),
+                flex_direction: FlexDirection::Column,
+                row_gap: px(6),
+                ..default()
+            })),
+        ))
         .with_children(|speed| {
             speed.spawn(Node { align_items: AlignItems::FlexEnd, column_gap: px(6), ..default() }).with_children(
                 |figure| {
@@ -541,17 +549,28 @@ pub fn records_text(records: &Records) -> String {
 }
 
 #[allow(clippy::type_complexity)]
+#[allow(clippy::too_many_arguments)]
 fn write(
     view: Res<RaceView>,
     mut texts: Query<(&Label, &mut Text, &mut TextColor)>,
     mut gauge: Query<(&mut Node, &mut BackgroundColor), With<Gauge>>,
-    mut records: Query<&mut Visibility, (With<RecordsPanel>, Without<ItemPanel>, Without<StartHint>)>,
-    mut item: Query<&mut Visibility, (With<ItemPanel>, Without<StartHint>)>,
-    mut start: Query<&mut Visibility, With<StartHint>>,
+    mut records: Query<
+        &mut Visibility,
+        (With<RecordsPanel>, Without<ItemPanel>, Without<StartHint>, Without<RaceOnly>),
+    >,
+    mut item: Query<&mut Visibility, (With<ItemPanel>, Without<StartHint>, Without<RaceOnly>)>,
+    mut start: Query<&mut Visibility, (With<StartHint>, Without<RaceOnly>)>,
+    mut race_only: Query<&mut Visibility, (With<RaceOnly>, Without<RecordsPanel>, Without<ItemPanel>)>,
+    garage: Option<Res<crate::garage::Shown>>,
 ) {
+    let garage = garage.is_some_and(|shown| shown.0);
+    for mut visibility in &mut race_only {
+        visibility.set_if_neq(if garage { Visibility::Hidden } else { Visibility::Inherited });
+    }
     let between = matches!(view.stage, Lights::Waiting | Lights::Ready(_) | Lights::Results(_));
     // Hidden while the whole race is shown again: the picture is the point.
     let shown = between
+        && !garage
         && view.watching.is_empty()
         && !(view.records.laps.is_empty() && view.cup.is_empty() && view.pick.is_empty());
     let show = |on: bool| if on { Visibility::Inherited } else { Visibility::Hidden };
