@@ -44,6 +44,10 @@ const CAMERA_EVERY: f32 = 42.0;
 /// The flyover's speed along the circuit, m/s, and its camera's height.
 const FLY: f32 = 17.0;
 const FLY_HEIGHT: f32 = 11.0;
+/// How far from a tunnel's mouth a camera by the track may stand, m.
+const PORTAL: f32 = 30.0;
+/// How far above the land a camera keeps, m, wherever its shot puts it.
+const CLEAR: f32 = 0.8;
 
 pub struct ShowPlugin;
 
@@ -77,6 +81,14 @@ pub struct Show {
     racing: bool,
     /// The whole race shown again, when it is.
     watching: Option<Watching>,
+    /// The colour of each kart on the tape: a kart gone is shown by the
+    /// live one of its colour.
+    colours: std::collections::HashMap<Entity, u32>,
+}
+
+/// Whether a live kart is itself on the tape (then it shows itself).
+fn frame_has(race: &[(f32, Vec<(Entity, Kart)>)], entity: Entity) -> bool {
+    race.first().is_some_and(|(_, karts)| karts.iter().any(|(e, _)| *e == entity))
 }
 
 /// A whole-race replay as it runs.
@@ -192,6 +204,20 @@ fn in_tunnel(course: &Course, along: f32) -> bool {
     })
 }
 
+/// A camera at `from` raised out of the land if its shot put it in it (a
+/// cutting beside the road, the hill over a tunnel); inside a tunnel, where
+/// the land is the hill above it, left where it is.
+fn out_of_the_land(course: &Course, land: Option<&osage_kart_land::Land>, from: Vec3) -> Vec3 {
+    let Some(land) = land else { return from };
+    let track = &course.0.track;
+    let below = track.locate(from.x, from.z);
+    if in_tunnel(course, below.along) && below.lateral.abs() < track.half_width + track.verge + 1.0 {
+        return from;
+    }
+    let ground = land.height(Vec2::new(from.x, from.z));
+    Vec3::new(from.x, from.y.max(ground + CLEAR), from.z)
+}
+
 /// A small hash in 0–1 of a number.
 fn hash(x: f32) -> f32 {
     let h = (x.to_bits().wrapping_mul(0x9E37_79B1) ^ 0x85EB_CA77).rotate_left(13).wrapping_mul(0xC2B2_AE35);
@@ -205,7 +231,10 @@ fn trackside(course: &Course, along: f32) -> Option<Shot> {
     let length = course.0.track.length();
     let n = ((along + 10.0) / CAMERA_EVERY).ceil();
     let at = (n * CAMERA_EVERY).rem_euclid(length);
-    if in_tunnel(course, at) || in_tunnel(course, along) {
+    // Not in a tunnel, nor by its mouth: there the camera would stand in
+    // the hill the tunnel goes through.
+    if [-PORTAL, 0.0, PORTAL].iter().any(|d| in_tunnel(course, (at + d).rem_euclid(length))) || in_tunnel(course, along)
+    {
         return None;
     }
     let side = if (n as i64).rem_euclid(2) == 0 { 1.0 } else { -1.0 };
@@ -268,7 +297,9 @@ fn present(
     remotes: Query<&crate::play::Remote>,
     photo: Res<crate::photo::Photo>,
     keys: Res<ButtonInput<KeyCode>>,
+    land: Option<Res<osage_kart_land::Land>>,
 ) {
+    let land = land.as_deref();
     let now = time.elapsed_secs();
     let Some(course) = course else { return };
     // The photo mode has the camera, and the picture is frozen.
@@ -284,6 +315,7 @@ fn present(
     let on = matches!(view.stage, Lights::Count(_) | Lights::Go | Lights::Racing | Lights::Results(_));
     if on && !show.racing {
         show.race.clear();
+        show.colours.clear();
         show.watching = None;
     }
     show.racing = on;
@@ -319,6 +351,9 @@ fn present(
     {
         let frame = karts.iter().map(|(entity, pose)| (entity, pose.kart)).collect();
         show.race.push((now, frame));
+        for (entity, pose) in &karts {
+            show.colours.insert(entity, pose.color);
+        }
     }
     if let Some(mut watch) = show.watching {
         let (first, last) = (show.race[0].0, show.race[show.race.len() - 1].0);
@@ -348,7 +383,25 @@ fn present(
             watch.cuts = 0;
             watch.shot = Shot::Onboard { until: first };
         }
-        let frame = frame_at(&show.race, watch.shown);
+        let mut frame = frame_at(&show.race, watch.shown);
+        // The karts of the race may be gone (the next race lines up new
+        // ones): each taped kart is shown by the live one of its colour.
+        let live: Vec<(Entity, u32)> = karts.iter().map(|(entity, pose)| (entity, pose.color)).collect();
+        let mut used = Vec::new();
+        for (entity, _) in frame.iter_mut() {
+            let shown_by = if live.iter().any(|(e, _)| e == entity) {
+                Some(*entity)
+            } else {
+                let colour = show.colours.get(entity).copied();
+                live.iter()
+                    .find(|(e, c)| Some(*c) == colour && !used.contains(e) && !frame_has(&show.race, *e))
+                    .map(|(e, _)| *e)
+            };
+            if let Some(shown_by) = shown_by {
+                used.push(shown_by);
+                *entity = shown_by;
+            }
+        }
         for (entity, then) in &frame {
             if let Ok((_, mut pose)) = karts.get_mut(*entity) {
                 pose.kart = *then;
@@ -361,6 +414,7 @@ fn present(
                 watch.shot = next_shot(&course, along, watch.shown, watch.cuts);
             }
             let (from, to) = framing(&course, watch.shot, &kart);
+            let from = out_of_the_land(&course, land, from);
             commands.insert_resource(Viewpoint { from, to });
             show.owns_view = true;
             let name = remotes
@@ -449,7 +503,7 @@ fn present(
         show.flown += FLY * time.delta_secs();
         wanted = Some(flyover(&course, show.flown, now));
     }
-    match wanted {
+    match wanted.map(|(from, to)| (out_of_the_land(&course, land, from), to)) {
         Some((from, to)) => {
             if !show.owns_view {
                 info!("show: {}", if view.replay { "replay" } else { "flying over the circuit" });

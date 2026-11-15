@@ -332,8 +332,9 @@ fn spawn(
     for (k, spectator) in set.spectators.into_iter().enumerate() {
         crate::crowd::spawn(commands, meshes, spectator, &cloth, k);
     }
+    let people = osage_content::root().is_some_and(|root| osage_humans::installed(&root));
     for (k, marshal) in set.marshals.into_iter().enumerate() {
-        crate::crowd::spawn_marshal(commands, meshes, marshal, [&cloth, &flag], k);
+        crate::crowd::spawn_marshal(commands, meshes, marshal, [&cloth, &flag], k, people);
     }
     for mesh in set.bright.meshes() {
         commands.spawn((Part, Mesh3d(meshes.add(mesh)), MeshMaterial3d(matte.clone()), NotShadowCaster));

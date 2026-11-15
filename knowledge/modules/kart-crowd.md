@@ -17,15 +17,15 @@ Fill a grandstand with people who read as people from the track: not a capsule u
 
 - **Pose:** how a spectator sits: upright with hands on the knees, leaning back with arms folded, or cheering with one arm raised.
 - **Stance:** how someone stands: watching, arms folded, waving, or holding a flag's staff forward at the waist (a marshal; the world adds the flag at `Stance::FLAG_HAND`).
-- **Wear:** what a part of the surface is — shirt, trousers, skin, hair, shoes — for the world to paint.
+- **Wear:** what a part of the surface is — shirt, trousers, skin, hair, shoes, eyes, lips — for the world to paint.
 
 # Architecture
 
-Each pose is a [blended solid](/algorithms/blended-solids.md) of 22 pieces: pelvis, belly and chest leaning with the pose, neck, head, a cap of hair over the top and back of the head, and per side a shoulder, a short sleeve, a bare upper and lower arm, a hand, a thigh with cloth folds, a shin and a shoe. It is sculpted once, at 3.5 cm (under two pixels ten metres off), into one shape per part, and shared by every spectator in that pose. The figure sits on the origin — the seat's top — facing +X, its feet 0.45 m lower on the tier in front. A standing figure is built the same way, 1.75 m tall, standing on the origin, facing +X.
+Each pose is a [blended solid](/algorithms/blended-solids.md) of 22 pieces: pelvis, belly and chest leaning with the pose, neck, head, a cap of hair over the top and back of the head, and per side a shoulder, a short sleeve, a bare upper and lower arm, a hand, a thigh with cloth folds, a shin and a shoe. It is sculpted once, at 3.5 cm (under two pixels ten metres off), into one shape per part, and shared by every spectator in that pose. The head is sculpted apart, finer (1.4 cm; 0.6 cm for someone seen from close, `standing_near`), and set on the neck: a skull, a face narrowing to the chin, a brow, a nose, cheekbones and ears, hair as matter over the top and back so that its line is where the two surfaces meet, eyes, eyebrows and lips painted on (D-120). The figure sits on the origin — the seat's top — facing +X, its feet 0.45 m lower on the tier in front. A standing figure is built the same way, 1.75 m tall, standing on the origin, facing +X.
 
 # Interfaces
 
-`Pose::{HandsOnKnees, ArmsFolded, Cheering, ALL}`, `Stance::{Watching, ArmsFolded, Waving, HoldingFlag, ALL, FLAG_HAND}`, `Wear::{Shirt, Trousers, Skin, Hair, Shoes}`, `seated(pose)` and `standing(stance) -> &'static [(Wear, Shape)]`.
+`Pose::{HandsOnKnees, ArmsFolded, Cheering, ALL}`, `Stance::{Watching, ArmsFolded, Waving, HoldingFlag, ALL, FLAG_HAND}`, `Wear::{Shirt, Trousers, Skin, Hair, Shoes}`, `seated(pose)`, `standing(stance)` and `standing_near(stance) -> &'static [(Wear, Shape)]`. A world with [osage-humans](/modules/osage-humans.md) installed shows its marshals as rigged people instead (D-129).
 
 # Invariants
 

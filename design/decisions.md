@@ -1132,3 +1132,28 @@ Date: 2026-11-15 · D-126's next step, the maintainer's go-ahead to change Bevy 
 - **Measured** on the L4, T4, the same `race`: the systems it serves were no faster (specialization 2.8 → 3.1 ms and 2.3 → 2.4 ms, bounds 2.4 → 2.7 ms, mean); frames 24.1 → 23.5 ms, within one run's noise of the next. **Not kept**: reverted the same night.
 - **What it shows:** the lookups are not where those systems' time goes. Their means are small and their 95th percentiles large (8–10 ms), all on the same frames, on a machine of 4 vCPUs (2 cores) running the main world, the render world and their parallel systems at once: the time may be waiting for a core, not work per entity. The cloud bench now takes the machine as an input (`machine`: `g2-standard-4`, the reference, or `g2-standard-8`) to tell the two apart; the reference stays the 4-vCPU machine until the maintainer says otherwise.
 - **Measured on 8 vCPUs** (g2-standard-8, the same L4, T4, traced, the same `race`): the systems that spiked on 4 halve and their spikes go — specialization p95 9–10 → 1.6 ms, bounds 7 → 1.5 ms, culling 4.7 → 2.8 ms; the main world's own work falls from about 20 to 13 ms a frame, and its wait for the GPU rises from 7 to 13 ms: the frame (23.2 ms) is the GPU's, the traced light's above all. The processor spikes of D-123 and D-126 were mostly the bench machine's two cores, which a player's computer with an RTX card (8 cores or more) does not share. One system still spikes on its own, Bevy's visibility ranges (p95 13 ms, 45 000 levels of placed models each with a range): the next to look at, in Bevy or in how osage gives its levels their ranges.
+
+## D-120 — Sculpted figures get a head of their own, with a face
+
+Date: 2026-11-15 · the maintainer: the marshal needed a human head, more detail in the torso and the head. (Number kept for this entry when it was planned.)
+
+- **Decision:** the crowd's figures keep one sculpted body per pose, but the head is sculpted apart and finer — 1.4 cm, 0.6 cm for people seen from close (marshals, mechanics) — and set on the neck: a skull, a face narrowing to the chin, a brow, a nose, cheekbones, ears, hair as matter over the top and back, eyes, eyebrows and lips painted on.
+- **Why:** at the body's 3.5 cm a head is a ball; a face needs features a centimetre or two across. Sculpting only the head finer costs little, the body staying shared.
+- **Superseded where people are installed:** see D-129.
+
+## D-129 — People from open rigged models: Quaternius's bodies, hair and moves
+
+Date: 2026-11-15 · the maintainer: "pourquoi tu prends pas un model d'humain open source", and any open content (D-122).
+
+- **Decision:** a new crate, `osage-humans`, makes people from Quaternius's Universal Base Characters and Universal Animation Library (CC0): two bodies, two skin tones, five hairstyles, 43 moves, one skeleton. The two zips are downloaded by a person (itch.io keeps automated clients out); `tools/quaternius.py` takes out what is used; the manifest lists every file. Without them, worlds keep their sculpted figures.
+- **Dressing by joints:** the bodies are bare. The joint that weighs most on a vertex says what it wears — head, neck, hands skin; torso and arms a top; hips and legs the bottom; feet shoes — and the body's texture is painted once per body and tone (fabric grey, flat, rough where worn), each outfit's colours set on the mesh's vertices. Worn parts are smoothed (Taubin's steps), their normals made again and pushed out 1.4–1.8 cm: cloth does not follow every muscle.
+- **Moves:** every bone is a target by its path of names, the library's paths, so its clips play on the people unchanged; a changed move crossfades.
+- **First use:** the kart's marshals, in orange, holding the flag up (`Idle_Torch_Loop`), the flag following the raised hand. Next, mechanics, then the crowd (each person has 65 bones: tens near the camera, not thousands).
+
+## D-130 — Headlamps aimed level; a replay shows the karts that line up next, and its cameras keep out of the land
+
+Date: 2026-11-15 · the maintainer, after playing: at night the headlamp lit "a small very bright spot just in front of the kart"; in a replay the karts were not seen, and the camera was at times under the land or above a tunnel.
+
+- **Headlamps:** 120 000 lm aimed 6° down from 45 cm put 5 700 lux on the road 2 m ahead and 49 at 10 m. Now 12 000 lm, aimed level in a narrow beam (inner 2°, outer 18°) that fades below it: about 640 lux at 2 m, 17 at 10 m — the pool spread down the road.
+- **Replay's karts:** when the next race lines up, the world replaces every kart (new entities); a replay started on the grid moved karts that were gone. The tape now keeps each kart's colour, and a kart gone is shown by the live one of its colour.
+- **Replay's cameras:** a camera by the track no longer stands within 30 m of a tunnel's mouth (it stood in the hill), and every camera of the show — trackside, helicopter, the flyover — is raised out of the land if its shot put it there, except inside a tunnel, where the land is the hill above.

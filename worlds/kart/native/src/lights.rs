@@ -33,8 +33,11 @@ const FACE: f32 = 500.0 * 20.0 * 20.0 / (1.6 * 0.7);
 /// A headlamp's lens as traced light sees it, cd/m²: 30 lux on the road
 /// 10 m ahead from a lens of 0.22 × 0.08 m.
 const LENS: f32 = 30.0 * 10.0 * 10.0 / (0.22 * 0.08);
-/// A kart's lamp, lumens.
-const HEADLAMP: f32 = 1.2e5;
+/// A kart's lamp, lumens. Aimed almost level, in a narrow beam that fades
+/// below it: the road takes the light at a grazing angle from 45 cm up, so
+/// a lamp aimed down lit a small blinding pool in front of the kart (5 700
+/// lux 2 m ahead, 49 at 10 m); level, about 640 lux at 2 m, 17 at 10 m.
+const HEADLAMP: f32 = 1.2e4;
 
 pub struct LightsPlugin;
 
@@ -205,14 +208,14 @@ fn headlamps(
                 SpotLight {
                     color: Color::srgb(1.0, 0.97, 0.92),
                     intensity: HEADLAMP,
-                    range: 35.0,
-                    outer_angle: 0.6,
-                    inner_angle: 0.35,
+                    range: 45.0,
+                    outer_angle: 0.32,
+                    inner_angle: 0.04,
                     shadow_maps_enabled: false,
                     ..default()
                 },
                 // The kart faces +Z; a light shines along its own -Z.
-                Transform::from_xyz(0.0, 0.45, 1.05).looking_to(Vec3::new(0.0, -0.1, 1.0), Vec3::Y),
+                Transform::from_xyz(0.0, 0.45, 1.05).looking_to(Vec3::new(0.0, -0.01, 1.0), Vec3::Y),
             ));
             kart.spawn((
                 Headlamp,

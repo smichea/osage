@@ -1319,3 +1319,431 @@ licence = "OFL-1.1"
 author = "Hector Gatti, Omnibus-Type (The Saira Project Authors)"
 source = "https://github.com/Omnibus-Type/Saira"
 used_by = "the fonts' licence, shipped beside them (OFL condition 2)"
+
+# Quaternius — https://quaternius.com, CC0 1.0, published on itch.io. The two
+# packs are downloaded by a person (itch.io serves them from a page, its
+# robots.txt keeps automated clients out); tools/quaternius.py takes out of
+# them what osage-humans loads. Bodies, hair and moves share one skeleton.
+
+[[asset]]
+path = "assets/quaternius/Universal Base Characters[Standard].zip"
+sha256 = "fdbf1804c90dfc1ea03e992bff7da2dfd1a79318e13270a660180f9308455f40"
+licence = "CC0-1.0"
+author = "Quaternius"
+source = "https://quaternius.itch.io/universal-base-characters"
+manual = "download it free from https://quaternius.itch.io/universal-base-characters (\"No thanks, just take me to the downloads\"), put it here, run tools/quaternius.py"
+used_by = "tools/quaternius.py"
+
+[[asset]]
+path = "assets/quaternius/Universal Animation Library[Standard].zip"
+sha256 = "cc73fc4e495b82958207316596317a3f40b9fa38065bde1027937452da537724"
+licence = "CC0-1.0"
+author = "Quaternius"
+source = "https://quaternius.itch.io/universal-animation-library"
+manual = "download it free from https://quaternius.itch.io/universal-animation-library (\"No thanks, just take me to the downloads\"), put it here, run tools/quaternius.py"
+used_by = "tools/quaternius.py"
+
+[[asset]]
+path = "assets/quaternius/humans/License_Standard.txt"
+made_by = "tools/quaternius.py"
+made_from = "assets/quaternius/Universal Base Characters[Standard].zip"
+licence = "CC0-1.0"
+author = "Quaternius"
+source = "https://quaternius.itch.io/universal-base-characters"
+used_by = "osage-humans: people of the kart circuit"
+
+[[asset]]
+path = "assets/quaternius/humans/Superhero_Female_FullBody.bin"
+made_by = "tools/quaternius.py"
+made_from = "assets/quaternius/Universal Base Characters[Standard].zip"
+licence = "CC0-1.0"
+author = "Quaternius"
+source = "https://quaternius.itch.io/universal-base-characters"
+used_by = "osage-humans: people of the kart circuit"
+
+[[asset]]
+path = "assets/quaternius/humans/Superhero_Female_FullBody.gltf"
+made_by = "tools/quaternius.py"
+made_from = "assets/quaternius/Universal Base Characters[Standard].zip"
+licence = "CC0-1.0"
+author = "Quaternius"
+source = "https://quaternius.itch.io/universal-base-characters"
+used_by = "osage-humans: people of the kart circuit"
+
+[[asset]]
+path = "assets/quaternius/humans/Superhero_Male_FullBody.bin"
+made_by = "tools/quaternius.py"
+made_from = "assets/quaternius/Universal Base Characters[Standard].zip"
+licence = "CC0-1.0"
+author = "Quaternius"
+source = "https://quaternius.itch.io/universal-base-characters"
+used_by = "osage-humans: people of the kart circuit"
+
+[[asset]]
+path = "assets/quaternius/humans/Superhero_Male_FullBody.gltf"
+made_by = "tools/quaternius.py"
+made_from = "assets/quaternius/Universal Base Characters[Standard].zip"
+licence = "CC0-1.0"
+author = "Quaternius"
+source = "https://quaternius.itch.io/universal-base-characters"
+used_by = "osage-humans: people of the kart circuit"
+
+[[asset]]
+path = "assets/quaternius/humans/T_Eye_Brown.png"
+made_by = "tools/quaternius.py"
+made_from = "assets/quaternius/Universal Base Characters[Standard].zip"
+licence = "CC0-1.0"
+author = "Quaternius"
+source = "https://quaternius.itch.io/universal-base-characters"
+used_by = "osage-humans: people of the kart circuit"
+
+[[asset]]
+path = "assets/quaternius/humans/T_Eye_Normal.png"
+made_by = "tools/quaternius.py"
+made_from = "assets/quaternius/Universal Base Characters[Standard].zip"
+licence = "CC0-1.0"
+author = "Quaternius"
+source = "https://quaternius.itch.io/universal-base-characters"
+used_by = "osage-humans: people of the kart circuit"
+
+[[asset]]
+path = "assets/quaternius/humans/T_Eye_Normal_png.png"
+made_by = "tools/quaternius.py"
+made_from = "assets/quaternius/Universal Base Characters[Standard].zip"
+licence = "CC0-1.0"
+author = "Quaternius"
+source = "https://quaternius.itch.io/universal-base-characters"
+used_by = "osage-humans: people of the kart circuit"
+
+[[asset]]
+path = "assets/quaternius/humans/T_Hair_1_BaseColor.png"
+made_by = "tools/quaternius.py"
+made_from = "assets/quaternius/Universal Base Characters[Standard].zip"
+licence = "CC0-1.0"
+author = "Quaternius"
+source = "https://quaternius.itch.io/universal-base-characters"
+used_by = "osage-humans: people of the kart circuit"
+
+[[asset]]
+path = "assets/quaternius/humans/T_Hair_1_BaseColor_png.png"
+made_by = "tools/quaternius.py"
+made_from = "assets/quaternius/Universal Base Characters[Standard].zip"
+licence = "CC0-1.0"
+author = "Quaternius"
+source = "https://quaternius.itch.io/universal-base-characters"
+used_by = "osage-humans: people of the kart circuit"
+
+[[asset]]
+path = "assets/quaternius/humans/T_Hair_1_Normal.png"
+made_by = "tools/quaternius.py"
+made_from = "assets/quaternius/Universal Base Characters[Standard].zip"
+licence = "CC0-1.0"
+author = "Quaternius"
+source = "https://quaternius.itch.io/universal-base-characters"
+used_by = "osage-humans: people of the kart circuit"
+
+[[asset]]
+path = "assets/quaternius/humans/T_Hair_1_Normal_png.png"
+made_by = "tools/quaternius.py"
+made_from = "assets/quaternius/Universal Base Characters[Standard].zip"
+licence = "CC0-1.0"
+author = "Quaternius"
+source = "https://quaternius.itch.io/universal-base-characters"
+used_by = "osage-humans: people of the kart circuit"
+
+[[asset]]
+path = "assets/quaternius/humans/T_Hair_2_BaseColor.png"
+made_by = "tools/quaternius.py"
+made_from = "assets/quaternius/Universal Base Characters[Standard].zip"
+licence = "CC0-1.0"
+author = "Quaternius"
+source = "https://quaternius.itch.io/universal-base-characters"
+used_by = "osage-humans: people of the kart circuit"
+
+[[asset]]
+path = "assets/quaternius/humans/T_Hair_2_BaseColor_png.png"
+made_by = "tools/quaternius.py"
+made_from = "assets/quaternius/Universal Base Characters[Standard].zip"
+licence = "CC0-1.0"
+author = "Quaternius"
+source = "https://quaternius.itch.io/universal-base-characters"
+used_by = "osage-humans: people of the kart circuit"
+
+[[asset]]
+path = "assets/quaternius/humans/T_Hair_2_Normal.png"
+made_by = "tools/quaternius.py"
+made_from = "assets/quaternius/Universal Base Characters[Standard].zip"
+licence = "CC0-1.0"
+author = "Quaternius"
+source = "https://quaternius.itch.io/universal-base-characters"
+used_by = "osage-humans: people of the kart circuit"
+
+[[asset]]
+path = "assets/quaternius/humans/T_Superhero_Female_Dark_BaseColor.png"
+made_by = "tools/quaternius.py"
+made_from = "assets/quaternius/Universal Base Characters[Standard].zip"
+licence = "CC0-1.0"
+author = "Quaternius"
+source = "https://quaternius.itch.io/universal-base-characters"
+used_by = "osage-humans: people of the kart circuit"
+
+[[asset]]
+path = "assets/quaternius/humans/T_Superhero_Female_Light_BaseColor.png"
+made_by = "tools/quaternius.py"
+made_from = "assets/quaternius/Universal Base Characters[Standard].zip"
+licence = "CC0-1.0"
+author = "Quaternius"
+source = "https://quaternius.itch.io/universal-base-characters"
+used_by = "osage-humans: people of the kart circuit"
+
+[[asset]]
+path = "assets/quaternius/humans/T_Superhero_Female_Normal.png"
+made_by = "tools/quaternius.py"
+made_from = "assets/quaternius/Universal Base Characters[Standard].zip"
+licence = "CC0-1.0"
+author = "Quaternius"
+source = "https://quaternius.itch.io/universal-base-characters"
+used_by = "osage-humans: people of the kart circuit"
+
+[[asset]]
+path = "assets/quaternius/humans/T_Superhero_Female_Roughness.png"
+made_by = "tools/quaternius.py"
+made_from = "assets/quaternius/Universal Base Characters[Standard].zip"
+licence = "CC0-1.0"
+author = "Quaternius"
+source = "https://quaternius.itch.io/universal-base-characters"
+used_by = "osage-humans: people of the kart circuit"
+
+[[asset]]
+path = "assets/quaternius/humans/T_Superhero_Male_Dark.png"
+made_by = "tools/quaternius.py"
+made_from = "assets/quaternius/Universal Base Characters[Standard].zip"
+licence = "CC0-1.0"
+author = "Quaternius"
+source = "https://quaternius.itch.io/universal-base-characters"
+used_by = "osage-humans: people of the kart circuit"
+
+[[asset]]
+path = "assets/quaternius/humans/T_Superhero_Male_Ligh.png"
+made_by = "tools/quaternius.py"
+made_from = "assets/quaternius/Universal Base Characters[Standard].zip"
+licence = "CC0-1.0"
+author = "Quaternius"
+source = "https://quaternius.itch.io/universal-base-characters"
+used_by = "osage-humans: people of the kart circuit"
+
+[[asset]]
+path = "assets/quaternius/humans/T_Superhero_Male_Normal.png"
+made_by = "tools/quaternius.py"
+made_from = "assets/quaternius/Universal Base Characters[Standard].zip"
+licence = "CC0-1.0"
+author = "Quaternius"
+source = "https://quaternius.itch.io/universal-base-characters"
+used_by = "osage-humans: people of the kart circuit"
+
+[[asset]]
+path = "assets/quaternius/humans/T_Superhero_Male_Roughness.png"
+made_by = "tools/quaternius.py"
+made_from = "assets/quaternius/Universal Base Characters[Standard].zip"
+licence = "CC0-1.0"
+author = "Quaternius"
+source = "https://quaternius.itch.io/universal-base-characters"
+used_by = "osage-humans: people of the kart circuit"
+
+[[asset]]
+path = "assets/quaternius/hair/Eyebrows_Female.bin"
+made_by = "tools/quaternius.py"
+made_from = "assets/quaternius/Universal Base Characters[Standard].zip"
+licence = "CC0-1.0"
+author = "Quaternius"
+source = "https://quaternius.itch.io/universal-base-characters"
+used_by = "osage-humans: people of the kart circuit"
+
+[[asset]]
+path = "assets/quaternius/hair/Eyebrows_Female.gltf"
+made_by = "tools/quaternius.py"
+made_from = "assets/quaternius/Universal Base Characters[Standard].zip"
+licence = "CC0-1.0"
+author = "Quaternius"
+source = "https://quaternius.itch.io/universal-base-characters"
+used_by = "osage-humans: people of the kart circuit"
+
+[[asset]]
+path = "assets/quaternius/hair/Eyebrows_Regular.bin"
+made_by = "tools/quaternius.py"
+made_from = "assets/quaternius/Universal Base Characters[Standard].zip"
+licence = "CC0-1.0"
+author = "Quaternius"
+source = "https://quaternius.itch.io/universal-base-characters"
+used_by = "osage-humans: people of the kart circuit"
+
+[[asset]]
+path = "assets/quaternius/hair/Eyebrows_Regular.gltf"
+made_by = "tools/quaternius.py"
+made_from = "assets/quaternius/Universal Base Characters[Standard].zip"
+licence = "CC0-1.0"
+author = "Quaternius"
+source = "https://quaternius.itch.io/universal-base-characters"
+used_by = "osage-humans: people of the kart circuit"
+
+[[asset]]
+path = "assets/quaternius/hair/Hair_Beard.bin"
+made_by = "tools/quaternius.py"
+made_from = "assets/quaternius/Universal Base Characters[Standard].zip"
+licence = "CC0-1.0"
+author = "Quaternius"
+source = "https://quaternius.itch.io/universal-base-characters"
+used_by = "osage-humans: people of the kart circuit"
+
+[[asset]]
+path = "assets/quaternius/hair/Hair_Beard.gltf"
+made_by = "tools/quaternius.py"
+made_from = "assets/quaternius/Universal Base Characters[Standard].zip"
+licence = "CC0-1.0"
+author = "Quaternius"
+source = "https://quaternius.itch.io/universal-base-characters"
+used_by = "osage-humans: people of the kart circuit"
+
+[[asset]]
+path = "assets/quaternius/hair/Hair_Buns.bin"
+made_by = "tools/quaternius.py"
+made_from = "assets/quaternius/Universal Base Characters[Standard].zip"
+licence = "CC0-1.0"
+author = "Quaternius"
+source = "https://quaternius.itch.io/universal-base-characters"
+used_by = "osage-humans: people of the kart circuit"
+
+[[asset]]
+path = "assets/quaternius/hair/Hair_Buns.gltf"
+made_by = "tools/quaternius.py"
+made_from = "assets/quaternius/Universal Base Characters[Standard].zip"
+licence = "CC0-1.0"
+author = "Quaternius"
+source = "https://quaternius.itch.io/universal-base-characters"
+used_by = "osage-humans: people of the kart circuit"
+
+[[asset]]
+path = "assets/quaternius/hair/Hair_Buzzed.bin"
+made_by = "tools/quaternius.py"
+made_from = "assets/quaternius/Universal Base Characters[Standard].zip"
+licence = "CC0-1.0"
+author = "Quaternius"
+source = "https://quaternius.itch.io/universal-base-characters"
+used_by = "osage-humans: people of the kart circuit"
+
+[[asset]]
+path = "assets/quaternius/hair/Hair_Buzzed.gltf"
+made_by = "tools/quaternius.py"
+made_from = "assets/quaternius/Universal Base Characters[Standard].zip"
+licence = "CC0-1.0"
+author = "Quaternius"
+source = "https://quaternius.itch.io/universal-base-characters"
+used_by = "osage-humans: people of the kart circuit"
+
+[[asset]]
+path = "assets/quaternius/hair/Hair_BuzzedFemale.bin"
+made_by = "tools/quaternius.py"
+made_from = "assets/quaternius/Universal Base Characters[Standard].zip"
+licence = "CC0-1.0"
+author = "Quaternius"
+source = "https://quaternius.itch.io/universal-base-characters"
+used_by = "osage-humans: people of the kart circuit"
+
+[[asset]]
+path = "assets/quaternius/hair/Hair_BuzzedFemale.gltf"
+made_by = "tools/quaternius.py"
+made_from = "assets/quaternius/Universal Base Characters[Standard].zip"
+licence = "CC0-1.0"
+author = "Quaternius"
+source = "https://quaternius.itch.io/universal-base-characters"
+used_by = "osage-humans: people of the kart circuit"
+
+[[asset]]
+path = "assets/quaternius/hair/Hair_Long.bin"
+made_by = "tools/quaternius.py"
+made_from = "assets/quaternius/Universal Base Characters[Standard].zip"
+licence = "CC0-1.0"
+author = "Quaternius"
+source = "https://quaternius.itch.io/universal-base-characters"
+used_by = "osage-humans: people of the kart circuit"
+
+[[asset]]
+path = "assets/quaternius/hair/Hair_Long.gltf"
+made_by = "tools/quaternius.py"
+made_from = "assets/quaternius/Universal Base Characters[Standard].zip"
+licence = "CC0-1.0"
+author = "Quaternius"
+source = "https://quaternius.itch.io/universal-base-characters"
+used_by = "osage-humans: people of the kart circuit"
+
+[[asset]]
+path = "assets/quaternius/hair/Hair_SimpleParted.bin"
+made_by = "tools/quaternius.py"
+made_from = "assets/quaternius/Universal Base Characters[Standard].zip"
+licence = "CC0-1.0"
+author = "Quaternius"
+source = "https://quaternius.itch.io/universal-base-characters"
+used_by = "osage-humans: people of the kart circuit"
+
+[[asset]]
+path = "assets/quaternius/hair/Hair_SimpleParted.gltf"
+made_by = "tools/quaternius.py"
+made_from = "assets/quaternius/Universal Base Characters[Standard].zip"
+licence = "CC0-1.0"
+author = "Quaternius"
+source = "https://quaternius.itch.io/universal-base-characters"
+used_by = "osage-humans: people of the kart circuit"
+
+[[asset]]
+path = "assets/quaternius/hair/T_Hair_1_BaseColor.png"
+made_by = "tools/quaternius.py"
+made_from = "assets/quaternius/Universal Base Characters[Standard].zip"
+licence = "CC0-1.0"
+author = "Quaternius"
+source = "https://quaternius.itch.io/universal-base-characters"
+used_by = "osage-humans: people of the kart circuit"
+
+[[asset]]
+path = "assets/quaternius/hair/T_Hair_1_Normal.png"
+made_by = "tools/quaternius.py"
+made_from = "assets/quaternius/Universal Base Characters[Standard].zip"
+licence = "CC0-1.0"
+author = "Quaternius"
+source = "https://quaternius.itch.io/universal-base-characters"
+used_by = "osage-humans: people of the kart circuit"
+
+[[asset]]
+path = "assets/quaternius/hair/T_Hair_2_BaseColor.png"
+made_by = "tools/quaternius.py"
+made_from = "assets/quaternius/Universal Base Characters[Standard].zip"
+licence = "CC0-1.0"
+author = "Quaternius"
+source = "https://quaternius.itch.io/universal-base-characters"
+used_by = "osage-humans: people of the kart circuit"
+
+[[asset]]
+path = "assets/quaternius/hair/T_Hair_2_Normal.png"
+made_by = "tools/quaternius.py"
+made_from = "assets/quaternius/Universal Base Characters[Standard].zip"
+licence = "CC0-1.0"
+author = "Quaternius"
+source = "https://quaternius.itch.io/universal-base-characters"
+used_by = "osage-humans: people of the kart circuit"
+
+[[asset]]
+path = "assets/quaternius/moves/License.txt"
+made_by = "tools/quaternius.py"
+made_from = "assets/quaternius/Universal Animation Library[Standard].zip"
+licence = "CC0-1.0"
+author = "Quaternius"
+source = "https://quaternius.itch.io/universal-animation-library"
+used_by = "osage-humans: people of the kart circuit"
+
+[[asset]]
+path = "assets/quaternius/moves/UAL1_Standard.glb"
+made_by = "tools/quaternius.py"
+made_from = "assets/quaternius/Universal Animation Library[Standard].zip"
+licence = "CC0-1.0"
+author = "Quaternius"
+source = "https://quaternius.itch.io/universal-animation-library"
+used_by = "osage-humans: people of the kart circuit"

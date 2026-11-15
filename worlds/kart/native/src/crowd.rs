@@ -88,7 +88,8 @@ pub struct CrowdPlugin;
 
 impl Plugin for CrowdPlugin {
     fn build(&self, app: &mut App) {
-        app.init_resource::<CrowdSeed>().add_systems(Update, ((temper, react).chain(), wave).in_set(Stage::Draw));
+        app.init_resource::<CrowdSeed>()
+            .add_systems(Update, ((temper, react).chain(), wave, hold_flags).in_set(Stage::Draw));
     }
 }
 
@@ -405,6 +406,7 @@ pub fn spawn_marshal(
     marshal: Flagman,
     [cloth, flag_material]: [&Handle<StandardMaterial>; 2],
     k: usize,
+    people: bool,
 ) {
     let along = (marshal.top - marshal.foot).normalize_or(Vec3::Y);
     // Out from the staff towards the track the marshal faces (+X), square to the staff.
@@ -430,9 +432,69 @@ pub fn spawn_marshal(
         commands.spawn((Mesh3d(state.cloth.clone()), MeshMaterial3d(flag_material.clone()), Transform::IDENTITY)).id();
     let pivot = commands.spawn(Transform::from_translation(marshal.hand)).add_children(&[staff, fabric]).id();
     state.pivot = pivot;
-    commands
+    let root = commands
         .spawn((Part, Mesh3d(meshes.add(marshal.figure)), MeshMaterial3d(cloth.clone()), marshal.place, state))
-        .add_child(pivot);
+        .add_child(pivot)
+        .id();
+    // A person of the asset manifest in place of the sculpted figure, once
+    // built (D-129): in orange, holding the flag up.
+    if people {
+        let pick = |salt: u32, n: usize| ((hashed(k, salt) * n as f32) as usize).min(n - 1);
+        let body = [osage_humans::Body::Man, osage_humans::Body::Woman][pick(41, 2)];
+        let hair = match body {
+            osage_humans::Body::Man => [osage_humans::Hair::Buzzed, osage_humans::Hair::Parted][pick(42, 2)],
+            osage_humans::Body::Woman => [osage_humans::Hair::Buns, osage_humans::Hair::Long][pick(42, 2)],
+        };
+        let orange = Color::srgb(0.95, 0.42, 0.06);
+        let human = osage_humans::Human {
+            body,
+            tone: [osage_humans::Tone::Light, osage_humans::Tone::Dark][pick(43, 2)],
+            hair: Some(hair),
+            hair_colour: [Color::srgb(0.35, 0.25, 0.18), Color::srgb(0.12, 0.1, 0.09), Color::srgb(0.75, 0.62, 0.45)]
+                [pick(44, 3)],
+            outfit: osage_humans::Outfit { top: orange, bottom: orange, shoes: Color::srgb(0.08, 0.08, 0.09) },
+            act: osage_humans::Move::HOLDING_UP,
+            pace: 0.9 + 0.2 * hashed(k, 45),
+            phase: hashed(k, 46),
+        };
+        // The model faces +Z; a marshal faces +X.
+        let turned = Transform::from_rotation(Quat::from_rotation_y(std::f32::consts::FRAC_PI_2));
+        let person = commands.spawn((human, turned, Bearer { pivot, figure: root })).id();
+        commands.entity(root).add_child(person);
+    }
+}
+
+/// A person holding a marshal's flag: the flag's pivot follows their
+/// raised hand, and the sculpted figure goes once they are built.
+#[derive(Component)]
+pub struct Bearer {
+    pivot: Entity,
+    figure: Entity,
+}
+
+/// Puts each flag in the hand that holds it up, in the marshal's own
+/// space; the flag is waved about that point (`wave`).
+fn hold_flags(
+    mut commands: Commands,
+    bearers: Query<(&Bearer, &osage_humans::Skeleton), Added<osage_humans::Skeleton>>,
+    held: Query<(&Bearer, &osage_humans::Skeleton)>,
+    globals: Query<&GlobalTransform>,
+    mut pivots: Query<&mut Transform>,
+) {
+    for (bearer, _) in &bearers {
+        commands.entity(bearer.figure).remove::<Mesh3d>();
+    }
+    for (bearer, skeleton) in &held {
+        let hand = ["hand_r", "hand_l"]
+            .iter()
+            .filter_map(|bone| skeleton.bones.get(*bone).and_then(|&e| globals.get(e).ok()))
+            .max_by(|a, b| a.translation().y.total_cmp(&b.translation().y));
+        let (Some(hand), Ok(root)) = (hand, globals.get(bearer.figure)) else { continue };
+        let local = root.affine().inverse().transform_point3(hand.translation());
+        if let Ok(mut pivot) = pivots.get_mut(bearer.pivot) {
+            pivot.translation = local;
+        }
+    }
 }
 
 /// Marshals wave their flags at karts coming by: side to side, the staff

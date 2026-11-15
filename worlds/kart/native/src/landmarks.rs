@@ -654,6 +654,8 @@ impl Dress {
             Wear::Skin => Paint::plain(skin.0, skin.1, skin.2),
             Wear::Hair => Paint::plain(hair.0, hair.1, hair.2),
             Wear::Shoes => Paint::plain(shoe.0, shoe.1, shoe.2),
+            Wear::Eyes => Paint::plain(0.07, 0.05, 0.04),
+            Wear::Lips => Paint::plain(skin.0 * 0.8, skin.1 * 0.58, skin.2 * 0.56),
         }
     }
 
@@ -690,13 +692,15 @@ fn onlooker(set: &mut Set, stance: Stance, place: Transform, shirt: (f32, f32, f
 /// picked by the set's dice.
 fn person(set: &mut Set, stance: Stance, place: Transform, shirt: (f32, f32, f32), trousers: (f32, f32, f32)) {
     let (skin, hair, shoe) = (set.dice.pick(&SKINS), set.dice.pick(&HAIRS), set.dice.pick(&SHOES));
-    for (wear, shape) in osage_kart_crowd::standing(stance) {
+    for (wear, shape) in osage_kart_crowd::standing_near(stance) {
         let paint = match wear {
             Wear::Shirt => Paint::shaded(shirt.0, shirt.1, shirt.2, 0.2),
             Wear::Trousers => Paint::plain(trousers.0 * 0.8, trousers.1 * 0.8, trousers.2 * 0.8),
             Wear::Skin => Paint::plain(skin.0, skin.1, skin.2),
             Wear::Hair => Paint::plain(hair.0, hair.1, hair.2),
             Wear::Shoes => Paint::plain(shoe.0, shoe.1, shoe.2),
+            Wear::Eyes => Paint::plain(0.07, 0.05, 0.04),
+            Wear::Lips => Paint::plain(skin.0 * 0.8, skin.1 * 0.58, skin.2 * 0.56),
         };
         set.standing.add_within(place.translation, shape, place, paint);
     }
@@ -789,7 +793,7 @@ pub fn marshals(set: &mut Set, circuit: &Circuit, land: &Land, frames: &[Frame])
         // is waved when karts come by (D-109), pivoting in the hand.
         let (skin, hair, shoe) = (set.dice.pick(&SKINS), set.dice.pick(&HAIRS), set.dice.pick(&SHOES));
         let dress = Dress { shirt: orange, trousers: orange, skin, hair, shoe };
-        let figure = dress.figure(osage_kart_crowd::standing(Stance::HoldingFlag));
+        let figure = dress.figure(osage_kart_crowd::standing_near(Stance::HoldingFlag));
         // The staff in the hand's own space, through the fist; the cloth is
         // the crowd module's, hung along the staff's top and moving.
         let (foot, top) = (Vec3::new(-0.05, -0.15, 0.0), Vec3::new(0.3, 0.95, 0.0));

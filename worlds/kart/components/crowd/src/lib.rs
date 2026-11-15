@@ -87,14 +87,82 @@ pub enum Wear {
     Skin,
     Hair,
     Shoes,
+    /// The eyes: dark.
+    Eyes,
+    /// The lips: the skin's colour, deeper.
+    Lips,
 }
 
-const WEAR: [Wear; 5] = [Wear::Shirt, Wear::Trousers, Wear::Skin, Wear::Hair, Wear::Shoes];
+const WEAR: [Wear; 7] = [Wear::Shirt, Wear::Trousers, Wear::Skin, Wear::Hair, Wear::Shoes, Wear::Eyes, Wear::Lips];
 
 /// The size of the sculpting grid: a spectator is seen from the track, ten
 /// metres off at the closest, where 3.5 cm is under two pixels; a crowd of
 /// two hundred costs a few hundred thousand triangles.
 const CELL: f32 = 0.035;
+
+/// The cells of a head seen from the track, and of one seen from close:
+/// a face's features are a centimetre or two across.
+const FAR_HEAD: f32 = 0.014;
+const NEAR_HEAD: f32 = 0.006;
+
+/// A head facing +X, its centre at the origin (D-120): a skull, a face
+/// narrowing to the chin, a brow, a nose, cheekbones and ears, blended;
+/// hair as matter over the top and back of the skull, so that its line on
+/// the forehead and the nape is where the two surfaces meet; the eyes,
+/// eyebrows and lips painted on.
+fn sculpt_head() -> Sculpture {
+    let (skin, hair, eyes, lips) = (2, 3, 5, 6);
+    let still = Quat::IDENTITY;
+    let mut head = Sculpture::new(0.012);
+    head.ellipsoid(skin, Vec3::new(-0.012, 0.025, 0.0), Vec3::new(0.094, 0.094, 0.077), still)
+        .ellipsoid(skin, Vec3::new(0.02, -0.04, 0.0), Vec3::new(0.068, 0.085, 0.064), still)
+        .ellipsoid(skin, Vec3::new(0.05, -0.1, 0.0), Vec3::new(0.03, 0.026, 0.034), still)
+        .ellipsoid(skin, Vec3::new(0.076, 0.024, 0.0), Vec3::new(0.018, 0.011, 0.05), still)
+        .cone(skin, Vec3::new(0.082, 0.004, 0.0), Vec3::new(0.103, -0.03, 0.0), 0.009, 0.014)
+        .ellipsoid(hair, Vec3::new(-0.03, 0.04, 0.0), Vec3::new(0.095, 0.09, 0.083), still);
+    for side in [-1.0f32, 1.0] {
+        head.ellipsoid(skin, Vec3::new(0.058, -0.022, side * 0.04), Vec3::new(0.024, 0.02, 0.024), still)
+            .ellipsoid(
+                skin,
+                Vec3::new(-0.012, -0.008, side * 0.079),
+                Vec3::new(0.014, 0.028, 0.007),
+                Quat::from_rotation_y(side * 0.35),
+            )
+            .paint_box(hair, Vec3::new(0.085, 0.023, side * 0.032), Vec3::new(0.03, 0.0045, 0.019), still)
+            .paint_box(eyes, Vec3::new(0.085, 0.0, side * 0.031), Vec3::new(0.03, 0.006, 0.012), still);
+    }
+    head.paint_box(lips, Vec3::new(0.08, -0.068, 0.0), Vec3::new(0.03, 0.0055, 0.021), still);
+    head
+}
+
+/// The head's shapes at `cell`, sculpted once for each.
+fn head(cell: f32) -> &'static [(usize, Shape)] {
+    static HEADS: [OnceLock<Vec<(usize, Shape)>>; 2] = [OnceLock::new(), OnceLock::new()];
+    HEADS[usize::from(cell == NEAR_HEAD)].get_or_init(|| sculpt_head().shapes(cell))
+}
+
+/// A body and its head, placed on its neck, as one shape per part, in the
+/// order of the parts.
+fn assemble(body: &Sculpture, head_at: Transform, head_cell: f32) -> Vec<(Wear, Shape)> {
+    let plain = osage_procedural::Paint::plain(1.0, 1.0, 1.0);
+    let body = body.shapes(CELL);
+    WEAR.iter()
+        .enumerate()
+        .filter_map(|(group, wear)| {
+            let mut batch = osage_procedural::Batch::default();
+            let mut any = false;
+            for (_, shape) in body.iter().filter(|(g, _)| *g == group) {
+                batch.add(shape, Transform::IDENTITY, plain);
+                any = true;
+            }
+            for (_, shape) in head(head_cell).iter().filter(|(g, _)| *g == group) {
+                batch.add(shape, head_at, plain);
+                any = true;
+            }
+            any.then(|| (*wear, Shape::new(batch.merged())))
+        })
+        .collect()
+}
 
 /// The figure of a seated spectator in `pose`, as one shape per part.
 pub fn seated(pose: Pose) -> &'static [(Wear, Shape)] {
@@ -102,7 +170,8 @@ pub fn seated(pose: Pose) -> &'static [(Wear, Shape)] {
         [OnceLock::new(), OnceLock::new(), OnceLock::new(), OnceLock::new(), OnceLock::new()];
     let slot = Pose::ALL.iter().position(|p| *p == pose).unwrap_or(0);
     FIGURES[slot].get_or_init(|| {
-        sculpt(pose).shapes(CELL).into_iter().map(|(group, shape)| (WEAR[group.min(WEAR.len() - 1)], shape)).collect()
+        let (body, head_at) = sculpt(pose);
+        assemble(&body, head_at, FAR_HEAD)
     })
 }
 
@@ -110,28 +179,28 @@ pub fn seated(pose: Pose) -> &'static [(Wear, Shape)] {
 pub fn standing(stance: Stance) -> &'static [(Wear, Shape)] {
     static FIGURES: [OnceLock<Vec<(Wear, Shape)>>; 8] = [const { OnceLock::new() }; 8];
     let slot = Stance::ALL.iter().position(|s| *s == stance).unwrap_or(0);
-    FIGURES[slot].get_or_init(|| {
-        sculpt_standing(stance)
-            .shapes(CELL)
-            .into_iter()
-            .map(|(group, shape)| (WEAR[group.min(WEAR.len() - 1)], shape))
-            .collect()
-    })
+    FIGURES[slot].get_or_init(|| assemble(&sculpt_standing(stance), STANDING_HEAD, FAR_HEAD))
 }
 
+/// The same figure for someone seen from close — a marshal at a post, a
+/// mechanic in the pits: the head's features made finer.
+pub fn standing_near(stance: Stance) -> &'static [(Wear, Shape)] {
+    static FIGURES: [OnceLock<Vec<(Wear, Shape)>>; 8] = [const { OnceLock::new() }; 8];
+    let slot = Stance::ALL.iter().position(|s| *s == stance).unwrap_or(0);
+    FIGURES[slot].get_or_init(|| assemble(&sculpt_standing(stance), STANDING_HEAD, NEAR_HEAD))
+}
+
+/// Where a standing figure's head is.
+const STANDING_HEAD: Transform = Transform::from_xyz(0.02, 1.67, 0.0);
+
 fn sculpt_standing(stance: Stance) -> Sculpture {
-    let (shirt, trousers, skin, hair, shoes) = (0, 1, 2, 3, 4);
+    let (shirt, trousers, skin, shoes) = (0, 1, 2, 4);
     let mut body = Sculpture::new(0.04);
+    // Up to the neck: the head is its own, finer sculpture ([`sculpt_head`]).
     body.ellipsoid(trousers, Vec3::new(0.0, 0.95, 0.0), Vec3::new(0.12, 0.11, 0.17), Quat::IDENTITY)
         .ellipsoid(shirt, Vec3::new(0.0, 1.15, 0.0), Vec3::new(0.11, 0.14, 0.16), Quat::IDENTITY)
         .ellipsoid(shirt, Vec3::new(-0.01, 1.34, 0.0), Vec3::new(0.12, 0.15, 0.19), Quat::IDENTITY)
-        .cone(skin, Vec3::new(-0.01, 1.45, 0.0), Vec3::new(0.0, 1.57, 0.0), 0.052, 0.048)
-        .ellipsoid(skin, Vec3::new(0.02, 1.67, 0.0), Vec3::new(0.1, 0.118, 0.084), Quat::IDENTITY)
-        // Short hair painted on the skull — its top, and its back down to
-        // the nape — the face bare: a cap of matter blended on read as a
-        // woollen hat.
-        .paint_box(hair, Vec3::new(0.0, 1.81, 0.0), Vec3::new(0.16, 0.085, 0.16), Quat::IDENTITY)
-        .paint_box(hair, Vec3::new(-0.12, 1.7, 0.0), Vec3::new(0.1, 0.1, 0.16), Quat::IDENTITY);
+        .cone(skin, Vec3::new(-0.01, 1.45, 0.0), Vec3::new(0.0, 1.57, 0.0), 0.052, 0.048);
     for side in [-1.0f32, 1.0] {
         let shoulder = Vec3::new(-0.01, 1.43, side * 0.19);
         let down =
@@ -187,8 +256,8 @@ fn sculpt_standing(stance: Stance) -> Sculpture {
     body
 }
 
-fn sculpt(pose: Pose) -> Sculpture {
-    let (shirt, trousers, skin, hair, shoes) = (0, 1, 2, 3, 4);
+fn sculpt(pose: Pose) -> (Sculpture, Transform) {
+    let (shirt, trousers, skin, shoes) = (0, 1, 2, 4);
     // Leaning back turns the trunk about Z: its top goes towards -X.
     let lean = Quat::from_rotation_z(if pose == Pose::ArmsFolded { 0.2 } else { 0.04 });
     let trunk = |p: Vec3| lean * p;
@@ -196,10 +265,8 @@ fn sculpt(pose: Pose) -> Sculpture {
     body.ellipsoid(trousers, Vec3::new(0.0, 0.08, 0.0), Vec3::new(0.13, 0.1, 0.17), Quat::IDENTITY)
         .ellipsoid(shirt, trunk(Vec3::new(0.0, 0.28, 0.0)), Vec3::new(0.11, 0.14, 0.16), lean)
         .ellipsoid(shirt, trunk(Vec3::new(-0.01, 0.47, 0.0)), Vec3::new(0.12, 0.15, 0.19), lean)
-        .cone(skin, trunk(Vec3::new(-0.01, 0.58, 0.0)), trunk(Vec3::new(0.0, 0.7, 0.0)), 0.052, 0.048)
-        .ellipsoid(skin, trunk(Vec3::new(0.02, 0.8, 0.0)), Vec3::new(0.1, 0.118, 0.084), lean)
-        .paint_box(hair, trunk(Vec3::new(0.0, 0.94, 0.0)), Vec3::new(0.16, 0.085, 0.16), lean)
-        .paint_box(hair, trunk(Vec3::new(-0.12, 0.83, 0.0)), Vec3::new(0.1, 0.1, 0.16), lean);
+        .cone(skin, trunk(Vec3::new(-0.01, 0.58, 0.0)), trunk(Vec3::new(0.0, 0.7, 0.0)), 0.052, 0.048);
+    let head_at = Transform::from_translation(trunk(Vec3::new(0.02, 0.8, 0.0))).with_rotation(lean);
     for side in [-1.0f32, 1.0] {
         let shoulder = trunk(Vec3::new(-0.01, 0.56, side * 0.19));
         let (elbow, wrist, hand) = match (pose, side > 0.0) {
@@ -249,7 +316,7 @@ fn sculpt(pose: Pose) -> Sculpture {
             .cone(trousers, knee, ankle, 0.056, 0.042)
             .cone(shoes, ankle + Vec3::new(-0.01, -0.02, 0.0), Vec3::new(0.6, -0.42, side * 0.12), 0.045, 0.04);
     }
-    body
+    (body, head_at)
 }
 
 #[cfg(test)]

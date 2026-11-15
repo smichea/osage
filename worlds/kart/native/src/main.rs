@@ -258,6 +258,10 @@ fn main() -> Result<()> {
     app.add_plugins(OsageRenderPlugin { tier, without: without.clone() })
         .add_plugins(osage_props::PropsPlugin)
         .add_plugins(scene::ScenePlugin);
+    // The people of the asset manifest, if installed; else sculpted ones.
+    if osage_content::root().is_some_and(|root| osage_humans::installed(&root)) {
+        app.add_plugins(osage_humans::HumansPlugin);
+    }
     if let Some(viewpoint) = viewpoint {
         app.insert_resource(viewpoint);
     }

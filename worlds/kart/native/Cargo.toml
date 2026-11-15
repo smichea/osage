@@ -29,6 +29,7 @@ osage-render.workspace = true
 osage-procedural.workspace = true
 osage-content.workspace = true
 osage-props.workspace = true
+osage-humans.workspace = true
 osage-sdk.workspace = true
 osage-kart-profile.workspace = true
 osage-report.workspace = true
