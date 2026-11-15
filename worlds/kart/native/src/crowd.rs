@@ -464,6 +464,36 @@ pub fn spawn_marshal(
     }
 }
 
+/// A mechanic in the pits, a person of the asset manifest (D-129): in the
+/// team's colour, dark trousers; kneeling at the kart, or standing talking.
+pub fn spawn_mechanic(commands: &mut Commands, place: Transform, (r, g, b): (f32, f32, f32), kneeling: bool, k: usize) {
+    let pick = |salt: u32, n: usize| ((hashed(k + 17, salt) * n as f32) as usize).min(n - 1);
+    let body = [osage_humans::Body::Man, osage_humans::Body::Woman][pick(51, 2)];
+    let hair = match body {
+        osage_humans::Body::Man => [osage_humans::Hair::Buzzed, osage_humans::Hair::Parted][pick(52, 2)],
+        osage_humans::Body::Woman => [osage_humans::Hair::Buns, osage_humans::Hair::BuzzedShort][pick(52, 2)],
+    };
+    let human = osage_humans::Human {
+        body,
+        tone: [osage_humans::Tone::Light, osage_humans::Tone::Dark][pick(53, 2)],
+        hair: Some(hair),
+        hair_colour: [Color::srgb(0.3, 0.22, 0.15), Color::srgb(0.1, 0.09, 0.08), Color::srgb(0.6, 0.45, 0.3)]
+            [pick(54, 3)],
+        outfit: osage_humans::Outfit {
+            top: Color::srgb(r, g, b),
+            bottom: Color::srgb(0.12, 0.12, 0.14),
+            shoes: Color::srgb(0.06, 0.06, 0.07),
+        },
+        act: if kneeling { osage_humans::Move::FIXING } else { osage_humans::Move::TALKING },
+        pace: 0.9 + 0.2 * hashed(k, 55),
+        phase: hashed(k, 56),
+    };
+    // The sculpted figures face +X; the model faces +Z.
+    let turned = place * Transform::from_rotation(Quat::from_rotation_y(std::f32::consts::FRAC_PI_2));
+    debug!(at = ?place.translation, kneeling, "a mechanic");
+    commands.spawn((Part, human, turned));
+}
+
 /// A person holding a marshal's flag: the flag's pivot follows their
 /// raised hand, and the sculpted figure goes once they are built.
 #[derive(Component)]

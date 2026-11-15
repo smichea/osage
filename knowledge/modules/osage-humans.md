@@ -42,7 +42,7 @@ A Bevy plugin. At start it loads both bodies, the light skins' textures, the hai
 
 # Knowledge
 
-- Used by [kart-native](/modules/kart-native.md): the marshals at the bends.
+- Used by [kart-native](/modules/kart-native.md): the marshals at the bends, the mechanics in the pits.
 - Content: `tools/quaternius.py` takes the files out of the publisher's two zips, downloaded by a person (assets/manifest.toml).
 
 # Reuse

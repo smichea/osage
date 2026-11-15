@@ -72,7 +72,7 @@ impl Plugin for GaragePlugin {
             .init_resource::<Pick>()
             .init_resource::<Screen>()
             .init_resource::<Shown>()
-            .add_systems(Startup, (setup, studio))
+            .add_systems(Startup, setup)
             .add_systems(Update, (toggle, build_cards, into_studio, portraits, highlight, spin).chain());
     }
 }
@@ -214,13 +214,18 @@ const MAP: (u32, u32) = (150, 96);
 const PORTRAIT: (u32, u32) = (120, 90);
 /// Where portraits are filmed: far from any circuit, each kart 30 m apart.
 const STUDIO: Vec3 = Vec3::new(20_000.0, 0.0, 20_000.0);
-/// The studio's own layer: lit by its own lights only, whatever the
-/// circuit's sky — a portrait looks the same by day and by night.
+/// The studio's own layer: only its cameras see its karts.
 const STUDIO_LAYER: usize = 7;
-/// The studio's exposure, EV100, and its lights' illuminance, lux.
+/// The studio's exposure, EV100, and its lamps, lumens: a key lamp high in
+/// front, a fill from the other side, each reaching only its own kart.
+/// (Render layers do not keep a light off other meshes, only out of their
+/// shadows: lamps of the whole sky, as these first were, lit the circuit
+/// with a flat grey light.)
 const STUDIO_EV100: f32 = 9.0;
-const KEY_LUX: f32 = 1900.0;
-const FILL_LUX: f32 = 650.0;
+const KEY: (f32, Vec3) = (2.0e5, Vec3::new(1.6, 2.6, 2.4));
+const FILL: (f32, Vec3) = (7.0e4, Vec3::new(-2.4, 1.0, 0.8));
+/// How far a studio lamp reaches, m: well short of the next kart's.
+const LAMP_RANGE: f32 = 9.0;
 /// Frames a portrait's camera films before it stops: long enough for its
 /// pipelines to be made, its kart built and the exposure to settle.
 const FILMED: u32 = 240;
@@ -563,19 +568,6 @@ fn card(picked: Picked, width: f32) -> impl Bundle {
     )
 }
 
-/// The studio's lights: a key light high in front, a fill from the other
-/// side, on the studio's layer only.
-fn studio(mut commands: Commands) {
-    let layer = bevy::camera::visibility::RenderLayers::layer(STUDIO_LAYER);
-    for (lux, from) in [(KEY_LUX, Vec3::new(1.0, 1.6, 1.2)), (FILL_LUX, Vec3::new(-1.4, 0.6, 0.4))] {
-        commands.spawn((
-            DirectionalLight { illuminance: lux, shadow_maps_enabled: false, ..default() },
-            Transform::from_translation(from).looking_at(Vec3::ZERO, Vec3::Y),
-            layer.clone(),
-        ));
-    }
-}
-
 /// Every part of a portrait's kart on the studio's layer, once built.
 fn into_studio(
     mut commands: Commands,
@@ -618,6 +610,12 @@ fn portrait(
     let image = images.add(target);
     let at = STUDIO + Vec3::X * 30.0 * slot as f32;
     commands.spawn((Portrait, crate::karts::Parked { colour: colour as usize }, Transform::from_translation(at)));
+    for (lumens, from) in [KEY, FILL] {
+        commands.spawn((
+            PointLight { intensity: lumens, range: LAMP_RANGE, shadow_maps_enabled: false, ..default() },
+            Transform::from_translation(at + from),
+        ));
+    }
     let camera = commands
         .spawn((
             PortraitCamera,

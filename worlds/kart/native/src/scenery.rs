@@ -106,6 +106,12 @@ pub struct Set {
     pub spectators: Vec<crate::crowd::Spectator>,
     /// Marshals with their flags, waved when karts come by (D-109).
     pub marshals: Vec<crate::crowd::Flagman>,
+    /// Whether the people of the asset manifest are installed (D-129): then
+    /// the mechanics are people, else sculpted figures.
+    pub people: bool,
+    /// The mechanics in the pits, as people: where, their team's colour,
+    /// and whether they kneel at the kart.
+    pub mechanics: Vec<(Transform, (f32, f32, f32), bool)>,
 }
 
 impl Set {
@@ -202,6 +208,8 @@ pub fn build(
         clearings: Vec::new(),
         spectators: Vec::new(),
         marshals: Vec::new(),
+        people: osage_content::root().is_some_and(|root| osage_humans::installed(&root)),
+        mechanics: Vec::new(),
     };
     let mut props = Props {
         commands: &mut commands,
@@ -332,9 +340,12 @@ fn spawn(
     for (k, spectator) in set.spectators.into_iter().enumerate() {
         crate::crowd::spawn(commands, meshes, spectator, &cloth, k);
     }
-    let people = osage_content::root().is_some_and(|root| osage_humans::installed(&root));
+    let people = set.people;
     for (k, marshal) in set.marshals.into_iter().enumerate() {
         crate::crowd::spawn_marshal(commands, meshes, marshal, [&cloth, &flag], k, people);
+    }
+    for (k, (place, colour, kneeling)) in set.mechanics.into_iter().enumerate() {
+        crate::crowd::spawn_mechanic(commands, place, colour, kneeling, k);
     }
     for mesh in set.bright.meshes() {
         commands.spawn((Part, Mesh3d(meshes.add(mesh)), MeshMaterial3d(matte.clone()), NotShadowCaster));

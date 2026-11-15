@@ -445,15 +445,20 @@ fn pits(set: &mut Set, props: &mut Props, circuit: &Circuit) {
         z += (length - 1.5) / 6.0;
     }
     // Before each open garage, a kart parked along the building, its driver
-    // waiting in it, and a mechanic in the team's colour beside it.
-    for (k, colour) in open.iter().zip([3usize, 6]) {
+    // waiting in it, and a mechanic in the team's colour beside it — with
+    // people installed, one kneeling at the kart, the other talking.
+    for (n, (k, colour)) in open.iter().zip([3usize, 6]).enumerate() {
         let z = -length / 2.0 + gap + *k as f32 * (door + gap) + door / 2.0;
         let along = frame * Transform::from_xyz(front - 1.25, 0.0, z).with_rotation(Quat::from_rotation_y(PI));
         props.commands.spawn((crate::scene::Part, crate::karts::Parked { colour }, along));
         let (r, g, b) = PALETTE[colour];
         let mechanic =
             frame * Transform::from_xyz(front - 0.6, 0.0, z + 1.4).with_rotation(Quat::from_rotation_y(PI * 0.85));
-        person(set, Stance::ArmsFolded, mechanic, (r, g, b), (0.12, 0.12, 0.14));
+        if set.people {
+            set.mechanics.push((mechanic, (r, g, b), n == 0));
+        } else {
+            person(set, Stance::ArmsFolded, mechanic, (r, g, b), (0.12, 0.12, 0.14));
+        }
     }
     // Windows at both ends of the ground floor.
     for end in [-1.0f32, 1.0] {

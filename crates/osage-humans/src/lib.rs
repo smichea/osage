@@ -803,6 +803,7 @@ fn build(
                 }
             }
         }
+        debug!(?entity, body = ?human.body, act = human.act.0, "osage-humans: built");
         commands.entity(entity).insert(Skeleton { armature, bones, playing: None });
     }
 }

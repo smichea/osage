@@ -17,10 +17,14 @@ use bevy::{
 
 use crate::theme;
 
-/// How long osage's own screen shows before the game's, s.
-const ENGINE: f32 = 1.6;
-/// The least time the splash shows, s, and how long it takes to fade.
-const LEAST: f32 = 3.0;
+/// How long osage's own screen shows before the game's, s from the first
+/// frame: the interface is drawn only once its shaders are made, two or
+/// three seconds in on an integrated GPU, so osage's screen is seen for
+/// about a second.
+const ENGINE: f32 = 4.5;
+/// The least time the splash shows, s from the first frame, and how long it
+/// takes to fade.
+const LEAST: f32 = 7.0;
 const FADE: f32 = 0.6;
 /// The mark's side, px, drawn at twice that.
 const MARK: f32 = 112.0;
@@ -52,6 +56,10 @@ enum Line {
 #[derive(Component)]
 struct Turning;
 
+/// The splash's own pictures: the only ones it fades.
+#[derive(Component)]
+struct Picture;
+
 fn setup(mut commands: Commands, mut images: ResMut<Assets<Image>>) {
     let mark = images.add(mark_image((MARK * 2.0) as u32));
     commands
@@ -71,11 +79,12 @@ fn setup(mut commands: Commands, mut images: ResMut<Assets<Image>>) {
             GlobalZIndex(100),
         ))
         .with_children(|splash| {
-            splash.spawn((ImageNode::new(mark), Node { width: px(MARK), height: px(MARK), ..default() }));
+            splash.spawn((Picture, ImageNode::new(mark), Node { width: px(MARK), height: px(MARK), ..default() }));
             splash.spawn((Line::Name, theme::heavy("osage", 72.0, theme::TEXT)));
             splash.spawn((Line::Under, theme::heavy("an open-source engine for open worlds", 16.0, theme::MUTED)));
             splash.spawn((
                 Turning,
+                Picture,
                 ImageNode::new(images.add(arc_image(64))),
                 Node { width: px(32), height: px(32), margin: UiRect::top(px(18)), ..default() },
                 Visibility::Hidden,
@@ -92,7 +101,7 @@ fn show(
     waiting: Option<Res<osage_props::Waiting>>,
     mut splash: Query<(Entity, &mut Splash, &mut BackgroundColor)>,
     mut lines: Query<(&Line, &mut Text, &mut TextColor)>,
-    mut images: Query<&mut ImageNode>,
+    mut images: Query<&mut ImageNode, With<Picture>>,
     mut turning: Query<(&mut Visibility, &mut UiTransform), With<Turning>>,
 ) {
     let Ok((entity, mut state, mut background)) = splash.single_mut() else { return };
