@@ -49,10 +49,3 @@ path = ["tools/crash-relay/Procfile"]
 precedence = "aggregate"
 SPDX-FileCopyrightText = "The osage contributors"
 SPDX-License-Identifier = "MIT OR Apache-2.0"
-
-# Bevy crates carried with an osage patch until it is upstream (third_party/README.md)
-[[annotations]]
-path = ["third_party/bevy_*/**"]
-precedence = "aggregate"
-SPDX-FileCopyrightText = "Bevy Contributors"
-SPDX-License-Identifier = "MIT OR Apache-2.0"
