@@ -4875,6 +4875,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "osage-hologram"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "bevy",
+ "osage-content",
+ "osage-props",
+]
+
+[[package]]
 name = "osage-humans"
 version = "0.1.0"
 dependencies = [

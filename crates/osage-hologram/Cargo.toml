@@ -1,0 +1,18 @@
+# SPDX-FileCopyrightText: The osage contributors
+# SPDX-License-Identifier: MIT OR Apache-2.0
+
+[package]
+name = "osage-hologram"
+description = "Holographic textures (issue #7): an object's appearance from every viewing angle, baked, compressed along the view direction, drawn from the views nearest the camera's"
+license = "MIT OR Apache-2.0"
+publish = false
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+
+[dependencies]
+bevy = { workspace = true, features = ["3d", "jpeg", "png"] }
+osage-content.workspace = true
+osage-props.workspace = true
+anyhow.workspace = true

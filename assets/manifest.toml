@@ -1747,3 +1747,130 @@ licence = "CC0-1.0"
 author = "Quaternius"
 source = "https://quaternius.itch.io/universal-animation-library"
 used_by = "osage-humans: people of the kart circuit"
+
+# A building facade for the holographic textures experiment (issue #7).
+[[asset]]
+path = "assets/polyhaven/modular_urban_apartments_facade/modular_urban_apartments_facade_1k.gltf"
+url = "https://dl.polyhaven.org/file/ph-assets/Models/gltf/1k/modular_urban_apartments_facade/modular_urban_apartments_facade_1k.gltf"
+sha256 = "1a5a17dffd27fb9e1236dea7e51c4e0393a9d88ed0885a0621e67a37f80b27eb"
+licence = "CC0-1.0"
+author = "Poly Haven"
+source = "https://polyhaven.com/a/modular_urban_apartments_facade"
+used_by = "osage-hologram: the first experiment's object (issue #7)"
+
+[[asset]]
+path = "assets/polyhaven/modular_urban_apartments_facade/textures/modular_urban_apartments_facade_plaster_arm_1k.jpg"
+url = "https://dl.polyhaven.org/file/ph-assets/Models/jpg/1k/modular_urban_apartments_facade/modular_urban_apartments_facade_plaster_arm_1k.jpg"
+sha256 = "71c2ab6cfe97411f0111e99658b88cd22946abc96a3ed67051e06dab8dde5cb8"
+licence = "CC0-1.0"
+author = "Poly Haven"
+source = "https://polyhaven.com/a/modular_urban_apartments_facade"
+used_by = "osage-hologram: the first experiment's object (issue #7)"
+
+[[asset]]
+path = "assets/polyhaven/modular_urban_apartments_facade/textures/modular_urban_apartments_facade_plaster_nor_gl_1k.jpg"
+url = "https://dl.polyhaven.org/file/ph-assets/Models/jpg/1k/modular_urban_apartments_facade/modular_urban_apartments_facade_plaster_nor_gl_1k.jpg"
+sha256 = "79cebca9b98dcb62efc5474a2d236c98a34b7260b58a65db24e501acf60de66c"
+licence = "CC0-1.0"
+author = "Poly Haven"
+source = "https://polyhaven.com/a/modular_urban_apartments_facade"
+used_by = "osage-hologram: the first experiment's object (issue #7)"
+
+[[asset]]
+path = "assets/polyhaven/modular_urban_apartments_facade/textures/modular_urban_apartments_facade_objects_nor_gl_1k.jpg"
+url = "https://dl.polyhaven.org/file/ph-assets/Models/jpg/1k/modular_urban_apartments_facade/modular_urban_apartments_facade_objects_nor_gl_1k.jpg"
+sha256 = "e5bac0355cbacb09d4400398f7e5f159624fb0519d5c007b639da75e59137030"
+licence = "CC0-1.0"
+author = "Poly Haven"
+source = "https://polyhaven.com/a/modular_urban_apartments_facade"
+used_by = "osage-hologram: the first experiment's object (issue #7)"
+
+[[asset]]
+path = "assets/polyhaven/modular_urban_apartments_facade/textures/modular_urban_apartments_facade_objects_diff_1k.jpg"
+url = "https://dl.polyhaven.org/file/ph-assets/Models/jpg/1k/modular_urban_apartments_facade/modular_urban_apartments_facade_objects_diff_1k.jpg"
+sha256 = "038083f96e63d92e6a30685f1a7f5b5b01a6448118dfecd6ed364d31088db7df"
+licence = "CC0-1.0"
+author = "Poly Haven"
+source = "https://polyhaven.com/a/modular_urban_apartments_facade"
+used_by = "osage-hologram: the first experiment's object (issue #7)"
+
+[[asset]]
+path = "assets/polyhaven/modular_urban_apartments_facade/textures/modular_urban_apartments_facade_trim_01_diff_1k.jpg"
+url = "https://dl.polyhaven.org/file/ph-assets/Models/jpg/1k/modular_urban_apartments_facade/modular_urban_apartments_facade_trim_01_diff_1k.jpg"
+sha256 = "62510c9e167363da1ff101b03d0c7705c74cb0e20bb02fc7bc0596f9da26ac8c"
+licence = "CC0-1.0"
+author = "Poly Haven"
+source = "https://polyhaven.com/a/modular_urban_apartments_facade"
+used_by = "osage-hologram: the first experiment's object (issue #7)"
+
+[[asset]]
+path = "assets/polyhaven/modular_urban_apartments_facade/textures/modular_urban_apartments_facade_trim_01_arm_1k.jpg"
+url = "https://dl.polyhaven.org/file/ph-assets/Models/jpg/1k/modular_urban_apartments_facade/modular_urban_apartments_facade_trim_01_arm_1k.jpg"
+sha256 = "b3fe0aa9389d827afa4a29e15842209a6d8dadb86eca9a0b462c2c9fe4f58987"
+licence = "CC0-1.0"
+author = "Poly Haven"
+source = "https://polyhaven.com/a/modular_urban_apartments_facade"
+used_by = "osage-hologram: the first experiment's object (issue #7)"
+
+[[asset]]
+path = "assets/polyhaven/modular_urban_apartments_facade/textures/modular_urban_apartments_facade_trim_02_nor_gl_1k.jpg"
+url = "https://dl.polyhaven.org/file/ph-assets/Models/jpg/1k/modular_urban_apartments_facade/modular_urban_apartments_facade_trim_02_nor_gl_1k.jpg"
+sha256 = "8a87d143725ec32951061b55935ffcef426755b0d11236d93e8b18cf94612498"
+licence = "CC0-1.0"
+author = "Poly Haven"
+source = "https://polyhaven.com/a/modular_urban_apartments_facade"
+used_by = "osage-hologram: the first experiment's object (issue #7)"
+
+[[asset]]
+path = "assets/polyhaven/modular_urban_apartments_facade/textures/modular_urban_apartments_facade_trim_01_nor_gl_1k.jpg"
+url = "https://dl.polyhaven.org/file/ph-assets/Models/jpg/1k/modular_urban_apartments_facade/modular_urban_apartments_facade_trim_01_nor_gl_1k.jpg"
+sha256 = "65cf274a67914590329b67eb6d926377d5aa45fa326afb91caa8781a30c99160"
+licence = "CC0-1.0"
+author = "Poly Haven"
+source = "https://polyhaven.com/a/modular_urban_apartments_facade"
+used_by = "osage-hologram: the first experiment's object (issue #7)"
+
+[[asset]]
+path = "assets/polyhaven/modular_urban_apartments_facade/textures/modular_urban_apartments_facade_objects_arm_1k.jpg"
+url = "https://dl.polyhaven.org/file/ph-assets/Models/jpg/1k/modular_urban_apartments_facade/modular_urban_apartments_facade_objects_arm_1k.jpg"
+sha256 = "16c23388d22461b5fc8f2a879e5549bc1591d99e0da4f0c057fe2a49c458da38"
+licence = "CC0-1.0"
+author = "Poly Haven"
+source = "https://polyhaven.com/a/modular_urban_apartments_facade"
+used_by = "osage-hologram: the first experiment's object (issue #7)"
+
+[[asset]]
+path = "assets/polyhaven/modular_urban_apartments_facade/textures/modular_urban_apartments_facade_trim_02_diff_1k.jpg"
+url = "https://dl.polyhaven.org/file/ph-assets/Models/jpg/1k/modular_urban_apartments_facade/modular_urban_apartments_facade_trim_02_diff_1k.jpg"
+sha256 = "10097392fa107eb3723fff229f1f9522dedd2f91e4bdc3eaac884325d42ddf8e"
+licence = "CC0-1.0"
+author = "Poly Haven"
+source = "https://polyhaven.com/a/modular_urban_apartments_facade"
+used_by = "osage-hologram: the first experiment's object (issue #7)"
+
+[[asset]]
+path = "assets/polyhaven/modular_urban_apartments_facade/modular_urban_apartments_facade.bin"
+url = "https://dl.polyhaven.org/file/ph-assets/Models/gltf/8k/modular_urban_apartments_facade/modular_urban_apartments_facade.bin"
+sha256 = "f041e71b6bd31864f20dd64d3a82519454a603c300686161e0349ff44f838bf2"
+licence = "CC0-1.0"
+author = "Poly Haven"
+source = "https://polyhaven.com/a/modular_urban_apartments_facade"
+used_by = "osage-hologram: the first experiment's object (issue #7)"
+
+[[asset]]
+path = "assets/polyhaven/modular_urban_apartments_facade/textures/modular_urban_apartments_facade_trim_02_arm_1k.jpg"
+url = "https://dl.polyhaven.org/file/ph-assets/Models/jpg/1k/modular_urban_apartments_facade/modular_urban_apartments_facade_trim_02_arm_1k.jpg"
+sha256 = "45a49a17b19b7d579237ec343b56ebee79ce1b06cb9d1179af8609d64ee1c27f"
+licence = "CC0-1.0"
+author = "Poly Haven"
+source = "https://polyhaven.com/a/modular_urban_apartments_facade"
+used_by = "osage-hologram: the first experiment's object (issue #7)"
+
+[[asset]]
+path = "assets/polyhaven/modular_urban_apartments_facade/textures/modular_urban_apartments_facade_plaster_diff_1k.jpg"
+url = "https://dl.polyhaven.org/file/ph-assets/Models/jpg/1k/modular_urban_apartments_facade/modular_urban_apartments_facade_plaster_diff_1k.jpg"
+sha256 = "aac6cb79d9a3f73ad360077a439e1b81b1e919d6ace658a27225b20858bcad3c"
+licence = "CC0-1.0"
+author = "Poly Haven"
+source = "https://polyhaven.com/a/modular_urban_apartments_facade"
+used_by = "osage-hologram: the first experiment's object (issue #7)"
