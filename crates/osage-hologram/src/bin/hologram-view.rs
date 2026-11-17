@@ -97,6 +97,7 @@ fn setup(
             centre: CENTRE,
             radius: RADIUS,
             stand: (Vec3::new(CENTRE.x, CENTRE.y, 0.0), Vec2::new(13.25, 8.75)),
+            flat: std::env::var_os("HOLOGRAM_FLAT").is_some(),
         },
         Transform::from_xyz(APART, 0.0, 0.0),
     ));
@@ -135,8 +136,19 @@ fn film(
     let middle = Vec3::new((APART + 27.0) / 2.0, 6.0, 0.0);
     let t = film.at as f32 / (film.frames.max(2) - 1) as f32;
     let angle = (-60.0 + 120.0 * t).to_radians();
-    let place = Transform::from_translation(middle + Vec3::new(angle.sin() * 70.0, 9.0, angle.cos() * 70.0))
-        .looking_at(middle, Vec3::Y);
+    let place = match std::env::var("HOLOGRAM_CLOSE") {
+        // Close, on the hologram, from between the grid's views:
+        // HOLOGRAM_CLOSE=1 the hologram, 2 the model, from the same place.
+        Ok(which) => {
+            let x = if which == "2" { 0.0 } else { APART };
+            let target = Vec3::new(x + 20.0, 8.0, 0.0);
+            let (a, e) = (35f32.to_radians(), 22f32.to_radians());
+            Transform::from_translation(target + Vec3::new(a.sin() * e.cos(), e.sin(), a.cos() * e.cos()) * 14.0)
+                .looking_at(target, Vec3::Y)
+        }
+        Err(_) => Transform::from_translation(middle + Vec3::new(angle.sin() * 70.0, 9.0, angle.cos() * 70.0))
+            .looking_at(middle, Vec3::Y),
+    };
     match film.camera {
         None => {
             let camera = commands
@@ -161,6 +173,11 @@ fn film(
         return;
     }
     if film.at >= film.frames {
+        // Frames for the last pictures to be written.
+        film.settle += 1;
+        if film.settle < 40 {
+            return;
+        }
         if let Some(started) = film.started {
             info!(frames = film.frames, seconds = started.elapsed().as_secs_f32(), "hologram-view: done");
         }

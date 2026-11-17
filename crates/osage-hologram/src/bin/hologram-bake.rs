@@ -31,7 +31,12 @@ use bevy::{
     window::ExitCondition,
     winit::WinitPlugin,
 };
-use osage_hologram::Grid;
+use bevy::{
+    camera::visibility::RenderLayers,
+    core_pipeline::tonemapping::{DebandDither, Tonemapping},
+    render::view::Msaa,
+};
+use osage_hologram::{DepthMaterial, DepthPlugin, Grid};
 
 const FACADE: &str = "polyhaven/modular_urban_apartments_facade/modular_urban_apartments_facade_1k.gltf";
 /// Frames drawn at a view before it is photographed, and after the last
@@ -55,6 +60,11 @@ struct Bake {
     loaded: bool,
     target: Handle<Image>,
     camera: Option<Entity>,
+    /// The depth pictures: their target, camera and material (a twin of
+    /// the model on its own layer, drawn by depth).
+    depth_target: Handle<Image>,
+    depth_camera: Option<Entity>,
+    depth_material: Handle<DepthMaterial>,
 }
 
 fn main() -> anyhow::Result<()> {
@@ -96,7 +106,7 @@ fn main() -> anyhow::Result<()> {
     App::new()
         .add_plugins(plugins)
         .add_plugins(ScheduleRunnerPlugin::run_loop(Duration::ZERO))
-        .add_plugins(osage_props::PropsPlugin)
+        .add_plugins((osage_props::PropsPlugin, DepthPlugin))
         .insert_resource(Bake {
             out,
             size,
@@ -108,6 +118,9 @@ fn main() -> anyhow::Result<()> {
             loaded: false,
             target: Handle::default(),
             camera: None,
+            depth_target: Handle::default(),
+            depth_camera: None,
+            depth_material: Handle::default(),
         })
         .insert_resource(ModelPath(model))
         .add_systems(Startup, setup)
@@ -118,6 +131,24 @@ fn main() -> anyhow::Result<()> {
 
 #[derive(Resource)]
 struct ModelPath(String);
+
+/// Saves a captured picture of numbers (a linear format Bevy's own saving
+/// refuses) byte for byte: labelled sRGB only to be written, its bytes
+/// unchanged.
+fn save_numbers(path: PathBuf) -> impl FnMut(On<bevy::render::view::screenshot::ScreenshotCaptured>) {
+    move |captured| {
+        let mut image = captured.image.clone();
+        image.texture_descriptor.format = TextureFormat::Rgba8UnormSrgb;
+        match image.try_into_dynamic() {
+            Ok(picture) => {
+                if let Err(error) = picture.to_rgba8().save(&path) {
+                    error!(?path, %error, "hologram-bake: cannot save a depth picture");
+                }
+            }
+            Err(error) => error!(?path, %error, "hologram-bake: cannot read a depth picture"),
+        }
+    }
+}
 
 /// The pictures' ground: grey to measure compression, magenta to be keyed
 /// out when the views are drawn.
@@ -159,15 +190,43 @@ fn setup(
     );
     target.texture_descriptor.usage |= TextureUsages::RENDER_ATTACHMENT | TextureUsages::COPY_SRC;
     bake.target = images.add(target);
+    // Depth is a number, not a colour: no sRGB.
+    let mut depth = Image::new_fill(
+        size,
+        TextureDimension::D2,
+        &[0, 0, 0, 255],
+        TextureFormat::Rgba8Unorm,
+        RenderAssetUsages::default(),
+    );
+    depth.texture_descriptor.usage |= TextureUsages::RENDER_ATTACHMENT | TextureUsages::COPY_SRC;
+    bake.depth_target = images.add(depth);
 }
 
 /// Once the model is in place: its centre and the radius of the sphere
 /// round it, from its meshes' boxes.
-fn measure(mut bake: ResMut<Bake>, waiting: Res<osage_props::Waiting>, meshes: Query<(&Aabb, &GlobalTransform)>) {
+#[allow(clippy::type_complexity)]
+fn measure(
+    mut commands: Commands,
+    mut bake: ResMut<Bake>,
+    waiting: Res<osage_props::Waiting>,
+    meshes: Query<(&Aabb, &GlobalTransform)>,
+    drawn: Query<(&Mesh3d, &GlobalTransform), With<MeshMaterial3d<StandardMaterial>>>,
+    mut depth_materials: ResMut<Assets<DepthMaterial>>,
+) {
     if bake.loaded || waiting.0 > 0 || meshes.is_empty() {
         return;
     }
     bake.loaded = true;
+    // The model's twin, drawn by depth, on its own layer.
+    bake.depth_material = depth_materials.add(DepthMaterial::default());
+    for (mesh, at) in &drawn {
+        commands.spawn((
+            mesh.clone(),
+            MeshMaterial3d(bake.depth_material.clone()),
+            at.compute_transform(),
+            RenderLayers::layer(1),
+        ));
+    }
     if bake.bounds.is_some() {
         return;
     }
@@ -192,7 +251,12 @@ fn measure(mut bake: ResMut<Bake>, waiting: Res<osage_props::Waiting>, meshes: Q
 }
 
 /// Each view in turn: the camera put there, a few frames drawn, a picture.
-fn photograph(mut commands: Commands, mut bake: ResMut<Bake>, mut exit: MessageWriter<AppExit>) {
+fn photograph(
+    mut commands: Commands,
+    mut bake: ResMut<Bake>,
+    mut exit: MessageWriter<AppExit>,
+    mut depth_materials: ResMut<Assets<DepthMaterial>>,
+) {
     let Some((centre, radius)) = bake.bounds.filter(|_| bake.loaded) else { return };
     if bake.at >= bake.path.len() {
         bake.frames += 1;
@@ -205,12 +269,38 @@ fn photograph(mut commands: Commands, mut bake: ResMut<Bake>, mut exit: MessageW
     let (row, column) = bake.path[bake.at];
     let [x, y, z] = Grid::direction(bake.grid.azimuths[column], bake.grid.elevations[row]);
     let place = Transform::from_translation(centre + Vec3::new(x, y, z) * radius * 3.0).looking_at(centre, Vec3::Y);
+    if let Some(mut material) = depth_materials.get_mut(&bake.depth_material) {
+        material.frame = centre.extend(radius);
+        material.back = Vec4::new(x, y, z, 0.0);
+    }
+    let projection = OrthographicProjection {
+        scaling_mode: ScalingMode::Fixed { width: radius * 2.0, height: radius * 2.0 },
+        ..OrthographicProjection::default_3d()
+    };
+    match bake.depth_camera {
+        None => {
+            let camera = commands
+                .spawn((
+                    Camera3d::default(),
+                    Camera { order: 1, clear_color: ClearColorConfig::Custom(Color::BLACK), ..default() },
+                    RenderTarget::Image(bake.depth_target.clone().into()),
+                    Projection::Orthographic(projection.clone()),
+                    Tonemapping::None,
+                    DebandDither::Disabled,
+                    Msaa::Off,
+                    RenderLayers::layer(1),
+                    place,
+                ))
+                .id();
+            bake.depth_camera = Some(camera);
+        }
+        Some(camera) if bake.frames == 0 => {
+            commands.entity(camera).insert(place);
+        }
+        Some(_) => {}
+    }
     match bake.camera {
         None => {
-            let projection = OrthographicProjection {
-                scaling_mode: ScalingMode::Fixed { width: radius * 2.0, height: radius * 2.0 },
-                ..OrthographicProjection::default_3d()
-            };
             let camera = commands
                 .spawn((
                     Camera3d::default(),
@@ -231,6 +321,8 @@ fn photograph(mut commands: Commands, mut bake: ResMut<Bake>, mut exit: MessageW
     if bake.frames == SETTLE {
         let file = bake.out.join(Grid::name(row, column));
         commands.spawn(Screenshot::image(bake.target.clone())).observe(save_to_disk(file));
+        let depth = bake.out.join(Grid::depth_name(row, column));
+        commands.spawn(Screenshot::image(bake.depth_target.clone())).observe(save_numbers(depth));
         bake.at += 1;
         bake.frames = 0;
     }

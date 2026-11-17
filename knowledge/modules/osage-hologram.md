@@ -42,4 +42,4 @@ Any Bevy app or tool that needs an object photographed from a grid of directions
 
 # Limits
 
-The parallax between the rectangle and the real surface is not corrected (relief blurs between views); no shadow; the light is baked; drawn blended (no depth prepass).
+Each view's depth corrects the parallax (`HOLOGRAM_FLAT` not to); close up it is blurred at 256 px; no shadow; the light is baked; drawn blended (no depth prepass).

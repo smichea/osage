@@ -47,8 +47,14 @@ Full tables: `results.tsv` written by the tool beside the views.
 - **What it shows:** from every angle of the turn the hologram reads as the facade — its windows, frames and cornices in relief from the side — on a single rectangle instead of 118 000 triangles. GPU memory: 135 × 256² × 4 B = 35 MB uncompressed, against the model's mesh and 1k textures.
 - **Its faults:** between views 10° apart, parts in relief (cornices, frames) blur or double, the parallax of the rectangle and the real surface not corrected; it casts no shadow on the ground; faint magenta at some edges; the light is the one it was baked under.
 
+## Third experiment: the parallax corrected with depth (2026-11-17)
+
+- **How:** `hologram-bake` also writes each view's depth — a twin of the model on its own layer, drawn by a material that writes how far each point stands towards the camera, in 16 bits over red and green (`depth.wesl`), saved byte for byte. The shader then finds, in each of the four views, the point where the eye's ray meets the object: its depth there read, the point on the ray at that depth taken, four times over, before the colour is sampled. `HOLOGRAM_FLAT=1` draws without it, for comparison.
+- **What it shows:** close up (14 m, from between views: 35° to the side, 22° up), the corrected hologram keeps its panels' edges where they are and loses most of the magenta fringe; the flat one smears edges across the gaps. But close up both are blurred: 256 px over a 32 m sphere is 12 cm a pixel, the model's 1k textures far finer. Its cost: a second texture array as large as the first (35 MB at 256 px).
+- **So:** the hologram is a far object. Near, it needs views of 1024 px or more (16× the memory, which the video compression of the first experiment would have to bring back down, decoded near the camera only), or to give way to the model.
+
 ## Next
 
-1. **Correct the parallax:** bake each view's depth, and find the point in each view along the eye's ray rather than on the rectangle — the doubling between views goes; then measure frame time and memory against the model, in the kart world.
+1. **Where it pays:** measure frame time and memory of the hologram against the model at the distances a race sees buildings (50–500 m), in the kart world — a street of facades, holograms beyond a distance, models near.
 2. **GPU form:** compare decoding into a texture array, a cache of nearby views decoded as the camera moves, and a factorised form (a few basis images per texel and weights per direction).
 3. **Light:** bake albedo and normals per view as well, and light the hologram at run time.

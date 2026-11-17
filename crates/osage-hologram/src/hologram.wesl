@@ -19,7 +19,8 @@ import bevy_pbr::render::{
 // x: first azimuth, y: azimuth step, z: first elevation, w: elevation step
 // (degrees).
 @group(constants::MATERIAL_BIND_GROUP) @binding(100) var<uniform> grid: vec4<f32>;
-// x: columns (azimuths), y: rows (elevations).
+// x: columns (azimuths), y: rows (elevations), z: 1 to find each point
+// along the eye's ray with the views' depth (0: on the stand-in).
 @group(constants::MATERIAL_BIND_GROUP) @binding(101) var<uniform> shape: vec4<f32>;
 // xyz: the photographed sphere's centre, in the world; w: its radius.
 @group(constants::MATERIAL_BIND_GROUP) @binding(102) var<uniform> frame: vec4<f32>;
@@ -27,6 +28,9 @@ import bevy_pbr::render::{
 @group(constants::MATERIAL_BIND_GROUP) @binding(103) var<uniform> turn: vec4<f32>;
 @group(constants::MATERIAL_BIND_GROUP) @binding(104) var views: texture_2d_array<f32>;
 @group(constants::MATERIAL_BIND_GROUP) @binding(105) var views_sampler: sampler;
+// Each view's depth (16 bits over red and green, blue where the object is),
+// read texel by texel: filtering would mix the two bytes.
+@group(constants::MATERIAL_BIND_GROUP) @binding(106) var depths: texture_2d_array<f32>;
 
 const DEGREES: f32 = 0.017453292;
 
@@ -44,15 +48,46 @@ fn view_direction(column: f32, row: f32) -> vec3<f32> {
     return vec3<f32>(sin(a) * cos(e), sin(e), cos(a) * cos(e));
 }
 
-// What view (column, row) saw at `q` (the point, from the sphere's centre,
-// in the object's frame): its colour, and 1 if it saw the object, else 0.
-fn seen(column: f32, row: f32, q: vec3<f32>) -> vec4<f32> {
+// A view's depth at `uv`: how far the surface stands towards the view's
+// camera from the sphere's centre; -1e9 where the view saw nothing.
+fn depth_at(layer: i32, uv: vec2<f32>) -> f32 {
+    let size = vec2<f32>(textureDimensions(depths));
+    let texel = vec2<i32>(clamp(uv * size, vec2<f32>(0.0), size - 1.0));
+    let d = textureLoad(depths, texel, layer, 0);
+    if (d.b < 0.5) {
+        return -1e9;
+    }
+    let t = (round(d.r * 255.0) * 256.0 + round(d.g * 255.0)) / 65535.0;
+    return (t * 2.0 - 1.0) * frame.w;
+}
+
+// What view (column, row) saw where the eye's ray meets the object: `q` is
+// where the ray crosses the stand-in (from the sphere's centre), `ray` its
+// direction, both in the object's frame. The point is found in the view
+// along the ray: its depth there read, the point on the ray at that depth
+// taken, a few times over. Its colour, and how much of the pixel is the
+// object.
+fn seen(column: f32, row: f32, q: vec3<f32>, ray: vec3<f32>) -> vec4<f32> {
     let back = view_direction(column, row);
     let right = normalize(cross(vec3<f32>(0.0, 1.0, 0.0), back));
     let up = cross(back, right);
     let size = 2.0 * frame.w;
-    let uv = vec2<f32>(dot(q, right) / size + 0.5, 0.5 - dot(q, up) / size);
     let layer = i32(row * shape.x + column);
+    let along = dot(ray, back);
+    var p = q;
+    var uv = vec2<f32>(dot(p, right) / size + 0.5, 0.5 - dot(p, up) / size);
+    // shape.z: 1 to correct the parallax with the views' depth, 0 not to.
+    if (shape.z > 0.5 && abs(along) > 0.05) {
+        for (var i = 0; i < 4; i++) {
+            let depth = depth_at(layer, uv);
+            if (depth < -1e8) {
+                break;
+            }
+            let t = (depth - dot(q, back)) / along;
+            p = q + ray * t;
+            uv = vec2<f32>(dot(p, right) / size + 0.5, 0.5 - dot(p, up) / size);
+        }
+    }
     let c = textureSampleLevel(views, views_sampler, uv, layer, 0.0);
     // How much of the pixel is the magenta ground (at the object's edges,
     // part of it): its coverage, and its colour with the ground taken out.
@@ -71,6 +106,7 @@ fn fragment(in: VertexOutput, @builtin(front_facing) is_front: bool) -> Fragment
     let p = in.world_position.xyz;
     let eye = into_object(normalize(view.world_position.xyz - p));
     let q = into_object(p - frame.xyz);
+    let ray = -eye;
 
     // Where the eye's direction falls in the grid.
     let azimuth = atan2(eye.x, eye.z) / DEGREES;
@@ -84,10 +120,10 @@ fn fragment(in: VertexOutput, @builtin(front_facing) is_front: bool) -> Fragment
     let wa = fa - c0;
     let we = fe - r0;
 
-    let s00 = seen(c0, r0, q);
-    let s10 = seen(c1, r0, q);
-    let s01 = seen(c0, r1, q);
-    let s11 = seen(c1, r1, q);
+    let s00 = seen(c0, r0, q, ray);
+    let s10 = seen(c1, r0, q, ray);
+    let s01 = seen(c0, r1, q, ray);
+    let s11 = seen(c1, r1, q, ray);
     let w00 = (1.0 - wa) * (1.0 - we) * s00.a;
     let w10 = wa * (1.0 - we) * s10.a;
     let w01 = (1.0 - wa) * we * s01.a;

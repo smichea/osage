@@ -82,6 +82,47 @@ impl Grid {
     pub fn name(row: usize, column: usize) -> String {
         format!("view-r{row:02}-c{column:02}.png")
     }
+
+    /// The file of a view's depth (see [`DepthMaterial`]).
+    pub fn depth_name(row: usize, column: usize) -> String {
+        format!("depth-r{row:02}-c{column:02}.png")
+    }
+}
+
+/// What a view's depth picture holds, drawn by `depth.wesl`: for each
+/// point of the object, how far it stands towards the camera from the
+/// photographed sphere's centre, from -radius to +radius, in 16 bits over
+/// red and green; blue where the object is.
+#[derive(Asset, AsBindGroup, Reflect, Debug, Clone, Default)]
+pub struct DepthMaterial {
+    /// The sphere's centre and radius.
+    #[uniform(0)]
+    pub frame: Vec4,
+    /// The direction towards the camera.
+    #[uniform(1)]
+    pub back: Vec4,
+}
+
+impl Material for DepthMaterial {
+    fn fragment_shader() -> ShaderRef {
+        "embedded://osage_hologram/depth.wesl".into()
+    }
+}
+
+/// Registers [`DepthMaterial`], for baking.
+pub struct DepthPlugin;
+
+impl Plugin for DepthPlugin {
+    fn build(&self, app: &mut App) {
+        embedded_asset!(app, "depth.wesl");
+        app.add_plugins(MaterialPlugin::<DepthMaterial>::default());
+    }
+}
+
+/// A point's depth from its depth picture's texel (red, green: 16 bits),
+/// from -radius to +radius; none where the ground is (blue 0).
+pub fn decode_depth(texel: [u8; 4], radius: f32) -> Option<f32> {
+    (texel[2] > 127).then(|| ((texel[0] as f32 * 256.0 + texel[1] as f32) / 65535.0) * 2.0 * radius - radius)
 }
 
 /// Draws [`Hologram`]s.
@@ -115,6 +156,9 @@ pub struct Views {
     #[texture(104, dimension = "2d_array")]
     #[sampler(105)]
     pub views: Option<Handle<Image>>,
+    /// Each view's depth (see [`DepthMaterial`]), read without filtering.
+    #[texture(106, dimension = "2d_array", sample_type = "float", filterable = false)]
+    pub depths: Option<Handle<Image>>,
 }
 
 impl MaterialExtension for Views {
@@ -137,11 +181,13 @@ pub struct Hologram {
     pub centre: Vec3,
     pub radius: f32,
     pub stand: (Vec3, Vec2),
+    /// Drawn on the stand-in, without the views' depth (for comparison).
+    pub flat: bool,
 }
 
-/// A hologram whose views are loading.
+/// A hologram whose views and depths are loading.
 #[derive(Component)]
-struct Loading(Vec<Handle<Image>>);
+struct Loading(Vec<Handle<Image>>, Vec<Handle<Image>>);
 
 /// A hologram's material, once made.
 #[derive(Component)]
@@ -163,14 +209,26 @@ fn assemble(
     for (entity, hologram) in &new {
         let order = (0..hologram.grid.elevations.len())
             .flat_map(|row| (0..hologram.grid.azimuths.len()).map(move |column| (row, column)));
-        let views = order.map(|(row, column)| server.load(format!("{}/{}", hologram.folder, Grid::name(row, column))));
-        commands.entity(entity).insert(Loading(views.collect()));
+        let order: Vec<_> = order.collect();
+        let views =
+            order.iter().map(|&(row, column)| server.load(format!("{}/{}", hologram.folder, Grid::name(row, column))));
+        // Depth is a number, not a colour: read as it is.
+        let depths = order.iter().map(|&(row, column)| {
+            server
+                .load_builder()
+                .with_settings(|settings: &mut bevy::image::ImageLoaderSettings| settings.is_srgb = false)
+                .load(format!("{}/{}", hologram.folder, Grid::depth_name(row, column)))
+        });
+        commands.entity(entity).insert(Loading(views.collect(), depths.collect()));
     }
-    for (entity, hologram, Loading(views)) in &loading {
-        if !views.iter().all(|view| server.is_loaded_with_dependencies(view)) {
+    for (entity, hologram, Loading(views, depths)) in &loading {
+        if !views.iter().chain(depths).all(|view| server.is_loaded_with_dependencies(view)) {
             continue;
         }
-        let Some(stack) = stack(views.iter().filter_map(|view| images.get(view))) else {
+        let (Some(stack), Some(depth_stack)) = (
+            stack(views.iter().filter_map(|view| images.get(view))),
+            stack(depths.iter().filter_map(|depth| images.get(depth))),
+        ) else {
             warn!(folder = hologram.folder, "osage-hologram: the views are not all of one size and kind");
             commands.entity(entity).remove::<Loading>().insert(Drawn(Handle::default()));
             continue;
@@ -181,10 +239,16 @@ fn assemble(
             base: StandardMaterial { unlit: true, alpha_mode: AlphaMode::Blend, ..default() },
             extension: Views {
                 grid: Vec4::new(grid.azimuths[0], step(&grid.azimuths), grid.elevations[0], step(&grid.elevations)),
-                shape: Vec4::new(grid.azimuths.len() as f32, grid.elevations.len() as f32, 0.0, 0.0),
+                shape: Vec4::new(
+                    grid.azimuths.len() as f32,
+                    grid.elevations.len() as f32,
+                    if hologram.flat { 0.0 } else { 1.0 },
+                    0.0,
+                ),
                 frame: Vec4::ZERO,
                 turn: Vec4::new(1.0, 0.0, 0.0, 0.0),
                 views: Some(images.add(stack)),
+                depths: Some(images.add(depth_stack)),
             },
         });
         let (centre, half) = hologram.stand;
@@ -268,6 +332,14 @@ mod tests {
         for view in path {
             assert!(seen.insert(view));
         }
+    }
+
+    #[test]
+    fn depth_decodes_across_the_sphere() {
+        assert_eq!(decode_depth([0, 0, 255, 255], 10.0), Some(-10.0));
+        assert_eq!(decode_depth([255, 255, 255, 255], 10.0), Some(10.0));
+        assert!((decode_depth([128, 0, 255, 255], 10.0).unwrap()).abs() < 0.01);
+        assert_eq!(decode_depth([128, 0, 0, 255], 10.0), None);
     }
 
     #[test]
