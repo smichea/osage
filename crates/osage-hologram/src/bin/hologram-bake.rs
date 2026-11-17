@@ -36,7 +36,7 @@ use bevy::{
     core_pipeline::tonemapping::{DebandDither, Tonemapping},
     render::view::Msaa,
 };
-use osage_hologram::{DepthMaterial, DepthPlugin, Grid};
+use osage_hologram::{DepthMaterial, DepthPlugin, Grid, NormalMaterial};
 
 const FACADE: &str = "polyhaven/modular_urban_apartments_facade/modular_urban_apartments_facade_1k.gltf";
 /// Frames drawn at a view before it is photographed, and after the last
@@ -65,6 +65,13 @@ struct Bake {
     depth_target: Handle<Image>,
     depth_camera: Option<Entity>,
     depth_material: Handle<DepthMaterial>,
+    /// The pictures of the colour without light and of the normals, for a
+    /// hologram lit where it is drawn: their targets and cameras (each a
+    /// twin of the model on a layer of its own: 2 unlit, 3 by normals).
+    albedo_target: Handle<Image>,
+    albedo_camera: Option<Entity>,
+    normal_target: Handle<Image>,
+    normal_camera: Option<Entity>,
 }
 
 fn main() -> anyhow::Result<()> {
@@ -121,6 +128,10 @@ fn main() -> anyhow::Result<()> {
             depth_target: Handle::default(),
             depth_camera: None,
             depth_material: Handle::default(),
+            albedo_target: Handle::default(),
+            albedo_camera: None,
+            normal_target: Handle::default(),
+            normal_camera: None,
         })
         .insert_resource(ModelPath(model))
         .add_systems(Startup, setup)
@@ -199,19 +210,30 @@ fn setup(
         RenderAssetUsages::default(),
     );
     depth.texture_descriptor.usage |= TextureUsages::RENDER_ATTACHMENT | TextureUsages::COPY_SRC;
-    bake.depth_target = images.add(depth);
+    bake.depth_target = images.add(depth.clone());
+    // The albedo is a colour (sRGB), the normals numbers.
+    bake.albedo_target = images.add(target_like(size, TextureFormat::Rgba8UnormSrgb));
+    bake.normal_target = images.add(depth);
+}
+
+fn target_like(size: Extent3d, format: TextureFormat) -> Image {
+    let mut image = Image::new_fill(size, TextureDimension::D2, &[0, 0, 0, 255], format, RenderAssetUsages::default());
+    image.texture_descriptor.usage |= TextureUsages::RENDER_ATTACHMENT | TextureUsages::COPY_SRC;
+    image
 }
 
 /// Once the model is in place: its centre and the radius of the sphere
 /// round it, from its meshes' boxes.
-#[allow(clippy::type_complexity)]
+#[allow(clippy::type_complexity, clippy::too_many_arguments)]
 fn measure(
     mut commands: Commands,
     mut bake: ResMut<Bake>,
     waiting: Res<osage_props::Waiting>,
     meshes: Query<(&Aabb, &GlobalTransform)>,
-    drawn: Query<(&Mesh3d, &GlobalTransform), With<MeshMaterial3d<StandardMaterial>>>,
+    drawn: Query<(&Mesh3d, &GlobalTransform, &MeshMaterial3d<StandardMaterial>)>,
     mut depth_materials: ResMut<Assets<DepthMaterial>>,
+    mut standard: ResMut<Assets<StandardMaterial>>,
+    mut normal_materials: ResMut<Assets<NormalMaterial>>,
 ) {
     if bake.loaded || waiting.0 > 0 || meshes.is_empty() {
         return;
@@ -219,13 +241,22 @@ fn measure(
     bake.loaded = true;
     // The model's twin, drawn by depth, on its own layer.
     bake.depth_material = depth_materials.add(DepthMaterial::default());
-    for (mesh, at) in &drawn {
-        commands.spawn((
-            mesh.clone(),
-            MeshMaterial3d(bake.depth_material.clone()),
-            at.compute_transform(),
-            RenderLayers::layer(1),
-        ));
+    let normals = normal_materials.add(NormalMaterial {});
+    let mut unlit = std::collections::HashMap::new();
+    for (mesh, at, material) in &drawn {
+        let place = at.compute_transform();
+        commands.spawn((mesh.clone(), MeshMaterial3d(bake.depth_material.clone()), place, RenderLayers::layer(1)));
+        // Its own colour, without light: the material made unlit.
+        let flat = unlit
+            .entry(material.0.id())
+            .or_insert_with(|| {
+                let mut copy = standard.get(&material.0).cloned().unwrap_or_default();
+                copy.unlit = true;
+                standard.add(copy)
+            })
+            .clone();
+        commands.spawn((mesh.clone(), MeshMaterial3d(flat), place, RenderLayers::layer(2)));
+        commands.spawn((mesh.clone(), MeshMaterial3d(normals.clone()), place, RenderLayers::layer(3)));
     }
     if bake.bounds.is_some() {
         return;
@@ -299,6 +330,41 @@ fn photograph(
         }
         Some(_) => {}
     }
+    // The albedo's camera: no tone mapping (the colour as it is), the
+    // background magenta; the normals': numbers, black ground.
+    for (layer, which) in [(2usize, 0usize), (3, 1)] {
+        let existing = if which == 0 { bake.albedo_camera } else { bake.normal_camera };
+        match existing {
+            None => {
+                let (target, clear) = if which == 0 {
+                    (bake.albedo_target.clone(), background())
+                } else {
+                    (bake.normal_target.clone(), Color::BLACK)
+                };
+                let camera = commands
+                    .spawn((
+                        Camera3d::default(),
+                        Camera { order: 1 + layer as isize, clear_color: ClearColorConfig::Custom(clear), ..default() },
+                        RenderTarget::Image(target.into()),
+                        Projection::Orthographic(projection.clone()),
+                        Tonemapping::None,
+                        DebandDither::Disabled,
+                        RenderLayers::layer(layer),
+                        place,
+                    ))
+                    .id();
+                if which == 0 {
+                    bake.albedo_camera = Some(camera);
+                } else {
+                    bake.normal_camera = Some(camera);
+                }
+            }
+            Some(camera) if bake.frames == 0 => {
+                commands.entity(camera).insert(place);
+            }
+            Some(_) => {}
+        }
+    }
     match bake.camera {
         None => {
             let camera = commands
@@ -323,6 +389,10 @@ fn photograph(
         commands.spawn(Screenshot::image(bake.target.clone())).observe(save_to_disk(file));
         let depth = bake.out.join(Grid::depth_name(row, column));
         commands.spawn(Screenshot::image(bake.depth_target.clone())).observe(save_numbers(depth));
+        let albedo = bake.out.join(Grid::albedo_name(row, column));
+        commands.spawn(Screenshot::image(bake.albedo_target.clone())).observe(save_to_disk(albedo));
+        let normal = bake.out.join(Grid::normal_name(row, column));
+        commands.spawn(Screenshot::image(bake.normal_target.clone())).observe(save_numbers(normal));
         bake.at += 1;
         bake.frames = 0;
     }

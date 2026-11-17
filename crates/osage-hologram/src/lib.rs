@@ -87,6 +87,16 @@ impl Grid {
     pub fn depth_name(row: usize, column: usize) -> String {
         format!("depth-r{row:02}-c{column:02}.png")
     }
+
+    /// The file of a view's colour without light (its albedo).
+    pub fn albedo_name(row: usize, column: usize) -> String {
+        format!("albedo-r{row:02}-c{column:02}.png")
+    }
+
+    /// The file of a view's normals (see [`NormalMaterial`]).
+    pub fn normal_name(row: usize, column: usize) -> String {
+        format!("normal-r{row:02}-c{column:02}.png")
+    }
 }
 
 /// What a view's depth picture holds, drawn by `depth.wesl`: for each
@@ -109,13 +119,25 @@ impl Material for DepthMaterial {
     }
 }
 
-/// Registers [`DepthMaterial`], for baking.
+/// What a view's normal picture holds, drawn by `normal.wesl`: the
+/// surface's direction at each point, as colour (n × 0.5 + 0.5).
+#[derive(Asset, AsBindGroup, Reflect, Debug, Clone, Default)]
+pub struct NormalMaterial {}
+
+impl Material for NormalMaterial {
+    fn fragment_shader() -> ShaderRef {
+        "embedded://osage_hologram/normal.wesl".into()
+    }
+}
+
+/// Registers [`DepthMaterial`] and [`NormalMaterial`], for baking.
 pub struct DepthPlugin;
 
 impl Plugin for DepthPlugin {
     fn build(&self, app: &mut App) {
         embedded_asset!(app, "depth.wesl");
-        app.add_plugins(MaterialPlugin::<DepthMaterial>::default());
+        embedded_asset!(app, "normal.wesl");
+        app.add_plugins((MaterialPlugin::<DepthMaterial>::default(), MaterialPlugin::<NormalMaterial>::default()));
     }
 }
 
@@ -161,6 +183,9 @@ pub struct Views {
     /// Each view's depth (see [`DepthMaterial`]), read without filtering.
     #[texture(106, dimension = "2d_array", sample_type = "float", filterable = false)]
     pub depths: Option<Handle<Image>>,
+    /// Each view's normals (see [`NormalMaterial`]), for a lit hologram.
+    #[texture(107, dimension = "2d_array")]
+    pub normals: Option<Handle<Image>>,
 }
 
 impl MaterialExtension for Views {
@@ -185,16 +210,23 @@ pub struct Hologram {
     pub stand: (Vec3, Vec2),
     /// Drawn on the stand-in, without the views' depth (for comparison).
     pub flat: bool,
+    /// Lit where it is drawn, by the world's lights, from the views of its
+    /// colour without light and of its normals; else drawn with the light
+    /// it was photographed in.
+    pub lit: bool,
 }
 
-/// Each folder's views and depths, stacked once and shared by every
-/// hologram drawn from it.
+/// Each folder's views, depths and normals (lit or not), stacked once and
+/// shared by every hologram drawn from it.
 #[derive(Resource, Default)]
-struct Stacks(std::collections::HashMap<String, (Handle<Image>, Handle<Image>)>);
+struct Stacks(std::collections::HashMap<(String, bool), Stack>);
 
-/// A hologram whose views and depths are loading.
+/// A folder's stacked views, depths and normals.
+type Stack = (Handle<Image>, Handle<Image>, Handle<Image>);
+
+/// A hologram whose views, depths and normals are loading.
 #[derive(Component)]
-struct Loading(Vec<Handle<Image>>, Vec<Handle<Image>>);
+struct Loading(Vec<Handle<Image>>, Vec<Handle<Image>>, Vec<Handle<Image>>);
 
 /// A hologram's material, once made.
 #[derive(Component)]
@@ -218,8 +250,10 @@ fn assemble(
         let order = (0..hologram.grid.elevations.len())
             .flat_map(|row| (0..hologram.grid.azimuths.len()).map(move |column| (row, column)));
         let order: Vec<_> = order.collect();
-        let views =
-            order.iter().map(|&(row, column)| server.load(format!("{}/{}", hologram.folder, Grid::name(row, column))));
+        let views = order.iter().map(|&(row, column)| {
+            let name = if hologram.lit { Grid::albedo_name(row, column) } else { Grid::name(row, column) };
+            server.load(format!("{}/{name}", hologram.folder))
+        });
         // Depth is a number, not a colour: read as it is.
         let depths = order.iter().map(|&(row, column)| {
             server
@@ -227,23 +261,36 @@ fn assemble(
                 .with_settings(|settings: &mut bevy::image::ImageLoaderSettings| settings.is_srgb = false)
                 .load(format!("{}/{}", hologram.folder, Grid::depth_name(row, column)))
         });
-        commands.entity(entity).insert(Loading(views.collect(), depths.collect()));
+        let normals = order.iter().map(|&(row, column)| {
+            server
+                .load_builder()
+                .with_settings(|settings: &mut bevy::image::ImageLoaderSettings| settings.is_srgb = false)
+                .load(format!("{}/{}", hologram.folder, Grid::normal_name(row, column)))
+        });
+        commands.entity(entity).insert(Loading(views.collect(), depths.collect(), normals.collect()));
     }
-    for (entity, hologram, Loading(views, depths)) in &loading {
-        if !views.iter().chain(depths).all(|view| server.is_loaded_with_dependencies(view)) {
+    for (entity, hologram, Loading(views, depths, normals)) in &loading {
+        if !views.iter().chain(depths).chain(normals).all(|view| server.is_loaded_with_dependencies(view)) {
             continue;
         }
-        let stacked = match stacks.0.get(&hologram.folder) {
-            Some(pair) => Some(pair.clone()),
-            None => stack(views.iter().filter_map(|view| images.get(view)))
-                .zip(stack(depths.iter().filter_map(|depth| images.get(depth))))
-                .map(|(colour, depth)| {
-                    let pair = (images.add(colour), images.add(depth));
-                    stacks.0.insert(hologram.folder.clone(), pair.clone());
-                    pair
-                }),
+        let key = (hologram.folder.clone(), hologram.lit);
+        let stacked = match stacks.0.get(&key) {
+            Some(three) => Some(three.clone()),
+            None => {
+                let colour = stack(views.iter().filter_map(|view| images.get(view)));
+                let depth = stack(depths.iter().filter_map(|depth| images.get(depth)));
+                let normal = stack(normals.iter().filter_map(|normal| images.get(normal)));
+                match (colour, depth, normal) {
+                    (Some(colour), Some(depth), Some(normal)) => {
+                        let three = (images.add(colour), images.add(depth), images.add(normal));
+                        stacks.0.insert(key, three.clone());
+                        Some(three)
+                    }
+                    _ => None,
+                }
+            }
         };
-        let Some((stack, depth_stack)) = stacked else {
+        let Some((stack, depth_stack, normal_stack)) = stacked else {
             warn!(folder = hologram.folder, "osage-hologram: the views are not all of one size and kind");
             commands.entity(entity).remove::<Loading>().insert(Drawn(Handle::default()));
             continue;
@@ -251,19 +298,25 @@ fn assemble(
         let grid = &hologram.grid;
         let step = |v: &[f32]| if v.len() > 1 { v[1] - v[0] } else { 1.0 };
         let material = materials.add(ExtendedMaterial {
-            base: StandardMaterial { unlit: true, alpha_mode: AlphaMode::Blend, ..default() },
+            base: StandardMaterial {
+                unlit: !hologram.lit,
+                alpha_mode: AlphaMode::Blend,
+                perceptual_roughness: 0.85,
+                ..default()
+            },
             extension: Views {
                 grid: Vec4::new(grid.azimuths[0], step(&grid.azimuths), grid.elevations[0], step(&grid.elevations)),
                 shape: Vec4::new(
                     grid.azimuths.len() as f32,
                     grid.elevations.len() as f32,
                     if hologram.flat { 0.0 } else { 1.0 },
-                    0.0,
+                    if hologram.lit { 1.0 } else { 0.0 },
                 ),
                 frame: Vec4::ZERO,
                 turn: Vec4::new(1.0, 0.0, 0.0, 0.0),
                 views: Some(stack),
                 depths: Some(depth_stack),
+                normals: Some(normal_stack),
             },
         });
         let (centre, half) = hologram.stand;

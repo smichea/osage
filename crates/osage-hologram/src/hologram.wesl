@@ -31,6 +31,10 @@ import bevy_pbr::render::{
 // Each view's depth (16 bits over red and green, blue where the object is),
 // read texel by texel: filtering would mix the two bytes.
 @group(constants::MATERIAL_BIND_GROUP) @binding(106) var depths: texture_2d_array<f32>;
+// Each view's normals, in the object's frame (n * 0.5 + 0.5): with them and
+// views of the colour without light (shape.w 1), the hologram is lit where
+// it is drawn, by the world's lights.
+@group(constants::MATERIAL_BIND_GROUP) @binding(107) var normals: texture_2d_array<f32>;
 
 const DEGREES: f32 = 0.017453292;
 
@@ -61,13 +65,20 @@ fn depth_at(layer: i32, uv: vec2<f32>) -> f32 {
     return (t * 2.0 - 1.0) * frame.w;
 }
 
+// What a view saw: its colour (alpha: how much of the pixel is the object)
+// and the surface's direction there, in the object's frame.
+struct Seen {
+    colour: vec4<f32>,
+    normal: vec3<f32>,
+}
+
 // What view (column, row) saw where the eye's ray meets the object: `q` is
 // where the ray crosses the stand-in (from the sphere's centre), `ray` its
 // direction, both in the object's frame. The point is found in the view
 // along the ray: its depth there read, the point on the ray at that depth
 // taken, a few times over. Its colour, and how much of the pixel is the
 // object.
-fn seen(column: f32, row: f32, q: vec3<f32>, ray: vec3<f32>) -> vec4<f32> {
+fn seen(column: f32, row: f32, q: vec3<f32>, ray: vec3<f32>) -> Seen {
     let back = view_direction(column, row);
     let right = normalize(cross(vec3<f32>(0.0, 1.0, 0.0), back));
     let up = cross(back, right);
@@ -93,11 +104,15 @@ fn seen(column: f32, row: f32, q: vec3<f32>, ray: vec3<f32>) -> vec4<f32> {
     // part of it): its coverage, and its colour with the ground taken out.
     let ground = clamp((min(c.r, c.b) - c.g - 0.15) / 0.7, 0.0, 1.0);
     let cover = 1.0 - ground;
+    var out: Seen;
+    out.normal = textureSampleLevel(normals, views_sampler, uv, layer, 0.0).rgb * 2.0 - 1.0;
     if (cover < 0.05) {
-        return vec4<f32>(0.0);
+        out.colour = vec4<f32>(0.0);
+        return out;
     }
     let unmixed = clamp((c.rgb - ground * vec3<f32>(1.0, 0.0, 1.0)) / cover, vec3<f32>(0.0), vec3<f32>(1.0));
-    return vec4<f32>(unmixed, cover);
+    out.colour = vec4<f32>(unmixed, cover);
+    return out;
 }
 
 @fragment
@@ -124,18 +139,28 @@ fn fragment(in: VertexOutput, @builtin(front_facing) is_front: bool) -> Fragment
     let s10 = seen(c1, r0, q, ray);
     let s01 = seen(c0, r1, q, ray);
     let s11 = seen(c1, r1, q, ray);
-    let w00 = (1.0 - wa) * (1.0 - we) * s00.a;
-    let w10 = wa * (1.0 - we) * s10.a;
-    let w01 = (1.0 - wa) * we * s01.a;
-    let w11 = wa * we * s11.a;
+    let w00 = (1.0 - wa) * (1.0 - we) * s00.colour.a;
+    let w10 = wa * (1.0 - we) * s10.colour.a;
+    let w01 = (1.0 - wa) * we * s01.colour.a;
+    let w11 = wa * we * s11.colour.a;
     let covered = w00 + w10 + w01 + w11;
     let all = (1.0 - wa) * (1.0 - we) + wa * (1.0 - we) + (1.0 - wa) * we + wa * we;
     if (covered < 0.5 * all) {
         discard;
     }
-    let colour = (s00.rgb * w00 + s10.rgb * w10 + s01.rgb * w01 + s11.rgb * w11) / covered;
+    let colour = (s00.colour.rgb * w00 + s10.colour.rgb * w10 + s01.colour.rgb * w01 + s11.colour.rgb * w11) / covered;
 
     pbr_input.material.base_color = vec4<f32>(colour, 1.0);
+    if (shape.w > 0.5) {
+        // Lit here: the views' colour is the surface's own, their normals
+        // turned from the object's frame into the world's.
+        let n = normalize(s00.normal * w00 + s10.normal * w10 + s01.normal * w01 + s11.normal * w11);
+        let c = turn.x;
+        let s = turn.y;
+        let world = normalize(vec3<f32>(c * n.x + s * n.z, n.y, -s * n.x + c * n.z));
+        pbr_input.N = world;
+        pbr_input.world_normal = world;
+    }
     var out: FragmentOutput;
     out.color = apply_pbr_lighting(pbr_input);
     out.color = main_pass_post_lighting_processing(pbr_input, out.color);

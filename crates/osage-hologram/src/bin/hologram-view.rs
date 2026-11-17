@@ -98,6 +98,7 @@ fn setup(
             radius: RADIUS,
             stand: (Vec3::new(CENTRE.x, CENTRE.y, 0.0), Vec2::new(13.25, 8.75)),
             flat: std::env::var_os("HOLOGRAM_FLAT").is_some(),
+            lit: std::env::var_os("HOLOGRAM_LIT").is_some(),
         },
         Transform::from_xyz(APART, 0.0, 0.0),
     ));

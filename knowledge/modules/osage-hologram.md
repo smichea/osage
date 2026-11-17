@@ -26,7 +26,7 @@ Test the idea of texturing objects with how they look from every viewing angle â
 
 # Interfaces
 
-`HologramPlugin`, `Hologram { folder, grid, centre, radius, stand }`, `HologramMaterial`, `Views`; `Grid { azimuths, elevations }`, `Grid::new`, `Grid::facade`, `Grid::direction(azimuth, elevation)`, `Grid::path`, `Grid::name(row, column)`; the `hologram-bake` program.
+`HologramPlugin`, `Hologram { folder, grid, centre, radius, stand, flat, lit }`, `DepthMaterial`, `NormalMaterial`, `decode_depth`, `HologramMaterial`, `Views`; `Grid { azimuths, elevations }`, `Grid::new`, `Grid::facade`, `Grid::direction(azimuth, elevation)`, `Grid::path`, `Grid::name(row, column)`; the `hologram-bake` program.
 
 # Invariants
 
@@ -42,4 +42,4 @@ Any Bevy app or tool that needs an object photographed from a grid of directions
 
 # Limits
 
-Each view's depth corrects the parallax (`HOLOGRAM_FLAT` not to); close up it is blurred at 256 px; no shadow; the light is baked; drawn blended (no depth prepass).
+With `lit`, it is drawn from views of its colour without light and of its normals, through the world's lighting. Each view's depth corrects the parallax (`HOLOGRAM_FLAT` not to); close up it is blurred at 256 px; no shadow; the light is baked; drawn blended (no depth prepass).
