@@ -104,6 +104,11 @@ The slowest frames are now the drive's first (most of the street in view, about 
 - **Measured:** a chunk of 208 pines and firs (about 400 million faces) bakes in 6 min 30 s on the laptop — 181 chunks would take about 20 hours: a bake for a cloud GPU.
 - **What it shows, not yet good:** 44 m from the track, the chunk drawn from 512-pixel views (about 20 cm a view pixel over its 100 m) reads as dark, scattered blots where the cards show crisp firs — too coarse for fine needles at that distance, and darker lit than the cards. At the resolution it would need (2048 px), a chunk's three arrays are about 2 GB: 181 of them cannot all be on the GPU. The form a hologram takes on the GPU — views decoded near the camera only, or a compact form — is what decides whether a whole forest can be one.
 
+## Ninth experiment: the GPU's share (issue #8)
+
+- **Halved:** a hologram's views, loaded as ordinary images, were each uploaded to the GPU as well as in its stacked arrays. Kept on the CPU (they are only stacked from), the forest plot's holograms take half the GPU memory, 330 MB less.
+- **A window of views:** a hologram may keep on the GPU only a window of its grid (`window`: columns × rows) around the direction the camera sees it from; when the views that direction needs leave it, the window slides and its arrays are made again from the views on the CPU. A view outside it is taken as the nearest inside, its point found by depth. The forest plot with a window of 5 × 3 views of its 105: drawn alike (the far side, seen at a slant, from a view at the window's edge, its point found by depth), 8.5 ms a frame (7.8 with every view), and a seventh of the GPU memory — 47 MB instead of 330.
+
 ## Ideas to explore (the maintainer's, 2026-11-17)
 
 *Decided the same day:* the grandstands' crowd waits for its hologram version (issue #12). A 3D crowd of rigged people, each different and reacting to the race, was tried — 21.8 → 32.5 ms a frame at T2 on the laptop — and not kept: the people of a hologram do not react to the race, until the server that streams holograms (idea 3) renders them live.

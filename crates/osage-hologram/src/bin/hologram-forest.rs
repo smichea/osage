@@ -117,6 +117,9 @@ fn setup(
             aspect: ASPECT,
             masked: true,
             stand_depth: depth + 5.0,
+            window: std::env::var("HOLOGRAM_WINDOW")
+                .ok()
+                .and_then(|w| w.split_once('x').and_then(|(a, b)| Some((a.parse().ok()?, b.parse().ok()?)))),
         });
     } else {
         for (tree, places) in TREES.iter().zip(osage_hologram::forest(width, depth, count, seed, TREES.len())) {

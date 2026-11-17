@@ -41,6 +41,20 @@ import bevy_pbr::render::{
 // y: 1 where the object is told by the depth pictures (views baked on
 // black), 0 by the magenta ground of the views.
 @group(constants::MATERIAL_BIND_GROUP) @binding(108) var<uniform> framing: vec4<f32>;
+// The window of views on the GPU (issue #8): first column, first row,
+// columns, rows of the grid that the arrays hold; z 0: the whole grid. A
+// view outside it is taken as the nearest inside, its point found by depth.
+@group(constants::MATERIAL_BIND_GROUP) @binding(109) var<uniform> window: vec4<f32>;
+
+// A view's layer in the arrays.
+fn layer_of(column: f32, row: f32) -> i32 {
+    if (window.z < 0.5) {
+        return i32(row * shape.x + column);
+    }
+    let c = clamp(column, window.x, window.x + window.z - 1.0);
+    let r = clamp(row, window.y, window.y + window.w - 1.0);
+    return i32((r - window.y) * window.z + (c - window.x));
+}
 
 const DEGREES: f32 = 0.017453292;
 
@@ -89,7 +103,7 @@ fn seen(column: f32, row: f32, q: vec3<f32>, ray: vec3<f32>) -> Seen {
     let right = normalize(cross(vec3<f32>(0.0, 1.0, 0.0), back));
     let up = cross(back, right);
     let size = vec2<f32>(2.0 * frame.w, 2.0 * frame.w * framing.x);
-    let layer = i32(row * shape.x + column);
+    let layer = layer_of(column, row);
     let along = dot(ray, back);
     var p = q;
     var uv = vec2<f32>(dot(p, right) / size.x + 0.5, 0.5 - dot(p, up) / size.y);

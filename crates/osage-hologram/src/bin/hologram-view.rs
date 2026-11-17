@@ -103,6 +103,7 @@ fn setup(
             aspect: 1.0,
             masked: false,
             stand_depth: 0.0,
+            window: None,
         },
         Transform::from_xyz(APART, 0.0, 0.0),
     ));

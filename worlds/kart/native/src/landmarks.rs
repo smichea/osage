@@ -1231,6 +1231,7 @@ impl Block {
             aspect: 1.0,
             masked: false,
             stand_depth: 0.0,
+            window: None,
         }
     }
 
