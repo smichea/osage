@@ -16,3 +16,5 @@ bevy = { workspace = true, features = ["3d", "jpeg", "png"] }
 osage-content.workspace = true
 osage-props.workspace = true
 anyhow.workspace = true
+serde.workspace = true
+serde_json.workspace = true

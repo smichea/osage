@@ -36,7 +36,7 @@ use bevy::{
     core_pipeline::tonemapping::{DebandDither, Tonemapping},
     render::view::Msaa,
 };
-use osage_hologram::{DepthMaterial, DepthPlugin, Grid, NormalMaterial};
+use osage_hologram::{DepthMaterial, DepthPlugin, Framing, Grid, NormalMaterial, Scene};
 
 const FACADE: &str = "polyhaven/modular_urban_apartments_facade/modular_urban_apartments_facade_1k.gltf";
 /// Frames drawn at a view before it is photographed, and after the last
@@ -64,7 +64,9 @@ struct Bake {
     /// the model on its own layer, drawn by depth).
     depth_target: Handle<Image>,
     depth_camera: Option<Entity>,
-    depth_material: Handle<DepthMaterial>,
+    /// One depth material per material of the model (each cutting its
+    /// leaves as the model's does), all told each view's direction.
+    depth_materials: Vec<Handle<DepthMaterial>>,
     /// The pictures of the colour without light and of the normals, for a
     /// hologram lit where it is drawn: their targets and cameras (each a
     /// twin of the model on a layer of its own: 2 unlit, 3 by normals).
@@ -72,7 +74,19 @@ struct Bake {
     albedo_camera: Option<Entity>,
     normal_target: Handle<Image>,
     normal_camera: Option<Entity>,
+    /// The views' height to width: given (HOLOGRAM_ASPECT), or made to fit
+    /// the object once measured (a scene's).
+    aspect: f32,
+    fit_aspect: bool,
+    /// Where the hologram stands in its world (a scene's), for its framing file.
+    stands: [f32; 7],
+    /// The pictures' targets are made once the framing is known.
+    targets_made: bool,
 }
+
+/// The scene to photograph, when given as a file (`HOLOGRAM_SCENE`).
+#[derive(Resource)]
+struct SceneFile(Option<Scene>);
 
 fn main() -> anyhow::Result<()> {
     let mut args = std::env::args().skip(1);
@@ -103,6 +117,20 @@ fn main() -> anyhow::Result<()> {
         }
         Err(_) => Grid::facade(),
     };
+    // A scene file: its models at their places, its own grid.
+    let scene: Option<Scene> = match std::env::var("HOLOGRAM_SCENE") {
+        Ok(file) => Some(serde_json::from_str(&std::fs::read_to_string(&file)?)?),
+        Err(_) => None,
+    };
+    let grid = match &scene {
+        Some(scene) => {
+            let [a0, a1, a2, e0, e1, e2] = scene.grid;
+            Grid::new((a0, a1, a2), (e0, e1, e2))
+        }
+        None => grid,
+    };
+    let given_aspect = std::env::var("HOLOGRAM_ASPECT").ok().and_then(|a| a.parse::<f32>().ok());
+    let stands = scene.as_ref().map_or([0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0], |scene| scene.at);
     let path = grid.path();
     let plugins = DefaultPlugins
         .build()
@@ -127,12 +155,17 @@ fn main() -> anyhow::Result<()> {
             camera: None,
             depth_target: Handle::default(),
             depth_camera: None,
-            depth_material: Handle::default(),
+            depth_materials: Vec::new(),
             albedo_target: Handle::default(),
             albedo_camera: None,
             normal_target: Handle::default(),
             normal_camera: None,
+            aspect: given_aspect.unwrap_or(1.0),
+            fit_aspect: given_aspect.is_none() && scene.is_some(),
+            stands,
+            targets_made: false,
         })
+        .insert_resource(SceneFile(scene))
         .insert_resource(ModelPath(model))
         .add_systems(Startup, setup)
         .add_systems(Update, (measure, photograph).chain())
@@ -161,11 +194,6 @@ fn save_numbers(path: PathBuf) -> impl FnMut(On<bevy::render::view::screenshot::
     }
 }
 
-/// The views' height to width.
-fn aspect() -> f32 {
-    std::env::var("HOLOGRAM_ASPECT").ok().and_then(|a| a.parse().ok()).unwrap_or(1.0)
-}
-
 /// The pictures' ground: grey to measure compression, magenta to be keyed
 /// out when the views are drawn.
 fn background() -> Color {
@@ -176,18 +204,36 @@ fn background() -> Color {
     }
 }
 
-fn setup(
-    mut commands: Commands,
-    server: Res<AssetServer>,
-    model: Res<ModelPath>,
-    mut bake: ResMut<Bake>,
-    mut images: ResMut<Assets<Image>>,
-) {
+fn setup(mut commands: Commands, server: Res<AssetServer>, model: Res<ModelPath>, scene: Res<SceneFile>) {
     // A forest (HOLOGRAM_FOREST = "WIDTH,DEPTH,TREES,SEED"): the trees of
     // HOLOGRAM_TREES (glTF files, comma-separated) scattered over a plot
     // WIDTH wide along x (centred), DEPTH deep behind z 0, each turned and
     // sized by a seeded hash; else the one model at the origin.
-    if let Ok(forest) = std::env::var("HOLOGRAM_FOREST") {
+    if let Some(scene) = &scene.0 {
+        for model in &scene.models {
+            let places = model
+                .places
+                .iter()
+                .map(|[x, y, z, qx, qy, qz, qw, k]| {
+                    Transform::from_xyz(*x, *y, *z)
+                        .with_rotation(Quat::from_xyzw(*qx, *qy, *qz, *qw))
+                        .with_scale(Vec3::splat(*k))
+                })
+                .collect();
+            commands.spawn(osage_props::Scatter {
+                model: server.load(model.path.clone()),
+                places,
+                using: if model.variants { osage_props::Use::Variants } else { osage_props::Use::Whole },
+                within: None,
+                shadows: true,
+                lods: false,
+                tint: None,
+                opaque: true,
+                lit_as_ground: false,
+            });
+        }
+        info!(models = scene.models.len(), "hologram-bake: a scene");
+    } else if let Ok(forest) = std::env::var("HOLOGRAM_FOREST") {
         let n: Vec<f32> = forest.split(',').filter_map(|v| v.parse().ok()).collect();
         let trees: Vec<String> =
             std::env::var("HOLOGRAM_TREES").unwrap_or_default().split(',').map(str::to_owned).collect();
@@ -234,32 +280,21 @@ fn setup(
         },
         Transform::from_xyz(-0.6, 1.0, 0.8).looking_at(Vec3::ZERO, Vec3::Y),
     ));
-    // HOLOGRAM_ASPECT: the views' height to width (default 1), for a wide,
-    // low object such as a strip of forest.
-    let size =
-        Extent3d { width: bake.size, height: (bake.size as f32 * aspect()).round() as u32, depth_or_array_layers: 1 };
-    let mut target = Image::new_fill(
-        size,
-        TextureDimension::D2,
-        &[0, 0, 0, 255],
-        TextureFormat::Rgba8UnormSrgb,
-        RenderAssetUsages::default(),
-    );
-    target.texture_descriptor.usage |= TextureUsages::RENDER_ATTACHMENT | TextureUsages::COPY_SRC;
-    bake.target = images.add(target);
-    // Depth is a number, not a colour: no sRGB.
-    let mut depth = Image::new_fill(
-        size,
-        TextureDimension::D2,
-        &[0, 0, 0, 255],
-        TextureFormat::Rgba8Unorm,
-        RenderAssetUsages::default(),
-    );
-    depth.texture_descriptor.usage |= TextureUsages::RENDER_ATTACHMENT | TextureUsages::COPY_SRC;
-    bake.depth_target = images.add(depth.clone());
-    // The albedo is a colour (sRGB), the normals numbers.
+}
+
+/// The pictures' targets, at the views' size (made once the framing is known).
+fn make_targets(bake: &mut Bake, images: &mut Assets<Image>) {
+    let size = Extent3d {
+        width: bake.size,
+        height: (bake.size as f32 * bake.aspect).round().max(8.0) as u32,
+        depth_or_array_layers: 1,
+    };
+    // The colour and the albedo are colours (sRGB); depth and normals numbers.
+    bake.target = images.add(target_like(size, TextureFormat::Rgba8UnormSrgb));
+    bake.depth_target = images.add(target_like(size, TextureFormat::Rgba8Unorm));
     bake.albedo_target = images.add(target_like(size, TextureFormat::Rgba8UnormSrgb));
-    bake.normal_target = images.add(depth);
+    bake.normal_target = images.add(target_like(size, TextureFormat::Rgba8Unorm));
+    bake.targets_made = true;
 }
 
 fn target_like(size: Extent3d, format: TextureFormat) -> Image {
@@ -280,18 +315,39 @@ fn measure(
     mut depth_materials: ResMut<Assets<DepthMaterial>>,
     mut standard: ResMut<Assets<StandardMaterial>>,
     mut normal_materials: ResMut<Assets<NormalMaterial>>,
+    mut images: ResMut<Assets<Image>>,
 ) {
     if bake.loaded || waiting.0 > 0 || meshes.is_empty() {
         return;
     }
     bake.loaded = true;
     // The model's twin, drawn by depth, on its own layer.
-    bake.depth_material = depth_materials.add(DepthMaterial::default());
-    let normals = normal_materials.add(NormalMaterial {});
+
     let mut unlit = std::collections::HashMap::new();
+    // Per material of the model: its depth and normal twins, cutting leaves
+    // out of their cards by its texture's alpha, as the model does.
+    let mut twins: std::collections::HashMap<_, (Handle<DepthMaterial>, Handle<NormalMaterial>)> = Default::default();
     for (mesh, at, material) in &drawn {
         let place = at.compute_transform();
-        commands.spawn((mesh.clone(), MeshMaterial3d(bake.depth_material.clone()), place, RenderLayers::layer(1)));
+        let (depth, normals) = twins
+            .entry(material.0.id())
+            .or_insert_with(|| {
+                let source = standard.get(&material.0).cloned().unwrap_or_default();
+                let cutoff = match source.alpha_mode {
+                    AlphaMode::Mask(cutoff) => cutoff,
+                    AlphaMode::Blend | AlphaMode::Premultiplied | AlphaMode::AlphaToCoverage => 0.5,
+                    _ => 0.0,
+                };
+                let (texture, cut) = match &source.base_color_texture {
+                    Some(texture) if cutoff > 0.0 => (Some(texture.clone()), Vec4::new(cutoff, 0.0, 0.0, 0.0)),
+                    _ => (None, Vec4::ZERO),
+                };
+                let depth = depth_materials.add(DepthMaterial { cut_texture: texture.clone(), cut, ..default() });
+                bake.depth_materials.push(depth.clone());
+                (depth, normal_materials.add(NormalMaterial { cut_texture: texture, cut }))
+            })
+            .clone();
+        commands.spawn((mesh.clone(), MeshMaterial3d(depth), place, RenderLayers::layer(1)));
         // Its own colour, without light: the material made unlit.
         let flat = unlit
             .entry(material.0.id())
@@ -302,9 +358,10 @@ fn measure(
             })
             .clone();
         commands.spawn((mesh.clone(), MeshMaterial3d(flat), place, RenderLayers::layer(2)));
-        commands.spawn((mesh.clone(), MeshMaterial3d(normals.clone()), place, RenderLayers::layer(3)));
+        commands.spawn((mesh.clone(), MeshMaterial3d(normals), place, RenderLayers::layer(3)));
     }
     if bake.bounds.is_some() {
+        make_targets(&mut bake, &mut images);
         return;
     }
     let (mut low, mut high) = (Vec3::MAX, Vec3::MIN);
@@ -325,6 +382,16 @@ fn measure(
     let radius = (high - low).length() / 2.0;
     info!(?low, ?high, radius, "hologram-bake: the model's bounds");
     bake.bounds = Some((centre, radius));
+    // A scene's views fitted to it: its height, and how much of its depth
+    // shows from the highest view, plus a margin.
+    if bake.fit_aspect {
+        let highest = bake.grid.elevations.iter().fold(0f32, |a, e| a.max(e.abs())).to_radians();
+        let half_height = (high.y - low.y) / 2.0;
+        let half_depth = (high - low).with_y(0.0).length() / 2.0;
+        bake.aspect = ((half_height * highest.cos() + half_depth * highest.sin()) / radius * 1.1).clamp(0.15, 1.0);
+        info!(aspect = bake.aspect, "hologram-bake: the views fitted");
+    }
+    make_targets(&mut bake, &mut images);
 }
 
 /// Each view in turn: the camera put there, a few frames drawn, a picture.
@@ -335,10 +402,30 @@ fn photograph(
     mut depth_materials: ResMut<Assets<DepthMaterial>>,
     mut cameras: Query<&mut Camera>,
 ) {
-    let Some((centre, radius)) = bake.bounds.filter(|_| bake.loaded) else { return };
+    let Some((centre, radius)) = bake.bounds.filter(|_| bake.loaded && bake.targets_made) else { return };
     if bake.at >= bake.path.len() {
         bake.frames += 1;
         if bake.frames > WIND_DOWN {
+            // The framing, for whoever draws the views.
+            let grid = &bake.grid;
+            let step = |v: &[f32]| if v.len() > 1 { v[1] - v[0] } else { 1.0 };
+            let framing = Framing {
+                centre: centre.to_array(),
+                radius,
+                aspect: bake.aspect,
+                grid: [
+                    grid.azimuths[0],
+                    *grid.azimuths.last().unwrap_or(&0.0),
+                    step(&grid.azimuths),
+                    grid.elevations[0],
+                    *grid.elevations.last().unwrap_or(&0.0),
+                    step(&grid.elevations),
+                ],
+                at: bake.stands,
+            };
+            if let Ok(text) = serde_json::to_string_pretty(&framing) {
+                let _ = std::fs::write(bake.out.join(Framing::FILE), text);
+            }
             info!(views = bake.path.len(), out = ?bake.out, "hologram-bake: done");
             exit.write(AppExit::Success);
         }
@@ -347,12 +434,14 @@ fn photograph(
     let (row, column) = bake.path[bake.at];
     let [x, y, z] = Grid::direction(bake.grid.azimuths[column], bake.grid.elevations[row]);
     let place = Transform::from_translation(centre + Vec3::new(x, y, z) * radius * 3.0).looking_at(centre, Vec3::Y);
-    if let Some(mut material) = depth_materials.get_mut(&bake.depth_material) {
-        material.frame = centre.extend(radius);
-        material.back = Vec4::new(x, y, z, 0.0);
+    for handle in bake.depth_materials.clone() {
+        if let Some(mut material) = depth_materials.get_mut(&handle) {
+            material.frame = centre.extend(radius);
+            material.back = Vec4::new(x, y, z, 0.0);
+        }
     }
     let projection = OrthographicProjection {
-        scaling_mode: ScalingMode::Fixed { width: radius * 2.0, height: radius * 2.0 * aspect() },
+        scaling_mode: ScalingMode::Fixed { width: radius * 2.0, height: radius * 2.0 * bake.aspect },
         ..OrthographicProjection::default_3d()
     };
     match bake.depth_camera {

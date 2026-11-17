@@ -252,9 +252,8 @@ pub fn build(
             // Cards come nearer: no toy tree is left to stand in for them.
             let from = 35.0;
             let models = &roadside.models;
-            for woods in osage_kart_roadside::woods(&land, &frames, track, &set.clearings, models, from, trees) {
-                commands.spawn((Part, woods));
-            }
+            let woods = osage_kart_roadside::woods(&land, &frames, track, &set.clearings, models, from, trees);
+            spawn_woods(&mut commands, &course.0.about.id, woods, &land, &frames);
             Growth::Bushes
         } else if let Some(roadside) = &roadside {
             let (models, detail) = (&roadside.models, roadside.detail);
@@ -268,9 +267,8 @@ pub fn build(
             // Woods off the circuit: thousands of trees, drawn as cards; in a
             // forest they come nearer, behind the modelled trees.
             let from = if scenery == "forest" { 60.0 } else { osage_kart_roadside::WOODS_FROM };
-            for woods in osage_kart_roadside::woods(&land, &frames, track, &set.clearings, models, from, trees) {
-                commands.spawn((Part, woods));
-            }
+            let woods = osage_kart_roadside::woods(&land, &frames, track, &set.clearings, models, from, trees);
+            spawn_woods(&mut commands, &course.0.about.id, woods, &land, &frames);
             // Modelled woods stand far too: nothing procedural is needed.
             Growth::None
         } else {
@@ -632,5 +630,29 @@ pub fn spare_the_rays(
         if spared {
             commands.entity(entity).insert(osage_render::NotTraced);
         }
+    }
+}
+
+/// The woods: their cards, but the chunks baked as holograms drawn as such
+/// (D-133, issue #8); and, asked by `OSAGE_WOODS_CHUNKS`, their chunks
+/// written for baking.
+fn spawn_woods(
+    commands: &mut Commands,
+    track: &str,
+    mut woods: Vec<osage_props::Woods>,
+    land: &Land,
+    frames: &[osage_kart_land::Frame],
+) {
+    if let Some(dir) = std::env::var_os("OSAGE_WOODS_CHUNKS")
+        && let Err(error) =
+            crate::woods_holograms::write_chunks(std::path::Path::new(&dir), track, &woods, land, frames)
+    {
+        warn!(%error, "woods: cannot write the chunks");
+    }
+    if let Some(root) = osage_content::root() {
+        crate::woods_holograms::draw(commands, &root, track, &mut woods);
+    }
+    for w in woods {
+        commands.spawn((Part, w));
     }
 }

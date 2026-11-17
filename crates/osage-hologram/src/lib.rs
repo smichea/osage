@@ -99,6 +99,73 @@ impl Grid {
     }
 }
 
+/// What `hologram-bake` photographs, given as a file (`HOLOGRAM_SCENE`):
+/// models at places, in the hologram's own frame (its front facing +Z),
+/// and the grid of directions to photograph it from.
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+pub struct Scene {
+    pub models: Vec<SceneModel>,
+    /// First azimuth, last, step; first elevation, last, step (degrees).
+    pub grid: [f32; 6],
+    /// Where the hologram stands in its world: translation, rotation
+    /// (a quaternion x, y, z, w) — for whoever draws it.
+    pub at: [f32; 7],
+}
+
+/// A model of a [`Scene`]: a glTF under the manifest's content, whether
+/// each place takes one of its variants, and its places (x, y, z, a
+/// quaternion x, y, z, w, a scale).
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+pub struct SceneModel {
+    pub path: String,
+    pub variants: bool,
+    pub places: Vec<[f32; 8]>,
+}
+
+/// How `hologram-bake` framed its views (written beside them as
+/// `hologram.json`): the photographed sphere's centre and radius, the
+/// views' height to width, the grid, and where the hologram stands.
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+pub struct Framing {
+    pub centre: [f32; 3],
+    pub radius: f32,
+    pub aspect: f32,
+    pub grid: [f32; 6],
+    pub at: [f32; 7],
+}
+
+impl Framing {
+    /// The file beside the views.
+    pub const FILE: &str = "hologram.json";
+
+    /// The hologram these views make, lit, told by depth (views on black),
+    /// on a box over the photographed sphere's lower part.
+    pub fn hologram(&self, folder: &str) -> Hologram {
+        let [a0, a1, a2, e0, e1, e2] = self.grid;
+        let centre = Vec3::from(self.centre);
+        let half = Vec2::new(self.radius, self.radius * self.aspect);
+        Hologram {
+            folder: folder.to_owned(),
+            grid: Grid::new((a0, a1, a2), (e0, e1, e2)),
+            centre,
+            radius: self.radius,
+            stand: (Vec3::new(centre.x, centre.y, centre.z + self.radius * 0.7), half),
+            flat: false,
+            lit: true,
+            fade_in: None,
+            aspect: self.aspect,
+            masked: true,
+            stand_depth: self.radius * 1.4,
+        }
+    }
+
+    /// Where the hologram stands in its world.
+    pub fn transform(&self) -> Transform {
+        let [x, y, z, qx, qy, qz, qw] = self.at;
+        Transform::from_xyz(x, y, z).with_rotation(Quat::from_xyzw(qx, qy, qz, qw))
+    }
+}
+
 /// A forest plot's trees: `count` trees of `kinds` kinds scattered over a
 /// plot `width` wide along x (centred on 0) and `depth` deep behind z 0,
 /// each turned and sized by a hash seeded with `seed` — the same at every
@@ -133,6 +200,13 @@ pub struct DepthMaterial {
     /// The direction towards the camera.
     #[uniform(1)]
     pub back: Vec4,
+    /// The model's colour texture, whose alpha cuts leaves out of their
+    /// cards where `cut.x` (the cutoff) is above 0.
+    #[texture(2)]
+    #[sampler(3)]
+    pub cut_texture: Option<Handle<Image>>,
+    #[uniform(4)]
+    pub cut: Vec4,
 }
 
 impl Material for DepthMaterial {
@@ -144,7 +218,14 @@ impl Material for DepthMaterial {
 /// What a view's normal picture holds, drawn by `normal.wesl`: the
 /// surface's direction at each point, as colour (n × 0.5 + 0.5).
 #[derive(Asset, AsBindGroup, Reflect, Debug, Clone, Default)]
-pub struct NormalMaterial {}
+pub struct NormalMaterial {
+    /// As [`DepthMaterial`]'s: leaves cut out of their cards.
+    #[texture(2)]
+    #[sampler(3)]
+    pub cut_texture: Option<Handle<Image>>,
+    #[uniform(4)]
+    pub cut: Vec4,
+}
 
 impl Material for NormalMaterial {
     fn fragment_shader() -> ShaderRef {

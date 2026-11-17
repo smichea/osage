@@ -57,6 +57,7 @@ mod track;
 #[cfg(feature = "sound")]
 mod voice;
 mod wildlife;
+mod woods_holograms;
 
 use std::{
     path::PathBuf,
