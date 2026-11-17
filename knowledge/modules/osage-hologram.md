@@ -36,7 +36,7 @@ Test the idea of texturing objects with how they look from every viewing angle �
 
 - Research: `research/09-holographic-textures.md` (first results: ×5–10 smaller than independent images at good quality when views are 2.5° apart).
 
-- Used by [kart-native](/modules/kart-native.md): apartment blocks behind Harbour Town (D-132).
+- Used by [kart-native](/modules/kart-native.md): apartment and factory blocks behind Harbour Town (D-132). Direction: in 3D only what physics needs, the rest holograms (D-133).
 
 # Reuse
 

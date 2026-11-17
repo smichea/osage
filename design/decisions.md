@@ -1176,3 +1176,11 @@ Date: 2026-11-17 · the maintainer's holographic textures (issue #7, research/09
 - **Decision:** where the apartment block's views are installed (`holograms/facade-256`, baked by `hologram-bake` from Poly Haven's urban apartments facade, CC0), a town circuit gets, beyond its sculpted houses, a second row of apartment blocks 40–55 m from the road, facing it, drawn as holograms lit by the world's lights (`osage-hologram`); behind each facade a solid block in its brick, so that the kit's panels read as one building. No model is needed: a kart's camera never comes within 40 m of them.
 - **Measured** at T2 on the reference laptop, Harbour Town, the same `race`: 19.60 → 19.75 ms a frame (p95 25.05 → 25.10); loading 0.8 s longer (the views stacked).
 - **Limits:** one block, repeated; the light is the world's but the normals are the geometry's alone; no shadow cast; 105 MB of views at 256 px, shared by every block.
+
+## D-133 — In 3D only what physics needs; everything else a hologram
+
+Date: 2026-11-17 · the maintainer: "l'idée est de n'avoir en 3D que ce qui est véritablement nécessaire pour le physique, tout le reste en hologrammes"; and the targets: buildings ("ils sont une cible aussi"), a forest computed with millions or billions of faces, the sea with ultra-realistic waves, boats, dolphins — each "produced once and for all", its angles limited to those the karts' and the game's other cameras can see.
+
+- **Direction:** worlds keep as geometry only what the simulation touches — the road, walls and barriers, the karts, what they can hit. Scenery is baked offline at any detail from open models into holograms (`osage-hologram`, research/09), photographed only from the directions the game's cameras can see it from (a narrow band of angles from a circuit: fine angular steps, which compress best along the angle), and drawn lit by the world.
+- **First steps:** apartment and factory blocks behind Harbour Town (D-132); next, a forest of hundreds of millions of faces as holograms; then the sea, which moves — views along time as well as angle.
+- **Open:** what a scenery that moves (waves, boats, animals) costs as views along time; GPU memory for many holograms (a compact form, or views decoded near the camera); shadows from holograms.
