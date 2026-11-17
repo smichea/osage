@@ -373,19 +373,33 @@ fn assemble(
         let order: Vec<_> = order.collect();
         let views = order.iter().map(|&(row, column)| {
             let name = if hologram.lit { Grid::albedo_name(row, column) } else { Grid::name(row, column) };
-            server.load(format!("{}/{name}", hologram.folder))
+            // Kept on the CPU only: they are stacked into one array, and the
+            // stack alone goes to the GPU (each view uploaded on its own as
+            // well doubled the GPU's memory for nothing).
+            server
+                .load_builder()
+                .with_settings(|settings: &mut bevy::image::ImageLoaderSettings| {
+                    settings.asset_usage = bevy::asset::RenderAssetUsages::MAIN_WORLD;
+                })
+                .load(format!("{}/{name}", hologram.folder))
         });
         // Depth is a number, not a colour: read as it is.
         let depths = order.iter().map(|&(row, column)| {
             server
                 .load_builder()
-                .with_settings(|settings: &mut bevy::image::ImageLoaderSettings| settings.is_srgb = false)
+                .with_settings(|settings: &mut bevy::image::ImageLoaderSettings| {
+                    settings.is_srgb = false;
+                    settings.asset_usage = bevy::asset::RenderAssetUsages::MAIN_WORLD;
+                })
                 .load(format!("{}/{}", hologram.folder, Grid::depth_name(row, column)))
         });
         let normals = order.iter().map(|&(row, column)| {
             server
                 .load_builder()
-                .with_settings(|settings: &mut bevy::image::ImageLoaderSettings| settings.is_srgb = false)
+                .with_settings(|settings: &mut bevy::image::ImageLoaderSettings| {
+                    settings.is_srgb = false;
+                    settings.asset_usage = bevy::asset::RenderAssetUsages::MAIN_WORLD;
+                })
                 .load(format!("{}/{}", hologram.folder, Grid::normal_name(row, column)))
         });
         commands.entity(entity).insert(Loading(views.collect(), depths.collect(), normals.collect()));
