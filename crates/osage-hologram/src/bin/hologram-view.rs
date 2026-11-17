@@ -64,15 +64,7 @@ fn main() -> anyhow::Result<()> {
         .add_plugins(plugins)
         .add_plugins(ScheduleRunnerPlugin::run_loop(Duration::ZERO))
         .add_plugins((osage_props::PropsPlugin, HologramPlugin))
-        .insert_resource(Film {
-            out,
-            frames,
-            at: 0,
-            settle: 0,
-            target: Handle::default(),
-            camera: None,
-            started: None,
-        })
+        .insert_resource(Film { out, frames, at: 0, settle: 0, target: Handle::default(), camera: None, started: None })
         .add_systems(Startup, setup)
         .add_systems(Update, film)
         .run();
