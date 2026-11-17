@@ -131,7 +131,9 @@ pub struct HologramPlugin;
 impl Plugin for HologramPlugin {
     fn build(&self, app: &mut App) {
         embedded_asset!(app, "hologram.wesl");
-        app.add_plugins(MaterialPlugin::<HologramMaterial>::default()).add_systems(Update, (assemble, follow));
+        app.add_plugins(MaterialPlugin::<HologramMaterial>::default())
+            .init_resource::<Stacks>()
+            .add_systems(Update, (assemble, follow).chain());
     }
 }
 
@@ -185,6 +187,11 @@ pub struct Hologram {
     pub flat: bool,
 }
 
+/// Each folder's views and depths, stacked once and shared by every
+/// hologram drawn from it.
+#[derive(Resource, Default)]
+struct Stacks(std::collections::HashMap<String, (Handle<Image>, Handle<Image>)>);
+
 /// A hologram whose views and depths are loading.
 #[derive(Component)]
 struct Loading(Vec<Handle<Image>>, Vec<Handle<Image>>);
@@ -205,6 +212,7 @@ fn assemble(
     mut images: ResMut<Assets<Image>>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<HologramMaterial>>,
+    mut stacks: ResMut<Stacks>,
 ) {
     for (entity, hologram) in &new {
         let order = (0..hologram.grid.elevations.len())
@@ -225,10 +233,17 @@ fn assemble(
         if !views.iter().chain(depths).all(|view| server.is_loaded_with_dependencies(view)) {
             continue;
         }
-        let (Some(stack), Some(depth_stack)) = (
-            stack(views.iter().filter_map(|view| images.get(view))),
-            stack(depths.iter().filter_map(|depth| images.get(depth))),
-        ) else {
+        let stacked = match stacks.0.get(&hologram.folder) {
+            Some(pair) => Some(pair.clone()),
+            None => stack(views.iter().filter_map(|view| images.get(view)))
+                .zip(stack(depths.iter().filter_map(|depth| images.get(depth))))
+                .map(|(colour, depth)| {
+                    let pair = (images.add(colour), images.add(depth));
+                    stacks.0.insert(hologram.folder.clone(), pair.clone());
+                    pair
+                }),
+        };
+        let Some((stack, depth_stack)) = stacked else {
             warn!(folder = hologram.folder, "osage-hologram: the views are not all of one size and kind");
             commands.entity(entity).remove::<Loading>().insert(Drawn(Handle::default()));
             continue;
@@ -247,8 +262,8 @@ fn assemble(
                 ),
                 frame: Vec4::ZERO,
                 turn: Vec4::new(1.0, 0.0, 0.0, 0.0),
-                views: Some(images.add(stack)),
-                depths: Some(images.add(depth_stack)),
+                views: Some(stack),
+                depths: Some(depth_stack),
             },
         });
         let (centre, half) = hologram.stand;
@@ -291,8 +306,9 @@ fn stack<'a>(views: impl Iterator<Item = &'a Image>) -> Option<Image> {
 }
 
 /// Keeps each hologram's material told where it stands and how it is turned.
+#[allow(clippy::type_complexity)]
 fn follow(
-    holograms: Query<(&Hologram, &GlobalTransform, &Drawn), Changed<GlobalTransform>>,
+    holograms: Query<(&Hologram, &GlobalTransform, &Drawn), Or<(Changed<GlobalTransform>, Added<Drawn>)>>,
     mut materials: ResMut<Assets<HologramMaterial>>,
 ) {
     for (hologram, at, Drawn(material)) in &holograms {

@@ -53,8 +53,22 @@ Full tables: `results.tsv` written by the tool beside the views.
 - **What it shows:** close up (14 m, from between views: 35° to the side, 22° up), the corrected hologram keeps its panels' edges where they are and loses most of the magenta fringe; the flat one smears edges across the gaps. But close up both are blurred: 256 px over a 32 m sphere is 12 cm a pixel, the model's 1k textures far finer. Its cost: a second texture array as large as the first (35 MB at 256 px).
 - **So:** the hologram is a far object. Near, it needs views of 1024 px or more (16× the memory, which the video compression of the first experiment would have to bring back down, decoded near the camera only), or to give way to the model.
 
+## Fourth experiment: a street (2026-11-17)
+
+- **How:** `hologram-street` lays 40 facades, 20 a side, 30 m apart, 18 m from the road's middle, and drives a camera down the road at 2 m, 25 m/s, off screen at 1280 × 720, on the reference laptop (Intel Iris Xe): every facade its model, every facade its hologram, or the model within 60 m and the hologram beyond. The holograms share one stack of views and depths (70 MB at 256 px).
+- **Measured** (400 frames after 30 to warm up):
+
+| street | mean | 95th percentile |
+|---|---|---|
+| 40 models (4.7 M triangles) | 63.6 ms | 524 ms |
+| 40 holograms | **9.2 ms** | 10.8 ms |
+| models within 60 m, holograms beyond | 39.5 ms | 258 ms |
+
+- **What it shows:** drawn from its views, a street of facades costs a seventh of its models' time, and its time does not depend on how detailed the model was. Seen from the road, the far facades read alike; near ones, the model's relief and shadows are better.
+- **To read it fairly:** each model is Poly Haven's whole kit (spare parts and cornices beside the wall), the hologram only the wall it framed: the models' cost is overstated, perhaps twice. The mixed street's spikes come from models shown and hidden as the camera passes (each shown again is prepared again), not from the holograms. The holograms carry the light they were baked in: the facades across the road, lit from behind, are dark as models and bright as holograms; and they cast no shadow.
+
 ## Next
 
-1. **Where it pays:** measure frame time and memory of the hologram against the model at the distances a race sees buildings (50–500 m), in the kart world — a street of facades, holograms beyond a distance, models near.
-2. **GPU form:** compare decoding into a texture array, a cache of nearby views decoded as the camera moves, and a factorised form (a few basis images per texel and weights per direction).
-3. **Light:** bake albedo and normals per view as well, and light the hologram at run time.
+1. **Light:** bake albedo and normals per view instead of lit colour, and light the hologram at run time — the street's two sides then light alike, and night and rain work.
+2. **The switch:** a hologram for far, a model for near, crossfaded, without the spikes of showing a model again (keep it prepared, fade it).
+3. **GPU form:** compare decoding into a texture array, a cache of nearby views decoded as the camera moves, and a factorised form (a few basis images per texel and weights per direction).
