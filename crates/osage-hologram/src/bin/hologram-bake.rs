@@ -161,10 +161,19 @@ fn save_numbers(path: PathBuf) -> impl FnMut(On<bevy::render::view::screenshot::
     }
 }
 
+/// The views' height to width.
+fn aspect() -> f32 {
+    std::env::var("HOLOGRAM_ASPECT").ok().and_then(|a| a.parse().ok()).unwrap_or(1.0)
+}
+
 /// The pictures' ground: grey to measure compression, magenta to be keyed
 /// out when the views are drawn.
 fn background() -> Color {
-    if std::env::var_os("HOLOGRAM_KEY").is_some() { Color::srgb(1.0, 0.0, 1.0) } else { Color::srgb(0.5, 0.5, 0.5) }
+    match std::env::var("HOLOGRAM_KEY").as_deref() {
+        Ok("black") => Color::BLACK,
+        Ok(_) => Color::srgb(1.0, 0.0, 1.0),
+        Err(_) => Color::srgb(0.5, 0.5, 0.5),
+    }
 }
 
 fn setup(
@@ -174,24 +183,61 @@ fn setup(
     mut bake: ResMut<Bake>,
     mut images: ResMut<Assets<Image>>,
 ) {
-    commands.spawn(osage_props::Scatter {
-        model: server.load(model.0.clone()),
-        places: vec![Transform::IDENTITY],
-        using: osage_props::Use::Whole,
-        within: None,
-        shadows: true,
-        lods: false,
-        tint: None,
-        opaque: false,
-        lit_as_ground: false,
-    });
+    // A forest (HOLOGRAM_FOREST = "WIDTH,DEPTH,TREES,SEED"): the trees of
+    // HOLOGRAM_TREES (glTF files, comma-separated) scattered over a plot
+    // WIDTH wide along x (centred), DEPTH deep behind z 0, each turned and
+    // sized by a seeded hash; else the one model at the origin.
+    if let Ok(forest) = std::env::var("HOLOGRAM_FOREST") {
+        let n: Vec<f32> = forest.split(',').filter_map(|v| v.parse().ok()).collect();
+        let trees: Vec<String> =
+            std::env::var("HOLOGRAM_TREES").unwrap_or_default().split(',').map(str::to_owned).collect();
+        if let ([width, depth, count, seed], false) = (n.as_slice(), trees.is_empty()) {
+            let (width, depth, count, seed) = (*width, *depth, *count, *seed);
+            let places = osage_hologram::forest(width, depth, count as usize, seed as u64, trees.len());
+            for (tree, places) in trees.iter().zip(places) {
+                commands.spawn(osage_props::Scatter {
+                    model: server.load(tree.clone()),
+                    places,
+                    using: osage_props::Use::Whole,
+                    within: None,
+                    shadows: true,
+                    lods: false,
+                    tint: None,
+                    opaque: true,
+                    lit_as_ground: false,
+                });
+            }
+            info!(trees = count, kinds = trees.len(), "hologram-bake: a forest");
+        }
+    } else {
+        commands.spawn(osage_props::Scatter {
+            model: server.load(model.0.clone()),
+            places: vec![Transform::IDENTITY],
+            using: osage_props::Use::Whole,
+            within: None,
+            shadows: true,
+            lods: false,
+            tint: None,
+            opaque: false,
+            lit_as_ground: false,
+        });
+    }
     // One sun, high and to the left of the front, the same for every view:
     // the light is part of what is photographed.
     commands.spawn((
-        DirectionalLight { illuminance: 10_000.0, shadow_maps_enabled: true, ..default() },
+        // A forest has no shadow maps: redrawn per cascade, its hundreds
+        // of millions of faces lost the integrated GPU.
+        DirectionalLight {
+            illuminance: 10_000.0,
+            shadow_maps_enabled: std::env::var_os("HOLOGRAM_FOREST").is_none(),
+            ..default()
+        },
         Transform::from_xyz(-0.6, 1.0, 0.8).looking_at(Vec3::ZERO, Vec3::Y),
     ));
-    let size = Extent3d { width: bake.size, height: bake.size, depth_or_array_layers: 1 };
+    // HOLOGRAM_ASPECT: the views' height to width (default 1), for a wide,
+    // low object such as a strip of forest.
+    let size =
+        Extent3d { width: bake.size, height: (bake.size as f32 * aspect()).round() as u32, depth_or_array_layers: 1 };
     let mut target = Image::new_fill(
         size,
         TextureDimension::D2,
@@ -287,6 +333,7 @@ fn photograph(
     mut bake: ResMut<Bake>,
     mut exit: MessageWriter<AppExit>,
     mut depth_materials: ResMut<Assets<DepthMaterial>>,
+    mut cameras: Query<&mut Camera>,
 ) {
     let Some((centre, radius)) = bake.bounds.filter(|_| bake.loaded) else { return };
     if bake.at >= bake.path.len() {
@@ -305,7 +352,7 @@ fn photograph(
         material.back = Vec4::new(x, y, z, 0.0);
     }
     let projection = OrthographicProjection {
-        scaling_mode: ScalingMode::Fixed { width: radius * 2.0, height: radius * 2.0 },
+        scaling_mode: ScalingMode::Fixed { width: radius * 2.0, height: radius * 2.0 * aspect() },
         ..OrthographicProjection::default_3d()
     };
     match bake.depth_camera {
@@ -383,17 +430,33 @@ fn photograph(
         }
         Some(_) => {}
     }
+    // One picture at a time: each camera draws alone for SETTLE frames and
+    // is photographed on its last — a heavy model drawn by four cameras in
+    // one frame lost the GPU.
+    let pass = (bake.frames / SETTLE) as usize;
+    let order = [bake.camera, bake.depth_camera, bake.albedo_camera, bake.normal_camera];
+    for (k, camera) in order.iter().enumerate() {
+        if let Some(mut settings) = camera.and_then(|c| cameras.get_mut(c).ok()) {
+            settings.is_active = k == pass;
+        }
+    }
     bake.frames += 1;
-    if bake.frames == SETTLE {
-        let file = bake.out.join(Grid::name(row, column));
-        commands.spawn(Screenshot::image(bake.target.clone())).observe(save_to_disk(file));
-        let depth = bake.out.join(Grid::depth_name(row, column));
-        commands.spawn(Screenshot::image(bake.depth_target.clone())).observe(save_numbers(depth));
-        let albedo = bake.out.join(Grid::albedo_name(row, column));
-        commands.spawn(Screenshot::image(bake.albedo_target.clone())).observe(save_to_disk(albedo));
-        let normal = bake.out.join(Grid::normal_name(row, column));
-        commands.spawn(Screenshot::image(bake.normal_target.clone())).observe(save_numbers(normal));
-        bake.at += 1;
-        bake.frames = 0;
+    if bake.frames.is_multiple_of(SETTLE) {
+        let (target, file, numbers) = match pass {
+            0 => (bake.target.clone(), Grid::name(row, column), false),
+            1 => (bake.depth_target.clone(), Grid::depth_name(row, column), true),
+            2 => (bake.albedo_target.clone(), Grid::albedo_name(row, column), false),
+            _ => (bake.normal_target.clone(), Grid::normal_name(row, column), true),
+        };
+        let path = bake.out.join(file);
+        if numbers {
+            commands.spawn(Screenshot::image(target)).observe(save_numbers(path));
+        } else {
+            commands.spawn(Screenshot::image(target)).observe(save_to_disk(path));
+        }
+        if pass == 3 {
+            bake.at += 1;
+            bake.frames = 0;
+        }
     }
 }

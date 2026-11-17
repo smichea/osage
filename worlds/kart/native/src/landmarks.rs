@@ -1228,6 +1228,9 @@ impl Block {
             flat: false,
             lit: true,
             fade_in: None,
+            aspect: 1.0,
+            masked: false,
+            stand_depth: 0.0,
         }
     }
 

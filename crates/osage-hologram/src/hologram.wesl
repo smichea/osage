@@ -37,6 +37,10 @@ import bevy_pbr::render::{
 // views of the colour without light (shape.w 1), the hologram is lit where
 // it is drawn, by the world's lights.
 @group(constants::MATERIAL_BIND_GROUP) @binding(107) var normals: texture_2d_array<f32>;
+// x: the views' height to width (their camera framed 2r wide, 2r·x high);
+// y: 1 where the object is told by the depth pictures (views baked on
+// black), 0 by the magenta ground of the views.
+@group(constants::MATERIAL_BIND_GROUP) @binding(108) var<uniform> framing: vec4<f32>;
 
 const DEGREES: f32 = 0.017453292;
 
@@ -84,11 +88,11 @@ fn seen(column: f32, row: f32, q: vec3<f32>, ray: vec3<f32>) -> Seen {
     let back = view_direction(column, row);
     let right = normalize(cross(vec3<f32>(0.0, 1.0, 0.0), back));
     let up = cross(back, right);
-    let size = 2.0 * frame.w;
+    let size = vec2<f32>(2.0 * frame.w, 2.0 * frame.w * framing.x);
     let layer = i32(row * shape.x + column);
     let along = dot(ray, back);
     var p = q;
-    var uv = vec2<f32>(dot(p, right) / size + 0.5, 0.5 - dot(p, up) / size);
+    var uv = vec2<f32>(dot(p, right) / size.x + 0.5, 0.5 - dot(p, up) / size.y);
     // shape.z: 1 to correct the parallax with the views' depth, 0 not to.
     if (shape.z > 0.5 && abs(along) > 0.05) {
         for (var i = 0; i < 4; i++) {
@@ -98,13 +102,21 @@ fn seen(column: f32, row: f32, q: vec3<f32>, ray: vec3<f32>) -> Seen {
             }
             let t = (depth - dot(q, back)) / along;
             p = q + ray * t;
-            uv = vec2<f32>(dot(p, right) / size + 0.5, 0.5 - dot(p, up) / size);
+            uv = vec2<f32>(dot(p, right) / size.x + 0.5, 0.5 - dot(p, up) / size.y);
         }
     }
     let c = textureSampleLevel(views, views_sampler, uv, layer, 0.0);
-    // How much of the pixel is the magenta ground (at the object's edges,
-    // part of it): its coverage, and its colour with the ground taken out.
-    let ground = clamp((min(c.r, c.b) - c.g - 0.15) / 0.7, 0.0, 1.0);
+    var ground = 0.0;
+    if (framing.y > 0.5) {
+        // The object is where the depth picture has it (blue).
+        let dims = vec2<f32>(textureDimensions(depths));
+        let texel = vec2<i32>(clamp(uv * dims, vec2<f32>(0.0), dims - 1.0));
+        ground = 1.0 - textureLoad(depths, texel, layer, 0).b;
+    } else {
+        // How much of the pixel is the magenta ground (at the object's
+        // edges, part of it): its coverage, its colour with the ground out.
+        ground = clamp((min(c.r, c.b) - c.g - 0.15) / 0.7, 0.0, 1.0);
+    }
     let cover = 1.0 - ground;
     var out: Seen;
     out.normal = textureSampleLevel(normals, views_sampler, uv, layer, 0.0).rgb * 2.0 - 1.0;
@@ -112,7 +124,8 @@ fn seen(column: f32, row: f32, q: vec3<f32>, ray: vec3<f32>) -> Seen {
         out.colour = vec4<f32>(0.0);
         return out;
     }
-    let unmixed = clamp((c.rgb - ground * vec3<f32>(1.0, 0.0, 1.0)) / cover, vec3<f32>(0.0), vec3<f32>(1.0));
+    let key = select(vec3<f32>(1.0, 0.0, 1.0), vec3<f32>(0.0), framing.y > 0.5);
+    let unmixed = clamp((c.rgb - ground * key) / cover, vec3<f32>(0.0), vec3<f32>(1.0));
     out.colour = vec4<f32>(unmixed, cover);
     return out;
 }

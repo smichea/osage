@@ -99,6 +99,28 @@ impl Grid {
     }
 }
 
+/// A forest plot's trees: `count` trees of `kinds` kinds scattered over a
+/// plot `width` wide along x (centred on 0) and `depth` deep behind z 0,
+/// each turned and sized by a hash seeded with `seed` — the same at every
+/// call. The places of each kind.
+pub fn forest(width: f32, depth: f32, count: usize, seed: u64, kinds: usize) -> Vec<Vec<Transform>> {
+    let mut places = vec![Vec::new(); kinds.max(1)];
+    let mut state = seed.wrapping_mul(2_654_435_761).wrapping_add(1);
+    let mut next = || {
+        state = state.wrapping_mul(6_364_136_223_846_793_005).wrapping_add(1_442_695_040_888_963_407);
+        (state >> 33) as f32 / (1u64 << 31) as f32
+    };
+    for _ in 0..count {
+        let (x, z) = ((next() - 0.5) * width, -next() * depth);
+        let kind = (next() * kinds.max(1) as f32) as usize % kinds.max(1);
+        let place = Transform::from_xyz(x, 0.0, z)
+            .with_rotation(Quat::from_rotation_y(next() * std::f32::consts::TAU))
+            .with_scale(Vec3::splat(0.8 + 0.5 * next()));
+        places[kind].push(place);
+    }
+    places
+}
+
 /// What a view's depth picture holds, drawn by `depth.wesl`: for each
 /// point of the object, how far it stands towards the camera from the
 /// photographed sphere's centre, from -radius to +radius, in 16 bits over
@@ -187,6 +209,9 @@ pub struct Views {
     /// Each view's normals (see [`NormalMaterial`]), for a lit hologram.
     #[texture(107, dimension = "2d_array")]
     pub normals: Option<Handle<Image>>,
+    /// The views' height to width.
+    #[uniform(108)]
+    pub framing: Vec4,
 }
 
 impl MaterialExtension for Views {
@@ -219,6 +244,16 @@ pub struct Hologram {
     /// gives way to it (the model's own range fading it out over the same);
     /// none: always whole.
     pub fade_in: Option<(f32, f32)>,
+    /// The views' height to width (as baked with `HOLOGRAM_ASPECT`).
+    pub aspect: f32,
+    /// Its views baked on black (`HOLOGRAM_KEY=black`), where it is told by
+    /// its depth pictures: for fine things (foliage) whose thousands of
+    /// edges a magenta ground would tint.
+    pub masked: bool,
+    /// How deep the stand-in is behind its front, m: 0 a rectangle; more,
+    /// a box, its front at `stand`'s centre (for an object rays can enter
+    /// from above, such as a forest).
+    pub stand_depth: f32,
 }
 
 /// Each folder's views, depths and normals (lit or not), stacked once and
@@ -322,10 +357,16 @@ fn assemble(
                 views: Some(stack),
                 depths: Some(depth_stack),
                 normals: Some(normal_stack),
+                framing: Vec4::new(hologram.aspect, if hologram.masked { 1.0 } else { 0.0 }, 0.0, 0.0),
             },
         });
         let (centre, half) = hologram.stand;
-        let quad = meshes.add(Rectangle::new(half.x * 2.0, half.y * 2.0));
+        let (quad, centre) = if hologram.stand_depth > 0.0 {
+            let box_centre = centre - Vec3::Z * hologram.stand_depth / 2.0;
+            (meshes.add(Cuboid::new(half.x * 2.0, half.y * 2.0, hologram.stand_depth)), box_centre)
+        } else {
+            (meshes.add(Rectangle::new(half.x * 2.0, half.y * 2.0)), centre)
+        };
         commands.entity(entity).remove::<Loading>().insert(Drawn(material.clone())).with_child((
             Mesh3d(quad),
             MeshMaterial3d(material),
@@ -406,6 +447,16 @@ mod tests {
         }
         for view in path {
             assert!(seen.insert(view));
+        }
+    }
+
+    #[test]
+    fn a_forest_is_the_same_at_every_call_and_inside_its_plot() {
+        let a = forest(60.0, 30.0, 120, 7, 3);
+        assert_eq!(a, forest(60.0, 30.0, 120, 7, 3));
+        assert_eq!(a.iter().map(Vec::len).sum::<usize>(), 120);
+        for place in a.iter().flatten() {
+            assert!(place.translation.x.abs() <= 30.0 && (-30.0..=0.0).contains(&place.translation.z));
         }
     }
 

@@ -161,6 +161,9 @@ fn setup(
                             lit: std::env::var_os("HOLOGRAM_LIT").is_some(),
                             // Mixed: it fades in as its model fades out.
                             fade_in: (drive.kind == Kind::Mixed).then_some((NEAR * 0.9, NEAR)),
+                            aspect: 1.0,
+                            masked: false,
+                            stand_depth: 0.0,
                         },
                         place,
                     ))

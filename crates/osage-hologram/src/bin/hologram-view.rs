@@ -100,6 +100,9 @@ fn setup(
             flat: std::env::var_os("HOLOGRAM_FLAT").is_some(),
             lit: std::env::var_os("HOLOGRAM_LIT").is_some(),
             fade_in: None,
+            aspect: 1.0,
+            masked: false,
+            stand_depth: 0.0,
         },
         Transform::from_xyz(APART, 0.0, 0.0),
     ));
