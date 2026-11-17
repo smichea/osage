@@ -15,6 +15,14 @@
 
 use std::f32::consts::PI;
 
+use bevy::{
+    asset::embedded_asset,
+    pbr::{ExtendedMaterial, MaterialExtension},
+    prelude::*,
+    render::render_resource::AsBindGroup,
+    shader::ShaderRef,
+};
+
 /// The viewing directions an object is photographed from: azimuths and
 /// elevations in degrees, the object's front facing +Z.
 #[derive(Clone, Debug, PartialEq)]
@@ -73,6 +81,163 @@ impl Grid {
     /// made from the files.
     pub fn name(row: usize, column: usize) -> String {
         format!("view-r{row:02}-c{column:02}.png")
+    }
+}
+
+/// Draws [`Hologram`]s.
+pub struct HologramPlugin;
+
+impl Plugin for HologramPlugin {
+    fn build(&self, app: &mut App) {
+        embedded_asset!(app, "hologram.wesl");
+        app.add_plugins(MaterialPlugin::<HologramMaterial>::default()).add_systems(Update, (assemble, follow));
+    }
+}
+
+/// A hologram's material: unlit, its colour from the views.
+pub type HologramMaterial = ExtendedMaterial<StandardMaterial, Views>;
+
+/// The views, as a texture array, and where they were taken from.
+#[derive(Asset, AsBindGroup, Reflect, Debug, Clone, Default)]
+pub struct Views {
+    /// First azimuth, azimuth step, first elevation, elevation step, degrees.
+    #[uniform(100)]
+    pub grid: Vec4,
+    /// Columns, rows.
+    #[uniform(101)]
+    pub shape: Vec4,
+    /// The photographed sphere's centre in the world, and its radius.
+    #[uniform(102)]
+    pub frame: Vec4,
+    /// Cosine and sine of the object's turn about the vertical.
+    #[uniform(103)]
+    pub turn: Vec4,
+    #[texture(104, dimension = "2d_array")]
+    #[sampler(105)]
+    pub views: Option<Handle<Image>>,
+}
+
+impl MaterialExtension for Views {
+    fn fragment_shader() -> ShaderRef {
+        "embedded://osage_hologram/hologram.wesl".into()
+    }
+}
+
+/// An object drawn from its views (a folder written by `hologram-bake`
+/// with `HOLOGRAM_KEY=1`): placed by its transform (a turn about the
+/// vertical only), on a rectangle standing at `stand` (in the object's
+/// frame: its centre and half size, facing +Z).
+#[derive(Component, Clone, Debug)]
+#[require(Transform, Visibility)]
+pub struct Hologram {
+    /// The views' folder, under the asset manifest's content.
+    pub folder: String,
+    pub grid: Grid,
+    /// The photographed sphere, in the object's frame: centre and radius.
+    pub centre: Vec3,
+    pub radius: f32,
+    pub stand: (Vec3, Vec2),
+}
+
+/// A hologram whose views are loading.
+#[derive(Component)]
+struct Loading(Vec<Handle<Image>>);
+
+/// A hologram's material, once made.
+#[derive(Component)]
+struct Drawn(Handle<HologramMaterial>);
+
+#[allow(clippy::type_complexity)]
+/// Loads each new hologram's views and, once all are there, stacks them
+/// into one texture array and puts the stand-in up.
+#[allow(clippy::too_many_arguments)]
+fn assemble(
+    mut commands: Commands,
+    server: Res<AssetServer>,
+    new: Query<(Entity, &Hologram), (Without<Loading>, Without<Drawn>)>,
+    loading: Query<(Entity, &Hologram, &Loading)>,
+    mut images: ResMut<Assets<Image>>,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut materials: ResMut<Assets<HologramMaterial>>,
+) {
+    for (entity, hologram) in &new {
+        let order = (0..hologram.grid.elevations.len())
+            .flat_map(|row| (0..hologram.grid.azimuths.len()).map(move |column| (row, column)));
+        let views = order.map(|(row, column)| server.load(format!("{}/{}", hologram.folder, Grid::name(row, column))));
+        commands.entity(entity).insert(Loading(views.collect()));
+    }
+    for (entity, hologram, Loading(views)) in &loading {
+        if !views.iter().all(|view| server.is_loaded_with_dependencies(view)) {
+            continue;
+        }
+        let Some(stack) = stack(views.iter().filter_map(|view| images.get(view))) else {
+            warn!(folder = hologram.folder, "osage-hologram: the views are not all of one size and kind");
+            commands.entity(entity).remove::<Loading>().insert(Drawn(Handle::default()));
+            continue;
+        };
+        let grid = &hologram.grid;
+        let step = |v: &[f32]| if v.len() > 1 { v[1] - v[0] } else { 1.0 };
+        let material = materials.add(ExtendedMaterial {
+            base: StandardMaterial { unlit: true, alpha_mode: AlphaMode::Blend, ..default() },
+            extension: Views {
+                grid: Vec4::new(grid.azimuths[0], step(&grid.azimuths), grid.elevations[0], step(&grid.elevations)),
+                shape: Vec4::new(grid.azimuths.len() as f32, grid.elevations.len() as f32, 0.0, 0.0),
+                frame: Vec4::ZERO,
+                turn: Vec4::new(1.0, 0.0, 0.0, 0.0),
+                views: Some(images.add(stack)),
+            },
+        });
+        let (centre, half) = hologram.stand;
+        let quad = meshes.add(Rectangle::new(half.x * 2.0, half.y * 2.0));
+        commands.entity(entity).remove::<Loading>().insert(Drawn(material.clone())).with_child((
+            Mesh3d(quad),
+            MeshMaterial3d(material),
+            Transform::from_translation(centre),
+            bevy::light::NotShadowCaster,
+        ));
+        info!(folder = hologram.folder, views = views.len(), "osage-hologram: drawn");
+    }
+}
+
+/// The views stacked into one texture array, if all are the same size and
+/// kind of 8-bit RGBA.
+fn stack<'a>(views: impl Iterator<Item = &'a Image>) -> Option<Image> {
+    let mut data = Vec::new();
+    let mut first: Option<(u32, u32, bevy::render::render_resource::TextureFormat)> = None;
+    let mut layers = 0;
+    for view in views {
+        let kind = (view.width(), view.height(), view.texture_descriptor.format);
+        if first.is_some_and(|f| f != kind) || view.data.is_none() {
+            return None;
+        }
+        first = Some(kind);
+        data.extend_from_slice(view.data.as_ref()?);
+        layers += 1;
+    }
+    let (width, height, format) = first?;
+    let mut image = Image::new(
+        bevy::render::render_resource::Extent3d { width, height: height * layers, depth_or_array_layers: 1 },
+        bevy::render::render_resource::TextureDimension::D2,
+        data,
+        format,
+        bevy::asset::RenderAssetUsages::RENDER_WORLD,
+    );
+    image.reinterpret_stacked_2d_as_array(layers).ok()?;
+    Some(image)
+}
+
+/// Keeps each hologram's material told where it stands and how it is turned.
+fn follow(
+    holograms: Query<(&Hologram, &GlobalTransform, &Drawn), Changed<GlobalTransform>>,
+    mut materials: ResMut<Assets<HologramMaterial>>,
+) {
+    for (hologram, at, Drawn(material)) in &holograms {
+        let Some(mut material) = materials.get_mut(material) else { continue };
+        let centre = at.transform_point(hologram.centre);
+        let forward = at.affine().transform_vector3(Vec3::Z).normalize_or(Vec3::Z);
+        let yaw = forward.x.atan2(forward.z);
+        material.extension.frame = centre.extend(hologram.radius);
+        material.extension.turn = Vec4::new(yaw.cos(), yaw.sin(), 0.0, 0.0);
     }
 }
 

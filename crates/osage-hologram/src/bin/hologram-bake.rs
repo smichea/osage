@@ -13,7 +13,8 @@
 //! radius, m (default: the whole model). Each view is orthographic — no perspective, the object
 //! framed the same in every picture, so that a view differs from the next
 //! only by the turn of the viewing angle — under one fixed sun, on a grey
-//! ground colour. Without a window: the pictures are drawn off screen.
+//! ground colour, or on magenta with `HOLOGRAM_KEY=1` (drawn as nothing
+//! by the hologram's shader). Without a window: the pictures are drawn off screen.
 
 use std::{path::PathBuf, time::Duration};
 
@@ -118,6 +119,12 @@ fn main() -> anyhow::Result<()> {
 #[derive(Resource)]
 struct ModelPath(String);
 
+/// The pictures' ground: grey to measure compression, magenta to be keyed
+/// out when the views are drawn.
+fn background() -> Color {
+    if std::env::var_os("HOLOGRAM_KEY").is_some() { Color::srgb(1.0, 0.0, 1.0) } else { Color::srgb(0.5, 0.5, 0.5) }
+}
+
 fn setup(
     mut commands: Commands,
     server: Res<AssetServer>,
@@ -207,7 +214,7 @@ fn photograph(mut commands: Commands, mut bake: ResMut<Bake>, mut exit: MessageW
             let camera = commands
                 .spawn((
                     Camera3d::default(),
-                    Camera { clear_color: ClearColorConfig::Custom(Color::srgb(0.5, 0.5, 0.5)), ..default() },
+                    Camera { clear_color: ClearColorConfig::Custom(background()), ..default() },
                     RenderTarget::Image(bake.target.clone().into()),
                     Projection::Orthographic(projection),
                     place,

@@ -41,8 +41,14 @@ Full tables: `results.tsv` written by the tool beside the views.
 - Views of a wall from the street; an object seen from all around needs the whole sphere (octahedral grids).
 - PSNR of the views themselves; what matters in the end is the picture drawn between views, from a camera that is never exactly at one.
 
+## Second experiment: drawn (2026-11-17)
+
+- **How:** `hologram-view` draws the facade's model and, 62 m to its left, its hologram, under the same sun, filmed by a camera turning from 60° to one side to 60° to the other. The hologram is one rectangle in the facade's plane and its 135 views (coarse grid, 256 px, baked on magenta) in one texture array. For each pixel, `hologram.wesl` takes the direction to the eye, the four views of the grid around it, finds the point in each as that view's orthographic camera saw it, and blends the four by nearness of angle; magenta is the ground — at the object's edges, part of a pixel, its colour unmixed from it.
+- **What it shows:** from every angle of the turn the hologram reads as the facade — its windows, frames and cornices in relief from the side — on a single rectangle instead of 118 000 triangles. GPU memory: 135 × 256² × 4 B = 35 MB uncompressed, against the model's mesh and 1k textures.
+- **Its faults:** between views 10° apart, parts in relief (cornices, frames) blur or double, the parallax of the rectangle and the real surface not corrected; it casts no shadow on the ground; faint magenta at some edges; the light is the one it was baked under.
+
 ## Next
 
-1. **Draw it:** a hologram component in osage that picks the views nearest the camera's direction and blends them, with each view's depth to correct the parallax between them; the facade drawn beside its model in the kart world: memory, frame time, look.
+1. **Correct the parallax:** bake each view's depth, and find the point in each view along the eye's ray rather than on the rectangle — the doubling between views goes; then measure frame time and memory against the model, in the kart world.
 2. **GPU form:** compare decoding into a texture array, a cache of nearby views decoded as the camera moves, and a factorised form (a few basis images per texel and weights per direction).
 3. **Light:** bake albedo and normals per view as well, and light the hologram at run time.

@@ -1874,3 +1874,1219 @@ licence = "CC0-1.0"
 author = "Poly Haven"
 source = "https://polyhaven.com/a/modular_urban_apartments_facade"
 used_by = "osage-hologram: the first experiment's object (issue #7)"
+
+# The facade's views, baked for the hologram (issue #7).
+[[asset]]
+path = "assets/holograms/facade-256/view-r00-c00.png"
+made_by = "crates/osage-hologram hologram-bake (HOLOGRAM_KEY=1, 256 px, framed 13.75,6.75,-2.9,16.2)"
+made_from = "assets/polyhaven/modular_urban_apartments_facade/modular_urban_apartments_facade_1k.gltf"
+licence = "CC0-1.0"
+author = "Poly Haven"
+source = "https://polyhaven.com/a/modular_urban_apartments_facade"
+used_by = "osage-hologram: hologram-view (issue #7)"
+
+[[asset]]
+path = "assets/holograms/facade-256/view-r00-c01.png"
+made_by = "crates/osage-hologram hologram-bake (HOLOGRAM_KEY=1, 256 px, framed 13.75,6.75,-2.9,16.2)"
+made_from = "assets/polyhaven/modular_urban_apartments_facade/modular_urban_apartments_facade_1k.gltf"
+licence = "CC0-1.0"
+author = "Poly Haven"
+source = "https://polyhaven.com/a/modular_urban_apartments_facade"
+used_by = "osage-hologram: hologram-view (issue #7)"
+
+[[asset]]
+path = "assets/holograms/facade-256/view-r00-c02.png"
+made_by = "crates/osage-hologram hologram-bake (HOLOGRAM_KEY=1, 256 px, framed 13.75,6.75,-2.9,16.2)"
+made_from = "assets/polyhaven/modular_urban_apartments_facade/modular_urban_apartments_facade_1k.gltf"
+licence = "CC0-1.0"
+author = "Poly Haven"
+source = "https://polyhaven.com/a/modular_urban_apartments_facade"
+used_by = "osage-hologram: hologram-view (issue #7)"
+
+[[asset]]
+path = "assets/holograms/facade-256/view-r00-c03.png"
+made_by = "crates/osage-hologram hologram-bake (HOLOGRAM_KEY=1, 256 px, framed 13.75,6.75,-2.9,16.2)"
+made_from = "assets/polyhaven/modular_urban_apartments_facade/modular_urban_apartments_facade_1k.gltf"
+licence = "CC0-1.0"
+author = "Poly Haven"
+source = "https://polyhaven.com/a/modular_urban_apartments_facade"
+used_by = "osage-hologram: hologram-view (issue #7)"
+
+[[asset]]
+path = "assets/holograms/facade-256/view-r00-c04.png"
+made_by = "crates/osage-hologram hologram-bake (HOLOGRAM_KEY=1, 256 px, framed 13.75,6.75,-2.9,16.2)"
+made_from = "assets/polyhaven/modular_urban_apartments_facade/modular_urban_apartments_facade_1k.gltf"
+licence = "CC0-1.0"
+author = "Poly Haven"
+source = "https://polyhaven.com/a/modular_urban_apartments_facade"
+used_by = "osage-hologram: hologram-view (issue #7)"
+
+[[asset]]
+path = "assets/holograms/facade-256/view-r00-c05.png"
+made_by = "crates/osage-hologram hologram-bake (HOLOGRAM_KEY=1, 256 px, framed 13.75,6.75,-2.9,16.2)"
+made_from = "assets/polyhaven/modular_urban_apartments_facade/modular_urban_apartments_facade_1k.gltf"
+licence = "CC0-1.0"
+author = "Poly Haven"
+source = "https://polyhaven.com/a/modular_urban_apartments_facade"
+used_by = "osage-hologram: hologram-view (issue #7)"
+
+[[asset]]
+path = "assets/holograms/facade-256/view-r00-c06.png"
+made_by = "crates/osage-hologram hologram-bake (HOLOGRAM_KEY=1, 256 px, framed 13.75,6.75,-2.9,16.2)"
+made_from = "assets/polyhaven/modular_urban_apartments_facade/modular_urban_apartments_facade_1k.gltf"
+licence = "CC0-1.0"
+author = "Poly Haven"
+source = "https://polyhaven.com/a/modular_urban_apartments_facade"
+used_by = "osage-hologram: hologram-view (issue #7)"
+
+[[asset]]
+path = "assets/holograms/facade-256/view-r00-c07.png"
+made_by = "crates/osage-hologram hologram-bake (HOLOGRAM_KEY=1, 256 px, framed 13.75,6.75,-2.9,16.2)"
+made_from = "assets/polyhaven/modular_urban_apartments_facade/modular_urban_apartments_facade_1k.gltf"
+licence = "CC0-1.0"
+author = "Poly Haven"
+source = "https://polyhaven.com/a/modular_urban_apartments_facade"
+used_by = "osage-hologram: hologram-view (issue #7)"
+
+[[asset]]
+path = "assets/holograms/facade-256/view-r00-c08.png"
+made_by = "crates/osage-hologram hologram-bake (HOLOGRAM_KEY=1, 256 px, framed 13.75,6.75,-2.9,16.2)"
+made_from = "assets/polyhaven/modular_urban_apartments_facade/modular_urban_apartments_facade_1k.gltf"
+licence = "CC0-1.0"
+author = "Poly Haven"
+source = "https://polyhaven.com/a/modular_urban_apartments_facade"
+used_by = "osage-hologram: hologram-view (issue #7)"
+
+[[asset]]
+path = "assets/holograms/facade-256/view-r00-c09.png"
+made_by = "crates/osage-hologram hologram-bake (HOLOGRAM_KEY=1, 256 px, framed 13.75,6.75,-2.9,16.2)"
+made_from = "assets/polyhaven/modular_urban_apartments_facade/modular_urban_apartments_facade_1k.gltf"
+licence = "CC0-1.0"
+author = "Poly Haven"
+source = "https://polyhaven.com/a/modular_urban_apartments_facade"
+used_by = "osage-hologram: hologram-view (issue #7)"
+
+[[asset]]
+path = "assets/holograms/facade-256/view-r00-c10.png"
+made_by = "crates/osage-hologram hologram-bake (HOLOGRAM_KEY=1, 256 px, framed 13.75,6.75,-2.9,16.2)"
+made_from = "assets/polyhaven/modular_urban_apartments_facade/modular_urban_apartments_facade_1k.gltf"
+licence = "CC0-1.0"
+author = "Poly Haven"
+source = "https://polyhaven.com/a/modular_urban_apartments_facade"
+used_by = "osage-hologram: hologram-view (issue #7)"
+
+[[asset]]
+path = "assets/holograms/facade-256/view-r00-c11.png"
+made_by = "crates/osage-hologram hologram-bake (HOLOGRAM_KEY=1, 256 px, framed 13.75,6.75,-2.9,16.2)"
+made_from = "assets/polyhaven/modular_urban_apartments_facade/modular_urban_apartments_facade_1k.gltf"
+licence = "CC0-1.0"
+author = "Poly Haven"
+source = "https://polyhaven.com/a/modular_urban_apartments_facade"
+used_by = "osage-hologram: hologram-view (issue #7)"
+
+[[asset]]
+path = "assets/holograms/facade-256/view-r00-c12.png"
+made_by = "crates/osage-hologram hologram-bake (HOLOGRAM_KEY=1, 256 px, framed 13.75,6.75,-2.9,16.2)"
+made_from = "assets/polyhaven/modular_urban_apartments_facade/modular_urban_apartments_facade_1k.gltf"
+licence = "CC0-1.0"
+author = "Poly Haven"
+source = "https://polyhaven.com/a/modular_urban_apartments_facade"
+used_by = "osage-hologram: hologram-view (issue #7)"
+
+[[asset]]
+path = "assets/holograms/facade-256/view-r00-c13.png"
+made_by = "crates/osage-hologram hologram-bake (HOLOGRAM_KEY=1, 256 px, framed 13.75,6.75,-2.9,16.2)"
+made_from = "assets/polyhaven/modular_urban_apartments_facade/modular_urban_apartments_facade_1k.gltf"
+licence = "CC0-1.0"
+author = "Poly Haven"
+source = "https://polyhaven.com/a/modular_urban_apartments_facade"
+used_by = "osage-hologram: hologram-view (issue #7)"
+
+[[asset]]
+path = "assets/holograms/facade-256/view-r00-c14.png"
+made_by = "crates/osage-hologram hologram-bake (HOLOGRAM_KEY=1, 256 px, framed 13.75,6.75,-2.9,16.2)"
+made_from = "assets/polyhaven/modular_urban_apartments_facade/modular_urban_apartments_facade_1k.gltf"
+licence = "CC0-1.0"
+author = "Poly Haven"
+source = "https://polyhaven.com/a/modular_urban_apartments_facade"
+used_by = "osage-hologram: hologram-view (issue #7)"
+
+[[asset]]
+path = "assets/holograms/facade-256/view-r01-c00.png"
+made_by = "crates/osage-hologram hologram-bake (HOLOGRAM_KEY=1, 256 px, framed 13.75,6.75,-2.9,16.2)"
+made_from = "assets/polyhaven/modular_urban_apartments_facade/modular_urban_apartments_facade_1k.gltf"
+licence = "CC0-1.0"
+author = "Poly Haven"
+source = "https://polyhaven.com/a/modular_urban_apartments_facade"
+used_by = "osage-hologram: hologram-view (issue #7)"
+
+[[asset]]
+path = "assets/holograms/facade-256/view-r01-c01.png"
+made_by = "crates/osage-hologram hologram-bake (HOLOGRAM_KEY=1, 256 px, framed 13.75,6.75,-2.9,16.2)"
+made_from = "assets/polyhaven/modular_urban_apartments_facade/modular_urban_apartments_facade_1k.gltf"
+licence = "CC0-1.0"
+author = "Poly Haven"
+source = "https://polyhaven.com/a/modular_urban_apartments_facade"
+used_by = "osage-hologram: hologram-view (issue #7)"
+
+[[asset]]
+path = "assets/holograms/facade-256/view-r01-c02.png"
+made_by = "crates/osage-hologram hologram-bake (HOLOGRAM_KEY=1, 256 px, framed 13.75,6.75,-2.9,16.2)"
+made_from = "assets/polyhaven/modular_urban_apartments_facade/modular_urban_apartments_facade_1k.gltf"
+licence = "CC0-1.0"
+author = "Poly Haven"
+source = "https://polyhaven.com/a/modular_urban_apartments_facade"
+used_by = "osage-hologram: hologram-view (issue #7)"
+
+[[asset]]
+path = "assets/holograms/facade-256/view-r01-c03.png"
+made_by = "crates/osage-hologram hologram-bake (HOLOGRAM_KEY=1, 256 px, framed 13.75,6.75,-2.9,16.2)"
+made_from = "assets/polyhaven/modular_urban_apartments_facade/modular_urban_apartments_facade_1k.gltf"
+licence = "CC0-1.0"
+author = "Poly Haven"
+source = "https://polyhaven.com/a/modular_urban_apartments_facade"
+used_by = "osage-hologram: hologram-view (issue #7)"
+
+[[asset]]
+path = "assets/holograms/facade-256/view-r01-c04.png"
+made_by = "crates/osage-hologram hologram-bake (HOLOGRAM_KEY=1, 256 px, framed 13.75,6.75,-2.9,16.2)"
+made_from = "assets/polyhaven/modular_urban_apartments_facade/modular_urban_apartments_facade_1k.gltf"
+licence = "CC0-1.0"
+author = "Poly Haven"
+source = "https://polyhaven.com/a/modular_urban_apartments_facade"
+used_by = "osage-hologram: hologram-view (issue #7)"
+
+[[asset]]
+path = "assets/holograms/facade-256/view-r01-c05.png"
+made_by = "crates/osage-hologram hologram-bake (HOLOGRAM_KEY=1, 256 px, framed 13.75,6.75,-2.9,16.2)"
+made_from = "assets/polyhaven/modular_urban_apartments_facade/modular_urban_apartments_facade_1k.gltf"
+licence = "CC0-1.0"
+author = "Poly Haven"
+source = "https://polyhaven.com/a/modular_urban_apartments_facade"
+used_by = "osage-hologram: hologram-view (issue #7)"
+
+[[asset]]
+path = "assets/holograms/facade-256/view-r01-c06.png"
+made_by = "crates/osage-hologram hologram-bake (HOLOGRAM_KEY=1, 256 px, framed 13.75,6.75,-2.9,16.2)"
+made_from = "assets/polyhaven/modular_urban_apartments_facade/modular_urban_apartments_facade_1k.gltf"
+licence = "CC0-1.0"
+author = "Poly Haven"
+source = "https://polyhaven.com/a/modular_urban_apartments_facade"
+used_by = "osage-hologram: hologram-view (issue #7)"
+
+[[asset]]
+path = "assets/holograms/facade-256/view-r01-c07.png"
+made_by = "crates/osage-hologram hologram-bake (HOLOGRAM_KEY=1, 256 px, framed 13.75,6.75,-2.9,16.2)"
+made_from = "assets/polyhaven/modular_urban_apartments_facade/modular_urban_apartments_facade_1k.gltf"
+licence = "CC0-1.0"
+author = "Poly Haven"
+source = "https://polyhaven.com/a/modular_urban_apartments_facade"
+used_by = "osage-hologram: hologram-view (issue #7)"
+
+[[asset]]
+path = "assets/holograms/facade-256/view-r01-c08.png"
+made_by = "crates/osage-hologram hologram-bake (HOLOGRAM_KEY=1, 256 px, framed 13.75,6.75,-2.9,16.2)"
+made_from = "assets/polyhaven/modular_urban_apartments_facade/modular_urban_apartments_facade_1k.gltf"
+licence = "CC0-1.0"
+author = "Poly Haven"
+source = "https://polyhaven.com/a/modular_urban_apartments_facade"
+used_by = "osage-hologram: hologram-view (issue #7)"
+
+[[asset]]
+path = "assets/holograms/facade-256/view-r01-c09.png"
+made_by = "crates/osage-hologram hologram-bake (HOLOGRAM_KEY=1, 256 px, framed 13.75,6.75,-2.9,16.2)"
+made_from = "assets/polyhaven/modular_urban_apartments_facade/modular_urban_apartments_facade_1k.gltf"
+licence = "CC0-1.0"
+author = "Poly Haven"
+source = "https://polyhaven.com/a/modular_urban_apartments_facade"
+used_by = "osage-hologram: hologram-view (issue #7)"
+
+[[asset]]
+path = "assets/holograms/facade-256/view-r01-c10.png"
+made_by = "crates/osage-hologram hologram-bake (HOLOGRAM_KEY=1, 256 px, framed 13.75,6.75,-2.9,16.2)"
+made_from = "assets/polyhaven/modular_urban_apartments_facade/modular_urban_apartments_facade_1k.gltf"
+licence = "CC0-1.0"
+author = "Poly Haven"
+source = "https://polyhaven.com/a/modular_urban_apartments_facade"
+used_by = "osage-hologram: hologram-view (issue #7)"
+
+[[asset]]
+path = "assets/holograms/facade-256/view-r01-c11.png"
+made_by = "crates/osage-hologram hologram-bake (HOLOGRAM_KEY=1, 256 px, framed 13.75,6.75,-2.9,16.2)"
+made_from = "assets/polyhaven/modular_urban_apartments_facade/modular_urban_apartments_facade_1k.gltf"
+licence = "CC0-1.0"
+author = "Poly Haven"
+source = "https://polyhaven.com/a/modular_urban_apartments_facade"
+used_by = "osage-hologram: hologram-view (issue #7)"
+
+[[asset]]
+path = "assets/holograms/facade-256/view-r01-c12.png"
+made_by = "crates/osage-hologram hologram-bake (HOLOGRAM_KEY=1, 256 px, framed 13.75,6.75,-2.9,16.2)"
+made_from = "assets/polyhaven/modular_urban_apartments_facade/modular_urban_apartments_facade_1k.gltf"
+licence = "CC0-1.0"
+author = "Poly Haven"
+source = "https://polyhaven.com/a/modular_urban_apartments_facade"
+used_by = "osage-hologram: hologram-view (issue #7)"
+
+[[asset]]
+path = "assets/holograms/facade-256/view-r01-c13.png"
+made_by = "crates/osage-hologram hologram-bake (HOLOGRAM_KEY=1, 256 px, framed 13.75,6.75,-2.9,16.2)"
+made_from = "assets/polyhaven/modular_urban_apartments_facade/modular_urban_apartments_facade_1k.gltf"
+licence = "CC0-1.0"
+author = "Poly Haven"
+source = "https://polyhaven.com/a/modular_urban_apartments_facade"
+used_by = "osage-hologram: hologram-view (issue #7)"
+
+[[asset]]
+path = "assets/holograms/facade-256/view-r01-c14.png"
+made_by = "crates/osage-hologram hologram-bake (HOLOGRAM_KEY=1, 256 px, framed 13.75,6.75,-2.9,16.2)"
+made_from = "assets/polyhaven/modular_urban_apartments_facade/modular_urban_apartments_facade_1k.gltf"
+licence = "CC0-1.0"
+author = "Poly Haven"
+source = "https://polyhaven.com/a/modular_urban_apartments_facade"
+used_by = "osage-hologram: hologram-view (issue #7)"
+
+[[asset]]
+path = "assets/holograms/facade-256/view-r02-c00.png"
+made_by = "crates/osage-hologram hologram-bake (HOLOGRAM_KEY=1, 256 px, framed 13.75,6.75,-2.9,16.2)"
+made_from = "assets/polyhaven/modular_urban_apartments_facade/modular_urban_apartments_facade_1k.gltf"
+licence = "CC0-1.0"
+author = "Poly Haven"
+source = "https://polyhaven.com/a/modular_urban_apartments_facade"
+used_by = "osage-hologram: hologram-view (issue #7)"
+
+[[asset]]
+path = "assets/holograms/facade-256/view-r02-c01.png"
+made_by = "crates/osage-hologram hologram-bake (HOLOGRAM_KEY=1, 256 px, framed 13.75,6.75,-2.9,16.2)"
+made_from = "assets/polyhaven/modular_urban_apartments_facade/modular_urban_apartments_facade_1k.gltf"
+licence = "CC0-1.0"
+author = "Poly Haven"
+source = "https://polyhaven.com/a/modular_urban_apartments_facade"
+used_by = "osage-hologram: hologram-view (issue #7)"
+
+[[asset]]
+path = "assets/holograms/facade-256/view-r02-c02.png"
+made_by = "crates/osage-hologram hologram-bake (HOLOGRAM_KEY=1, 256 px, framed 13.75,6.75,-2.9,16.2)"
+made_from = "assets/polyhaven/modular_urban_apartments_facade/modular_urban_apartments_facade_1k.gltf"
+licence = "CC0-1.0"
+author = "Poly Haven"
+source = "https://polyhaven.com/a/modular_urban_apartments_facade"
+used_by = "osage-hologram: hologram-view (issue #7)"
+
+[[asset]]
+path = "assets/holograms/facade-256/view-r02-c03.png"
+made_by = "crates/osage-hologram hologram-bake (HOLOGRAM_KEY=1, 256 px, framed 13.75,6.75,-2.9,16.2)"
+made_from = "assets/polyhaven/modular_urban_apartments_facade/modular_urban_apartments_facade_1k.gltf"
+licence = "CC0-1.0"
+author = "Poly Haven"
+source = "https://polyhaven.com/a/modular_urban_apartments_facade"
+used_by = "osage-hologram: hologram-view (issue #7)"
+
+[[asset]]
+path = "assets/holograms/facade-256/view-r02-c04.png"
+made_by = "crates/osage-hologram hologram-bake (HOLOGRAM_KEY=1, 256 px, framed 13.75,6.75,-2.9,16.2)"
+made_from = "assets/polyhaven/modular_urban_apartments_facade/modular_urban_apartments_facade_1k.gltf"
+licence = "CC0-1.0"
+author = "Poly Haven"
+source = "https://polyhaven.com/a/modular_urban_apartments_facade"
+used_by = "osage-hologram: hologram-view (issue #7)"
+
+[[asset]]
+path = "assets/holograms/facade-256/view-r02-c05.png"
+made_by = "crates/osage-hologram hologram-bake (HOLOGRAM_KEY=1, 256 px, framed 13.75,6.75,-2.9,16.2)"
+made_from = "assets/polyhaven/modular_urban_apartments_facade/modular_urban_apartments_facade_1k.gltf"
+licence = "CC0-1.0"
+author = "Poly Haven"
+source = "https://polyhaven.com/a/modular_urban_apartments_facade"
+used_by = "osage-hologram: hologram-view (issue #7)"
+
+[[asset]]
+path = "assets/holograms/facade-256/view-r02-c06.png"
+made_by = "crates/osage-hologram hologram-bake (HOLOGRAM_KEY=1, 256 px, framed 13.75,6.75,-2.9,16.2)"
+made_from = "assets/polyhaven/modular_urban_apartments_facade/modular_urban_apartments_facade_1k.gltf"
+licence = "CC0-1.0"
+author = "Poly Haven"
+source = "https://polyhaven.com/a/modular_urban_apartments_facade"
+used_by = "osage-hologram: hologram-view (issue #7)"
+
+[[asset]]
+path = "assets/holograms/facade-256/view-r02-c07.png"
+made_by = "crates/osage-hologram hologram-bake (HOLOGRAM_KEY=1, 256 px, framed 13.75,6.75,-2.9,16.2)"
+made_from = "assets/polyhaven/modular_urban_apartments_facade/modular_urban_apartments_facade_1k.gltf"
+licence = "CC0-1.0"
+author = "Poly Haven"
+source = "https://polyhaven.com/a/modular_urban_apartments_facade"
+used_by = "osage-hologram: hologram-view (issue #7)"
+
+[[asset]]
+path = "assets/holograms/facade-256/view-r02-c08.png"
+made_by = "crates/osage-hologram hologram-bake (HOLOGRAM_KEY=1, 256 px, framed 13.75,6.75,-2.9,16.2)"
+made_from = "assets/polyhaven/modular_urban_apartments_facade/modular_urban_apartments_facade_1k.gltf"
+licence = "CC0-1.0"
+author = "Poly Haven"
+source = "https://polyhaven.com/a/modular_urban_apartments_facade"
+used_by = "osage-hologram: hologram-view (issue #7)"
+
+[[asset]]
+path = "assets/holograms/facade-256/view-r02-c09.png"
+made_by = "crates/osage-hologram hologram-bake (HOLOGRAM_KEY=1, 256 px, framed 13.75,6.75,-2.9,16.2)"
+made_from = "assets/polyhaven/modular_urban_apartments_facade/modular_urban_apartments_facade_1k.gltf"
+licence = "CC0-1.0"
+author = "Poly Haven"
+source = "https://polyhaven.com/a/modular_urban_apartments_facade"
+used_by = "osage-hologram: hologram-view (issue #7)"
+
+[[asset]]
+path = "assets/holograms/facade-256/view-r02-c10.png"
+made_by = "crates/osage-hologram hologram-bake (HOLOGRAM_KEY=1, 256 px, framed 13.75,6.75,-2.9,16.2)"
+made_from = "assets/polyhaven/modular_urban_apartments_facade/modular_urban_apartments_facade_1k.gltf"
+licence = "CC0-1.0"
+author = "Poly Haven"
+source = "https://polyhaven.com/a/modular_urban_apartments_facade"
+used_by = "osage-hologram: hologram-view (issue #7)"
+
+[[asset]]
+path = "assets/holograms/facade-256/view-r02-c11.png"
+made_by = "crates/osage-hologram hologram-bake (HOLOGRAM_KEY=1, 256 px, framed 13.75,6.75,-2.9,16.2)"
+made_from = "assets/polyhaven/modular_urban_apartments_facade/modular_urban_apartments_facade_1k.gltf"
+licence = "CC0-1.0"
+author = "Poly Haven"
+source = "https://polyhaven.com/a/modular_urban_apartments_facade"
+used_by = "osage-hologram: hologram-view (issue #7)"
+
+[[asset]]
+path = "assets/holograms/facade-256/view-r02-c12.png"
+made_by = "crates/osage-hologram hologram-bake (HOLOGRAM_KEY=1, 256 px, framed 13.75,6.75,-2.9,16.2)"
+made_from = "assets/polyhaven/modular_urban_apartments_facade/modular_urban_apartments_facade_1k.gltf"
+licence = "CC0-1.0"
+author = "Poly Haven"
+source = "https://polyhaven.com/a/modular_urban_apartments_facade"
+used_by = "osage-hologram: hologram-view (issue #7)"
+
+[[asset]]
+path = "assets/holograms/facade-256/view-r02-c13.png"
+made_by = "crates/osage-hologram hologram-bake (HOLOGRAM_KEY=1, 256 px, framed 13.75,6.75,-2.9,16.2)"
+made_from = "assets/polyhaven/modular_urban_apartments_facade/modular_urban_apartments_facade_1k.gltf"
+licence = "CC0-1.0"
+author = "Poly Haven"
+source = "https://polyhaven.com/a/modular_urban_apartments_facade"
+used_by = "osage-hologram: hologram-view (issue #7)"
+
+[[asset]]
+path = "assets/holograms/facade-256/view-r02-c14.png"
+made_by = "crates/osage-hologram hologram-bake (HOLOGRAM_KEY=1, 256 px, framed 13.75,6.75,-2.9,16.2)"
+made_from = "assets/polyhaven/modular_urban_apartments_facade/modular_urban_apartments_facade_1k.gltf"
+licence = "CC0-1.0"
+author = "Poly Haven"
+source = "https://polyhaven.com/a/modular_urban_apartments_facade"
+used_by = "osage-hologram: hologram-view (issue #7)"
+
+[[asset]]
+path = "assets/holograms/facade-256/view-r03-c00.png"
+made_by = "crates/osage-hologram hologram-bake (HOLOGRAM_KEY=1, 256 px, framed 13.75,6.75,-2.9,16.2)"
+made_from = "assets/polyhaven/modular_urban_apartments_facade/modular_urban_apartments_facade_1k.gltf"
+licence = "CC0-1.0"
+author = "Poly Haven"
+source = "https://polyhaven.com/a/modular_urban_apartments_facade"
+used_by = "osage-hologram: hologram-view (issue #7)"
+
+[[asset]]
+path = "assets/holograms/facade-256/view-r03-c01.png"
+made_by = "crates/osage-hologram hologram-bake (HOLOGRAM_KEY=1, 256 px, framed 13.75,6.75,-2.9,16.2)"
+made_from = "assets/polyhaven/modular_urban_apartments_facade/modular_urban_apartments_facade_1k.gltf"
+licence = "CC0-1.0"
+author = "Poly Haven"
+source = "https://polyhaven.com/a/modular_urban_apartments_facade"
+used_by = "osage-hologram: hologram-view (issue #7)"
+
+[[asset]]
+path = "assets/holograms/facade-256/view-r03-c02.png"
+made_by = "crates/osage-hologram hologram-bake (HOLOGRAM_KEY=1, 256 px, framed 13.75,6.75,-2.9,16.2)"
+made_from = "assets/polyhaven/modular_urban_apartments_facade/modular_urban_apartments_facade_1k.gltf"
+licence = "CC0-1.0"
+author = "Poly Haven"
+source = "https://polyhaven.com/a/modular_urban_apartments_facade"
+used_by = "osage-hologram: hologram-view (issue #7)"
+
+[[asset]]
+path = "assets/holograms/facade-256/view-r03-c03.png"
+made_by = "crates/osage-hologram hologram-bake (HOLOGRAM_KEY=1, 256 px, framed 13.75,6.75,-2.9,16.2)"
+made_from = "assets/polyhaven/modular_urban_apartments_facade/modular_urban_apartments_facade_1k.gltf"
+licence = "CC0-1.0"
+author = "Poly Haven"
+source = "https://polyhaven.com/a/modular_urban_apartments_facade"
+used_by = "osage-hologram: hologram-view (issue #7)"
+
+[[asset]]
+path = "assets/holograms/facade-256/view-r03-c04.png"
+made_by = "crates/osage-hologram hologram-bake (HOLOGRAM_KEY=1, 256 px, framed 13.75,6.75,-2.9,16.2)"
+made_from = "assets/polyhaven/modular_urban_apartments_facade/modular_urban_apartments_facade_1k.gltf"
+licence = "CC0-1.0"
+author = "Poly Haven"
+source = "https://polyhaven.com/a/modular_urban_apartments_facade"
+used_by = "osage-hologram: hologram-view (issue #7)"
+
+[[asset]]
+path = "assets/holograms/facade-256/view-r03-c05.png"
+made_by = "crates/osage-hologram hologram-bake (HOLOGRAM_KEY=1, 256 px, framed 13.75,6.75,-2.9,16.2)"
+made_from = "assets/polyhaven/modular_urban_apartments_facade/modular_urban_apartments_facade_1k.gltf"
+licence = "CC0-1.0"
+author = "Poly Haven"
+source = "https://polyhaven.com/a/modular_urban_apartments_facade"
+used_by = "osage-hologram: hologram-view (issue #7)"
+
+[[asset]]
+path = "assets/holograms/facade-256/view-r03-c06.png"
+made_by = "crates/osage-hologram hologram-bake (HOLOGRAM_KEY=1, 256 px, framed 13.75,6.75,-2.9,16.2)"
+made_from = "assets/polyhaven/modular_urban_apartments_facade/modular_urban_apartments_facade_1k.gltf"
+licence = "CC0-1.0"
+author = "Poly Haven"
+source = "https://polyhaven.com/a/modular_urban_apartments_facade"
+used_by = "osage-hologram: hologram-view (issue #7)"
+
+[[asset]]
+path = "assets/holograms/facade-256/view-r03-c07.png"
+made_by = "crates/osage-hologram hologram-bake (HOLOGRAM_KEY=1, 256 px, framed 13.75,6.75,-2.9,16.2)"
+made_from = "assets/polyhaven/modular_urban_apartments_facade/modular_urban_apartments_facade_1k.gltf"
+licence = "CC0-1.0"
+author = "Poly Haven"
+source = "https://polyhaven.com/a/modular_urban_apartments_facade"
+used_by = "osage-hologram: hologram-view (issue #7)"
+
+[[asset]]
+path = "assets/holograms/facade-256/view-r03-c08.png"
+made_by = "crates/osage-hologram hologram-bake (HOLOGRAM_KEY=1, 256 px, framed 13.75,6.75,-2.9,16.2)"
+made_from = "assets/polyhaven/modular_urban_apartments_facade/modular_urban_apartments_facade_1k.gltf"
+licence = "CC0-1.0"
+author = "Poly Haven"
+source = "https://polyhaven.com/a/modular_urban_apartments_facade"
+used_by = "osage-hologram: hologram-view (issue #7)"
+
+[[asset]]
+path = "assets/holograms/facade-256/view-r03-c09.png"
+made_by = "crates/osage-hologram hologram-bake (HOLOGRAM_KEY=1, 256 px, framed 13.75,6.75,-2.9,16.2)"
+made_from = "assets/polyhaven/modular_urban_apartments_facade/modular_urban_apartments_facade_1k.gltf"
+licence = "CC0-1.0"
+author = "Poly Haven"
+source = "https://polyhaven.com/a/modular_urban_apartments_facade"
+used_by = "osage-hologram: hologram-view (issue #7)"
+
+[[asset]]
+path = "assets/holograms/facade-256/view-r03-c10.png"
+made_by = "crates/osage-hologram hologram-bake (HOLOGRAM_KEY=1, 256 px, framed 13.75,6.75,-2.9,16.2)"
+made_from = "assets/polyhaven/modular_urban_apartments_facade/modular_urban_apartments_facade_1k.gltf"
+licence = "CC0-1.0"
+author = "Poly Haven"
+source = "https://polyhaven.com/a/modular_urban_apartments_facade"
+used_by = "osage-hologram: hologram-view (issue #7)"
+
+[[asset]]
+path = "assets/holograms/facade-256/view-r03-c11.png"
+made_by = "crates/osage-hologram hologram-bake (HOLOGRAM_KEY=1, 256 px, framed 13.75,6.75,-2.9,16.2)"
+made_from = "assets/polyhaven/modular_urban_apartments_facade/modular_urban_apartments_facade_1k.gltf"
+licence = "CC0-1.0"
+author = "Poly Haven"
+source = "https://polyhaven.com/a/modular_urban_apartments_facade"
+used_by = "osage-hologram: hologram-view (issue #7)"
+
+[[asset]]
+path = "assets/holograms/facade-256/view-r03-c12.png"
+made_by = "crates/osage-hologram hologram-bake (HOLOGRAM_KEY=1, 256 px, framed 13.75,6.75,-2.9,16.2)"
+made_from = "assets/polyhaven/modular_urban_apartments_facade/modular_urban_apartments_facade_1k.gltf"
+licence = "CC0-1.0"
+author = "Poly Haven"
+source = "https://polyhaven.com/a/modular_urban_apartments_facade"
+used_by = "osage-hologram: hologram-view (issue #7)"
+
+[[asset]]
+path = "assets/holograms/facade-256/view-r03-c13.png"
+made_by = "crates/osage-hologram hologram-bake (HOLOGRAM_KEY=1, 256 px, framed 13.75,6.75,-2.9,16.2)"
+made_from = "assets/polyhaven/modular_urban_apartments_facade/modular_urban_apartments_facade_1k.gltf"
+licence = "CC0-1.0"
+author = "Poly Haven"
+source = "https://polyhaven.com/a/modular_urban_apartments_facade"
+used_by = "osage-hologram: hologram-view (issue #7)"
+
+[[asset]]
+path = "assets/holograms/facade-256/view-r03-c14.png"
+made_by = "crates/osage-hologram hologram-bake (HOLOGRAM_KEY=1, 256 px, framed 13.75,6.75,-2.9,16.2)"
+made_from = "assets/polyhaven/modular_urban_apartments_facade/modular_urban_apartments_facade_1k.gltf"
+licence = "CC0-1.0"
+author = "Poly Haven"
+source = "https://polyhaven.com/a/modular_urban_apartments_facade"
+used_by = "osage-hologram: hologram-view (issue #7)"
+
+[[asset]]
+path = "assets/holograms/facade-256/view-r04-c00.png"
+made_by = "crates/osage-hologram hologram-bake (HOLOGRAM_KEY=1, 256 px, framed 13.75,6.75,-2.9,16.2)"
+made_from = "assets/polyhaven/modular_urban_apartments_facade/modular_urban_apartments_facade_1k.gltf"
+licence = "CC0-1.0"
+author = "Poly Haven"
+source = "https://polyhaven.com/a/modular_urban_apartments_facade"
+used_by = "osage-hologram: hologram-view (issue #7)"
+
+[[asset]]
+path = "assets/holograms/facade-256/view-r04-c01.png"
+made_by = "crates/osage-hologram hologram-bake (HOLOGRAM_KEY=1, 256 px, framed 13.75,6.75,-2.9,16.2)"
+made_from = "assets/polyhaven/modular_urban_apartments_facade/modular_urban_apartments_facade_1k.gltf"
+licence = "CC0-1.0"
+author = "Poly Haven"
+source = "https://polyhaven.com/a/modular_urban_apartments_facade"
+used_by = "osage-hologram: hologram-view (issue #7)"
+
+[[asset]]
+path = "assets/holograms/facade-256/view-r04-c02.png"
+made_by = "crates/osage-hologram hologram-bake (HOLOGRAM_KEY=1, 256 px, framed 13.75,6.75,-2.9,16.2)"
+made_from = "assets/polyhaven/modular_urban_apartments_facade/modular_urban_apartments_facade_1k.gltf"
+licence = "CC0-1.0"
+author = "Poly Haven"
+source = "https://polyhaven.com/a/modular_urban_apartments_facade"
+used_by = "osage-hologram: hologram-view (issue #7)"
+
+[[asset]]
+path = "assets/holograms/facade-256/view-r04-c03.png"
+made_by = "crates/osage-hologram hologram-bake (HOLOGRAM_KEY=1, 256 px, framed 13.75,6.75,-2.9,16.2)"
+made_from = "assets/polyhaven/modular_urban_apartments_facade/modular_urban_apartments_facade_1k.gltf"
+licence = "CC0-1.0"
+author = "Poly Haven"
+source = "https://polyhaven.com/a/modular_urban_apartments_facade"
+used_by = "osage-hologram: hologram-view (issue #7)"
+
+[[asset]]
+path = "assets/holograms/facade-256/view-r04-c04.png"
+made_by = "crates/osage-hologram hologram-bake (HOLOGRAM_KEY=1, 256 px, framed 13.75,6.75,-2.9,16.2)"
+made_from = "assets/polyhaven/modular_urban_apartments_facade/modular_urban_apartments_facade_1k.gltf"
+licence = "CC0-1.0"
+author = "Poly Haven"
+source = "https://polyhaven.com/a/modular_urban_apartments_facade"
+used_by = "osage-hologram: hologram-view (issue #7)"
+
+[[asset]]
+path = "assets/holograms/facade-256/view-r04-c05.png"
+made_by = "crates/osage-hologram hologram-bake (HOLOGRAM_KEY=1, 256 px, framed 13.75,6.75,-2.9,16.2)"
+made_from = "assets/polyhaven/modular_urban_apartments_facade/modular_urban_apartments_facade_1k.gltf"
+licence = "CC0-1.0"
+author = "Poly Haven"
+source = "https://polyhaven.com/a/modular_urban_apartments_facade"
+used_by = "osage-hologram: hologram-view (issue #7)"
+
+[[asset]]
+path = "assets/holograms/facade-256/view-r04-c06.png"
+made_by = "crates/osage-hologram hologram-bake (HOLOGRAM_KEY=1, 256 px, framed 13.75,6.75,-2.9,16.2)"
+made_from = "assets/polyhaven/modular_urban_apartments_facade/modular_urban_apartments_facade_1k.gltf"
+licence = "CC0-1.0"
+author = "Poly Haven"
+source = "https://polyhaven.com/a/modular_urban_apartments_facade"
+used_by = "osage-hologram: hologram-view (issue #7)"
+
+[[asset]]
+path = "assets/holograms/facade-256/view-r04-c07.png"
+made_by = "crates/osage-hologram hologram-bake (HOLOGRAM_KEY=1, 256 px, framed 13.75,6.75,-2.9,16.2)"
+made_from = "assets/polyhaven/modular_urban_apartments_facade/modular_urban_apartments_facade_1k.gltf"
+licence = "CC0-1.0"
+author = "Poly Haven"
+source = "https://polyhaven.com/a/modular_urban_apartments_facade"
+used_by = "osage-hologram: hologram-view (issue #7)"
+
+[[asset]]
+path = "assets/holograms/facade-256/view-r04-c08.png"
+made_by = "crates/osage-hologram hologram-bake (HOLOGRAM_KEY=1, 256 px, framed 13.75,6.75,-2.9,16.2)"
+made_from = "assets/polyhaven/modular_urban_apartments_facade/modular_urban_apartments_facade_1k.gltf"
+licence = "CC0-1.0"
+author = "Poly Haven"
+source = "https://polyhaven.com/a/modular_urban_apartments_facade"
+used_by = "osage-hologram: hologram-view (issue #7)"
+
+[[asset]]
+path = "assets/holograms/facade-256/view-r04-c09.png"
+made_by = "crates/osage-hologram hologram-bake (HOLOGRAM_KEY=1, 256 px, framed 13.75,6.75,-2.9,16.2)"
+made_from = "assets/polyhaven/modular_urban_apartments_facade/modular_urban_apartments_facade_1k.gltf"
+licence = "CC0-1.0"
+author = "Poly Haven"
+source = "https://polyhaven.com/a/modular_urban_apartments_facade"
+used_by = "osage-hologram: hologram-view (issue #7)"
+
+[[asset]]
+path = "assets/holograms/facade-256/view-r04-c10.png"
+made_by = "crates/osage-hologram hologram-bake (HOLOGRAM_KEY=1, 256 px, framed 13.75,6.75,-2.9,16.2)"
+made_from = "assets/polyhaven/modular_urban_apartments_facade/modular_urban_apartments_facade_1k.gltf"
+licence = "CC0-1.0"
+author = "Poly Haven"
+source = "https://polyhaven.com/a/modular_urban_apartments_facade"
+used_by = "osage-hologram: hologram-view (issue #7)"
+
+[[asset]]
+path = "assets/holograms/facade-256/view-r04-c11.png"
+made_by = "crates/osage-hologram hologram-bake (HOLOGRAM_KEY=1, 256 px, framed 13.75,6.75,-2.9,16.2)"
+made_from = "assets/polyhaven/modular_urban_apartments_facade/modular_urban_apartments_facade_1k.gltf"
+licence = "CC0-1.0"
+author = "Poly Haven"
+source = "https://polyhaven.com/a/modular_urban_apartments_facade"
+used_by = "osage-hologram: hologram-view (issue #7)"
+
+[[asset]]
+path = "assets/holograms/facade-256/view-r04-c12.png"
+made_by = "crates/osage-hologram hologram-bake (HOLOGRAM_KEY=1, 256 px, framed 13.75,6.75,-2.9,16.2)"
+made_from = "assets/polyhaven/modular_urban_apartments_facade/modular_urban_apartments_facade_1k.gltf"
+licence = "CC0-1.0"
+author = "Poly Haven"
+source = "https://polyhaven.com/a/modular_urban_apartments_facade"
+used_by = "osage-hologram: hologram-view (issue #7)"
+
+[[asset]]
+path = "assets/holograms/facade-256/view-r04-c13.png"
+made_by = "crates/osage-hologram hologram-bake (HOLOGRAM_KEY=1, 256 px, framed 13.75,6.75,-2.9,16.2)"
+made_from = "assets/polyhaven/modular_urban_apartments_facade/modular_urban_apartments_facade_1k.gltf"
+licence = "CC0-1.0"
+author = "Poly Haven"
+source = "https://polyhaven.com/a/modular_urban_apartments_facade"
+used_by = "osage-hologram: hologram-view (issue #7)"
+
+[[asset]]
+path = "assets/holograms/facade-256/view-r04-c14.png"
+made_by = "crates/osage-hologram hologram-bake (HOLOGRAM_KEY=1, 256 px, framed 13.75,6.75,-2.9,16.2)"
+made_from = "assets/polyhaven/modular_urban_apartments_facade/modular_urban_apartments_facade_1k.gltf"
+licence = "CC0-1.0"
+author = "Poly Haven"
+source = "https://polyhaven.com/a/modular_urban_apartments_facade"
+used_by = "osage-hologram: hologram-view (issue #7)"
+
+[[asset]]
+path = "assets/holograms/facade-256/view-r05-c00.png"
+made_by = "crates/osage-hologram hologram-bake (HOLOGRAM_KEY=1, 256 px, framed 13.75,6.75,-2.9,16.2)"
+made_from = "assets/polyhaven/modular_urban_apartments_facade/modular_urban_apartments_facade_1k.gltf"
+licence = "CC0-1.0"
+author = "Poly Haven"
+source = "https://polyhaven.com/a/modular_urban_apartments_facade"
+used_by = "osage-hologram: hologram-view (issue #7)"
+
+[[asset]]
+path = "assets/holograms/facade-256/view-r05-c01.png"
+made_by = "crates/osage-hologram hologram-bake (HOLOGRAM_KEY=1, 256 px, framed 13.75,6.75,-2.9,16.2)"
+made_from = "assets/polyhaven/modular_urban_apartments_facade/modular_urban_apartments_facade_1k.gltf"
+licence = "CC0-1.0"
+author = "Poly Haven"
+source = "https://polyhaven.com/a/modular_urban_apartments_facade"
+used_by = "osage-hologram: hologram-view (issue #7)"
+
+[[asset]]
+path = "assets/holograms/facade-256/view-r05-c02.png"
+made_by = "crates/osage-hologram hologram-bake (HOLOGRAM_KEY=1, 256 px, framed 13.75,6.75,-2.9,16.2)"
+made_from = "assets/polyhaven/modular_urban_apartments_facade/modular_urban_apartments_facade_1k.gltf"
+licence = "CC0-1.0"
+author = "Poly Haven"
+source = "https://polyhaven.com/a/modular_urban_apartments_facade"
+used_by = "osage-hologram: hologram-view (issue #7)"
+
+[[asset]]
+path = "assets/holograms/facade-256/view-r05-c03.png"
+made_by = "crates/osage-hologram hologram-bake (HOLOGRAM_KEY=1, 256 px, framed 13.75,6.75,-2.9,16.2)"
+made_from = "assets/polyhaven/modular_urban_apartments_facade/modular_urban_apartments_facade_1k.gltf"
+licence = "CC0-1.0"
+author = "Poly Haven"
+source = "https://polyhaven.com/a/modular_urban_apartments_facade"
+used_by = "osage-hologram: hologram-view (issue #7)"
+
+[[asset]]
+path = "assets/holograms/facade-256/view-r05-c04.png"
+made_by = "crates/osage-hologram hologram-bake (HOLOGRAM_KEY=1, 256 px, framed 13.75,6.75,-2.9,16.2)"
+made_from = "assets/polyhaven/modular_urban_apartments_facade/modular_urban_apartments_facade_1k.gltf"
+licence = "CC0-1.0"
+author = "Poly Haven"
+source = "https://polyhaven.com/a/modular_urban_apartments_facade"
+used_by = "osage-hologram: hologram-view (issue #7)"
+
+[[asset]]
+path = "assets/holograms/facade-256/view-r05-c05.png"
+made_by = "crates/osage-hologram hologram-bake (HOLOGRAM_KEY=1, 256 px, framed 13.75,6.75,-2.9,16.2)"
+made_from = "assets/polyhaven/modular_urban_apartments_facade/modular_urban_apartments_facade_1k.gltf"
+licence = "CC0-1.0"
+author = "Poly Haven"
+source = "https://polyhaven.com/a/modular_urban_apartments_facade"
+used_by = "osage-hologram: hologram-view (issue #7)"
+
+[[asset]]
+path = "assets/holograms/facade-256/view-r05-c06.png"
+made_by = "crates/osage-hologram hologram-bake (HOLOGRAM_KEY=1, 256 px, framed 13.75,6.75,-2.9,16.2)"
+made_from = "assets/polyhaven/modular_urban_apartments_facade/modular_urban_apartments_facade_1k.gltf"
+licence = "CC0-1.0"
+author = "Poly Haven"
+source = "https://polyhaven.com/a/modular_urban_apartments_facade"
+used_by = "osage-hologram: hologram-view (issue #7)"
+
+[[asset]]
+path = "assets/holograms/facade-256/view-r05-c07.png"
+made_by = "crates/osage-hologram hologram-bake (HOLOGRAM_KEY=1, 256 px, framed 13.75,6.75,-2.9,16.2)"
+made_from = "assets/polyhaven/modular_urban_apartments_facade/modular_urban_apartments_facade_1k.gltf"
+licence = "CC0-1.0"
+author = "Poly Haven"
+source = "https://polyhaven.com/a/modular_urban_apartments_facade"
+used_by = "osage-hologram: hologram-view (issue #7)"
+
+[[asset]]
+path = "assets/holograms/facade-256/view-r05-c08.png"
+made_by = "crates/osage-hologram hologram-bake (HOLOGRAM_KEY=1, 256 px, framed 13.75,6.75,-2.9,16.2)"
+made_from = "assets/polyhaven/modular_urban_apartments_facade/modular_urban_apartments_facade_1k.gltf"
+licence = "CC0-1.0"
+author = "Poly Haven"
+source = "https://polyhaven.com/a/modular_urban_apartments_facade"
+used_by = "osage-hologram: hologram-view (issue #7)"
+
+[[asset]]
+path = "assets/holograms/facade-256/view-r05-c09.png"
+made_by = "crates/osage-hologram hologram-bake (HOLOGRAM_KEY=1, 256 px, framed 13.75,6.75,-2.9,16.2)"
+made_from = "assets/polyhaven/modular_urban_apartments_facade/modular_urban_apartments_facade_1k.gltf"
+licence = "CC0-1.0"
+author = "Poly Haven"
+source = "https://polyhaven.com/a/modular_urban_apartments_facade"
+used_by = "osage-hologram: hologram-view (issue #7)"
+
+[[asset]]
+path = "assets/holograms/facade-256/view-r05-c10.png"
+made_by = "crates/osage-hologram hologram-bake (HOLOGRAM_KEY=1, 256 px, framed 13.75,6.75,-2.9,16.2)"
+made_from = "assets/polyhaven/modular_urban_apartments_facade/modular_urban_apartments_facade_1k.gltf"
+licence = "CC0-1.0"
+author = "Poly Haven"
+source = "https://polyhaven.com/a/modular_urban_apartments_facade"
+used_by = "osage-hologram: hologram-view (issue #7)"
+
+[[asset]]
+path = "assets/holograms/facade-256/view-r05-c11.png"
+made_by = "crates/osage-hologram hologram-bake (HOLOGRAM_KEY=1, 256 px, framed 13.75,6.75,-2.9,16.2)"
+made_from = "assets/polyhaven/modular_urban_apartments_facade/modular_urban_apartments_facade_1k.gltf"
+licence = "CC0-1.0"
+author = "Poly Haven"
+source = "https://polyhaven.com/a/modular_urban_apartments_facade"
+used_by = "osage-hologram: hologram-view (issue #7)"
+
+[[asset]]
+path = "assets/holograms/facade-256/view-r05-c12.png"
+made_by = "crates/osage-hologram hologram-bake (HOLOGRAM_KEY=1, 256 px, framed 13.75,6.75,-2.9,16.2)"
+made_from = "assets/polyhaven/modular_urban_apartments_facade/modular_urban_apartments_facade_1k.gltf"
+licence = "CC0-1.0"
+author = "Poly Haven"
+source = "https://polyhaven.com/a/modular_urban_apartments_facade"
+used_by = "osage-hologram: hologram-view (issue #7)"
+
+[[asset]]
+path = "assets/holograms/facade-256/view-r05-c13.png"
+made_by = "crates/osage-hologram hologram-bake (HOLOGRAM_KEY=1, 256 px, framed 13.75,6.75,-2.9,16.2)"
+made_from = "assets/polyhaven/modular_urban_apartments_facade/modular_urban_apartments_facade_1k.gltf"
+licence = "CC0-1.0"
+author = "Poly Haven"
+source = "https://polyhaven.com/a/modular_urban_apartments_facade"
+used_by = "osage-hologram: hologram-view (issue #7)"
+
+[[asset]]
+path = "assets/holograms/facade-256/view-r05-c14.png"
+made_by = "crates/osage-hologram hologram-bake (HOLOGRAM_KEY=1, 256 px, framed 13.75,6.75,-2.9,16.2)"
+made_from = "assets/polyhaven/modular_urban_apartments_facade/modular_urban_apartments_facade_1k.gltf"
+licence = "CC0-1.0"
+author = "Poly Haven"
+source = "https://polyhaven.com/a/modular_urban_apartments_facade"
+used_by = "osage-hologram: hologram-view (issue #7)"
+
+[[asset]]
+path = "assets/holograms/facade-256/view-r06-c00.png"
+made_by = "crates/osage-hologram hologram-bake (HOLOGRAM_KEY=1, 256 px, framed 13.75,6.75,-2.9,16.2)"
+made_from = "assets/polyhaven/modular_urban_apartments_facade/modular_urban_apartments_facade_1k.gltf"
+licence = "CC0-1.0"
+author = "Poly Haven"
+source = "https://polyhaven.com/a/modular_urban_apartments_facade"
+used_by = "osage-hologram: hologram-view (issue #7)"
+
+[[asset]]
+path = "assets/holograms/facade-256/view-r06-c01.png"
+made_by = "crates/osage-hologram hologram-bake (HOLOGRAM_KEY=1, 256 px, framed 13.75,6.75,-2.9,16.2)"
+made_from = "assets/polyhaven/modular_urban_apartments_facade/modular_urban_apartments_facade_1k.gltf"
+licence = "CC0-1.0"
+author = "Poly Haven"
+source = "https://polyhaven.com/a/modular_urban_apartments_facade"
+used_by = "osage-hologram: hologram-view (issue #7)"
+
+[[asset]]
+path = "assets/holograms/facade-256/view-r06-c02.png"
+made_by = "crates/osage-hologram hologram-bake (HOLOGRAM_KEY=1, 256 px, framed 13.75,6.75,-2.9,16.2)"
+made_from = "assets/polyhaven/modular_urban_apartments_facade/modular_urban_apartments_facade_1k.gltf"
+licence = "CC0-1.0"
+author = "Poly Haven"
+source = "https://polyhaven.com/a/modular_urban_apartments_facade"
+used_by = "osage-hologram: hologram-view (issue #7)"
+
+[[asset]]
+path = "assets/holograms/facade-256/view-r06-c03.png"
+made_by = "crates/osage-hologram hologram-bake (HOLOGRAM_KEY=1, 256 px, framed 13.75,6.75,-2.9,16.2)"
+made_from = "assets/polyhaven/modular_urban_apartments_facade/modular_urban_apartments_facade_1k.gltf"
+licence = "CC0-1.0"
+author = "Poly Haven"
+source = "https://polyhaven.com/a/modular_urban_apartments_facade"
+used_by = "osage-hologram: hologram-view (issue #7)"
+
+[[asset]]
+path = "assets/holograms/facade-256/view-r06-c04.png"
+made_by = "crates/osage-hologram hologram-bake (HOLOGRAM_KEY=1, 256 px, framed 13.75,6.75,-2.9,16.2)"
+made_from = "assets/polyhaven/modular_urban_apartments_facade/modular_urban_apartments_facade_1k.gltf"
+licence = "CC0-1.0"
+author = "Poly Haven"
+source = "https://polyhaven.com/a/modular_urban_apartments_facade"
+used_by = "osage-hologram: hologram-view (issue #7)"
+
+[[asset]]
+path = "assets/holograms/facade-256/view-r06-c05.png"
+made_by = "crates/osage-hologram hologram-bake (HOLOGRAM_KEY=1, 256 px, framed 13.75,6.75,-2.9,16.2)"
+made_from = "assets/polyhaven/modular_urban_apartments_facade/modular_urban_apartments_facade_1k.gltf"
+licence = "CC0-1.0"
+author = "Poly Haven"
+source = "https://polyhaven.com/a/modular_urban_apartments_facade"
+used_by = "osage-hologram: hologram-view (issue #7)"
+
+[[asset]]
+path = "assets/holograms/facade-256/view-r06-c06.png"
+made_by = "crates/osage-hologram hologram-bake (HOLOGRAM_KEY=1, 256 px, framed 13.75,6.75,-2.9,16.2)"
+made_from = "assets/polyhaven/modular_urban_apartments_facade/modular_urban_apartments_facade_1k.gltf"
+licence = "CC0-1.0"
+author = "Poly Haven"
+source = "https://polyhaven.com/a/modular_urban_apartments_facade"
+used_by = "osage-hologram: hologram-view (issue #7)"
+
+[[asset]]
+path = "assets/holograms/facade-256/view-r06-c07.png"
+made_by = "crates/osage-hologram hologram-bake (HOLOGRAM_KEY=1, 256 px, framed 13.75,6.75,-2.9,16.2)"
+made_from = "assets/polyhaven/modular_urban_apartments_facade/modular_urban_apartments_facade_1k.gltf"
+licence = "CC0-1.0"
+author = "Poly Haven"
+source = "https://polyhaven.com/a/modular_urban_apartments_facade"
+used_by = "osage-hologram: hologram-view (issue #7)"
+
+[[asset]]
+path = "assets/holograms/facade-256/view-r06-c08.png"
+made_by = "crates/osage-hologram hologram-bake (HOLOGRAM_KEY=1, 256 px, framed 13.75,6.75,-2.9,16.2)"
+made_from = "assets/polyhaven/modular_urban_apartments_facade/modular_urban_apartments_facade_1k.gltf"
+licence = "CC0-1.0"
+author = "Poly Haven"
+source = "https://polyhaven.com/a/modular_urban_apartments_facade"
+used_by = "osage-hologram: hologram-view (issue #7)"
+
+[[asset]]
+path = "assets/holograms/facade-256/view-r06-c09.png"
+made_by = "crates/osage-hologram hologram-bake (HOLOGRAM_KEY=1, 256 px, framed 13.75,6.75,-2.9,16.2)"
+made_from = "assets/polyhaven/modular_urban_apartments_facade/modular_urban_apartments_facade_1k.gltf"
+licence = "CC0-1.0"
+author = "Poly Haven"
+source = "https://polyhaven.com/a/modular_urban_apartments_facade"
+used_by = "osage-hologram: hologram-view (issue #7)"
+
+[[asset]]
+path = "assets/holograms/facade-256/view-r06-c10.png"
+made_by = "crates/osage-hologram hologram-bake (HOLOGRAM_KEY=1, 256 px, framed 13.75,6.75,-2.9,16.2)"
+made_from = "assets/polyhaven/modular_urban_apartments_facade/modular_urban_apartments_facade_1k.gltf"
+licence = "CC0-1.0"
+author = "Poly Haven"
+source = "https://polyhaven.com/a/modular_urban_apartments_facade"
+used_by = "osage-hologram: hologram-view (issue #7)"
+
+[[asset]]
+path = "assets/holograms/facade-256/view-r06-c11.png"
+made_by = "crates/osage-hologram hologram-bake (HOLOGRAM_KEY=1, 256 px, framed 13.75,6.75,-2.9,16.2)"
+made_from = "assets/polyhaven/modular_urban_apartments_facade/modular_urban_apartments_facade_1k.gltf"
+licence = "CC0-1.0"
+author = "Poly Haven"
+source = "https://polyhaven.com/a/modular_urban_apartments_facade"
+used_by = "osage-hologram: hologram-view (issue #7)"
+
+[[asset]]
+path = "assets/holograms/facade-256/view-r06-c12.png"
+made_by = "crates/osage-hologram hologram-bake (HOLOGRAM_KEY=1, 256 px, framed 13.75,6.75,-2.9,16.2)"
+made_from = "assets/polyhaven/modular_urban_apartments_facade/modular_urban_apartments_facade_1k.gltf"
+licence = "CC0-1.0"
+author = "Poly Haven"
+source = "https://polyhaven.com/a/modular_urban_apartments_facade"
+used_by = "osage-hologram: hologram-view (issue #7)"
+
+[[asset]]
+path = "assets/holograms/facade-256/view-r06-c13.png"
+made_by = "crates/osage-hologram hologram-bake (HOLOGRAM_KEY=1, 256 px, framed 13.75,6.75,-2.9,16.2)"
+made_from = "assets/polyhaven/modular_urban_apartments_facade/modular_urban_apartments_facade_1k.gltf"
+licence = "CC0-1.0"
+author = "Poly Haven"
+source = "https://polyhaven.com/a/modular_urban_apartments_facade"
+used_by = "osage-hologram: hologram-view (issue #7)"
+
+[[asset]]
+path = "assets/holograms/facade-256/view-r06-c14.png"
+made_by = "crates/osage-hologram hologram-bake (HOLOGRAM_KEY=1, 256 px, framed 13.75,6.75,-2.9,16.2)"
+made_from = "assets/polyhaven/modular_urban_apartments_facade/modular_urban_apartments_facade_1k.gltf"
+licence = "CC0-1.0"
+author = "Poly Haven"
+source = "https://polyhaven.com/a/modular_urban_apartments_facade"
+used_by = "osage-hologram: hologram-view (issue #7)"
+
+[[asset]]
+path = "assets/holograms/facade-256/view-r07-c00.png"
+made_by = "crates/osage-hologram hologram-bake (HOLOGRAM_KEY=1, 256 px, framed 13.75,6.75,-2.9,16.2)"
+made_from = "assets/polyhaven/modular_urban_apartments_facade/modular_urban_apartments_facade_1k.gltf"
+licence = "CC0-1.0"
+author = "Poly Haven"
+source = "https://polyhaven.com/a/modular_urban_apartments_facade"
+used_by = "osage-hologram: hologram-view (issue #7)"
+
+[[asset]]
+path = "assets/holograms/facade-256/view-r07-c01.png"
+made_by = "crates/osage-hologram hologram-bake (HOLOGRAM_KEY=1, 256 px, framed 13.75,6.75,-2.9,16.2)"
+made_from = "assets/polyhaven/modular_urban_apartments_facade/modular_urban_apartments_facade_1k.gltf"
+licence = "CC0-1.0"
+author = "Poly Haven"
+source = "https://polyhaven.com/a/modular_urban_apartments_facade"
+used_by = "osage-hologram: hologram-view (issue #7)"
+
+[[asset]]
+path = "assets/holograms/facade-256/view-r07-c02.png"
+made_by = "crates/osage-hologram hologram-bake (HOLOGRAM_KEY=1, 256 px, framed 13.75,6.75,-2.9,16.2)"
+made_from = "assets/polyhaven/modular_urban_apartments_facade/modular_urban_apartments_facade_1k.gltf"
+licence = "CC0-1.0"
+author = "Poly Haven"
+source = "https://polyhaven.com/a/modular_urban_apartments_facade"
+used_by = "osage-hologram: hologram-view (issue #7)"
+
+[[asset]]
+path = "assets/holograms/facade-256/view-r07-c03.png"
+made_by = "crates/osage-hologram hologram-bake (HOLOGRAM_KEY=1, 256 px, framed 13.75,6.75,-2.9,16.2)"
+made_from = "assets/polyhaven/modular_urban_apartments_facade/modular_urban_apartments_facade_1k.gltf"
+licence = "CC0-1.0"
+author = "Poly Haven"
+source = "https://polyhaven.com/a/modular_urban_apartments_facade"
+used_by = "osage-hologram: hologram-view (issue #7)"
+
+[[asset]]
+path = "assets/holograms/facade-256/view-r07-c04.png"
+made_by = "crates/osage-hologram hologram-bake (HOLOGRAM_KEY=1, 256 px, framed 13.75,6.75,-2.9,16.2)"
+made_from = "assets/polyhaven/modular_urban_apartments_facade/modular_urban_apartments_facade_1k.gltf"
+licence = "CC0-1.0"
+author = "Poly Haven"
+source = "https://polyhaven.com/a/modular_urban_apartments_facade"
+used_by = "osage-hologram: hologram-view (issue #7)"
+
+[[asset]]
+path = "assets/holograms/facade-256/view-r07-c05.png"
+made_by = "crates/osage-hologram hologram-bake (HOLOGRAM_KEY=1, 256 px, framed 13.75,6.75,-2.9,16.2)"
+made_from = "assets/polyhaven/modular_urban_apartments_facade/modular_urban_apartments_facade_1k.gltf"
+licence = "CC0-1.0"
+author = "Poly Haven"
+source = "https://polyhaven.com/a/modular_urban_apartments_facade"
+used_by = "osage-hologram: hologram-view (issue #7)"
+
+[[asset]]
+path = "assets/holograms/facade-256/view-r07-c06.png"
+made_by = "crates/osage-hologram hologram-bake (HOLOGRAM_KEY=1, 256 px, framed 13.75,6.75,-2.9,16.2)"
+made_from = "assets/polyhaven/modular_urban_apartments_facade/modular_urban_apartments_facade_1k.gltf"
+licence = "CC0-1.0"
+author = "Poly Haven"
+source = "https://polyhaven.com/a/modular_urban_apartments_facade"
+used_by = "osage-hologram: hologram-view (issue #7)"
+
+[[asset]]
+path = "assets/holograms/facade-256/view-r07-c07.png"
+made_by = "crates/osage-hologram hologram-bake (HOLOGRAM_KEY=1, 256 px, framed 13.75,6.75,-2.9,16.2)"
+made_from = "assets/polyhaven/modular_urban_apartments_facade/modular_urban_apartments_facade_1k.gltf"
+licence = "CC0-1.0"
+author = "Poly Haven"
+source = "https://polyhaven.com/a/modular_urban_apartments_facade"
+used_by = "osage-hologram: hologram-view (issue #7)"
+
+[[asset]]
+path = "assets/holograms/facade-256/view-r07-c08.png"
+made_by = "crates/osage-hologram hologram-bake (HOLOGRAM_KEY=1, 256 px, framed 13.75,6.75,-2.9,16.2)"
+made_from = "assets/polyhaven/modular_urban_apartments_facade/modular_urban_apartments_facade_1k.gltf"
+licence = "CC0-1.0"
+author = "Poly Haven"
+source = "https://polyhaven.com/a/modular_urban_apartments_facade"
+used_by = "osage-hologram: hologram-view (issue #7)"
+
+[[asset]]
+path = "assets/holograms/facade-256/view-r07-c09.png"
+made_by = "crates/osage-hologram hologram-bake (HOLOGRAM_KEY=1, 256 px, framed 13.75,6.75,-2.9,16.2)"
+made_from = "assets/polyhaven/modular_urban_apartments_facade/modular_urban_apartments_facade_1k.gltf"
+licence = "CC0-1.0"
+author = "Poly Haven"
+source = "https://polyhaven.com/a/modular_urban_apartments_facade"
+used_by = "osage-hologram: hologram-view (issue #7)"
+
+[[asset]]
+path = "assets/holograms/facade-256/view-r07-c10.png"
+made_by = "crates/osage-hologram hologram-bake (HOLOGRAM_KEY=1, 256 px, framed 13.75,6.75,-2.9,16.2)"
+made_from = "assets/polyhaven/modular_urban_apartments_facade/modular_urban_apartments_facade_1k.gltf"
+licence = "CC0-1.0"
+author = "Poly Haven"
+source = "https://polyhaven.com/a/modular_urban_apartments_facade"
+used_by = "osage-hologram: hologram-view (issue #7)"
+
+[[asset]]
+path = "assets/holograms/facade-256/view-r07-c11.png"
+made_by = "crates/osage-hologram hologram-bake (HOLOGRAM_KEY=1, 256 px, framed 13.75,6.75,-2.9,16.2)"
+made_from = "assets/polyhaven/modular_urban_apartments_facade/modular_urban_apartments_facade_1k.gltf"
+licence = "CC0-1.0"
+author = "Poly Haven"
+source = "https://polyhaven.com/a/modular_urban_apartments_facade"
+used_by = "osage-hologram: hologram-view (issue #7)"
+
+[[asset]]
+path = "assets/holograms/facade-256/view-r07-c12.png"
+made_by = "crates/osage-hologram hologram-bake (HOLOGRAM_KEY=1, 256 px, framed 13.75,6.75,-2.9,16.2)"
+made_from = "assets/polyhaven/modular_urban_apartments_facade/modular_urban_apartments_facade_1k.gltf"
+licence = "CC0-1.0"
+author = "Poly Haven"
+source = "https://polyhaven.com/a/modular_urban_apartments_facade"
+used_by = "osage-hologram: hologram-view (issue #7)"
+
+[[asset]]
+path = "assets/holograms/facade-256/view-r07-c13.png"
+made_by = "crates/osage-hologram hologram-bake (HOLOGRAM_KEY=1, 256 px, framed 13.75,6.75,-2.9,16.2)"
+made_from = "assets/polyhaven/modular_urban_apartments_facade/modular_urban_apartments_facade_1k.gltf"
+licence = "CC0-1.0"
+author = "Poly Haven"
+source = "https://polyhaven.com/a/modular_urban_apartments_facade"
+used_by = "osage-hologram: hologram-view (issue #7)"
+
+[[asset]]
+path = "assets/holograms/facade-256/view-r07-c14.png"
+made_by = "crates/osage-hologram hologram-bake (HOLOGRAM_KEY=1, 256 px, framed 13.75,6.75,-2.9,16.2)"
+made_from = "assets/polyhaven/modular_urban_apartments_facade/modular_urban_apartments_facade_1k.gltf"
+licence = "CC0-1.0"
+author = "Poly Haven"
+source = "https://polyhaven.com/a/modular_urban_apartments_facade"
+used_by = "osage-hologram: hologram-view (issue #7)"
+
+[[asset]]
+path = "assets/holograms/facade-256/view-r08-c00.png"
+made_by = "crates/osage-hologram hologram-bake (HOLOGRAM_KEY=1, 256 px, framed 13.75,6.75,-2.9,16.2)"
+made_from = "assets/polyhaven/modular_urban_apartments_facade/modular_urban_apartments_facade_1k.gltf"
+licence = "CC0-1.0"
+author = "Poly Haven"
+source = "https://polyhaven.com/a/modular_urban_apartments_facade"
+used_by = "osage-hologram: hologram-view (issue #7)"
+
+[[asset]]
+path = "assets/holograms/facade-256/view-r08-c01.png"
+made_by = "crates/osage-hologram hologram-bake (HOLOGRAM_KEY=1, 256 px, framed 13.75,6.75,-2.9,16.2)"
+made_from = "assets/polyhaven/modular_urban_apartments_facade/modular_urban_apartments_facade_1k.gltf"
+licence = "CC0-1.0"
+author = "Poly Haven"
+source = "https://polyhaven.com/a/modular_urban_apartments_facade"
+used_by = "osage-hologram: hologram-view (issue #7)"
+
+[[asset]]
+path = "assets/holograms/facade-256/view-r08-c02.png"
+made_by = "crates/osage-hologram hologram-bake (HOLOGRAM_KEY=1, 256 px, framed 13.75,6.75,-2.9,16.2)"
+made_from = "assets/polyhaven/modular_urban_apartments_facade/modular_urban_apartments_facade_1k.gltf"
+licence = "CC0-1.0"
+author = "Poly Haven"
+source = "https://polyhaven.com/a/modular_urban_apartments_facade"
+used_by = "osage-hologram: hologram-view (issue #7)"
+
+[[asset]]
+path = "assets/holograms/facade-256/view-r08-c03.png"
+made_by = "crates/osage-hologram hologram-bake (HOLOGRAM_KEY=1, 256 px, framed 13.75,6.75,-2.9,16.2)"
+made_from = "assets/polyhaven/modular_urban_apartments_facade/modular_urban_apartments_facade_1k.gltf"
+licence = "CC0-1.0"
+author = "Poly Haven"
+source = "https://polyhaven.com/a/modular_urban_apartments_facade"
+used_by = "osage-hologram: hologram-view (issue #7)"
+
+[[asset]]
+path = "assets/holograms/facade-256/view-r08-c04.png"
+made_by = "crates/osage-hologram hologram-bake (HOLOGRAM_KEY=1, 256 px, framed 13.75,6.75,-2.9,16.2)"
+made_from = "assets/polyhaven/modular_urban_apartments_facade/modular_urban_apartments_facade_1k.gltf"
+licence = "CC0-1.0"
+author = "Poly Haven"
+source = "https://polyhaven.com/a/modular_urban_apartments_facade"
+used_by = "osage-hologram: hologram-view (issue #7)"
+
+[[asset]]
+path = "assets/holograms/facade-256/view-r08-c05.png"
+made_by = "crates/osage-hologram hologram-bake (HOLOGRAM_KEY=1, 256 px, framed 13.75,6.75,-2.9,16.2)"
+made_from = "assets/polyhaven/modular_urban_apartments_facade/modular_urban_apartments_facade_1k.gltf"
+licence = "CC0-1.0"
+author = "Poly Haven"
+source = "https://polyhaven.com/a/modular_urban_apartments_facade"
+used_by = "osage-hologram: hologram-view (issue #7)"
+
+[[asset]]
+path = "assets/holograms/facade-256/view-r08-c06.png"
+made_by = "crates/osage-hologram hologram-bake (HOLOGRAM_KEY=1, 256 px, framed 13.75,6.75,-2.9,16.2)"
+made_from = "assets/polyhaven/modular_urban_apartments_facade/modular_urban_apartments_facade_1k.gltf"
+licence = "CC0-1.0"
+author = "Poly Haven"
+source = "https://polyhaven.com/a/modular_urban_apartments_facade"
+used_by = "osage-hologram: hologram-view (issue #7)"
+
+[[asset]]
+path = "assets/holograms/facade-256/view-r08-c07.png"
+made_by = "crates/osage-hologram hologram-bake (HOLOGRAM_KEY=1, 256 px, framed 13.75,6.75,-2.9,16.2)"
+made_from = "assets/polyhaven/modular_urban_apartments_facade/modular_urban_apartments_facade_1k.gltf"
+licence = "CC0-1.0"
+author = "Poly Haven"
+source = "https://polyhaven.com/a/modular_urban_apartments_facade"
+used_by = "osage-hologram: hologram-view (issue #7)"
+
+[[asset]]
+path = "assets/holograms/facade-256/view-r08-c08.png"
+made_by = "crates/osage-hologram hologram-bake (HOLOGRAM_KEY=1, 256 px, framed 13.75,6.75,-2.9,16.2)"
+made_from = "assets/polyhaven/modular_urban_apartments_facade/modular_urban_apartments_facade_1k.gltf"
+licence = "CC0-1.0"
+author = "Poly Haven"
+source = "https://polyhaven.com/a/modular_urban_apartments_facade"
+used_by = "osage-hologram: hologram-view (issue #7)"
+
+[[asset]]
+path = "assets/holograms/facade-256/view-r08-c09.png"
+made_by = "crates/osage-hologram hologram-bake (HOLOGRAM_KEY=1, 256 px, framed 13.75,6.75,-2.9,16.2)"
+made_from = "assets/polyhaven/modular_urban_apartments_facade/modular_urban_apartments_facade_1k.gltf"
+licence = "CC0-1.0"
+author = "Poly Haven"
+source = "https://polyhaven.com/a/modular_urban_apartments_facade"
+used_by = "osage-hologram: hologram-view (issue #7)"
+
+[[asset]]
+path = "assets/holograms/facade-256/view-r08-c10.png"
+made_by = "crates/osage-hologram hologram-bake (HOLOGRAM_KEY=1, 256 px, framed 13.75,6.75,-2.9,16.2)"
+made_from = "assets/polyhaven/modular_urban_apartments_facade/modular_urban_apartments_facade_1k.gltf"
+licence = "CC0-1.0"
+author = "Poly Haven"
+source = "https://polyhaven.com/a/modular_urban_apartments_facade"
+used_by = "osage-hologram: hologram-view (issue #7)"
+
+[[asset]]
+path = "assets/holograms/facade-256/view-r08-c11.png"
+made_by = "crates/osage-hologram hologram-bake (HOLOGRAM_KEY=1, 256 px, framed 13.75,6.75,-2.9,16.2)"
+made_from = "assets/polyhaven/modular_urban_apartments_facade/modular_urban_apartments_facade_1k.gltf"
+licence = "CC0-1.0"
+author = "Poly Haven"
+source = "https://polyhaven.com/a/modular_urban_apartments_facade"
+used_by = "osage-hologram: hologram-view (issue #7)"
+
+[[asset]]
+path = "assets/holograms/facade-256/view-r08-c12.png"
+made_by = "crates/osage-hologram hologram-bake (HOLOGRAM_KEY=1, 256 px, framed 13.75,6.75,-2.9,16.2)"
+made_from = "assets/polyhaven/modular_urban_apartments_facade/modular_urban_apartments_facade_1k.gltf"
+licence = "CC0-1.0"
+author = "Poly Haven"
+source = "https://polyhaven.com/a/modular_urban_apartments_facade"
+used_by = "osage-hologram: hologram-view (issue #7)"
+
+[[asset]]
+path = "assets/holograms/facade-256/view-r08-c13.png"
+made_by = "crates/osage-hologram hologram-bake (HOLOGRAM_KEY=1, 256 px, framed 13.75,6.75,-2.9,16.2)"
+made_from = "assets/polyhaven/modular_urban_apartments_facade/modular_urban_apartments_facade_1k.gltf"
+licence = "CC0-1.0"
+author = "Poly Haven"
+source = "https://polyhaven.com/a/modular_urban_apartments_facade"
+used_by = "osage-hologram: hologram-view (issue #7)"
+
+[[asset]]
+path = "assets/holograms/facade-256/view-r08-c14.png"
+made_by = "crates/osage-hologram hologram-bake (HOLOGRAM_KEY=1, 256 px, framed 13.75,6.75,-2.9,16.2)"
+made_from = "assets/polyhaven/modular_urban_apartments_facade/modular_urban_apartments_facade_1k.gltf"
+licence = "CC0-1.0"
+author = "Poly Haven"
+source = "https://polyhaven.com/a/modular_urban_apartments_facade"
+used_by = "osage-hologram: hologram-view (issue #7)"
