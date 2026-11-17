@@ -94,6 +94,7 @@ fn main() -> Result<()> {
     let mut film = None;
     // Players at this computer: 2 splits the screen (D-086).
     let mut players = 1u8;
+    let mut replay_after: Option<f32> = None;
     let mut args = std::env::args().skip(1);
     while let Some(arg) = args.next() {
         let mut value = || args.next().with_context(|| format!("{arg} needs a value"));
@@ -107,6 +108,12 @@ fn main() -> Result<()> {
                     .map(|s| s.trim().parse::<f32>())
                     .collect::<Result<_, _>>()
                     .context("--screenshot-after takes seconds, comma-separated")?
+            }
+            // A test of the replay (D-082): R pressed for the player, once,
+            // at that many seconds, if the race is over by then.
+            "--replay-after" => {
+                let seconds = value()?.parse::<f32>().context("--replay-after takes seconds")?;
+                replay_after = Some(seconds);
             }
             "--tier" => tier = Some(value()?.parse::<Tier>().map_err(anyhow::Error::msg)?),
             "--sky" => sky = Some(value()?.parse::<scene::Sky>().map_err(anyhow::Error::msg)?),
@@ -306,6 +313,9 @@ fn main() -> Result<()> {
             // Off screen: the picture at a fixed size, and the pictures taken of it.
             app.insert_resource(osage_render::resolution::Output(Some(bevy::math::UVec2::new(width, height))))
                 .insert_resource(play::OffScreen);
+        }
+        if let Some(after) = replay_after {
+            app.insert_resource(show::ReplayAfter(after));
         }
         app.add_plugins(play::PlayPlugin { url, tier, autodrive, screenshot_after, players })
             .add_plugins(settings::SettingsPlugin { fps })

@@ -58,6 +58,11 @@ impl Plugin for ShowPlugin {
     }
 }
 
+/// A test of the replay (`--replay-after SECONDS`): R pressed once, at
+/// that time.
+#[derive(Resource)]
+pub struct ReplayAfter(pub f32);
+
 /// After the show: what overrides it (the photo mode) runs after.
 #[derive(SystemSet, Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Shown;
@@ -298,6 +303,7 @@ fn present(
     photo: Res<crate::photo::Photo>,
     keys: Res<ButtonInput<KeyCode>>,
     land: Option<Res<osage_kart_land::Land>>,
+    mut replay_after: Option<ResMut<ReplayAfter>>,
 ) {
     let land = land.as_deref();
     let now = time.elapsed_secs();
@@ -324,7 +330,17 @@ fn present(
     }
     let between = matches!(view.stage, Lights::Waiting | Lights::Ready(_) | Lights::Results(_));
     let kept = show.race.last().map_or(0.0, |(t, _)| *t) - show.race.first().map_or(0.0, |(t, _)| *t);
-    if keys.just_pressed(KeyCode::KeyR) && between {
+    // The test's R, once, at the first moment between races after its time
+    // with a race on the tape.
+    let asked = replay_after.as_mut().is_some_and(|after| {
+        let due = after.0 > 0.0 && now >= after.0 && between && kept > 3.0 && show.watching.is_none();
+        if due {
+            after.0 = -1.0;
+            info!("show: the replay test presses R");
+        }
+        due
+    });
+    if (keys.just_pressed(KeyCode::KeyR) || asked) && between {
         show.watching = match show.watching {
             Some(_) => None,
             None if kept > 3.0 => {
