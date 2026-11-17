@@ -84,8 +84,8 @@ fn main() -> anyhow::Result<()> {
         .set(RenderPlugin { synchronous_pipeline_compilation: true, ..default() })
         .set(AssetPlugin { file_path: root.to_string_lossy().into_owned(), ..default() })
         .disable::<WinitPlugin>();
-    App::new()
-        .add_plugins(plugins)
+    let mut app = App::new();
+    app.add_plugins(plugins)
         .add_plugins(ScheduleRunnerPlugin::run_loop(Duration::ZERO))
         .add_plugins((osage_props::PropsPlugin, HologramPlugin))
         .insert_resource(Drive {
@@ -98,8 +98,17 @@ fn main() -> anyhow::Result<()> {
             camera: None,
         })
         .add_systems(Startup, setup)
-        .add_systems(Update, drive)
-        .run();
+        .add_systems(Update, drive);
+    // One frame on the GPU at a time, as the kart's bench: without a window
+    // to pace it, the processor would queue frames faster than the GPU draws
+    // them and then wait for many at once — regular stalls that are the
+    // queue's, not a frame's.
+    if let Some(render) = app.get_sub_app_mut(bevy::render::RenderApp) {
+        render
+            .init_resource::<InFlight>()
+            .add_systems(bevy::render::Render, keep_one_in_flight.in_set(bevy::render::RenderSystems::Cleanup));
+    }
+    app.run();
     Ok(())
 }
 
@@ -160,7 +169,12 @@ fn setup(
         }
     }
     commands.spawn((
-        DirectionalLight { illuminance: 10_000.0, shadow_maps_enabled: true, ..default() },
+        // HOLOGRAM_NO_SHADOWS: without shadow maps, to tell their cost apart.
+        DirectionalLight {
+            illuminance: 10_000.0,
+            shadow_maps_enabled: std::env::var_os("HOLOGRAM_NO_SHADOWS").is_none(),
+            ..default()
+        },
         Transform::from_xyz(-0.6, 1.0, 0.8).looking_at(Vec3::ZERO, Vec3::Y),
     ));
     commands.spawn((
@@ -177,6 +191,30 @@ fn setup(
     );
     target.texture_descriptor.usage |= TextureUsages::RENDER_ATTACHMENT | TextureUsages::COPY_SRC;
     drive.target = images.add(target);
+}
+
+/// Whether the frame handed to the GPU last is done.
+#[derive(Resource, Default)]
+struct InFlight(Option<std::sync::Arc<std::sync::atomic::AtomicBool>>);
+
+fn keep_one_in_flight(
+    device: Res<bevy::render::renderer::RenderDevice>,
+    queue: Res<bevy::render::renderer::RenderQueue>,
+    mut in_flight: ResMut<InFlight>,
+) {
+    use std::sync::{
+        Arc,
+        atomic::{AtomicBool, Ordering},
+    };
+    let done = Arc::new(AtomicBool::new(false));
+    let signal = done.clone();
+    queue.on_submitted_work_done(move || signal.store(true, Ordering::Release));
+    if let Some(previous) = in_flight.0.replace(done) {
+        while !previous.load(Ordering::Acquire) {
+            let _ = device.poll(bevy::render::render_resource::PollType::Poll);
+            std::thread::sleep(Duration::from_micros(100));
+        }
+    }
 }
 
 /// Where the camera is at a frame of the drive.

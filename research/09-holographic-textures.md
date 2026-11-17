@@ -77,10 +77,20 @@ Full tables: `results.tsv` written by the tool beside the views.
 
 - **How:** in the mixed street the model no longer is hidden and shown: it is seen up to 60 m and fades out over its last tenth by Bevy's visibility range (dithered, the model kept prepared), while the hologram (lit) fades in over the same 54–60 m by its own transparency (`fade_in`).
 - **Measured:** 41.5 ms a frame (p95 294 ms), against 39.5 ms (p95 258) when the models were hidden and shown — the switch was not what cost.
-- **What it shows:** the two meet without a jump: at the edge of the range the model's dither and the hologram's fade cross (a fine dither pattern shows in a still frame; temporal anti-aliasing would smooth it in a game). And the stalls are the models': the street of models alone stalls every 12–13 frames (every 5 m of the drive), 1.3 s at first, then 0.5 s, on the reference laptop; the street of holograms never does. Their cause is not yet found.
+- **What it shows:** the two meet without a jump: at the edge of the range the model's dither and the hologram's fade cross (a fine dither pattern shows in a still frame; temporal anti-aliasing would smooth it in a game). The stalls seen so far were the measurement's: without a window to pace it, the processor queued frames faster than the GPU drew the models, then waited for many at once — every 12–13 frames, 0.5–1.3 s. Kept to one frame on the GPU at a time (as the kart's bench does), they go.
+
+## The street measured again, one frame at a time (2026-11-17)
+
+| street (lit holograms) | mean | 95th percentile |
+|---|---|---|
+| 40 models | 59.5 ms | 125 ms |
+| 40 holograms | **8.5 ms** | 9.9 ms |
+| models within 60 m, holograms beyond, crossfaded | 37.7 ms | 101 ms |
+
+The slowest frames are now the drive's first (most of the street in view, about 125 ms each, steadily), not stalls. Of the models' 60 ms, about 35 are the sun's shadow maps redrawing 4.7 million triangles (26 ms without them): a hologram, which casts no shadow yet, also spares those — a shadow of its own, from its depth, would cost a fraction of a model's.
 
 ## Next
 
-1. **The models' stalls:** find what stalls a street of models every 5 m on an integrated GPU (shadow cascades, memory) — it decides how near the switch can be.
-2. **GPU form:** compare decoding into a texture array, a cache of nearby views decoded as the camera moves, and a factorised form (a few basis images per texel and weights per direction) — three arrays (colour, depth, normals) at 256 px are 105 MB.
-3. **Shadows:** the hologram casting its shadow, from its depth.
+1. **GPU form:** compare decoding into a texture array, a cache of nearby views decoded as the camera moves, and a factorised form (a few basis images per texel and weights per direction) — three arrays (colour, depth, normals) at 256 px are 105 MB.
+2. **Shadows:** the hologram casting its shadow, from its depth.
+3. **Into the kart world:** buildings along a circuit as holograms beyond 60 m.
