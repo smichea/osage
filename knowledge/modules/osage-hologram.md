@@ -22,11 +22,11 @@ Test the idea of texturing objects with how they look from every viewing angle �
 
 `hologram-bake OUT [MODEL] [SIZE] [X,Y,Z,R]` loads a model of the asset manifest through [osage-props](/modules/osage-props.md), off screen, and photographs it orthographically — the framing the same in every view — from every direction of the grid (`HOLOGRAM_GRID` for another), under one fixed sun, one PNG per view named by its row and column. `tools/hologram-measure.py` then compares, at several qualities, the views stored one by one (JPEG, WebP) with the views as one video along the angle (H.265, AV1) and in random order, by PSNR and SSIM.
 
-`HologramPlugin` draws a `Hologram` (a folder of views baked on magenta, its grid, the photographed sphere, a stand-in rectangle): its views loaded and stacked into one texture array, an unlit material whose shader (`hologram.wesl`) blends, for each pixel, the four views around the direction of the eye, each sampled where its orthographic camera saw the point; magenta is nothing, partly magenta edges unmixed. `hologram-view` films a model and its hologram side by side; `hologram-street` times a street of 40 facades as models, holograms, or both by distance. Holograms drawn from one folder share one stack.
+`HologramPlugin` draws a `Hologram` (a folder of views baked on magenta, its grid, the photographed sphere, a stand-in rectangle): its views loaded and stacked into one texture array, an unlit material whose shader (`hologram.wesl`) blends, for each pixel, the four views around the direction of the eye, each sampled where its orthographic camera saw the point; magenta is nothing, partly magenta edges unmixed. `hologram-view` films a model and its hologram side by side; `hologram-street` times a street of 40 facades as models, holograms, or both by distance. Holograms drawn from one folder share one stack. A hologram may fade in over a range of distances (`fade_in`) as its model's visibility range fades the model out.
 
 # Interfaces
 
-`HologramPlugin`, `Hologram { folder, grid, centre, radius, stand, flat, lit }`, `DepthMaterial`, `NormalMaterial`, `decode_depth`, `HologramMaterial`, `Views`; `Grid { azimuths, elevations }`, `Grid::new`, `Grid::facade`, `Grid::direction(azimuth, elevation)`, `Grid::path`, `Grid::name(row, column)`; the `hologram-bake` program.
+`HologramPlugin`, `Hologram { folder, grid, centre, radius, stand, flat, lit, fade_in }`, `DepthMaterial`, `NormalMaterial`, `decode_depth`, `HologramMaterial`, `Views`; `Grid { azimuths, elevations }`, `Grid::new`, `Grid::facade`, `Grid::direction(azimuth, elevation)`, `Grid::path`, `Grid::name(row, column)`; the `hologram-bake` program.
 
 # Invariants
 

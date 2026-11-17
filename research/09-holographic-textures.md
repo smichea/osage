@@ -65,7 +65,7 @@ Full tables: `results.tsv` written by the tool beside the views.
 | models within 60 m, holograms beyond | 39.5 ms | 258 ms |
 
 - **What it shows:** drawn from its views, a street of facades costs a seventh of its models' time, and its time does not depend on how detailed the model was. Seen from the road, the far facades read alike; near ones, the model's relief and shadows are better.
-- **To read it fairly:** each model is Poly Haven's whole kit (spare parts and cornices beside the wall), the hologram only the wall it framed: the models' cost is overstated, perhaps twice. The mixed street's spikes come from models shown and hidden as the camera passes (each shown again is prepared again), not from the holograms. The holograms carry the light they were baked in (one sun, from the front): a facade the world's sun lights otherwise is wrong — across the road, both look dark in the picture, for reasons not yet looked into; and they cast no shadow. *(Corrected the same day: an earlier line said they looked bright.)*
+- **To read it fairly:** each model is Poly Haven's whole kit (spare parts and cornices beside the wall), the hologram only the wall it framed: the models' cost is overstated, perhaps twice. The mixed street's spikes are the models' (see the sixth experiment), not the holograms'. The holograms carry the light they were baked in (one sun, from the front): a facade the world's sun lights otherwise is wrong — across the road, both look dark in the picture, for reasons not yet looked into; and they cast no shadow. *(Corrected the same day: an earlier line said they looked bright.)*
 
 ## Fifth experiment: lit where drawn (2026-11-17)
 
@@ -73,8 +73,14 @@ Full tables: `results.tsv` written by the tool beside the views.
 - **Measured** on the same street: 10.1 ms a frame (p95 11.9), against 9.2 ms baked-lit and 63.6 ms as models. Memory: a third texture array (35 MB at 256 px).
 - **What it shows:** lit where drawn, the holograms light as their models do — the side facing the sun bright, the side across the road in its own shade, the relief shaded by the sun's angle. Night, rain and a moving sun then need nothing more from them. Faults remaining: a faint magenta at edges in the unlit views; no shadow cast; normals from the geometry only (the models' normal maps not baked).
 
+## Sixth experiment: the switch (2026-11-17)
+
+- **How:** in the mixed street the model no longer is hidden and shown: it is seen up to 60 m and fades out over its last tenth by Bevy's visibility range (dithered, the model kept prepared), while the hologram (lit) fades in over the same 54–60 m by its own transparency (`fade_in`).
+- **Measured:** 41.5 ms a frame (p95 294 ms), against 39.5 ms (p95 258) when the models were hidden and shown — the switch was not what cost.
+- **What it shows:** the two meet without a jump: at the edge of the range the model's dither and the hologram's fade cross (a fine dither pattern shows in a still frame; temporal anti-aliasing would smooth it in a game). And the stalls are the models': the street of models alone stalls every 12–13 frames (every 5 m of the drive), 1.3 s at first, then 0.5 s, on the reference laptop; the street of holograms never does. Their cause is not yet found.
+
 ## Next
 
-1. **The switch:** a hologram for far, a model for near, crossfaded, without the spikes of showing a model again (keep it prepared, fade it).
+1. **The models' stalls:** find what stalls a street of models every 5 m on an integrated GPU (shadow cascades, memory) — it decides how near the switch can be.
 2. **GPU form:** compare decoding into a texture array, a cache of nearby views decoded as the camera moves, and a factorised form (a few basis images per texel and weights per direction) — three arrays (colour, depth, normals) at 256 px are 105 MB.
 3. **Shadows:** the hologram casting its shadow, from its depth.

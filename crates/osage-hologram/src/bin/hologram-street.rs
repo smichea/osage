@@ -9,7 +9,9 @@
 //!
 //! `models`: every facade its model (118 000 triangles each); `holograms`:
 //! every facade its hologram (one rectangle); `mixed`: the model within
-//! 60 m of the camera, the hologram beyond. With OUT, three pictures of the
+//! 60 m of the camera, the hologram beyond, the one fading into the other
+//! over 54–60 m (the model by its visibility range, kept prepared; the
+//! hologram by its transparency). With OUT, three pictures of the
 //! drive are written there.
 
 use std::{path::PathBuf, time::Duration};
@@ -50,14 +52,6 @@ enum Kind {
     Models,
     Holograms,
     Mixed,
-}
-
-/// One facade: its model's and its hologram's roots, and where it stands.
-#[derive(Component)]
-struct Facade {
-    model: Option<Entity>,
-    hologram: Option<Entity>,
-    at: Vec3,
 }
 
 #[derive(Resource)]
@@ -104,7 +98,7 @@ fn main() -> anyhow::Result<()> {
             camera: None,
         })
         .add_systems(Startup, setup)
-        .add_systems(Update, (choose, drive).chain())
+        .add_systems(Update, drive)
         .run();
     Ok(())
 }
@@ -128,13 +122,15 @@ fn setup(
                 * Transform::from_xyz(-CENTRE.x, 0.0, 0.0);
             let wants_model = drive.kind != Kind::Holograms;
             let wants_hologram = drive.kind != Kind::Models;
-            let model = wants_model.then(|| {
+            wants_model.then(|| {
                 commands
                     .spawn(osage_props::Scatter {
                         model: model.clone(),
                         places: vec![place],
                         using: osage_props::Use::Whole,
-                        within: None,
+                        // Mixed: the model seen up to NEAR, fading out over
+                        // its last tenth, as the hologram fades in.
+                        within: (drive.kind == Kind::Mixed).then_some(NEAR),
                         shadows: true,
                         lods: false,
                         tint: None,
@@ -143,7 +139,7 @@ fn setup(
                     })
                     .id()
             });
-            let hologram = wants_hologram.then(|| {
+            wants_hologram.then(|| {
                 commands
                     .spawn((
                         Hologram {
@@ -154,12 +150,13 @@ fn setup(
                             stand: (Vec3::new(CENTRE.x, CENTRE.y, 0.0), Vec2::new(13.25, 8.75)),
                             flat: false,
                             lit: std::env::var_os("HOLOGRAM_LIT").is_some(),
+                            // Mixed: it fades in as its model fades out.
+                            fade_in: (drive.kind == Kind::Mixed).then_some((NEAR * 0.9, NEAR)),
                         },
                         place,
                     ))
                     .id()
             });
-            commands.spawn(Facade { model, hologram, at: place.transform_point(CENTRE) });
         }
     }
     commands.spawn((
@@ -186,22 +183,6 @@ fn setup(
 fn camera_at(frame: u32) -> Transform {
     let x = -40.0 + frame as f32 * SPEED / 60.0;
     Transform::from_xyz(x, 2.0, 0.0).looking_at(Vec3::new(x + 50.0, 3.0, 0.0), Vec3::Y)
-}
-
-/// `mixed`: the model near the camera, the hologram beyond.
-fn choose(drive: Res<Drive>, facades: Query<&Facade>, mut shown: Query<&mut Visibility>) {
-    if drive.kind != Kind::Mixed {
-        return;
-    }
-    let eye = camera_at(drive.frame).translation;
-    for facade in &facades {
-        let near = facade.at.distance(eye) < NEAR;
-        for (entity, on) in [(facade.model, near), (facade.hologram, !near)] {
-            if let Some(mut visibility) = entity.and_then(|e| shown.get_mut(e).ok()) {
-                visibility.set_if_neq(if on { Visibility::Inherited } else { Visibility::Hidden });
-            }
-        }
-    }
 }
 
 fn drive(
@@ -255,6 +236,14 @@ fn drive(
         let mean = times.iter().sum::<f32>() / times.len().max(1) as f32;
         let p95 = times.get(times.len() * 95 / 100).copied().unwrap_or(0.0);
         println!("{:?}: {} frames, mean {mean:.2} ms, p95 {p95:.2} ms", drive.kind, times.len());
+        let slow: Vec<String> = drive
+            .times
+            .iter()
+            .enumerate()
+            .filter(|(_, ms)| **ms > 100.0)
+            .map(|(i, ms)| format!("{}:{ms:.0}", i as u32 + WARM + 1))
+            .collect();
+        println!("  frames over 100 ms (frame:ms): {}", slow.join(" "));
         exit.write(AppExit::Success);
     }
 }

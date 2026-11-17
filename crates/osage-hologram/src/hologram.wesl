@@ -24,7 +24,9 @@ import bevy_pbr::render::{
 @group(constants::MATERIAL_BIND_GROUP) @binding(101) var<uniform> shape: vec4<f32>;
 // xyz: the photographed sphere's centre, in the world; w: its radius.
 @group(constants::MATERIAL_BIND_GROUP) @binding(102) var<uniform> frame: vec4<f32>;
-// x, y: cosine and sine of the object's turn about the vertical.
+// x, y: cosine and sine of the object's turn about the vertical; z, w: the
+// distances over which it fades in (from z, whole at w; w 0: always whole),
+// where a model gives way to it.
 @group(constants::MATERIAL_BIND_GROUP) @binding(103) var<uniform> turn: vec4<f32>;
 @group(constants::MATERIAL_BIND_GROUP) @binding(104) var views: texture_2d_array<f32>;
 @group(constants::MATERIAL_BIND_GROUP) @binding(105) var views_sampler: sampler;
@@ -150,7 +152,14 @@ fn fragment(in: VertexOutput, @builtin(front_facing) is_front: bool) -> Fragment
     }
     let colour = (s00.colour.rgb * w00 + s10.colour.rgb * w10 + s01.colour.rgb * w01 + s11.colour.rgb * w11) / covered;
 
-    pbr_input.material.base_color = vec4<f32>(colour, 1.0);
+    var fade = 1.0;
+    if (turn.w > 0.0) {
+        fade = smoothstep(turn.z, turn.w, distance(view.world_position.xyz, p));
+        if (fade <= 0.0) {
+            discard;
+        }
+    }
+    pbr_input.material.base_color = vec4<f32>(colour, fade);
     if (shape.w > 0.5) {
         // Lit here: the views' colour is the surface's own, their normals
         // turned from the object's frame into the world's.

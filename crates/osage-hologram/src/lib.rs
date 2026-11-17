@@ -174,7 +174,8 @@ pub struct Views {
     /// The photographed sphere's centre in the world, and its radius.
     #[uniform(102)]
     pub frame: Vec4,
-    /// Cosine and sine of the object's turn about the vertical.
+    /// Cosine and sine of the object's turn about the vertical; the
+    /// distances it fades in over.
     #[uniform(103)]
     pub turn: Vec4,
     #[texture(104, dimension = "2d_array")]
@@ -214,6 +215,10 @@ pub struct Hologram {
     /// colour without light and of its normals; else drawn with the light
     /// it was photographed in.
     pub lit: bool,
+    /// Faded in from the first distance to the second, m, where its model
+    /// gives way to it (the model's own range fading it out over the same);
+    /// none: always whole.
+    pub fade_in: Option<(f32, f32)>,
 }
 
 /// Each folder's views, depths and normals (lit or not), stacked once and
@@ -370,7 +375,8 @@ fn follow(
         let forward = at.affine().transform_vector3(Vec3::Z).normalize_or(Vec3::Z);
         let yaw = forward.x.atan2(forward.z);
         material.extension.frame = centre.extend(hologram.radius);
-        material.extension.turn = Vec4::new(yaw.cos(), yaw.sin(), 0.0, 0.0);
+        let (near, far) = hologram.fade_in.unwrap_or((0.0, 0.0));
+        material.extension.turn = Vec4::new(yaw.cos(), yaw.sin(), near, far);
     }
 }
 
