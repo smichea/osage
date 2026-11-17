@@ -36,6 +36,8 @@ Test the idea of texturing objects with how they look from every viewing angle �
 
 - Research: `research/09-holographic-textures.md` (first results: ×5–10 smaller than independent images at good quality when views are 2.5° apart).
 
+- Used by [kart-native](/modules/kart-native.md): apartment blocks behind Harbour Town (D-132).
+
 # Reuse
 
 Any Bevy app or tool that needs an object photographed from a grid of directions. Permissive licence.

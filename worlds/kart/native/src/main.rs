@@ -271,6 +271,7 @@ fn main() -> Result<()> {
     if osage_content::root().is_some_and(|root| osage_humans::installed(&root)) {
         app.add_plugins(osage_humans::HumansPlugin);
     }
+    app.add_plugins(osage_hologram::HologramPlugin);
     if let Some(viewpoint) = viewpoint {
         app.insert_resource(viewpoint);
     }

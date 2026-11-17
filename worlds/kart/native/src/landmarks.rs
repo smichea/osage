@@ -1186,6 +1186,28 @@ pub fn fair(set: &mut Set, props: &mut Props, circuit: &Circuit, land: &Land) {
 /// plaster in the warm colours of a port, a gable roof of tiles or slate,
 /// a window to each bay of each floor, a door on the ground — with a gap
 /// now and then, where nothing is built near the start or in a bend.
+/// The apartment block's views (issue #7), under the manifest's content:
+/// Poly Haven's urban apartments facade, baked by `hologram-bake`.
+pub const BLOCK_VIEWS: &str = "holograms/facade-256";
+/// The block's wall, in its model's frame: from x 0.5 to 27, y -2 to 15.5,
+/// its front at z 0, the panels standing out from z -2 to 0.3.
+const BLOCK_WALL: (f32, f32, f32, f32) = (0.5, 27.0, -2.0, 15.5);
+
+/// An apartment block drawn as a hologram, lit by the world's lights.
+pub fn block_hologram() -> osage_hologram::Hologram {
+    let (x0, x1, y0, y1) = BLOCK_WALL;
+    osage_hologram::Hologram {
+        folder: BLOCK_VIEWS.to_owned(),
+        grid: osage_hologram::Grid::facade(),
+        centre: Vec3::new(13.75, 6.75, -2.9),
+        radius: 16.2,
+        stand: (Vec3::new((x0 + x1) / 2.0, (y0 + y1) / 2.0, 0.0), Vec2::new((x1 - x0) / 2.0, (y1 - y0) / 2.0)),
+        flat: false,
+        lit: true,
+        fade_in: None,
+    }
+}
+
 pub fn town(set: &mut Set, circuit: &Circuit, land: &Land, frames: &[Frame]) {
     let track = &circuit.track;
     let (length, wall) = (track.length(), track.half_width + track.verge + BARRIER);
@@ -1276,6 +1298,61 @@ pub fn town(set: &mut Set, circuit: &Circuit, land: &Land, frames: &[Frame]) {
                     }
                 }
             }
+        }
+    }
+    if set.holograms {
+        apartment_blocks(set, circuit, land, frames, &built);
+    }
+}
+
+/// Beyond the town's houses, a second row: apartment blocks 40–55 m from
+/// the road, facing it, drawn as holograms (issue #7) — never near enough
+/// for a kart's camera to need their models. Behind each facade, a solid
+/// block in its brick, so that the kit's panels read as one building.
+fn apartment_blocks(set: &mut Set, circuit: &Circuit, land: &Land, frames: &[Frame], houses: &[(Vec2, f32)]) {
+    let track = &circuit.track;
+    let (length, wall) = (track.length(), track.half_width + track.verge + BARRIER);
+    let (x0, x1, y0, y1) = BLOCK_WALL;
+    let (width, depth) = (x1 - x0, 9.0);
+    let mut placed: Vec<Vec2> = Vec::new();
+    let mut since = 0.0;
+    for (i, frame) in frames.iter().enumerate() {
+        let next = &frames[(i + 1) % frames.len()];
+        since += frame.at.distance(next.at);
+        let from_start = (frame.along - circuit.start + length / 2.0).rem_euclid(length) - length / 2.0;
+        if from_start.abs() < 60.0 || since < 30.0 {
+            continue;
+        }
+        since = 0.0;
+        for side in [-1.0f32, 1.0] {
+            if set.dice.roll() < 0.25 {
+                continue;
+            }
+            let back = wall + set.dice.between(40.0, 55.0);
+            let facing = -frame.right * side;
+            let front = frame.at - facing * back;
+            let centre = front - facing * depth / 2.0;
+            let across = Vec2::new(facing.y, -facing.x);
+            let corners = [(-1.0, 0.0), (1.0, 0.0), (1.0, -1.0), (-1.0, -1.0)]
+                .map(|(a, b)| front + across * a * width / 2.0 + facing * b * depth);
+            let near_road = corners.iter().any(|c| land.distance_to_track(*c) < wall + 30.0);
+            let crowded = placed.iter().any(|at| at.distance(centre) < width + 2.0)
+                || houses.iter().any(|(at, r)| at.distance(centre) < r + width / 2.0 + 2.0);
+            if near_road || crowded || corners.iter().any(|c| land.wet(*c)) {
+                continue;
+            }
+            placed.push(centre);
+            set.clear(centre, width * 0.6 + 4.0);
+            let ground = corners.iter().map(|c| land.height(*c)).fold(f32::MAX, f32::min);
+            // The facade's frame: its wall's middle at `front`, its bottom on
+            // the ground, its front (+Z) to the road.
+            let turn = upright(heading(facing));
+            let facade = Transform::from_xyz(front.x, ground - y0, front.y).with_rotation(turn)
+                * Transform::from_xyz(-(x0 + x1) / 2.0, 0.0, 0.0);
+            set.blocks.push(facade);
+            // The solid block behind the panels.
+            let body = Shape::block(Vec3::new(x0, y0 - 1.5, -depth), Vec3::new(x1, y1 - 0.3, -2.2));
+            set.concrete.add_within(facade.translation, &body, facade, Paint::shaded(0.6, 0.36, 0.27, 0.12));
         }
     }
 }

@@ -4946,6 +4946,7 @@ dependencies = [
  "crossbeam-channel",
  "lewton",
  "osage-content",
+ "osage-hologram",
  "osage-humans",
  "osage-kart-crowd",
  "osage-kart-cup",

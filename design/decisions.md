@@ -1168,3 +1168,11 @@ Date: 2026-11-15 · the maintainer, after playing: "les choix dans les sélectio
 - **Corrected the same night:** the studio's first lights were lights of the whole sky on the studio's render layer — but render layers keep a light out of other meshes' shadows, not off them: they lit the circuit with a flat grey light. The studio now has short-range lamps beside each kart, 20 km from any circuit. The splash's fade faded every picture of the interface, not only its own (portraits vanished); and since the interface is drawn only once its shaders are made (two or three seconds in on an integrated GPU), the splash is held at least 7 s from the first frame, osage's screen 4.5 s of it.
 - **Mechanics** (D-129): with people installed, the two mechanics in the pits are people in their team's colour, one kneeling at the kart, the other standing talking.
 - **Not yet:** pictures of the kart bodies themselves (they share one model; their character is in the bars), a portrait of the driver's face (the karts' drivers are helmeted).
+
+## D-132 — Holograms in a world: a second row of apartment blocks behind Harbour Town
+
+Date: 2026-11-17 · the maintainer's holographic textures (issue #7, research/09), which they asked to work on today.
+
+- **Decision:** where the apartment block's views are installed (`holograms/facade-256`, baked by `hologram-bake` from Poly Haven's urban apartments facade, CC0), a town circuit gets, beyond its sculpted houses, a second row of apartment blocks 40–55 m from the road, facing it, drawn as holograms lit by the world's lights (`osage-hologram`); behind each facade a solid block in its brick, so that the kit's panels read as one building. No model is needed: a kart's camera never comes within 40 m of them.
+- **Measured** at T2 on the reference laptop, Harbour Town, the same `race`: 19.60 → 19.75 ms a frame (p95 25.05 → 25.10); loading 0.8 s longer (the views stacked).
+- **Limits:** one block, repeated; the light is the world's but the normals are the geometry's alone; no shadow cast; 105 MB of views at 256 px, shared by every block.

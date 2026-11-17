@@ -112,6 +112,12 @@ pub struct Set {
     /// The mechanics in the pits, as people: where, their team's colour,
     /// and whether they kneel at the kart.
     pub mechanics: Vec<(Transform, (f32, f32, f32), bool)>,
+    /// Whether the apartment blocks' holograms are installed (issue #7):
+    /// then a town has a second row of them, beyond its houses.
+    pub holograms: bool,
+    /// Where each apartment block stands: its facade's frame (the model's,
+    /// its wall facing the road along +Z).
+    pub blocks: Vec<Transform>,
 }
 
 impl Set {
@@ -210,6 +216,9 @@ pub fn build(
         marshals: Vec::new(),
         people: osage_content::root().is_some_and(|root| osage_humans::installed(&root)),
         mechanics: Vec::new(),
+        holograms: osage_content::root()
+            .is_some_and(|root| root.join(crate::landmarks::BLOCK_VIEWS).join("albedo-r00-c00.png").exists()),
+        blocks: Vec::new(),
     };
     let mut props = Props {
         commands: &mut commands,
@@ -343,6 +352,9 @@ fn spawn(
     let people = set.people;
     for (k, marshal) in set.marshals.into_iter().enumerate() {
         crate::crowd::spawn_marshal(commands, meshes, marshal, [&cloth, &flag], k, people);
+    }
+    for place in set.blocks.into_iter() {
+        commands.spawn((Part, crate::landmarks::block_hologram(), place));
     }
     for (k, (place, colour, kneeling)) in set.mechanics.into_iter().enumerate() {
         crate::crowd::spawn_mechanic(commands, place, colour, kneeling, k);
