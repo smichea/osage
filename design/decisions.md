@@ -1210,3 +1210,12 @@ Date: 2026-11-18 · the maintainer: "est-on d'accord que la seule chose à strea
 - **Form:** the outer surface is cut into tiles, the faces of the 3 m cubes; each tile carries panoramas taken from points on it looking out, with their depth — a distant building sharp without a great many directions, a near one put in place by its depth. When the block slides, the tiles it keeps stay, and new ones come ahead of the viewer as its speed asks; transport as in D-134 (AV1, the panoramas of neighbouring points being alike).
 - **The 9, 27 and 81 m cubes** no longer go to the client: they remain the server's means of computing the incoming light, baked or live.
 - **First experiment:** one block of Bistro — the light coming into it rendered by Cycles, the inside traced, composed and compared with a render of the whole scene.
+
+## D-137 — The light coming into the block, taken inside the viewer's cube
+
+Date: 2026-11-18 · the maintainer, shown the client against Cycles with both (research 10), chose "Oui, 5 sondes par cube".
+
+- **Decision (changes D-136's form, not what is sent):** the light coming into the viewer's block is taken by five probes inside the viewer's 3 m cube, no longer by tiles on the block's outer surface: full spheres with their depth, at the eyes' height (1.65 m over the ground under each), at the cube's centre and 0.75 m from it towards each corner, the block's 9 cubes transparent to their camera's rays from 30 cm over the ground (the street, its pavements and kerbs stay; the rest still casts its shadows and its light). What is sent is still only the light coming into the block (D-136); it is taken from nearly where the eye is.
+- **Why:** a probe on the block's surface stands a metre from what lies just outside the block, the eye 3 to 5 m back; the eye sees behind a bollard, a kerb or a door's jamb what no such probe sees (3.8 % of the measured picture), and those holes can only be guessed. From inside the cube, 0.04 %; 28.4 dB against Cycles from 26.2.
+- **Cost:** a probe weighs about 860 KiB (4096 × 2048, AV1), 4.3 MB a cube, about 16 Mbit/s walking; a cube's five take 15 min of an L4 at 256 samples.
+- **Transition:** where a cube's probes are not baked yet, the client falls back on the block's surface tiles (D-136).

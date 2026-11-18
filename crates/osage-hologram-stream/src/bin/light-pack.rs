@@ -1,15 +1,17 @@
 // SPDX-FileCopyrightText: The osage contributors
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-//! Packs tiles of light into AV1 (D-136):
+//! Packs tiles of light into AV1 (D-136, D-137):
 //!
 //!     light-pack RAW OUT [CRF [DEPTH_CRF]]
 //!
-//! RAW holds a folder a tile, as `tools/bistro/tiles.py` writes them
-//! (`radiance.f32`, `distance.f32`, `meta.json`); OUT receives a folder a
-//! tile with `colour.ivf` (radiance, 10-bit through its curve), `depth.ivf`
-//! (distance, 12-bit through its curve) and `mask.ivf` (the sky), and
-//! `index.json`, the tiles there. A tile already packed is left as it is.
+//! RAW holds a folder a tile or probe, as `tools/bistro/tiles.py` and
+//! `tools/bistro/cube-probes.py` write them (`radiance.f32`, `distance.f32`,
+//! `meta.json`); OUT receives a folder each with `colour.ivf` (radiance,
+//! 10-bit through its curve), `depth.ivf` (distance, 12-bit through its
+//! curve), `mask.ivf` (the sky) and `meta.json`, and `index.json`, all that
+//! is packed there, from this RAW or another. One already packed is left
+//! as it is.
 //! Each tile is decoded back as a client would, and the packer reports what
 //! the tiles weigh and how close they come back.
 
@@ -118,7 +120,14 @@ fn main() -> anyhow::Result<()> {
         }
         Ok(())
     })?;
-    let packed: Vec<String> = keys.iter().filter(|k| out.join(k).join("mask.ivf").exists()).cloned().collect();
+    // Everything packed in OUT, from this RAW or another (the probes inside
+    // the cubes beside the blocks' tiles).
+    let mut packed: Vec<String> = std::fs::read_dir(&out)?
+        .filter_map(|e| e.ok())
+        .filter(|e| e.path().join("mask.ivf").exists())
+        .map(|e| e.file_name().to_string_lossy().into_owned())
+        .collect();
+    packed.sort();
     std::fs::write(out.join("index.json"), serde_json::to_string(&packed)?)?;
     let (raw_bytes, colour, depth, mask, n, error, distance_error) = *totals.lock().unwrap();
     if n > 0 {

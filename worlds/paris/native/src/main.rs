@@ -51,8 +51,8 @@ pub struct Options {
     pub plain: bool,
     /// The whole street drawn from its model, the block's faces hidden.
     pub whole: bool,
-    /// A trial: the light from this many probes inside the walker's cube
-    /// (`tools/bistro/cube-probes.py`) instead of the block's tiles; 0 none.
+    /// How many of the probes inside the walker's cube to take the light
+    /// from (D-137), 5 unless told; 0: the block's surface tiles (D-136).
     pub cube_probes: usize,
 }
 
@@ -92,7 +92,7 @@ fn main() -> anyhow::Result<()> {
     let mut street: Option<PathBuf> = None;
     let (mut shot_file, mut at, mut heading) = (None, None, 0.0f32);
     let mut fov = 70.0f32;
-    let (mut plain, mut whole, mut cube_probes) = (false, false, 0usize);
+    let (mut plain, mut whole, mut cube_probes) = (false, false, osage_world_paris::tiles::PROBES);
     let mut film: Option<(PathBuf, f32)> = None;
     let mut args = std::env::args().skip(1);
     while let Some(arg) = args.next() {
@@ -111,7 +111,7 @@ fn main() -> anyhow::Result<()> {
             "--fov" => fov = need(args.next(), "--fov DEGREES")?.parse::<f32>()?,
             "--plain" => plain = true,
             "--whole" => whole = true,
-            "--cube-probes" => cube_probes = need(args.next(), "--cube-probes HOW_MANY (1 to 5)")?.parse()?,
+            "--cube-probes" => cube_probes = need(args.next(), "--cube-probes HOW_MANY (0 to 5)")?.parse()?,
             "--film" => {
                 let folder = PathBuf::from(need(args.next(), "--film DIR SECONDS")?);
                 let seconds = need(args.next(), "--film DIR SECONDS")?.parse::<f32>()?;

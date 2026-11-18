@@ -163,11 +163,52 @@ impl Block {
     }
 }
 
+/// How many probes a cube has inside it (D-137).
+pub const PROBES: usize = 5;
+
+/// The names of a cube's probes (D-137, `tools/bistro/cube-probes.py`):
+/// `c_X_Y_Z_K`, K from 0, the cube's centre, to 4, towards its corners.
+pub fn probe_keys(cube: IVec3) -> Vec<String> {
+    (0..PROBES).map(|k| format!("c_{}_{}_{}_{k}", cube.x, cube.y, cube.z)).collect()
+}
+
 /// The tiles a walker whose eyes are at `eye` needs within `horizon`
 /// seconds at `speed` m/s: those of the blocks of every cube it can reach
-/// by then (on its layer, and the next one up or down when its eyes are
-/// near it).
+/// by then.
 pub fn needed(eye: Vec3, speed: f32, horizon: f32) -> Vec<Tile> {
+    let mut tiles = BTreeSet::new();
+    for cube in reachable(eye, speed, horizon) {
+        tiles.extend(Block { cube }.tiles());
+    }
+    tiles.into_iter().collect()
+}
+
+/// The probes such a walker needs (D-137): those of every cube it can
+/// reach by then.
+pub fn needed_probes(eye: Vec3, speed: f32, horizon: f32) -> Vec<String> {
+    reachable(eye, speed, horizon).into_iter().flat_map(probe_keys).collect()
+}
+
+/// The light such a walker needs, cube by cube: the cube's probes where
+/// `there` says they are (D-137), else its block's surface tiles (D-136);
+/// only what is there.
+pub fn needed_light(eye: Vec3, speed: f32, horizon: f32, there: impl Fn(&str) -> bool) -> Vec<String> {
+    let mut keys = BTreeSet::new();
+    for cube in reachable(eye, speed, horizon) {
+        let probes = probe_keys(cube);
+        if there(&probes[0]) {
+            keys.extend(probes.into_iter().filter(|k| there(k)));
+        } else {
+            keys.extend(Block { cube }.tiles().into_iter().map(|t| t.key()).filter(|k| there(k)));
+        }
+    }
+    keys.into_iter().collect()
+}
+
+/// The cubes a walker whose eyes are at `eye` can reach within `horizon`
+/// seconds at `speed` m/s, and a metre more: on its layer, and the next one
+/// up or down when its eyes are near it.
+pub fn reachable(eye: Vec3, speed: f32, horizon: f32) -> Vec<IVec3> {
     let reach = speed.max(0.0) * horizon.max(0.0) + 1.0;
     let mut layers = BTreeSet::new();
     for dy in [-0.75, 0.0, 0.75] {
@@ -175,7 +216,7 @@ pub fn needed(eye: Vec3, speed: f32, horizon: f32) -> Vec<Tile> {
     }
     let (x0, x1) = (((eye.x - reach) / CUBE).floor() as i32, ((eye.x + reach) / CUBE).floor() as i32);
     let (z0, z1) = (((eye.z - reach) / CUBE).floor() as i32, ((eye.z + reach) / CUBE).floor() as i32);
-    let mut tiles = BTreeSet::new();
+    let mut cubes = Vec::new();
     for x in x0..=x1 {
         for z in z0..=z1 {
             // The cube's nearest point within reach.
@@ -187,17 +228,32 @@ pub fn needed(eye: Vec3, speed: f32, horizon: f32) -> Vec<Tile> {
             if nearest.distance(eye) > reach {
                 continue;
             }
-            for &y in &layers {
-                tiles.extend(Block { cube: IVec3::new(x, y, z) }.tiles());
-            }
+            cubes.extend(layers.iter().map(|&y| IVec3::new(x, y, z)));
         }
     }
-    tiles.into_iter().collect()
+    cubes
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_walker_needs_the_probes_of_the_cubes_it_can_reach() {
+        let eye = Vec3::new(25.0, 1.9, -61.6);
+        let still = needed_probes(eye, 0.0, 2.0);
+        assert_eq!(still, probe_keys(IVec3::new(8, 0, -21)), "standing in the middle of its cube");
+        assert_eq!(still[0], "c_8_0_-21_0");
+        let walking = needed_probes(eye, 1.4, 2.0);
+        assert!(walking.len() > still.len() && walking.len().is_multiple_of(PROBES));
+        assert!(walking.contains(&"c_8_0_-20_0".to_owned()), "the cube ahead to the south");
+        // A cube with its probes baked sends them, one without its block's tiles.
+        let baked = |k: &str| k.starts_with("c_8_0_-21_") || !k.starts_with("c_");
+        let light = needed_light(eye, 0.0, 2.0, baked);
+        assert_eq!(light, probe_keys(IVec3::new(8, 0, -21)));
+        let light = needed_light(Vec3::new(25.0, 1.9, -58.6), 0.0, 2.0, baked);
+        assert_eq!(light.len(), 30, "the block of a cube without probes: its tiles");
+    }
 
     #[test]
     fn a_block_has_thirty_tiles_on_its_surface_looking_out() {

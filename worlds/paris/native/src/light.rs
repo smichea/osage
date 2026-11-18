@@ -114,6 +114,10 @@ pub struct Store {
     pub drawn: usize,
     /// The block whose light lights the camera now.
     pub lit: Option<Block>,
+    /// Where each probe that has come stands (D-137: its `meta.json`).
+    centres: HashMap<String, Vec3>,
+    /// Whether the block drawn now takes its light from its cube's probes.
+    cubed: bool,
     changed: bool,
 }
 
@@ -130,7 +134,13 @@ enum Ask {
 
 enum Got {
     Needed(Vec<String>),
-    Tile { key: String, drawn: light::Drawn, bytes: u64 },
+    /// A tile or a probe, and where a probe stands.
+    Tile {
+        key: String,
+        drawn: light::Drawn,
+        bytes: u64,
+        centre: Option<Vec3>,
+    },
     Failed(String),
 }
 
@@ -200,11 +210,14 @@ fn work(asks: Receiver<Ask>, gots: Sender<Got>) {
                         Source::Folder(folder) => std::fs::read(folder.join(&key).join(file)),
                     }
                 };
+                // A probe inside a cube (D-137) says where it stands.
+                let centre =
+                    if key.starts_with("c_") { fetch("meta.json").ok().and_then(|m| centre(&m)) } else { None };
                 match (fetch("colour.ivf"), fetch("depth.ivf"), fetch("mask.ivf")) {
                     (Ok(c), Ok(d), Ok(m)) => {
                         let bytes = (c.len() + d.len() + m.len()) as u64;
                         match light::decode(&c, &d, &m).map(|mut v| v.pop()) {
-                            Ok(Some(drawn)) => Got::Tile { key, drawn, bytes },
+                            Ok(Some(drawn)) => Got::Tile { key, drawn, bytes, centre },
                             Ok(None) => Got::Failed(format!("{key}: no picture")),
                             Err(e) => Got::Failed(format!("{key}: {e}")),
                         }
@@ -217,6 +230,14 @@ fn work(asks: Receiver<Ask>, gots: Sender<Got>) {
             return;
         }
     }
+}
+
+/// Where a probe stands, from its `meta.json`.
+fn centre(meta: &[u8]) -> Option<Vec3> {
+    let meta: serde_json::Value = serde_json::from_slice(meta).ok()?;
+    let c = meta["centre"].as_array()?;
+    let at = |i: usize| c.get(i).and_then(|v| v.as_f64()).map(|v| v as f32);
+    Some(Vec3::new(at(0)?, at(1)?, at(2)?))
 }
 
 fn source(options: &Options, server: &LightServer) -> Option<Source> {
@@ -250,14 +271,14 @@ fn ask(
             let _ = fetcher.asks.send(Ask::Need { source, walker: id });
         }
         (Source::Folder(_), _) => {
-            let wanted: Vec<String> = if options.cube_probes > 0 {
-                cube_keys(Block::of(me.eyes()).cube, options.cube_probes)
-            } else {
-                tiles::needed(me.eyes(), me.speed, HORIZON).into_iter().map(|t| t.key()).collect()
-            };
+            // The probes of the cubes within reach (D-137), or their blocks'
+            // surface tiles where those are not baked (D-136).
+            let probes = options.cube_probes > 0;
+            let wanted = tiles::needed_light(me.eyes(), me.speed, HORIZON, |k| {
+                store.present.as_ref().is_some_and(|p| p.contains(k)) && (probes || !k.starts_with("c_"))
+            });
             for key in wanted {
-                let there = store.present.as_ref().is_some_and(|p| p.contains(&key));
-                if there && store.asked.insert(key.clone()) {
+                if store.asked.insert(key.clone()) {
                     let _ = fetcher.asks.send(Ask::Tile { source: source.clone(), key });
                 }
             }
@@ -277,9 +298,12 @@ fn receive(options: Res<Options>, server: Res<LightServer>, fetcher: Res<Fetcher
                     }
                 }
             }
-            Got::Tile { key, drawn, bytes } => {
+            Got::Tile { key, drawn, bytes, centre } => {
                 store.bytes += bytes;
                 store.received += 1;
+                if let Some(centre) = centre {
+                    store.centres.insert(key.clone(), centre);
+                }
                 store.tiles.insert(key, Arc::new(drawn));
                 store.changed = true;
             }
@@ -378,14 +402,18 @@ fn arrays(
         return;
     }
     store.changed = false;
-    if options.cube_probes > 0 {
-        let probes = cube_probes(&store, &options, block.cube);
-        let moved = store.block != Some(block);
+    // The cube's probes where they have come (D-137); else the block's
+    // surface tiles (D-136).
+    let probes =
+        if options.cube_probes > 0 { cube_probes(&store, options.cube_probes, block.cube) } else { Vec::new() };
+    if !probes.is_empty() {
+        let moved = store.block != Some(block) || !store.cubed;
         if !moved && probes.len() == store.drawn {
             return;
         }
         store.block = Some(block);
         store.drawn = probes.len();
+        store.cubed = true;
         if let Some((centre, drawn)) = probes.first().cloned() {
             let done = fetcher.lights.0.clone();
             let _ = thread::Builder::new().name("paris-environment".to_owned()).spawn(move || {
@@ -413,6 +441,9 @@ fn arrays(
         for (layer, (centre, _)) in probes.iter().enumerate().take(5) {
             at[layer] = centre.extend(layer as f32);
         }
+        for glow in &glows {
+            commands.entity(glow).despawn();
+        }
         let (lo, hi) = (block.min(), block.max());
         for (index, face) in Face::ALL.into_iter().enumerate() {
             let (entity, handle) = &faces.0[index];
@@ -425,17 +456,28 @@ fn arrays(
                 material.distances = distances.clone();
             }
             place_face(&mut places, *entity, face, lo, hi, options.whole);
+            // Traced (T4): the face a lamp of what the centre probe saw
+            // come in through it, weighed by the cosine.
+            if let (Ok(quad), true, Some((_, drawn))) = (quads.get(*entity), traced.0, probes.first()) {
+                let luminance = seen_through(drawn, face.normal()) * NITS;
+                let lamp = osage_render::Emitter(LinearRgba::rgb(luminance.x, luminance.y, luminance.z));
+                let glow = commands
+                    .spawn((Mesh3d(quad.0.clone()), lamp, Transform::default(), Visibility::Inherited, Glow))
+                    .id();
+                commands.entity(*entity).add_child(glow);
+            }
         }
         return;
     }
     let mine: Vec<(Tile, Arc<light::Drawn>)> =
         block.tiles().into_iter().filter_map(|t| store.tiles.get(&t.key()).map(|d| (t, d.clone()))).collect();
-    let moved = store.block != Some(block);
+    let moved = store.block != Some(block) || store.cubed;
     if !moved && mine.len() == store.drawn {
         return;
     }
     store.block = Some(block);
     store.drawn = mine.len();
+    store.cubed = false;
     // The block lit by its own light, on a thread: what comes in from each
     // direction, seen from its centre.
     if !mine.is_empty() {
@@ -523,25 +565,44 @@ fn place_face(
     }
 }
 
-/// The names of a cube's first `count` probes (`tools/bistro/cube-probes.py`).
-fn cube_keys(cube: IVec3, count: usize) -> Vec<String> {
-    (0..count.min(5)).map(|k| format!("c_{}_{}_{}_{k}", cube.x, cube.y, cube.z)).collect()
+/// The cube's first `count` probes that have come, each with where it
+/// stands; none unless its centre's has.
+fn cube_probes(store: &Store, count: usize, cube: IVec3) -> Vec<(Vec3, Arc<light::Drawn>)> {
+    let keys = tiles::probe_keys(cube);
+    if !store.centres.contains_key(&keys[0]) {
+        return Vec::new();
+    }
+    keys.into_iter()
+        .take(count)
+        .filter_map(|key| Some((*store.centres.get(&key)?, store.tiles.get(&key)?.clone())))
+        .collect()
 }
 
-/// The cube's probes that have come, each with where it stands (its
-/// `meta.json` in the street's folder: walking alone only).
-fn cube_probes(store: &Store, options: &Options, cube: IVec3) -> Vec<(Vec3, Arc<light::Drawn>)> {
-    cube_keys(cube, options.cube_probes)
-        .into_iter()
-        .filter_map(|key| {
-            let drawn = store.tiles.get(&key)?.clone();
-            let meta = std::fs::read_to_string(options.street.join("tiles").join(&key).join("meta.json")).ok()?;
-            let meta: serde_json::Value = serde_json::from_str(&meta).ok()?;
-            let c = meta["centre"].as_array()?;
-            let at = |i: usize| c.get(i).and_then(|v| v.as_f64()).map(|v| v as f32);
-            Some((Vec3::new(at(0)?, at(1)?, at(2)?), drawn))
-        })
-        .collect()
+/// What a probe inside the cube saw come in through the half sphere
+/// around `out`, weighed by the cosine: the radiance a lamp facing in from
+/// that side of the block shines with.
+fn seen_through(drawn: &light::Drawn, out: Vec3) -> Vec3 {
+    let (w, h) = (drawn.width as usize, drawn.height as usize);
+    let step = (w / 256).max(1);
+    let (mut sum, mut weight) = (Vec3::ZERO, 0.0);
+    for row in (0..h).step_by(step) {
+        let lat = std::f32::consts::FRAC_PI_2 - (row as f32 + 0.5) / h as f32 * std::f32::consts::PI;
+        for col in (0..w).step_by(step) {
+            let lon = ((col as f32 + 0.5) / w as f32 - 0.5) * std::f32::consts::TAU;
+            let d = Vec3::new(lat.cos() * lon.sin(), lat.sin(), -lat.cos() * lon.cos());
+            let cosine = d.dot(out);
+            if cosine <= 0.0 {
+                continue;
+            }
+            // An equirectangular pixel spans the cosine of its latitude.
+            let w8 = cosine * lat.cos();
+            let packed = drawn.radiance[row * w + col];
+            let band = |shift: u32| light::decode_radiance(((packed >> shift) & 1023) as f32 / 1023.0);
+            sum += Vec3::new(band(0), band(10), band(20)) * w8;
+            weight += w8;
+        }
+    }
+    if weight > 0.0 { sum / weight } else { Vec3::ZERO }
 }
 
 /// What comes into the block from each direction as a probe inside it saw

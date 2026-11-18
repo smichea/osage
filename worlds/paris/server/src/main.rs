@@ -1,21 +1,23 @@
 // SPDX-FileCopyrightText: The osage contributors
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-//! `paris-server`: the Paris world (D-136) and, beside it, its server of
-//! light.
+//! `paris-server`: the Paris world (D-136, D-137) and, beside it, its
+//! server of light.
 //!
 //!     paris-server [--street DIR] [--light-listen ADDR] [--horizon SECONDS] [osage-server options]
 //!
-//! DIR holds what `tools/bistro/export.py` and `tools/bistro/tiles.py`
-//! made of the street (default: `orca/bistro/out` under the asset
-//! manifest's content): its walk grid (`walk.json`, `walk.bin`) and its
-//! tiles of light (`tiles/`, listed in `tiles/index.json`). The server of
-//! light listens on ADDR (0.0.0.0:7883 unless told) and answers
-//! `/need?walker=ID` with the tiles that walker can see the light of within
-//! the horizon (2 s unless told), from where it is in the world and how
-//! fast it goes — not from what its client says — then sends each at
-//! `/h/TILE/{colour,depth,mask}.ivf`. Clients learn its port from the
-//! world's `paris.world/1`.
+//! DIR holds what `tools/bistro/export.py`, `tools/bistro/cube-probes.py`
+//! and `tools/bistro/tiles.py` made of the street (default:
+//! `orca/bistro/out` under the asset manifest's content): its walk grid
+//! (`walk.json`, `walk.bin`) and its light (`tiles/`, listed in
+//! `tiles/index.json`): the probes inside its cubes, and the blocks'
+//! surface tiles where those are not baked. The server of light listens on
+//! ADDR (0.0.0.0:7883 unless told) and answers `/need?walker=ID` with the
+//! probes and tiles of the cubes that walker can reach within the horizon
+//! (2 s unless told), from where it is in the world and how fast it goes —
+//! not from what its client says — then sends each at
+//! `/h/KEY/{colour,depth,mask}.ivf` (and `meta.json`, where a probe
+//! stands). Clients learn its port from the world's `paris.world/1`.
 
 use std::{collections::HashSet, net::TcpListener, path::PathBuf, sync::Arc};
 
@@ -63,11 +65,9 @@ fn main() -> anyhow::Result<()> {
     let need: Arc<http::Need> = Arc::new(move |query: &str| {
         let id = query.split('&').find_map(|kv| kv.strip_prefix("walker="))?.parse::<u64>().ok()?;
         let walker = *seen.0.lock().ok()?.get(&id)?;
-        let wanted: Vec<String> = tiles::needed(walker.eyes, walker.speed, horizon)
-            .into_iter()
-            .map(|t| t.key())
-            .filter(|k| present.contains(k))
-            .collect();
+        // The probes inside the cubes the walker can reach (D-137), or their
+        // blocks' surface tiles where those are not baked (D-136).
+        let wanted = tiles::needed_light(walker.eyes, walker.speed, horizon, |k| present.contains(k));
         serde_json::to_string(&wanted).ok()
     });
     http::serve(listener, tiles_folder, need)?;

@@ -23,8 +23,8 @@ run=$(metadata osage-run)
 size=$(metadata osage-size || echo 2048)
 samples=$(metadata osage-samples || echo 256)
 packed=$(metadata osage-packed || echo "")
-# A cube (X,Y,Z): its probes (cube-probes.py) baked instead of the tiles,
-# brought back raw, nothing else.
+# Cubes (X,Y,Z;X,Y,Z…): their probes (cube-probes.py) baked instead of the
+# tiles, brought back raw, nothing else.
 cube=$(metadata osage-cube || echo "")
 work=/var/tmp/osage
 rm -rf "$work" && mkdir -p "$work/out" && cd "$work"
@@ -79,10 +79,12 @@ else
   OSAGE_DEVICE=$device "$blender" -b scene/bistro/exterior.blend --python-exit-code 1 \
     --python tools/truth.py -- out/truth 1280 720 16 >out/device.log 2>&1 || device=CUDA
   if [ -n "$cube" ]; then
-    say "rendering on $device; baking the probes of cube $cube, $size px wide, $samples samples"
-    OSAGE_DEVICE=$device "$blender" -b scene/bistro/exterior.blend --python-exit-code 1 \
-      --python tools/cube-probes.py -- "$cube" raw "$size" "$samples" >out/bake.log 2>&1 ||
-      finish "failed: the probes (see out/bake.log)"
+    for one in ${cube//;/ }; do
+      say "rendering on $device; baking the probes of cube $one, $size px wide, $samples samples"
+      OSAGE_DEVICE=$device "$blender" -b scene/bistro/exterior.blend --python-exit-code 1 \
+        --python tools/cube-probes.py -- "$one" raw "$size" "$samples" >>out/bake.log 2>&1 ||
+        finish "failed: the probes of $one (see out/bake.log)"
+    done
     tar -cf raw.tar raw && gcloud storage cp raw.tar "$run/raw.tar" >/dev/null 2>&1 || finish "failed: the raw probes did not go up"
     finish ok
   fi

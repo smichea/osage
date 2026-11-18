@@ -17,7 +17,7 @@ Walk in a street of Paris as real as its photographs, the client drawing in 3D o
 
 - **The block's faces:** six quads on the outer surface of the walker's block, facing in; the street's meshes inside the block hide them where they stand, and they hide everything beyond.
 - **Incoming light material:** on each face, for each pixel, the ray from the eye leaves the block there; marching out along it in the probes of the four nearest tiles (fisheyes over 200 degrees, with distances), each finds where the ray first goes behind what it saw, halving the last step until the place is known; those that saw the ray's point itself there (not something nearer hiding it) give its radiance, the more the more their look at the point is like the eye's; where none did, what a probe saw just beside and behind the thing hiding the point fills the hole. The faces are drawn after the opaque pass (alpha blended, opaque), so that traced light's denoiser leaves them.
-- **Probes inside the cube (a trial):** with `--cube-probes N`, the light comes from up to five full spheres taken inside the walker's cube (`tools/bistro/cube-probes.py`, equirectangular), each with where it stands in its `meta.json`, instead of the block's 30 surface tiles; walking alone only.
+- **Probes inside the cube (D-137):** the light comes from the five full spheres taken inside the walker's cube (`tools/bistro/cube-probes.py`, equirectangular), each with where it stands (its `meta.json`, fetched with it); where they are not baked, from the block's 30 surface tiles. `--cube-probes N` takes N of them, 0 the surface tiles only.
 - **Look:** radiance is shown through Blender's own AgX, the view transform Cycles' pictures are seen through: a table of it (`tools/bistro/agx-lut.py`, under the asset content as `blender/agx-64.bin`) put where Bevy reads its Blender Filmic table. Bevy's AgX is Sobotka's first, brighter in the mid-tones by about a fifth.
 
 # Architecture
@@ -26,7 +26,7 @@ Walk in a street of Paris as real as its photographs, the client drawing in 3D o
 
 # Interfaces
 
-The program `paris` (`[ws://HOST:7878] [--tier T1..T4] [--street DIR] [--offline] [--fov DEGREES] [--shot FILE --at X,Y,Z --heading DEGREES] [--film DIR SECONDS --heading DEGREES] [--plain] [--whole]`), built with `--features raytracing` to trace the block at T4. `look::TABLE`, the table of Blender's AgX it reads.
+The program `paris` (`[ws://HOST:7878] [--tier T1..T4] [--street DIR] [--offline] [--fov DEGREES] [--shot FILE --at X,Y,Z --heading DEGREES] [--film DIR SECONDS --heading DEGREES] [--plain] [--whole] [--cube-probes N]`), built with `--features raytracing` to trace the block at T4. `look::TABLE`, the table of Blender's AgX it reads.
 
 # Invariants
 
