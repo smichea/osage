@@ -6,7 +6,7 @@ resource: https://github.com/smichea/osage/tree/main/worlds/paris/native
 licence: MIT OR Apache-2.0
 status: draft
 tags: [paris, client, bevy, light]
-generated: { by: "claude-code/claude-opus-5-5", at: "2026-11-18T13:40:00Z" }
+generated: { by: "claude-code/claude-opus-5-5", at: "2026-11-18T15:00:00Z" }
 ---
 
 # Purpose
@@ -43,4 +43,4 @@ The incoming light material and its arrays serve any world drawn as a block in 3
 
 # Limits
 
-The block is rasterised at T1–T3; at T4 it is traced, its faces lamps of their tiles' light weighed by the cosine, which leaves its cobbles a third too dark (a traced ray leaving the block should take the tiles' light in its own direction). Beyond the block the picture is as sharp as the tiles: at 384 px over 200 degrees, nine times coarser than the picture; at 2048 px, near the picture's. Near the block, surface tiles leave holes where the eye sees behind an object no probe sees past; probes inside the cube close them, but only walking alone so far. Its environment light is seen from the block's centre: no shadow of a single thing outside falls inside it. Each block's arrays are made again when the walker enters it; decoding runs on the CPU.
+The block is rasterised at T1–T3; at T4 it is traced, its faces lamps of what the centre probe saw come in through each, scaled for the floor in the middle to gather what the probe saw (27.3 dB on an L4, the cobbles at 0.71 of Cycles; Solari's realtime path barely lights the block from its environment map alone, and a traced ray leaving the block should take the probes' light in its own direction). Beyond the block the picture is as sharp as the tiles: at 384 px over 200 degrees, nine times coarser than the picture; at 2048 px, near the picture's. Near the block, surface tiles leave holes where the eye sees behind an object no probe sees past; probes inside the cube close them, but only walking alone so far. Its environment light is seen from the block's centre: no shadow of a single thing outside falls inside it. Each block's arrays are made again when the walker enters it; decoding runs on the CPU.

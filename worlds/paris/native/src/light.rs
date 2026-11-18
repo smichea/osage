@@ -484,10 +484,10 @@ fn arrays(
         store.drawn = probes.len();
         store.cubed = true;
         store.probes_of = Some(block.cube);
-        if let (true, Some((centre, drawn))) = (relit, probes.first().cloned()) {
+        if let (true, Some((_, drawn))) = (relit, probes.first().cloned()) {
             let done = fetcher.lights.0.clone();
             let _ = thread::Builder::new().name("paris-environment".to_owned()).spawn(move || {
-                let (diffuse, specular) = environment_seen(&drawn, centre);
+                let (diffuse, specular) = environment_seen(&drawn);
                 let _ = done.send((block, diffuse, specular));
             });
         }
@@ -515,6 +515,20 @@ fn arrays(
             commands.entity(glow).despawn();
         }
         let (lo, hi) = (block.min(), block.max());
+        // Traced (T4), the block is lit by its faces as lamps: Solari's
+        // realtime path barely lights it from its environment map (research
+        // 10). Each face shines what the centre probe saw come in through it,
+        // all scaled for the floor in the middle of the block to gather from
+        // them what the probe saw come in.
+        let lamps = match (traced.0, probes.first()) {
+            (true, Some((centre, drawn))) => {
+                let shine = Face::ALL.map(|face| seen_through(drawn, face.normal()));
+                let scale = lamps_scale(drawn, &shine, *centre, &block);
+                debug!(scale, "paris: the faces' lamps");
+                Some(shine.map(|l| l * scale))
+            }
+            _ => None,
+        };
         for (index, face) in Face::ALL.into_iter().enumerate() {
             let (entity, handle) = &faces.0[index];
             if let Some(mut material) = materials.get_mut(handle) {
@@ -526,10 +540,8 @@ fn arrays(
                 material.distances = distances.clone();
             }
             place_face(&mut places, *entity, face, lo, hi, options.whole);
-            // Traced (T4): the face a lamp of what the centre probe saw
-            // come in through it, weighed by the cosine.
-            if let (Ok(quad), true, Some((_, drawn))) = (quads.get(*entity), traced.0, probes.first()) {
-                let luminance = seen_through(drawn, face.normal()) * NITS;
+            if let (Ok(quad), Some(lamps)) = (quads.get(*entity), lamps) {
+                let luminance = lamps[index] * NITS;
                 let lamp = osage_render::Emitter(LinearRgba::rgb(luminance.x, luminance.y, luminance.z));
                 let glow = commands
                     .spawn((Mesh3d(quad.0.clone()), lamp, Transform::default(), Visibility::Inherited, Glow))
@@ -649,6 +661,55 @@ fn cube_probes(store: &Store, count: usize, cube: IVec3) -> Vec<(Vec3, Arc<light
     keys.into_iter().take(count).filter_map(|k| Some((*store.centres.get(&k)?, store.tiles.get(&k)?.clone()))).collect()
 }
 
+/// What a probe inside the cube saw come in from direction `d`
+/// (equirectangular: the middle column north, east to its right).
+fn seen_towards(drawn: &light::Drawn, d: Vec3) -> Vec3 {
+    let (w, h) = (drawn.width as usize, drawn.height as usize);
+    let d = d.normalize_or(Vec3::Y);
+    let lon = d.x.atan2(-d.z);
+    let lat = d.y.clamp(-1.0, 1.0).asin();
+    let u = 0.5 + lon / std::f32::consts::TAU;
+    let v = 0.5 - lat / std::f32::consts::PI;
+    let (col, row) = (((u * w as f32) as usize).min(w - 1), ((v * h as f32) as usize).min(h - 1));
+    let packed = drawn.radiance[row * w + col];
+    let band = |shift: u32| light::decode_radiance(((packed >> shift) & 1023) as f32 / 1023.0);
+    Vec3::new(band(0), band(10), band(20))
+}
+
+/// How much the faces' lamps (`shine`, in `Face::ALL`'s order) must be
+/// scaled for the floor in the middle of the block, under the centre probe,
+/// to gather from them as much light as the probe saw come in: over the
+/// half sphere above, weighed by the cosine, each direction's lamp being
+/// the face it leaves the block by.
+fn lamps_scale(drawn: &light::Drawn, shine: &[Vec3; 6], centre: Vec3, block: &Block) -> f32 {
+    let luminance = |v: Vec3| 0.2126 * v.x + 0.7152 * v.y + 0.0722 * v.z;
+    let floor = centre - Vec3::Y * osage_world_paris::walk::EYES;
+    let (lo, hi) = (block.min(), block.max());
+    let (mut seen, mut lit) = (0.0f32, 0.0f32);
+    const N: usize = 48;
+    for i in 0..N {
+        for j in 0..N {
+            // Directions spread as the cosine over the half sphere above.
+            let (u, v) = ((i as f32 + 0.5) / N as f32, (j as f32 + 0.5) / N as f32);
+            let (sine, phi) = (u.sqrt(), v * std::f32::consts::TAU);
+            let d = Vec3::new(sine * phi.cos(), (1.0 - u).sqrt(), sine * phi.sin());
+            let leave = |axis: usize| {
+                if d[axis].abs() < 1e-6 {
+                    f32::INFINITY
+                } else if d[axis] > 0.0 {
+                    (hi[axis] - floor[axis]) / d[axis]
+                } else {
+                    (lo[axis] - floor[axis]) / d[axis]
+                }
+            };
+            let axis = (0..3).min_by(|&a, &b| leave(a).total_cmp(&leave(b))).unwrap_or(1);
+            lit += luminance(shine[axis * 2 + usize::from(d[axis] > 0.0)]);
+            seen += luminance(seen_towards(drawn, d));
+        }
+    }
+    if lit > 0.0 { (seen / lit).clamp(0.25, 4.0) } else { 1.0 }
+}
+
 /// What a probe inside the cube saw come in through the half sphere
 /// around `out`, weighed by the cosine: the radiance a lamp facing in from
 /// that side of the block shines with.
@@ -678,20 +739,8 @@ fn seen_through(drawn: &light::Drawn, out: Vec3) -> Vec3 {
 
 /// What comes into the block from each direction as a probe inside it saw
 /// it (equirectangular: the middle column north, east to its right).
-fn environment_seen(drawn: &light::Drawn, _centre: Vec3) -> (Image, Image) {
-    let (w, h) = (drawn.width as usize, drawn.height as usize);
-    let sample = |d: Vec3| -> Vec3 {
-        let d = d.normalize_or(Vec3::Y);
-        let lon = d.x.atan2(-d.z);
-        let lat = d.y.clamp(-1.0, 1.0).asin();
-        let u = 0.5 + lon / std::f32::consts::TAU;
-        let v = 0.5 - lat / std::f32::consts::PI;
-        let (col, row) = (((u * w as f32) as usize).min(w - 1), ((v * h as f32) as usize).min(h - 1));
-        let packed = drawn.radiance[row * w + col];
-        let band = |shift: u32| light::decode_radiance(((packed >> shift) & 1023) as f32 / 1023.0);
-        Vec3::new(band(0), band(10), band(20))
-    };
-    osage_render::sky_light::cubemaps(sample)
+fn environment_seen(drawn: &light::Drawn) -> (Image, Image) {
+    osage_render::sky_light::cubemaps(|d| seen_towards(drawn, d))
 }
 
 /// The radiance a lamp on a tile shines with to light as the tile's
