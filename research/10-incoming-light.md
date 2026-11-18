@@ -99,6 +99,8 @@ The five probes of four more cubes along a walk baked (4096 × 2048, 128 samples
 
 The picture is then whole along the walk, sharp in the cubes with probes, the tiles' blur in the one without; 52 ms a frame on the Iris Xe while it decodes.
 
+On the L4, from the scene camera's place with the cube's probes: 28.5 dB at T3, the cobbles at 0.99 of Cycles. At T4 the block is traced and lit by its faces as lamps of the centre probe's light through each (as in the tiles' case, about 0.64 of Cycles on the cobbles). Without the lamps, the rays leaving the block met nothing and Solari's realtime path took the camera's environment map — the centre probe's light, direction by direction — alone: the cobbles fell to 0.20. Lighting the traced block by the light coming in, ray by ray, is left to an RTX machine to work out.
+
 ## Next
 
 1. The whole street baked, at 1024–1536 px and more samples: about 2 000 tiles, a cloud GPU's work (hours on the laptop's processor for 384 px).
