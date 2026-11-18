@@ -1,0 +1,119 @@
+// SPDX-FileCopyrightText: The osage contributors
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
+//! What the walker reads on screen — where it is, how much light has come,
+//! the street's credit — and the shot: one picture from a place once the
+//! light is there.
+
+use bevy::{
+    prelude::*,
+    render::view::screenshot::{Screenshot, save_to_disk},
+};
+use osage_world_paris::tiles::Block;
+
+use osage_render::resolution::Picture;
+
+use crate::{Options, light::Store, street::Placed, walker::Me};
+
+pub struct HudPlugin;
+
+impl Plugin for HudPlugin {
+    fn build(&self, app: &mut App) {
+        app.add_systems(Startup, setup).add_systems(Update, (read, shoot));
+    }
+}
+
+#[derive(Component)]
+struct Readout;
+
+fn setup(mut commands: Commands, options: Res<Options>) {
+    if options.shot.is_some() {
+        return;
+    }
+    let text = |size: f32| TextFont { font_size: bevy::text::FontSize::Px(size), ..default() };
+    commands.spawn((
+        Text::new(""),
+        text(15.0),
+        TextColor(Color::srgba(1.0, 1.0, 1.0, 0.9)),
+        Node { position_type: PositionType::Absolute, top: Val::Px(12.0), left: Val::Px(14.0), ..default() },
+        Readout,
+    ));
+    commands.spawn((
+        Text::new(
+            "Walk: W A S D (Z Q S D) or the arrows, Shift to run; click to look with the mouse, Escape to let it go.\n\
+             Bistro: Amazon Lumberyard, Open Research Content Archive (ORCA), NVIDIA, 2017, CC BY 4.0. \
+             Sky: San Giuseppe Bridge, Poly Haven, CC0.",
+        ),
+        text(12.0),
+        TextColor(Color::srgba(1.0, 1.0, 1.0, 0.75)),
+        Node { position_type: PositionType::Absolute, bottom: Val::Px(10.0), left: Val::Px(14.0), ..default() },
+    ));
+}
+
+fn read(me: Res<Me>, store: Res<Store>, placed: Option<Res<Placed>>, mut readouts: Query<&mut Text, With<Readout>>) {
+    let Ok(mut text) = readouts.single_mut() else { return };
+    let block = Block::of(me.eyes());
+    let street = if placed.is_some_and(|p| p.0) { "" } else { " — the street is loading" };
+    **text = format!(
+        "Paris, Bistro{street}\n{:.1}, {:.1}, {:.1} m · {:.1} m/s · block {} {} {}\nlight: {} of 30 tiles of this block · {} tiles came, {:.1} MB",
+        me.feet.x,
+        me.feet.y,
+        me.feet.z,
+        me.speed,
+        block.cube.x,
+        block.cube.y,
+        block.cube.z,
+        store.drawn,
+        store.received,
+        store.bytes as f64 / 1e6,
+    );
+}
+
+/// A shot: once the street is placed and the block's light has come and
+/// settled, one picture, then leave.
+#[allow(clippy::too_many_arguments)]
+fn shoot(
+    mut commands: Commands,
+    options: Res<Options>,
+    picture: Option<Res<Picture>>,
+    placed: Option<Res<Placed>>,
+    store: Res<Store>,
+    mut frames: Local<u32>,
+    mut all: Local<u32>,
+    mut taken: Local<Option<u32>>,
+    mut timed: Local<(f32, u32)>,
+    time: Res<Time>,
+    mut exit: MessageWriter<AppExit>,
+) {
+    let (Some(shot), Some(picture)) = (&options.shot, picture) else { return };
+    *frames += 1;
+    *all += 1;
+    if let Some(at) = *taken {
+        if *frames > at + 30 {
+            exit.write(AppExit::Success);
+        }
+        return;
+    }
+    let street = placed.is_some_and(|p| p.0);
+    // The block's light has come — or, never forever, a picture of what
+    // there is after a while.
+    let ready = street && ((store.drawn > 0 && store.received >= store.drawn) || *all > 1500);
+    // Some frames after, for the pipelines and the light.
+    const SETTLE: u32 = 60;
+    if !ready {
+        *frames = 0;
+        return;
+    }
+    if *frames < SETTLE {
+        // The last half of the settling frames, timed.
+        if *frames > SETTLE / 2 {
+            timed.0 += time.delta_secs();
+            timed.1 += 1;
+        }
+        return;
+    }
+    commands.spawn(Screenshot::image(picture.image.clone())).observe(save_to_disk(shot.file.clone()));
+    let ms = 1000.0 * timed.0 / timed.1.max(1) as f32;
+    info!(file = %shot.file.display(), tiles = store.drawn, frame_ms = ms, "paris: shot");
+    *taken = Some(*frames);
+}

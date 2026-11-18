@@ -3,7 +3,7 @@
 
 [workspace]
 resolver = "3"
-members = ["crates/*", "worlds/kart/physics", "worlds/kart/world", "worlds/kart/server", "worlds/kart/native", "worlds/kart/components/*"]
+members = ["crates/*", "worlds/kart/physics", "worlds/kart/world", "worlds/kart/server", "worlds/kart/native", "worlds/kart/components/*", "worlds/paris/world", "worlds/paris/server", "worlds/paris/native"]
 
 [workspace.package]
 version = "0.1.0"
@@ -41,6 +41,7 @@ osage-props = { path = "crates/osage-props" }
 osage-hologram = { path = "crates/osage-hologram" }
 osage-hologram-stream = { path = "crates/osage-hologram-stream" }
 osage-cubes = { path = "crates/osage-cubes" }
+osage-world-paris = { path = "worlds/paris/world" }
 osage-humans = { path = "crates/osage-humans" }
 osage-music = { path = "crates/osage-music" }
 osage-voice = { path = "crates/osage-voice" }

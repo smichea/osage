@@ -33,6 +33,7 @@ pub mod decode;
 pub mod encode;
 pub mod http;
 pub mod ivf;
+pub mod light;
 
 use std::collections::BTreeMap;
 

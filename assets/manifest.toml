@@ -15843,3 +15843,62 @@ licence = "CC-BY-4.0"
 author = "Amazon Lumberyard (NVIDIA ORCA)"
 source = "https://developer.nvidia.com/orca/amazon-lumberyard-bistro"
 used_by = "worlds/paris: the street its holograms are photographed from (D-134)"
+
+# Made from the Bistro above (CC BY 4.0, as it): the street prepared, exported
+# for the client, its walk grid, and the light coming into its blocks.
+
+[[asset]]
+path = "assets/orca/bistro/exterior.blend"
+made_by = "blender -b --factory-startup --python tools/bistro/prepare.py -- assets/orca/bistro/src/Bistro_v5_2 assets/orca/bistro (after unzipping Bistro_v5_2.zip into assets/orca/bistro/src)"
+licence = "CC-BY-4.0"
+author = "Amazon Lumberyard (NVIDIA ORCA), derived by the osage contributors"
+source = "https://developer.nvidia.com/orca/amazon-lumberyard-bistro"
+used_by = "worlds/paris: the street ready for Cycles, the tiles' bake"
+
+[[asset]]
+path = "assets/orca/bistro/out/bistro.gltf"
+made_by = "blender -b assets/orca/bistro/exterior.blend --python tools/bistro/export.py -- assets/orca/bistro/out"
+licence = "CC-BY-4.0"
+author = "Amazon Lumberyard (NVIDIA ORCA), derived by the osage contributors"
+source = "https://developer.nvidia.com/orca/amazon-lumberyard-bistro"
+used_by = "worlds/paris/native: the street the client draws around the walker"
+
+[[asset]]
+path = "assets/orca/bistro/out/bistro.bin"
+made_by = "tools/bistro/export.py (with bistro.gltf)"
+licence = "CC-BY-4.0"
+author = "Amazon Lumberyard (NVIDIA ORCA), derived by the osage contributors"
+source = "https://developer.nvidia.com/orca/amazon-lumberyard-bistro"
+used_by = "worlds/paris/native: the street's geometry"
+
+[[asset]]
+path = "assets/orca/bistro/out/textures"
+made_by = "tools/bistro/export.py (with bistro.gltf)"
+licence = "CC-BY-4.0"
+author = "Amazon Lumberyard (NVIDIA ORCA), derived by the osage contributors"
+source = "https://developer.nvidia.com/orca/amazon-lumberyard-bistro"
+used_by = "worlds/paris/native: the street's textures"
+
+[[asset]]
+path = "assets/orca/bistro/out/walk.json"
+made_by = "tools/bistro/export.py (with bistro.gltf)"
+licence = "CC-BY-4.0"
+author = "Amazon Lumberyard (NVIDIA ORCA), derived by the osage contributors"
+source = "https://developer.nvidia.com/orca/amazon-lumberyard-bistro"
+used_by = "worlds/paris: where walkers can stand"
+
+[[asset]]
+path = "assets/orca/bistro/out/walk.bin"
+made_by = "tools/bistro/export.py (with bistro.gltf)"
+licence = "CC-BY-4.0"
+author = "Amazon Lumberyard (NVIDIA ORCA), derived by the osage contributors"
+source = "https://developer.nvidia.com/orca/amazon-lumberyard-bistro"
+used_by = "worlds/paris: where walkers can stand"
+
+[[asset]]
+path = "assets/orca/bistro/out/tiles"
+made_by = "paris-tiles assets/orca/bistro/out > tiles.json; blender -b assets/orca/bistro/exterior.blend --python tools/bistro/tiles.py -- tiles.json target/bistro-tiles; light-pack target/bistro-tiles assets/orca/bistro/out/tiles"
+licence = "CC-BY-4.0"
+author = "Amazon Lumberyard (NVIDIA ORCA), derived by the osage contributors"
+source = "https://developer.nvidia.com/orca/amazon-lumberyard-bistro"
+used_by = "worlds/paris: the light coming into the walkers' blocks (D-136)"

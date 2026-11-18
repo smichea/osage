@@ -74,12 +74,12 @@ fn answer(stream: TcpStream, root: &std::path::Path, need: &Need) -> io::Result<
     }
 }
 
-/// A path of plain names: letters, digits, `-`, `_`, `.`, `/`, never `..`.
+/// A path of plain names: letters, digits, `-`, `_`, `.`, `+`, `/`, never `..`.
 fn safe(path: &str) -> bool {
     !path.is_empty()
         && !path.contains("..")
         && !path.starts_with('/')
-        && path.chars().all(|c| c.is_ascii_alphanumeric() || "-_./".contains(c))
+        && path.chars().all(|c| c.is_ascii_alphanumeric() || "-_.+/".contains(c))
 }
 
 fn reply(stream: &mut TcpStream, status: &str, kind: &str, body: &[u8]) -> io::Result<()> {
@@ -161,12 +161,15 @@ mod tests {
         let root = std::env::temp_dir().join(format!("osage-hologram-http-{}", std::process::id()));
         std::fs::create_dir_all(root.join("a")).unwrap();
         std::fs::write(root.join("a/view-b00-00.ivf"), b"block").unwrap();
+        std::fs::create_dir_all(root.join("+x_1_0_-2")).unwrap();
+        std::fs::write(root.join("+x_1_0_-2/mask.ivf"), b"tile").unwrap();
         let listener = TcpListener::bind("127.0.0.1:0").unwrap();
         let address = listener.local_addr().unwrap().to_string();
         let need: Arc<Need> = Arc::new(|query: &str| (query == "x=1").then(|| "[\"a\"]".to_owned()));
         serve(listener, root.clone(), need).unwrap();
         let mut client = Client::new(address);
         assert_eq!(client.get("/h/a/view-b00-00.ivf").unwrap(), b"block");
+        assert_eq!(client.get("/h/+x_1_0_-2/mask.ivf").unwrap(), b"tile", "a tile's key");
         assert_eq!(client.get("/need?x=1").unwrap(), b"[\"a\"]");
         assert!(client.get("/need?x=2").is_err());
         assert!(client.get("/h/../secret").is_err());

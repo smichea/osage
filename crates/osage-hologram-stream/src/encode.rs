@@ -43,7 +43,7 @@ impl Default for Quality {
 /// Fills what lies around the object (`mask`: where it is) with the
 /// object's own values, spread smoothly outwards (push-pull: averages over
 /// ever larger squares, brought back down where nothing was).
-fn fill(width: usize, height: usize, mask: &[bool], values: &mut [[f32; 3]]) {
+pub(crate) fn fill(width: usize, height: usize, mask: &[bool], values: &mut [[f32; 3]]) {
     if mask.len() != width * height || mask.iter().all(|&m| m) || !mask.iter().any(|&m| m) {
         return;
     }

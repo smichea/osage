@@ -1,0 +1,24 @@
+# SPDX-FileCopyrightText: The osage contributors
+# SPDX-License-Identifier: MIT OR Apache-2.0
+
+[package]
+name = "osage-paris-server"
+description = "The Paris world served by osage-server, and beside it the server of the light coming into each walker's block (D-136)"
+license = "MIT OR Apache-2.0"
+publish = false
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+
+[[bin]]
+name = "paris-server"
+path = "src/main.rs"
+
+[dependencies]
+osage-server.workspace = true
+osage-world-paris.workspace = true
+osage-hologram-stream.workspace = true
+osage-content.workspace = true
+anyhow.workspace = true
+serde_json.workspace = true

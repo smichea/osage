@@ -19,6 +19,10 @@ path = "src/bin/hologram-pack.rs"
 name = "hologram-serve"
 path = "src/bin/hologram-serve.rs"
 
+[[bin]]
+name = "light-pack"
+path = "src/bin/light-pack.rs"
+
 [dependencies]
 anyhow.workspace = true
 libc = "0.2.191"

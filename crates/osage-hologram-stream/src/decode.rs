@@ -61,6 +61,138 @@ pub fn block(file: &[u8], series: Series) -> anyhow::Result<Vec<Picture>> {
     pictures.into_iter().collect()
 }
 
+/// A decoded picture's samples at full precision, for what 8 bits cannot
+/// hold (a light's radiance, its distance).
+pub struct Planes {
+    pub width: u32,
+    pub height: u32,
+    /// Samples as stored, 0 to `max`.
+    luma: Vec<f32>,
+    cb: Vec<f32>,
+    cr: Vec<f32>,
+    /// The chroma planes' width, and whether they are halved across, down.
+    chroma_width: u32,
+    halved: (u32, u32),
+    max: f32,
+    bits: u32,
+    full: bool,
+    identity: bool,
+    kr: f32,
+    kb: f32,
+}
+
+impl Planes {
+    /// The luma as 0..1 of its range, as stored (a grey picture's values).
+    pub fn grey(&self) -> Vec<f32> {
+        self.luma.iter().map(|&v| v / self.max).collect()
+    }
+
+    /// Red, green and blue, 0..1, through the stream's matrix and range; the
+    /// chroma between its samples, bilinear.
+    pub fn rgb(&self) -> Vec<[f32; 3]> {
+        let (width, height) = (self.width, self.height);
+        if self.cb.is_empty() {
+            return self.grey().into_iter().map(|v| [v, v, v]).collect();
+        }
+        let scale = (1u32 << (self.bits - 8)) as f32;
+        let (y_low, y_span) = if self.full { (0.0, self.max) } else { (16.0 * scale, 219.0 * scale) };
+        let (c_mid, c_span) =
+            if self.full { ((1u32 << (self.bits - 1)) as f32, self.max) } else { (128.0 * scale, 224.0 * scale) };
+        let (columns, rows) = (between(width, self.halved.0), between(height, self.halved.1));
+        let cw = self.chroma_width as usize;
+        let mut out = Vec::with_capacity((width * height) as usize);
+        let (mut u, mut v) = (vec![0.0f32; cw], vec![0.0f32; cw]);
+        for (y, &(first, second, ty)) in rows.iter().enumerate() {
+            for i in 0..cw {
+                let (a, b) = (first * cw + i, second * cw + i);
+                u[i] = self.cb[a] + (self.cb[b] - self.cb[a]) * ty;
+                v[i] = self.cr[a] + (self.cr[b] - self.cr[a]) * ty;
+            }
+            let row = &self.luma[y * width as usize..(y + 1) * width as usize];
+            for (x, &(a, b, tx)) in columns.iter().enumerate() {
+                let (pu, pv) = (u[a] + (u[b] - u[a]) * tx, v[a] + (v[b] - v[a]) * tx);
+                let yy = (row[x] - y_low) / y_span;
+                if self.identity {
+                    out.push([(pv - y_low) / y_span, yy, (pu - y_low) / y_span]);
+                    continue;
+                }
+                let (pb, pr) = ((pu - c_mid) / c_span, (pv - c_mid) / c_span);
+                let r = yy + 2.0 * (1.0 - self.kr) * pr;
+                let b = yy + 2.0 * (1.0 - self.kb) * pb;
+                let g = (yy - self.kr * r - self.kb * b) / (1.0 - self.kr - self.kb);
+                out.push([r, g, b]);
+            }
+        }
+        out
+    }
+}
+
+/// The pictures of an IVF file at full precision.
+pub fn planes(file: &[u8]) -> anyhow::Result<Vec<Planes>> {
+    let mut decoder = Decoder::new()?;
+    let mut pictures = Vec::new();
+    for frame in ivf::frames(file)? {
+        decoder.send(frame, |picture| pictures.push(extract(picture)))?;
+    }
+    decoder.drain(|picture| pictures.push(extract(picture)))?;
+    pictures.into_iter().collect()
+}
+
+fn extract(picture: &Dav1dPicture) -> anyhow::Result<Planes> {
+    let (width, height) = (picture.p.w as u32, picture.p.h as u32);
+    let bits = picture.p.bpc as u32;
+    let wide = bits > 8;
+    let plane = |i: usize, stride: isize| -> anyhow::Result<Plane> {
+        Ok(Plane { at: picture.data[i].context("a plane is missing")?.as_ptr().cast(), stride, wide })
+    };
+    let read = |plane: &Plane, w: u32, h: u32| {
+        let mut all = Vec::with_capacity((w * h) as usize);
+        let mut row = Vec::with_capacity(w as usize);
+        for y in 0..h {
+            plane.row(y, w, &mut row);
+            all.extend_from_slice(&row);
+        }
+        all
+    };
+    let luma = read(&plane(0, picture.stride[0])?, width, height);
+    // SAFETY: a decoded picture carries its sequence header.
+    let header = unsafe { picture.seq_hdr.context("no sequence header")?.as_ref() };
+    let (halved, chroma) = match picture.p.layout {
+        DAV1D_PIXEL_LAYOUT_I400 => ((0, 0), None),
+        DAV1D_PIXEL_LAYOUT_I420 => ((1, 1), Some(())),
+        DAV1D_PIXEL_LAYOUT_I422 => ((1, 0), Some(())),
+        _ => ((0, 0), Some(())),
+    };
+    let (chroma_width, chroma_height) = ((width + halved.0) >> halved.0, (height + halved.1) >> halved.1);
+    let (cb, cr) = match chroma {
+        Some(()) => (
+            read(&plane(1, picture.stride[1])?, chroma_width, chroma_height),
+            read(&plane(2, picture.stride[1])?, chroma_width, chroma_height),
+        ),
+        None => (Vec::new(), Vec::new()),
+    };
+    let (kr, kb) = if header.mtrx == DAV1D_MC_BT601 || header.mtrx == DAV1D_MC_BT470BG {
+        (0.299, 0.114)
+    } else {
+        (0.2126, 0.0722)
+    };
+    Ok(Planes {
+        width,
+        height,
+        luma,
+        cb,
+        cr,
+        chroma_width,
+        halved,
+        max: ((1u32 << bits) - 1) as f32,
+        bits,
+        full: header.color_range != 0,
+        identity: header.mtrx == DAV1D_MC_IDENTITY,
+        kr,
+        kb,
+    })
+}
+
 /// dav1d's "try again": a picture waits to be taken, or more data is needed.
 fn again(result: i32) -> bool {
     result == -libc::EAGAIN

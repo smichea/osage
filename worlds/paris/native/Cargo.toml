@@ -1,0 +1,30 @@
+# SPDX-FileCopyrightText: The osage contributors
+# SPDX-License-Identifier: MIT OR Apache-2.0
+
+[package]
+name = "osage-paris-native"
+description = "Native client of the Paris world (Bevy): a walk on foot in Bistro, the 9 cubes of 3 m around the walker drawn, all else the light coming into them, streamed (D-136)"
+license = "MIT OR Apache-2.0"
+publish = false
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+
+[[bin]]
+name = "paris"
+path = "src/main.rs"
+
+[dependencies]
+osage-world-paris.workspace = true
+osage-hologram-stream.workspace = true
+osage-render.workspace = true
+osage-content.workspace = true
+osage-humans.workspace = true
+osage-sdk.workspace = true
+anyhow.workspace = true
+bevy = { workspace = true, features = ["3d", "ui", "hdr"] }
+crossbeam-channel.workspace = true
+prost.workspace = true
+serde_json.workspace = true
+tokio.workspace = true

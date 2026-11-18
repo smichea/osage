@@ -5113,6 +5113,36 @@ dependencies = [
 ]
 
 [[package]]
+name = "osage-paris-native"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "bevy",
+ "crossbeam-channel",
+ "osage-content",
+ "osage-hologram-stream",
+ "osage-humans",
+ "osage-render",
+ "osage-sdk",
+ "osage-world-paris",
+ "prost",
+ "serde_json",
+ "tokio",
+]
+
+[[package]]
+name = "osage-paris-server"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "osage-content",
+ "osage-hologram-stream",
+ "osage-server",
+ "osage-world-paris",
+ "serde_json",
+]
+
+[[package]]
 name = "osage-procedural"
 version = "0.1.0"
 dependencies = [
@@ -5255,6 +5285,20 @@ dependencies = [
  "osage-proto",
  "prost",
  "prost-types",
+]
+
+[[package]]
+name = "osage-world-paris"
+version = "0.1.0"
+dependencies = [
+ "bevy",
+ "osage-world-module-api",
+ "prost",
+ "prost-build",
+ "protox",
+ "serde",
+ "serde_json",
+ "tracing",
 ]
 
 [[package]]

@@ -1,0 +1,24 @@
+# SPDX-FileCopyrightText: The osage contributors
+# SPDX-License-Identifier: MIT OR Apache-2.0
+
+[package]
+name = "osage-world-paris"
+description = "A walk in a street of Paris for osage (Amazon Lumberyard's Bistro): walkers on its walk grid, and the tiles of light coming into each walker's block"
+license = "MIT OR Apache-2.0"
+publish = false
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+
+[dependencies]
+osage-world-module-api.workspace = true
+bevy = { workspace = true, features = ["std", "multi_threaded", "async_executor"] }
+prost.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tracing.workspace = true
+
+[build-dependencies]
+prost-build.workspace = true
+protox.workspace = true

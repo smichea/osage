@@ -1,6 +1,7 @@
 # Knowledge Update Log
 
 ## 2026-11-18
+* **Creation**: Added the Paris world, [osage-world-paris](/modules/paris-world.md) and its client [osage-paris-native](/modules/paris-native.md): a walk in Bistro, the 9 cubes around the walker drawn, the light coming into them streamed (D-136); [osage-hologram-stream](/modules/osage-hologram-stream.md) carries tiles of light (radiance in high dynamic range, distance).
 * **Creation**: Added the modules [osage-cubes](/modules/osage-cubes.md) — nested cubes around a viewer, each level centred on its cube, coarse holograms carved by finer neighbourhoods — and [osage-hologram-stream](/modules/osage-hologram-stream.md) — a hologram's views in blocks of AV1 video along the angle, sent as the viewer needs them (D-134).
 * **Update**: [osage-hologram](/modules/osage-hologram.md) draws streamed holograms (`stream::StreamPlugin`), their window filled as views come.
 

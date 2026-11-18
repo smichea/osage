@@ -1,0 +1,36 @@
+// SPDX-FileCopyrightText: The osage contributors
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
+syntax = "proto3";
+
+package paris.v1;
+
+// Intent for a walker: how to move, relative to where it faces, and where
+// it faces. It stops 0.5 s after the last one.
+message Stroll {
+  // Ahead (+1) or back (-1).
+  float forward = 1;
+  // To the right (+1) or the left (-1).
+  float right = 2;
+  // Where the walker faces, radians around Y; 0 faces -Z (north), pi/2 west.
+  float heading = 3;
+  // Running rather than walking.
+  bool run = 4;
+}
+
+// Who a walker is: drawn the same by every client.
+message Walker {
+  // A seed for how the walker looks (body, hair, clothes).
+  uint64 look = 1;
+  // A passer-by of the world rather than a person or an agent.
+  bool passer_by = 2;
+}
+
+// The world itself, on an entity of its own.
+message World {
+  // The port of the server of light beside the world (HTTP, D-136): the
+  // tiles of light coming into each walker's block.
+  uint32 light_port = 1;
+  // How far ahead, in seconds of walking, the light is sent.
+  float horizon = 2;
+}
