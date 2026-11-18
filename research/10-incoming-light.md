@@ -41,8 +41,40 @@ Of the rays that leave the block (88 % of the picture), the probes agreed on 98 
 - The inside is lit by the whole scene (Cycles' own light), not by the probes: it tests what is seen beyond the block, not how the probes light the block.
 - The renders run on the laptop's processor (no GPU Cycles can use there).
 
+## In the client (2026-11-18)
+
+`osage-paris-native` draws the same thing in real time: Bistro's meshes that reach into the walker's block, and on the block's six faces the light coming in (`light.wesl`, the same march as above in the four nearest probes). The tiles come from `paris-server`, which decides from the walker's place and speed in the world what to send: 384 px fisheyes over 200°, 16 samples, AV1 at about 20 KiB a tile (colour 16–25, distance 2–4, sky under 1), radiance within about 4 % on average.
+
+- **Against Cycles,** from the place and direction of the scene's camera (1280 × 720, T3): 19.6 dB over the picture. Brightness, client against Cycles: the cobbles inside the block 0.95, the street beyond 1.22, the facade 1.10, the sky 1.06.
+- **The block lit by its own light:** lit by the sky's photograph, the cobbles came out 2.5 times too bright — the whole sky, where a street's floor sees a strip of it between facades. Lit instead by what its tiles saw come in from each direction, seen from its centre (an environment light made on a thread when the walker enters a block), they come within 5 %.
+- **Cost:** 30 ms a frame at T3 1280 × 720 on the Iris Xe of the laptop, the faces' march included; 16–26 ms with fewer tiles.
+- **Walking:** 4 s of walking, filmed, brought 104 tiles (2.5 MB) as the server sent them ahead; beyond the baked area the faces stay dark, as they should: no tile there yet.
+- **Sharpness** beyond the block is the probes': 384 px over 200° is about 0.5° a pixel, nine times the picture's. The bake is what makes it sharp, not the client.
+
+## Against Cycles again (2026-11-18, afternoon)
+
+Set beside Cycles, the client's picture was blurred beyond the block and bent in places: a window drawn twice, a sign doubled. Measured region by region from the same place (PSNR on sRGB pictures; brightness, client over Cycles):
+
+| Client | Picture | Cobbles in the block | Street beyond | Facades | Sky |
+|---|---|---|---|---|---|
+| first | 19.6 dB | 29.2 dB | 21.9 dB | 19.1–19.4 dB | 27.3 dB |
+| exact march | 20.7 dB | 29.3 dB | 22.8 dB | 19.8–20.2 dB | 27.3 dB |
+| and Blender's AgX, no SSAO | **22.4 dB** | 30.3 dB (×0.97) | 25.8 dB (×0.97) | 21.8–21.9 dB (×1.02–1.06) | 29.0 dB (×1.00) |
+
+What each was:
+
+1. **The march** took the colour where the ray had already passed behind what a probe saw, up to a third of the distance beyond (2.5 m at 10 m), accepted gaps of metres, and mixed four probes that disagreed: hence the doubled window. Now each probe's last step is halved eight times to find where the ray goes behind its surface, a probe that saw something nearer there is set aside (the march going on behind it), and those left weigh by how like the eye's their look at the point is. The deformations went.
+2. **The distance** was lossy (libaom at 12): at the edges, up to 74 of its 4096 levels off, a metre and a half at 10 m. At constant quality 1 it stays within 7 levels for 11 KiB a tile instead of 2; exact, 31 KiB. Little gain in PSNR with these tiles, but no more edges moved.
+3. **The look.** Both pictures go through AgX, but not the same one: Bevy's is Sobotka's first, Blender's (4.0 and on) another. Without tonemapping or bloom the light coming in came within 4 % of Cycles everywhere; through the two AgX, a fifth brighter in the mid-tones. A table of Blender's own AgX (`tools/bistro/agx-lut.py`: Blender shows a lattice of light, 64³, and the table reads it back; checked against Cycles' picture at 53.9 dB) replaces it in the client.
+4. **SSAO**, over a light that comes in already shaded by the street, darkened the cobbles by a quarter. Left out (also 5 ms a frame on the Iris Xe).
+
+The whole street drawn from its model by the client at T3, without the light coming in, comes to 13.7 dB: lit by one environment light, its facades come out up to 1.9 times too bright and it has no sky. What the light coming in carries is Cycles' own light; the raster renderer cannot make it.
+
+What remains is sharpness: the tiles' 384 px over 200 degrees, 16 samples denoised, against the picture's nine times finer pixels.
+
 ## Next
 
-1. The probes over 200° in the bake; more samples and pixels where the street is seen from close (a cloud GPU).
-2. In the client (`osage-paris-native`), the same march in the faces' shader, the block lit by the probes' light rather than by the sky's photograph alone.
+1. The whole street baked, at 1024–1536 px and more samples: about 2 000 tiles, a cloud GPU's work (hours on the laptop's processor for 384 px).
+2. Tiles of neighbouring planes as one video (they differ by a few metres of parallax), for the stream.
 3. Probes between tiles' centres where walls stand near a face, to see behind depth edges.
+4. The block traced at T4 (Solari): its faces are lamps of their tiles' mean light for the rays; tried on an RTX card.

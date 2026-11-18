@@ -164,6 +164,7 @@ fn bounds(mesh: &Mesh) -> Option<(Vec3, Vec3)> {
 /// Shows the meshes that reach into the walker's block, hides the others.
 fn show(
     me: Res<Me>,
+    options: Res<crate::Options>,
     mut last: Local<Option<Block>>,
     mut pieces: Query<(&Piece, &mut Visibility)>,
     added: Query<(), Added<Piece>>,
@@ -175,7 +176,7 @@ fn show(
     *last = Some(block);
     let (lo, hi) = (block.min() - 0.01, block.max() + 0.01);
     for (piece, mut visibility) in &mut pieces {
-        let reaches = piece.min.cmple(hi).all() && piece.max.cmpge(lo).all();
+        let reaches = options.whole || (piece.min.cmple(hi).all() && piece.max.cmpge(lo).all());
         let wanted = if reaches { Visibility::Inherited } else { Visibility::Hidden };
         if *visibility != wanted {
             *visibility = wanted;

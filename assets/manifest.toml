@@ -15879,6 +15879,18 @@ author = "Amazon Lumberyard (NVIDIA ORCA), derived by the osage contributors"
 source = "https://developer.nvidia.com/orca/amazon-lumberyard-bistro"
 used_by = "worlds/paris/native: the street's textures"
 
+# Blender's AgX view transform sampled into a table: what Blender shows for
+# each light, so that the Paris client shows Cycles' radiance as Blender
+# does (research 10). Made on this machine by Blender, the output of its
+# view transform as a render is, not a part of Blender.
+[[asset]]
+path = "assets/blender/agx-64.bin"
+made_by = "blender -b --factory-startup --python tools/bistro/agx-lut.py -- assets/blender/agx-64.bin"
+licence = "MIT OR Apache-2.0"
+author = "the osage contributors (Blender's AgX view transform: Troy Sobotka; Zijun Eary Zhou, Mark Faderbauer, Sakari Kapanen)"
+source = "https://github.com/EaryChow/AgX"
+used_by = "worlds/paris/native: the look, radiance shown as Blender shows it (look.rs)"
+
 [[asset]]
 path = "assets/orca/bistro/out/walk.json"
 made_by = "tools/bistro/export.py (with bistro.gltf)"

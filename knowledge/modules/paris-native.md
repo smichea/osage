@@ -6,7 +6,7 @@ resource: https://github.com/smichea/osage/tree/main/worlds/paris/native
 licence: MIT OR Apache-2.0
 status: draft
 tags: [paris, client, bevy, light]
-generated: { by: "claude-code/claude-opus-5-5", at: "2026-11-18T07:30:00Z" }
+generated: { by: "claude-code/claude-opus-5-5", at: "2026-11-18T10:40:00Z" }
 ---
 
 # Purpose
@@ -16,19 +16,21 @@ Walk in a street of Paris as real as its photographs, the client drawing in 3D o
 # Concepts
 
 - **The block's faces:** six quads on the outer surface of the walker's block, facing in; the street's meshes inside the block hide them where they stand, and they hide everything beyond.
-- **Incoming light material:** on each face, for each pixel, the ray from the eye leaves the block there; marching out along it in the probes of the four nearest tiles (fisheyes of the half sphere, with distances), those that agree that the ray meets what they saw give its radiance.
+- **Incoming light material:** on each face, for each pixel, the ray from the eye leaves the block there; marching out along it in the probes of the four nearest tiles (fisheyes over 200 degrees, with distances), each finds where the ray first goes behind what it saw, halving the last step until the place is known; those that saw the ray's point itself there (not something nearer hiding it) give its radiance, the more the more their look at the point is like the eye's.
+- **Look:** radiance is shown through Blender's own AgX, the view transform Cycles' pictures are seen through: a table of it (`tools/bistro/agx-lut.py`, under the asset content as `blender/agx-64.bin`) put where Bevy reads its Blender Filmic table. Bevy's AgX is Sobotka's first, brighter in the mid-tones by about a fifth.
 
 # Architecture
 
-`street` loads the street's glTF (from `tools/bistro/export.py`), places each mesh, and shows only those whose box reaches into the walker's block; it lights them by the sky's photograph at the bake's strength, as an environment light. `light` asks the world's server of light, a few times a second, what the walker needs (or, walking alone, works it out from the street's folder), fetches and decodes the tiles on threads of their own, and when the walker enters another block or light comes for its own, stacks that block's tiles into two texture arrays (radiance 10 bits a band, distance as floats) and moves and tells the faces (`IncomingLight`, `light.wesl`). `walker` takes the keys and the mouse, steps the walker with the world's walk grid at once and puts the camera at its eyes; `net` sends its strolls, takes the server's place when it parts from the client's, learns the server of light from `paris.world/1`, and draws the other walkers as people. Units: the renderer's radiance (1 the white of Cycles' picture) times `NITS` is luminance under osage's sunny exposure. `--shot` draws one picture from a place once the light has come.
+`street` loads the street's glTF (from `tools/bistro/export.py`), places each mesh, and shows only those whose box reaches into the walker's block; it lights them by the sky's photograph at the bake's strength, as an environment light. `light` asks the world's server of light, a few times a second, what the walker needs (or, walking alone, works it out from the street's folder), fetches and decodes the tiles on threads of their own, and when the walker enters another block or light comes for its own, stacks that block's tiles into two texture arrays (radiance 10 bits a band, distance as floats) and moves and tells the faces (`IncomingLight`, `light.wesl`). The block is lit by its own light: when the walker enters it, what its tiles saw come in from each direction, seen from its centre, is made into the camera's environment light on a thread (lit by the whole sky instead, a street's floor came out 2.5 times too bright). osage-render's sky, sky light and screen-space ambient occlusion are left out: over the light coming in, already shaded by the street, SSAO darkened the cobbles by a quarter against Cycles. `look` puts Blender's AgX in place. At T4 (`raytracing` feature), each face is also a lamp of its tiles' mean light for the traced rays (`Emitter`). `walker` takes the keys and the mouse, steps the walker with the world's walk grid at once and puts the camera at its eyes; `net` sends its strolls, takes the server's place when it parts from the client's, learns the server of light from `paris.world/1`, and draws the other walkers as people. Units: the renderer's radiance (1 the white of Cycles' picture) times `NITS` is luminance under osage's sunny exposure. `--shot` draws one picture from a place once the block's light has come and lights it, and times the frames before it; `--film` walks straight ahead and saves every third picture; `--plain` shows radiance without tonemapping or bloom and `--whole` draws the whole street from its model, for measures against Cycles.
 
 # Interfaces
 
-The program `paris` (`[ws://HOST:7878] [--tier T1..T4] [--street DIR] [--offline] [--shot FILE --at X,Y,Z --heading DEGREES]`).
+The program `paris` (`[ws://HOST:7878] [--tier T1..T4] [--street DIR] [--offline] [--fov DEGREES] [--shot FILE --at X,Y,Z --heading DEGREES] [--film DIR SECONDS --heading DEGREES] [--plain] [--whole]`), built with `--features raytracing` to trace the block at T4. `look::TABLE`, the table of Blender's AgX it reads.
 
 # Invariants
 
 - Nothing beyond the walker's block is drawn from the model: a mesh is shown only while its box reaches into the block, and the faces hide the rest.
+- Measured (research 10), from the scene camera's place against Cycles through the same AgX, with the 384 px tiles: 22.4 dB over the picture (19.6 before the exact march, Blender's AgX and SSAO left out); the cobbles inside the block 30 dB, every region within 6 % of Cycles' brightness; 12–15 ms a frame at T3 1280 × 720 on an Iris Xe. The whole street drawn from its model at T3 instead: 13.7 dB.
 
 # Knowledge
 
@@ -40,4 +42,4 @@ The incoming light material and its arrays serve any world drawn as a block in 3
 
 # Limits
 
-The block is rasterised at T1–T3; traced at T4 it is not yet. Its light comes from the sky's photograph, not from the tiles: shadows of what stands outside the block do not reach inside it. Each block's arrays are made again when the walker enters it; decoding runs on the CPU.
+The block is rasterised at T1–T3; at T4 it is traced, its faces' lamps the mean of their tiles. Beyond the block the picture is as sharp as the tiles: at 384 px over 200 degrees, nine times coarser than the picture. Its environment light is seen from the block's centre: no shadow of a single thing outside falls inside it. Each block's arrays are made again when the walker enters it; decoding runs on the CPU.

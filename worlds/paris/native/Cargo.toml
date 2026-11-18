@@ -28,3 +28,8 @@ crossbeam-channel.workspace = true
 prost.workspace = true
 serde_json.workspace = true
 tokio.workspace = true
+
+[features]
+# The block traced at T4 (Bevy Solari, D-093), on hardware that traces rays:
+# `paris --tier T4`.
+raytracing = ["osage-render/raytracing"]

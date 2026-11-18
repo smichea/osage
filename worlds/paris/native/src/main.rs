@@ -5,7 +5,8 @@
 //! (D-136).
 //!
 //!     paris [ws://HOST:7878] [--tier T1..T4] [--street DIR] [--offline] [--fov DEGREES]
-//!           [--shot FILE --at X,Y,Z --heading DEGREES]
+//!           [--shot FILE --at X,Y,Z --heading DEGREES] [--film DIR SECONDS --heading DEGREES]
+//!           [--plain] [--whole]
 //!
 //! The walker goes where the keys say (W A S D or Z Q S D, the arrows;
 //! Shift runs), looks where the mouse does once the window is clicked
@@ -15,11 +16,18 @@
 //! walker is and how fast it goes. `--offline` walks without a server,
 //! taking the light from the street's own folder; `--shot` draws one
 //! picture from a place (`--at`, the eyes) once the light has come, saves
-//! it and leaves. DIR is what `tools/bistro/export.py` and the tiles' bake
-//! made (default: `orca/bistro/out` under the asset manifest's content).
+//! it and leaves; `--film` walks straight ahead for SECONDS from where the
+//! walker arrives, facing `--heading`, and saves every third picture in
+//! DIR. The street's folder (`--street`) is what `tools/bistro/export.py`
+//! and the tiles' bake made (default: `orca/bistro/out` under the asset
+//! manifest's content). Two options serve measures against Cycles:
+//! `--plain` shows the radiance as it is, clipped at white, without
+//! tonemapping or bloom; `--whole` draws the whole street from its model,
+//! no light coming in, to tell the renderer's part from the light's.
 
 mod hud;
 mod light;
+mod look;
 mod net;
 mod street;
 mod walker;
@@ -38,6 +46,19 @@ pub struct Options {
     pub shot: Option<Shot>,
     /// The camera's field, top to bottom, degrees.
     pub fov: f32,
+    pub film: Option<Film>,
+    /// No tonemapping, no bloom: the radiance as an sRGB picture.
+    pub plain: bool,
+    /// The whole street drawn from its model, the block's faces hidden.
+    pub whole: bool,
+}
+
+/// A walk straight ahead, filmed.
+#[derive(Clone, Debug)]
+pub struct Film {
+    pub folder: PathBuf,
+    pub seconds: f32,
+    pub heading: f32,
 }
 
 /// One picture from a place, then leave.
@@ -68,6 +89,8 @@ fn main() -> anyhow::Result<()> {
     let mut street: Option<PathBuf> = None;
     let (mut shot_file, mut at, mut heading) = (None, None, 0.0f32);
     let mut fov = 70.0f32;
+    let (mut plain, mut whole) = (false, false);
+    let mut film: Option<(PathBuf, f32)> = None;
     let mut args = std::env::args().skip(1);
     while let Some(arg) = args.next() {
         match arg.as_str() {
@@ -83,6 +106,13 @@ fn main() -> anyhow::Result<()> {
             }
             "--heading" => heading = need(args.next(), "--heading DEGREES")?.parse::<f32>()?.to_radians(),
             "--fov" => fov = need(args.next(), "--fov DEGREES")?.parse::<f32>()?,
+            "--plain" => plain = true,
+            "--whole" => whole = true,
+            "--film" => {
+                let folder = PathBuf::from(need(args.next(), "--film DIR SECONDS")?);
+                let seconds = need(args.next(), "--film DIR SECONDS")?.parse::<f32>()?;
+                film = Some((folder, seconds));
+            }
             url if url.starts_with("ws://") || url.starts_with("wss://") => server = Some(url.to_owned()),
             other => anyhow::bail!("unknown argument {other}"),
         }
@@ -99,11 +129,13 @@ fn main() -> anyhow::Result<()> {
         None => None,
     };
     let online = server.is_some();
-    let options = Options { street, server, shot: shot.clone(), fov };
+    let film = film.map(|(folder, seconds)| Film { folder, seconds, heading });
+    let offscreen = shot.is_some() || film.is_some();
+    let options = Options { street, server, shot: shot.clone(), fov, film, plain, whole };
 
     let assets = AssetPlugin { file_path: root.to_string_lossy().into_owned(), ..default() };
     let mut app = App::new();
-    if shot.is_some() {
+    if offscreen {
         // No window: the picture is drawn off screen.
         let windowless = WindowPlugin { primary_window: None, exit_condition: ExitCondition::DontExit, ..default() };
         app.add_plugins(DefaultPlugins.set(windowless).set(assets).disable::<WinitPlugin>())
@@ -114,9 +146,23 @@ fn main() -> anyhow::Result<()> {
         let window = Window { title: "osage — Paris".to_owned(), ..default() };
         app.add_plugins(DefaultPlugins.set(WindowPlugin { primary_window: Some(window), ..default() }).set(assets));
     }
+    if plain {
+        app.insert_resource(osage_render::Look {
+            tonemapping: bevy::core_pipeline::tonemapping::Tonemapping::None,
+            ..default()
+        })
+        .add_systems(Update, unbloom);
+    } else {
+        app.insert_resource(osage_render::Look { tonemapping: look::tonemapping(&root), ..default() })
+            .add_plugins(look::LookPlugin { table: root.join(look::TABLE) });
+    }
     // The sky is the light coming into the block, and it lights the block
-    // too: osage's own sky and sky light are left out.
-    app.add_plugins(OsageRenderPlugin { tier, without: vec![Technique::Sky, Technique::SkyLight] })
+    // too: osage's own sky and sky light are left out. So is screen-space
+    // ambient occlusion: the light coming in is already shaded by the
+    // street, and over it SSAO darkened the block's cobbles by a quarter
+    // against Cycles (research 10).
+    let without = vec![Technique::Sky, Technique::SkyLight, Technique::AmbientOcclusion];
+    app.add_plugins(OsageRenderPlugin { tier, without })
         .insert_resource(options)
         .insert_resource(walker::Grid(std::sync::Arc::new(walk)))
         .add_plugins((street::StreetPlugin, light::LightPlugin, walker::WalkerPlugin, hud::HudPlugin));
@@ -128,4 +174,11 @@ fn main() -> anyhow::Result<()> {
     }
     app.run();
     Ok(())
+}
+
+/// `--plain`: no bloom on the picture either.
+fn unbloom(mut commands: Commands, blooming: Query<Entity, With<bevy::post_process::bloom::Bloom>>) {
+    for camera in &blooming {
+        commands.entity(camera).remove::<bevy::post_process::bloom::Bloom>();
+    }
 }

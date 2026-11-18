@@ -3,7 +3,7 @@
 
 //! Packs tiles of light into AV1 (D-136):
 //!
-//!     light-pack RAW OUT [CRF]
+//!     light-pack RAW OUT [CRF [DEPTH_CRF]]
 //!
 //! RAW holds a folder a tile, as `tools/bistro/tiles.py` writes them
 //! (`radiance.f32`, `distance.f32`, `meta.json`); OUT receives a folder a
@@ -25,13 +25,16 @@ fn floats(path: &std::path::Path) -> anyhow::Result<Vec<f32>> {
 
 fn main() -> anyhow::Result<()> {
     let mut args = std::env::args().skip(1);
-    let usage = "light-pack RAW OUT [CRF]";
+    let usage = "light-pack RAW OUT [CRF [DEPTH_CRF]]";
     let raw = PathBuf::from(args.next().context(usage)?);
     let out = PathBuf::from(args.next().context(usage)?);
-    let quality = match args.next() {
-        Some(crf) => Quality { radiance: crf.parse()?, ..Quality::default() },
-        None => Quality::default(),
-    };
+    let mut quality = Quality::default();
+    if let Some(crf) = args.next() {
+        quality.radiance = crf.parse()?;
+    }
+    if let Some(crf) = args.next() {
+        quality.distance = crf.parse()?;
+    }
     std::fs::create_dir_all(&out)?;
     let mut keys: Vec<String> = std::fs::read_dir(&raw)?
         .filter_map(|e| e.ok())
@@ -40,7 +43,7 @@ fn main() -> anyhow::Result<()> {
         .collect();
     keys.sort();
     let next = Mutex::new(keys.iter());
-    let totals = Mutex::new((0u64, 0u64, 0u64, 0u64, 0usize, 0.0f32));
+    let totals = Mutex::new((0u64, 0u64, 0u64, 0u64, 0usize, 0.0f32, 0.0f32));
     std::thread::scope(|scope| -> anyhow::Result<()> {
         let threads = std::thread::available_parallelism().map_or(4, |n| n.get()).min(6);
         let workers: Vec<_> = (0..threads)
@@ -89,6 +92,14 @@ fn main() -> anyhow::Result<()> {
                                 }
                             }
                         }
+                        // And the distance's, relative, where it is not the sky.
+                        let (mut off, mut solid) = (0.0f32, 0usize);
+                        for (back, truth) in back[0].distance.iter().zip(&light.distance) {
+                            if truth.is_finite() && *back >= 0.0 {
+                                off += (back - truth).abs() / (1.0 + truth);
+                                solid += 1;
+                            }
+                        }
                         let mut totals = totals.lock().unwrap();
                         totals.0 += (radiance.len() * 4 + distance.len() * 4) as u64;
                         totals.1 += encoded.radiance.len() as u64;
@@ -96,6 +107,7 @@ fn main() -> anyhow::Result<()> {
                         totals.3 += encoded.sky.len() as u64;
                         totals.4 += 1;
                         totals.5 += sum / n.max(1) as f32;
+                        totals.6 += off / solid.max(1) as f32;
                         let _ = worst;
                     }
                 })
@@ -108,16 +120,17 @@ fn main() -> anyhow::Result<()> {
     })?;
     let packed: Vec<String> = keys.iter().filter(|k| out.join(k).join("mask.ivf").exists()).cloned().collect();
     std::fs::write(out.join("index.json"), serde_json::to_string(&packed)?)?;
-    let (raw_bytes, colour, depth, mask, n, error) = *totals.lock().unwrap();
+    let (raw_bytes, colour, depth, mask, n, error, distance_error) = *totals.lock().unwrap();
     if n > 0 {
         println!(
             "light-pack: {n} tiles packed: colour {:.0} KiB, distance {:.0} KiB, sky {:.0} KiB a tile ({:.0} KiB of floats); \
-             radiance within {:.1} % on average; {} tiles in {}",
+             radiance within {:.1} % on average, distance within {:.2} % of 1 m + itself; {} tiles in {}",
             colour as f64 / n as f64 / 1024.0,
             depth as f64 / n as f64 / 1024.0,
             mask as f64 / n as f64 / 1024.0,
             raw_bytes as f64 / n as f64 / 1024.0,
             100.0 * error / n as f32,
+            100.0 * distance_error / n as f32,
             packed.len(),
             out.display()
         );

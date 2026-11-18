@@ -6,10 +6,12 @@
 // is drawn; whatever it would meet out there, the probes of the face's
 // tiles saw it arrive. Each probe is an equidistant fisheye over 200
 // degrees looking out (osage-world-paris's PROBE_FOV), with how far each of
-// its pixels lies. Of the four
-// tiles around where the ray leaves, each is asked where the ray first
-// passes behind what its probe saw — marching out along the ray — and
-// those that agree that the ray meets what they saw there give its colour.
+// its pixels lies. Of the four tiles around where the ray leaves, each is
+// asked where the ray first passes behind what its probe saw, marching out
+// along the ray and then halving the last step until the place is found.
+// Those whose probe saw the ray's point itself there (not something nearer
+// hiding it) give its colour, the more the more their look at the point is
+// like the eye's.
 
 import bevy_pbr::render::{
     forward_io::VertexOutput,
@@ -35,7 +37,12 @@ import bevy_pbr::render::{
 const CUBE: f32 = 3.0;
 // Half the probes' field, radians (200 degrees).
 const HALF_FIELD: f32 = 1.7453293;
-const STEPS: i32 = 40;
+const STEPS: i32 = 64;
+// Halvings of the step where a ray went behind what a probe saw.
+const REFINE: i32 = 8;
+// How fast trust falls as a probe's look at a point turns from the eye's,
+// radians.
+const LIKENESS: f32 = 0.15;
 // The curve the radiance travels through (osage-hologram-stream's light):
 // ln(1 + 64 * 64).
 const CURVE_K: f32 = 64.0;
@@ -107,33 +114,84 @@ fn step_distance(k: i32) -> f32 {
     return 0.01 * pow(50000.0, f32(k - 1) / f32(STEPS - 2));
 }
 
+// What a probe saw towards a point.
+struct Look {
+    uv: vec2<f32>,
+    // Whether the point is in the probe's field.
+    on: bool,
+    // How far the probe saw something that way, m; negative: the sky.
+    seen: f32,
+    // How far the point is from the probe, m.
+    reach: f32,
+}
+
+fn look(probe: vec3<f32>, normal: vec3<f32>, up: vec3<f32>, right: vec3<f32>, layer: i32, point: vec3<f32>) -> Look {
+    let v = point - probe;
+    let p = project(v, normal, up, right);
+    var l: Look;
+    l.uv = p.xy;
+    l.on = p.z > 0.5;
+    l.reach = length(v);
+    l.seen = -1.0;
+    if (l.on) {
+        l.seen = textureLoad(distances, texel(p.xy), layer, 0).r;
+    }
+    return l;
+}
+
+// Whether the point lies at or beyond what the probe saw that way.
+fn behind(l: Look) -> bool {
+    return l.on && l.seen >= 0.0 && l.reach >= l.seen;
+}
+
 // What one probe tells of the ray: its radiance, and how much to trust it.
 fn march(probe: vec3<f32>, normal: vec3<f32>, up: vec3<f32>, layer: i32, start: vec3<f32>, ray: vec3<f32>) -> vec4<f32> {
     let right = cross(normal, up);
+    // A texel's angle, radians.
+    let texel_angle = 2.0 * HALF_FIELD / high.w;
+    // Where something nearer hid the ray's point: the least hidden, kept
+    // in case no step does better.
+    var hidden = vec4<f32>(0.0);
     var previous = 0.0;
+    var was_behind = false;
     for (var k = 0; k < STEPS; k = k + 1) {
         let t = step_distance(k);
-        let point = start + ray * t;
-        let v = point - probe;
-        let on = project(v, normal, up, right);
-        if (on.z > 0.5) {
-            let d = textureLoad(distances, texel(on.xy), layer, 0).r;
-            let reach = length(v);
-            if (d >= 0.0 && reach >= d - 0.01) {
-                // The ray has passed behind what the probe saw: is it what
-                // the ray meets, or something in front hiding it?
-                let seen = probe + normalize(v) * d;
-                let gap = distance(point, seen);
-                let tolerance = (t - previous) + 0.02 * t + 0.03;
-                if (gap > 2.0 * tolerance) {
-                    return vec4<f32>(0.0);
+        let now_behind = behind(look(probe, normal, up, right, layer, start + ray * t));
+        if (now_behind && !was_behind) {
+            // Between the last step and this one the ray went behind what
+            // the probe saw: halve the step to find where.
+            var near = previous;
+            var far = t;
+            for (var i = 0; i < REFINE; i = i + 1) {
+                let middle = 0.5 * (near + far);
+                if (behind(look(probe, normal, up, right, layer, start + ray * middle))) {
+                    far = middle;
+                } else {
+                    near = middle;
                 }
-                let c = textureSampleLevel(colours, colours_sampler, on.xy, layer, 0.0).rgb;
-                let closeness = exp(-(gap / tolerance) * (gap / tolerance));
-                return vec4<f32>(radiance(c), closeness);
+            }
+            let point = start + ray * far;
+            let l = look(probe, normal, up, right, layer, point);
+            let c = radiance(textureSampleLevel(colours, colours_sampler, l.uv, layer, 0.0).rgb);
+            // Meeting a surface, the halving ends within about a texel of
+            // what the probe saw; passing behind an edge, the whole jump
+            // to what stands in front is left.
+            let gap = abs(l.reach - l.seen);
+            let slack = 0.02 + 4.0 * texel_angle * l.seen + (far - near);
+            if (gap <= slack) {
+                let angle = acos(clamp(dot(normalize(point - probe), ray), -1.0, 1.0));
+                return vec4<f32>(c, exp(-(angle * angle) / (LIKENESS * LIKENESS)) + 1e-3);
+            }
+            let guess = 1e-4 * exp(-gap);
+            if (guess > hidden.a) {
+                hidden = vec4<f32>(c, guess);
             }
         }
+        was_behind = now_behind;
         previous = t;
+    }
+    if (hidden.a > 0.0) {
+        return hidden;
     }
     // It met nothing: the sky, in the ray's own direction.
     let sky = project(ray, normal, up, right);
@@ -216,7 +274,7 @@ fn fragment(in: VertexOutput) -> @location(0) vec4<f32> {
         trust = trust + w * told.a;
     }
     var light = vec3<f32>(0.0);
-    if (trust > 1e-4) {
+    if (trust > 0.0) {
         light = total / trust;
     } else {
         // No probe agreed: the nearest one's colour in the ray's direction.

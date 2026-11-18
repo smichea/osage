@@ -16,11 +16,13 @@ sky and all, and where each pixel lies. In OUT/KEY/: `radiance.f32` (red,
 green, blue, float32, rows from the top), `distance.f32` (metres, float32,
 infinite where the sky is) and `meta.json`. A tile already there is left
 as it is, so that a bake can stop and go on. `light-pack` then makes them
-AV1. Runs inside Blender (tested with 5.2), numpy as Blender bundles it.
+AV1. Runs inside Blender (tested with 5.2), numpy as Blender bundles it;
+OSAGE_DEVICE=OPTIX (or CUDA) renders on the GPU.
 """
 
 import json
 import math
+import os
 import pathlib
 import sys
 import time
@@ -66,9 +68,27 @@ def position_material():
     return material
 
 
+def device(scene):
+    """The GPU OSAGE_DEVICE names (OPTIX, CUDA), or the processor."""
+    kind = os.environ.get("OSAGE_DEVICE")
+    if not kind:
+        scene.cycles.device = "CPU"
+        return
+    prefs = bpy.context.preferences.addons["cycles"].preferences
+    prefs.compute_device_type = kind
+    prefs.refresh_devices()
+    used = 0
+    for d in prefs.devices:
+        d.use = d.type == kind
+        used += d.use
+    if not used:
+        sys.exit(f"tiles: no {kind} device")
+    scene.cycles.device = "GPU"
+
+
 def setup(scene, size, samples, transparent):
     scene.render.engine = "CYCLES"
-    scene.cycles.device = "CPU"
+    device(scene)
     scene.cycles.samples = samples
     scene.cycles.use_denoising = samples > 1
     scene.cycles.filter_width = 1.5 if samples > 1 else 0.01

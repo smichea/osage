@@ -98,6 +98,8 @@ pub struct Store {
     /// The block drawn now, and how many of its tiles it has.
     pub block: Option<Block>,
     pub drawn: usize,
+    /// The block whose light lights the camera now.
+    pub lit: Option<Block>,
     changed: bool,
 }
 
@@ -132,6 +134,12 @@ struct Fetcher {
 /// The six faces of the block, as entities with their materials.
 #[derive(Resource)]
 struct Faces([(Entity, Handle<IncomingLight>); 6]);
+
+/// A face's light for traced rays (T4 only): the mean of what its tiles
+/// saw coming in, as a lamp the size of the face, the coarse light that
+/// lights the block (D-136). Remade for each block.
+#[derive(Component)]
+struct Glow;
 
 fn start(mut commands: Commands, options: Res<Options>, mut store: ResMut<Store>) {
     let (asks, to_workers) = crossbeam_channel::unbounded::<Ask>();
@@ -331,7 +339,9 @@ fn slot(block: &Block, tile: &Tile) -> usize {
 
 /// When the walker enters another block, or light comes for its own: the
 /// block's tiles stacked into the arrays, its faces moved and told.
+#[allow(clippy::too_many_arguments)]
 fn arrays(
+    mut commands: Commands,
     me: Res<Me>,
     mut store: ResMut<Store>,
     faces: Res<Faces>,
@@ -339,6 +349,10 @@ fn arrays(
     mut images: ResMut<Assets<Image>>,
     mut materials: ResMut<Assets<IncomingLight>>,
     mut places: Query<(&mut Transform, &mut Visibility)>,
+    glows: Query<Entity, With<Glow>>,
+    quads: Query<&Mesh3d>,
+    traced: Res<osage_render::TracedLight>,
+    options: Res<Options>,
 ) {
     let block = Block::of(me.eyes());
     if store.block == Some(block) && !store.changed {
@@ -378,6 +392,9 @@ fn arrays(
             images.add(array(side, layers, TextureFormat::R32Float, distance)),
         )
     };
+    for glow in &glows {
+        commands.entity(glow).despawn();
+    }
     let (lo, hi) = (block.min(), block.max());
     for (index, face) in Face::ALL.into_iter().enumerate() {
         let (entity, handle) = &faces.0[index];
@@ -410,9 +427,41 @@ fn arrays(
         if let Ok((mut place, mut visibility)) = places.get_mut(*entity) {
             *place =
                 Transform::from_translation(centre).looking_to(normal, up).with_scale(Vec3::new(width, height, 1.0));
-            *visibility = Visibility::Inherited;
+            *visibility = if options.whole { Visibility::Hidden } else { Visibility::Inherited };
+        }
+        let (sum, n) = mine
+            .iter()
+            .filter(|(t, _)| t.face == face)
+            .map(|(_, d)| mean_radiance(d))
+            .fold((Vec3::ZERO, 0), |(s, n), r| (s + r, n + 1));
+        if let (Ok(quad), true) = (quads.get(*entity), traced.0 && n > 0) {
+            let luminance = sum / n as f32 * NITS;
+            let lamp = osage_render::Emitter(LinearRgba::rgb(luminance.x, luminance.y, luminance.z));
+            let glow =
+                commands.spawn((Mesh3d(quad.0.clone()), lamp, Transform::default(), Visibility::Inherited, Glow)).id();
+            commands.entity(*entity).add_child(glow);
         }
     }
+}
+
+/// The mean radiance a tile's probe saw coming in: over the half sphere
+/// out of the block (the fisheye's circle within 90 of its 100 degrees).
+fn mean_radiance(drawn: &light::Drawn) -> Vec3 {
+    let (w, h) = (drawn.width as usize, drawn.height as usize);
+    let (mut sum, mut n) = (Vec3::ZERO, 0);
+    for row in (0..h).step_by(4) {
+        for col in (0..w).step_by(4) {
+            let (u, v) = ((col as f32 + 0.5) / w as f32 * 2.0 - 1.0, (row as f32 + 0.5) / h as f32 * 2.0 - 1.0);
+            if u * u + v * v > 0.81 {
+                continue;
+            }
+            let packed = drawn.radiance[row * w + col];
+            let band = |shift: u32| light::decode_radiance(((packed >> shift) & 1023) as f32 / 1023.0);
+            sum += Vec3::new(band(0), band(10), band(20));
+            n += 1;
+        }
+    }
+    if n > 0 { sum / n as f32 } else { Vec3::ZERO }
 }
 
 /// What comes into `block` from each direction, seen from its centre: the
@@ -472,7 +521,7 @@ fn environment(block: &Block, tiles: &[(Tile, Arc<light::Drawn>)]) -> (Image, Im
 fn lit(
     mut commands: Commands,
     fetcher: Res<Fetcher>,
-    store: Res<Store>,
+    mut store: ResMut<Store>,
     mut images: ResMut<Assets<Image>>,
     cameras: Query<Entity, With<osage_render::OsageCamera>>,
 ) {
@@ -489,5 +538,6 @@ fn lit(
                 ..default()
             });
         }
+        store.lit = Some(block);
     }
 }

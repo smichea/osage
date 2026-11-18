@@ -19,7 +19,7 @@ pub struct HudPlugin;
 
 impl Plugin for HudPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(Startup, setup).add_systems(Update, (read, shoot));
+        app.add_systems(Startup, setup).add_systems(Update, (read, shoot, film));
     }
 }
 
@@ -27,7 +27,7 @@ impl Plugin for HudPlugin {
 struct Readout;
 
 fn setup(mut commands: Commands, options: Res<Options>) {
-    if options.shot.is_some() {
+    if options.shot.is_some() || options.film.is_some() {
         return;
     }
     let text = |size: f32| TextFont { font_size: bevy::text::FontSize::Px(size), ..default() };
@@ -95,9 +95,10 @@ fn shoot(
         return;
     }
     let street = placed.is_some_and(|p| p.0);
-    // The block's light has come — or, never forever, a picture of what
-    // there is after a while.
-    let ready = street && ((store.drawn > 0 && store.received >= store.drawn) || *all > 1500);
+    // The block's light has come and lights it — or, never forever, a
+    // picture of what there is after a while.
+    let come = store.drawn > 0 && store.received >= store.drawn && store.lit == store.block;
+    let ready = street && (come || *all > 1500);
     // Some frames after, for the pipelines and the light.
     const SETTLE: u32 = 60;
     if !ready {
@@ -116,4 +117,42 @@ fn shoot(
     let ms = 1000.0 * timed.0 / timed.1.max(1) as f32;
     info!(file = %shot.file.display(), tiles = store.drawn, frame_ms = ms, "paris: shot");
     *taken = Some(*frames);
+}
+
+/// Filming: every third picture saved while the walker walks; done after
+/// the film's seconds of walking.
+#[allow(clippy::too_many_arguments)]
+fn film(
+    mut commands: Commands,
+    options: Res<Options>,
+    picture: Option<Res<Picture>>,
+    me: Res<Me>,
+    store: Res<Store>,
+    time: Res<Time>,
+    mut walked: Local<f32>,
+    mut frame: Local<u32>,
+    mut exit: MessageWriter<AppExit>,
+) {
+    let (Some(film), Some(picture)) = (&options.film, picture) else { return };
+    if me.stride.forward == 0.0 {
+        return;
+    }
+    *walked += time.delta_secs();
+    *frame += 1;
+    if *walked > film.seconds {
+        info!(
+            frames = *frame,
+            frame_ms = 1000.0 * *walked / *frame as f32,
+            tiles = store.received,
+            megabytes = store.bytes as f64 / 1e6,
+            "paris: filmed"
+        );
+        exit.write(AppExit::Success);
+        return;
+    }
+    if (*frame).is_multiple_of(3) {
+        let _ = std::fs::create_dir_all(&film.folder);
+        let file = film.folder.join(format!("{:05}.png", *frame / 3));
+        commands.spawn(Screenshot::image(picture.image.clone())).observe(save_to_disk(file));
+    }
 }

@@ -45,7 +45,7 @@ pub struct WalkerPlugin;
 
 impl Plugin for WalkerPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(Startup, setup).add_systems(Update, (grab, look, keys, step, follow).chain());
+        app.add_systems(Startup, setup).add_systems(Update, (grab, look, keys, film, step, follow).chain());
     }
 }
 
@@ -58,7 +58,10 @@ fn setup(mut commands: Commands, grid: Res<Grid>, options: Res<Options>) {
             stride: Stride { heading: shot.heading, ..Stride::default() },
             speed: 0.0,
         },
-        None => Me { feet: grid.0.start, heading: 0.0, pitch: 0.0, stride: Stride::default(), speed: 0.0 },
+        None => {
+            let heading = options.film.as_ref().map_or(0.0, |f| f.heading);
+            Me { feet: grid.0.start, heading, pitch: 0.0, stride: Stride { heading, ..Stride::default() }, speed: 0.0 }
+        }
     };
     // osage-render draws the scene into its picture, shown in the window or
     // (a shot) taken from it.
@@ -113,6 +116,20 @@ fn keys(keys: Res<ButtonInput<KeyCode>>, mut me: ResMut<Me>) {
     let run = keys.pressed(KeyCode::ShiftLeft) || keys.pressed(KeyCode::ShiftRight);
     let heading = me.heading;
     me.stride = Stride { forward, right, heading, run };
+}
+
+/// Filming: straight ahead, once the street is there and the light of the
+/// first block has come.
+fn film(
+    options: Res<Options>,
+    placed: Option<Res<crate::street::Placed>>,
+    store: Res<crate::light::Store>,
+    mut me: ResMut<Me>,
+) {
+    let Some(film) = &options.film else { return };
+    let ready = placed.is_some_and(|p| p.0) && store.drawn > 0;
+    me.heading = film.heading;
+    me.stride = Stride { forward: if ready { 1.0 } else { 0.0 }, right: 0.0, heading: film.heading, run: false };
 }
 
 /// The walker's own steps, taken here at once.

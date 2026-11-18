@@ -13,8 +13,12 @@
 //!   [`BRIGHTEST`].
 //! - **Distance**, m, travels as 12-bit grey through a logarithmic curve
 //!   ([`encode_distance`]): millimetres near, decimetres a hundred metres
-//!   off; lossy, its sky padded, and where the sky is travels apart, exact
-//!   (a mask).
+//!   off; nearly exact (libaom at constant quality 1: within 7 levels of
+//!   4096, a decimetre at 10 m), for a client that reprojects what a probe
+//!   saw puts it where the distance says; at 12, the codec smeared it at
+//!   edges by up to 74 levels, a metre and a half at 10 m, for 3 KiB less a
+//!   tile. Its sky is padded, and where the sky is travels apart, exact (a
+//!   mask).
 
 use std::{
     io::{Read as _, Write as _},
@@ -66,14 +70,14 @@ pub fn decode_distance(g: f32) -> f32 {
 pub struct Quality {
     /// SVT-AV1's constant quality for radiance (0 best, 63 worst).
     pub radiance: u8,
-    /// libaom's for distance.
+    /// libaom's for distance; 0 keeps it exact, 1 within a few levels.
     pub distance: u8,
     pub preset: u8,
 }
 
 impl Default for Quality {
     fn default() -> Self {
-        Self { radiance: 10, distance: 12, preset: 6 }
+        Self { radiance: 10, distance: 1, preset: 6 }
     }
 }
 
@@ -259,10 +263,16 @@ mod tests {
         errors.sort_by(f32::total_cmp);
         let mean = errors.iter().sum::<f32>() / errors.len() as f32;
         let p99 = errors[errors.len() * 99 / 100];
-        assert!(mean < 0.06 && p99 < 0.2, "radiance off by {:.1} % on average, {:.1} % at the 99th centile", mean * 100.0, p99 * 100.0);
+        assert!(
+            mean < 0.06 && p99 < 0.2,
+            "radiance off by {:.1} % on average, {:.1} % at the 99th centile",
+            mean * 100.0,
+            p99 * 100.0
+        );
         for (i, &d) in drawn.distance.iter().enumerate() {
             if distance[i].is_finite() {
-                assert!((d - distance[i]).abs() < 0.05 * distance[i] + 0.05, "{d} for {}", distance[i]);
+                // Within a few of the curve's 4096 levels.
+                assert!((d - distance[i]).abs() <= 0.015 * (1.0 + distance[i]), "{d} for {}", distance[i]);
             } else {
                 assert!(d < 0.0, "the sky stays the sky");
             }
