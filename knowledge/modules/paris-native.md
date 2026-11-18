@@ -6,7 +6,7 @@ resource: https://github.com/smichea/osage/tree/main/worlds/paris/native
 licence: MIT OR Apache-2.0
 status: draft
 tags: [paris, client, bevy, light]
-generated: { by: "claude-code/claude-opus-5-5", at: "2026-11-18T10:40:00Z" }
+generated: { by: "claude-code/claude-opus-5-5", at: "2026-11-18T12:00:00Z" }
 ---
 
 # Purpose
@@ -16,7 +16,8 @@ Walk in a street of Paris as real as its photographs, the client drawing in 3D o
 # Concepts
 
 - **The block's faces:** six quads on the outer surface of the walker's block, facing in; the street's meshes inside the block hide them where they stand, and they hide everything beyond.
-- **Incoming light material:** on each face, for each pixel, the ray from the eye leaves the block there; marching out along it in the probes of the four nearest tiles (fisheyes over 200 degrees, with distances), each finds where the ray first goes behind what it saw, halving the last step until the place is known; those that saw the ray's point itself there (not something nearer hiding it) give its radiance, the more the more their look at the point is like the eye's.
+- **Incoming light material:** on each face, for each pixel, the ray from the eye leaves the block there; marching out along it in the probes of the four nearest tiles (fisheyes over 200 degrees, with distances), each finds where the ray first goes behind what it saw, halving the last step until the place is known; those that saw the ray's point itself there (not something nearer hiding it) give its radiance, the more the more their look at the point is like the eye's; where none did, what a probe saw just beside and behind the thing hiding the point fills the hole. The faces are drawn after the opaque pass (alpha blended, opaque), so that traced light's denoiser leaves them.
+- **Probes inside the cube (a trial):** with `--cube-probes N`, the light comes from up to five full spheres taken inside the walker's cube (`tools/bistro/cube-probes.py`, equirectangular), each with where it stands in its `meta.json`, instead of the block's 30 surface tiles; walking alone only.
 - **Look:** radiance is shown through Blender's own AgX, the view transform Cycles' pictures are seen through: a table of it (`tools/bistro/agx-lut.py`, under the asset content as `blender/agx-64.bin`) put where Bevy reads its Blender Filmic table. Bevy's AgX is Sobotka's first, brighter in the mid-tones by about a fifth.
 
 # Architecture
@@ -30,7 +31,7 @@ The program `paris` (`[ws://HOST:7878] [--tier T1..T4] [--street DIR] [--offline
 # Invariants
 
 - Nothing beyond the walker's block is drawn from the model: a mesh is shown only while its box reaches into the block, and the faces hide the rest.
-- Measured (research 10), from the scene camera's place against Cycles through the same AgX, with the 384 px tiles: 22.4 dB over the picture (19.6 before the exact march, Blender's AgX and SSAO left out); the cobbles inside the block 30 dB, every region within 6 % of Cycles' brightness; 12–15 ms a frame at T3 1280 × 720 on an Iris Xe. The whole street drawn from its model at T3 instead: 13.7 dB.
+- Measured (research 10), from the scene camera's place against Cycles through the same AgX: with the 384 px tiles, 22.4 dB over the picture (19.6 before the exact march, Blender's AgX and SSAO left out); with 2048 px tiles, 26.2 dB; with five probes inside the cube, 28.4 dB, the part of the picture no probe sees down from 3.8 % to 0.04 %. Every region within 10 % of Cycles' brightness; 12–25 ms a frame at T3 1280 × 720 on an Iris Xe, 5 ms at T4 on an L4. The whole street drawn from its model at T3 instead: 13.7 dB.
 
 # Knowledge
 
@@ -42,4 +43,4 @@ The incoming light material and its arrays serve any world drawn as a block in 3
 
 # Limits
 
-The block is rasterised at T1–T3; at T4 it is traced, its faces' lamps the mean of their tiles. Beyond the block the picture is as sharp as the tiles: at 384 px over 200 degrees, nine times coarser than the picture. Its environment light is seen from the block's centre: no shadow of a single thing outside falls inside it. Each block's arrays are made again when the walker enters it; decoding runs on the CPU.
+The block is rasterised at T1–T3; at T4 it is traced, its faces lamps of their tiles' light weighed by the cosine, which leaves its cobbles a third too dark (a traced ray leaving the block should take the tiles' light in its own direction). Beyond the block the picture is as sharp as the tiles: at 384 px over 200 degrees, nine times coarser than the picture; at 2048 px, near the picture's. Near the block, surface tiles leave holes where the eye sees behind an object no probe sees past; probes inside the cube close them, but only walking alone so far. Its environment light is seen from the block's centre: no shadow of a single thing outside falls inside it. Each block's arrays are made again when the walker enters it; decoding runs on the CPU.

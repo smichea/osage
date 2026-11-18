@@ -1,6 +1,7 @@
 # Knowledge Update Log
 
 ## 2026-11-18
+* **Update**: [osage-paris-native](/modules/paris-native.md) fills the holes no probe sees, draws its faces after the opaque pass (traced light's denoiser leaves them) and tries probes inside the walker's cube (`--cube-probes`): 28.4 dB against Cycles, a hundredfold fewer holes than the block's surface tiles.
 * **Update**: [osage-paris-native](/modules/paris-native.md) marches exactly in the probes (the last step halved, hidden points set aside, probes weighed by how like the eye's their look is), shows radiance through Blender's own AgX and leaves SSAO out: 22.4 dB against Cycles from 19.6, every region's brightness within 6 %; [osage-hologram-stream](/modules/osage-hologram-stream.md) keeps distance nearly exact.
 * **Creation**: Added the Paris world, [osage-world-paris](/modules/paris-world.md) and its client [osage-paris-native](/modules/paris-native.md): a walk in Bistro, the 9 cubes around the walker drawn, the light coming into them streamed (D-136); [osage-hologram-stream](/modules/osage-hologram-stream.md) carries tiles of light (radiance in high dynamic range, distance).
 * **Creation**: Added the modules [osage-cubes](/modules/osage-cubes.md) — nested cubes around a viewer, each level centred on its cube, coarse holograms carved by finer neighbourhoods — and [osage-hologram-stream](/modules/osage-hologram-stream.md) — a hologram's views in blocks of AV1 video along the angle, sent as the viewer needs them (D-134).

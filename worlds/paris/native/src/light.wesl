@@ -33,6 +33,11 @@ import bevy_pbr::render::{
 @group(constants::MATERIAL_BIND_GROUP) @binding(5) var distances: texture_2d_array<f32>;
 // x: radiance to luminance (the renderer's units to cd/m²).
 @group(constants::MATERIAL_BIND_GROUP) @binding(6) var<uniform> scale: vec4<f32>;
+// A trial: probes inside the walker's cube instead of the block's tiles;
+// xyz where each stands, w its layer (-1: none).
+@group(constants::MATERIAL_BIND_GROUP) @binding(7) var<uniform> probes: array<vec4<f32>, 5>;
+// Their pictures' width and height; z 1 when they are used; w how many.
+@group(constants::MATERIAL_BIND_GROUP) @binding(8) var<uniform> shape: vec4<f32>;
 
 const CUBE: f32 = 3.0;
 // Half the probes' field, radians (200 degrees).
@@ -101,9 +106,32 @@ fn project(v: vec3<f32>, normal: vec3<f32>, up: vec3<f32>, right: vec3<f32>) -> 
     return vec3<f32>(uv, select(0.0, 1.0, z > 0.0 && r <= 1.0));
 }
 
+// Whether the light comes from probes inside the cube.
+fn cubed() -> bool {
+    return shape.z > 0.5;
+}
+
+// A probe's picture, pixels.
+fn size() -> vec2<f32> {
+    if (cubed()) {
+        return shape.xy;
+    }
+    return vec2<f32>(high.w);
+}
+
+// Where a direction from a probe inside the cube falls on its
+// equirectangular picture: the middle column north (-z), east to its
+// right, the top row straight up; the whole sphere.
+fn equirect(v: vec3<f32>) -> vec3<f32> {
+    let n = normalize(v);
+    let lon = atan2(n.x, -n.z);
+    let lat = asin(clamp(n.y, -1.0, 1.0));
+    return vec3<f32>(0.5 + lon / 6.2831853, 0.5 - lat / 3.1415927, 1.0);
+}
+
 fn texel(uv: vec2<f32>) -> vec2<i32> {
-    let side = high.w;
-    return vec2<i32>(clamp(uv * side, vec2<f32>(0.0), vec2<f32>(side - 1.0)));
+    let s = size();
+    return vec2<i32>(clamp(uv * s, vec2<f32>(0.0), s - 1.0));
 }
 
 fn step_distance(k: i32) -> f32 {
@@ -127,7 +155,7 @@ struct Look {
 
 fn look(probe: vec3<f32>, normal: vec3<f32>, up: vec3<f32>, right: vec3<f32>, layer: i32, point: vec3<f32>) -> Look {
     let v = point - probe;
-    let p = project(v, normal, up, right);
+    let p = select(project(v, normal, up, right), equirect(v), cubed());
     var l: Look;
     l.uv = p.xy;
     l.on = p.z > 0.5;
@@ -144,11 +172,41 @@ fn behind(l: Look) -> bool {
     return l.on && l.seen >= 0.0 && l.reach >= l.seen;
 }
 
+// Where something nearer hides the ray's point from a probe, what the
+// probe saw just beside it and farther than it: the ground behind a
+// bollard, the wall beside a door's jamb; the nearer of those, at the
+// nearest ring of texels that has one. The thing in front stretched over
+// the hole was worse: bollards drawn as stairs. None found: the thing.
+fn beside(layer: i32, uv: vec2<f32>, front: f32) -> vec3<f32> {
+    let s = size();
+    let behind_front = front + 0.3 + 0.05 * front;
+    var best = vec2<f32>(-1.0);
+    var nearest = 1e9;
+    for (var ring = 1; ring <= 5 && best.x < 0.0; ring = ring + 1) {
+        let r = vec2<f32>(f32(1 << u32(ring))) / s;
+        for (var k = 0; k < 8; k = k + 1) {
+            let a = f32(k) * 0.7853982;
+            let at = uv + vec2<f32>(cos(a), sin(a)) * r;
+            let d = textureLoad(distances, texel(at), layer, 0).r;
+            // The sky lies behind everything.
+            let depth = select(d, 1e6, d < 0.0);
+            if (depth > behind_front && depth < nearest) {
+                nearest = depth;
+                best = at;
+            }
+        }
+    }
+    if (best.x < 0.0) {
+        best = uv;
+    }
+    return radiance(textureSampleLevel(colours, colours_sampler, best, layer, 0.0).rgb);
+}
+
 // What one probe tells of the ray: its radiance, and how much to trust it.
 fn march(probe: vec3<f32>, normal: vec3<f32>, up: vec3<f32>, layer: i32, start: vec3<f32>, ray: vec3<f32>) -> vec4<f32> {
     let right = cross(normal, up);
     // A texel's angle, radians.
-    let texel_angle = 2.0 * HALF_FIELD / high.w;
+    let texel_angle = select(2.0 * HALF_FIELD / high.w, 6.2831853 / shape.x, cubed());
     // Where something nearer hid the ray's point: the least hidden, kept
     // in case no step does better.
     var hidden = vec4<f32>(0.0);
@@ -184,7 +242,7 @@ fn march(probe: vec3<f32>, normal: vec3<f32>, up: vec3<f32>, layer: i32, start: 
             }
             let guess = 1e-4 * exp(-gap);
             if (guess > hidden.a) {
-                hidden = vec4<f32>(c, guess);
+                hidden = vec4<f32>(beside(layer, l.uv, l.seen), guess);
             }
         }
         was_behind = now_behind;
@@ -194,7 +252,7 @@ fn march(probe: vec3<f32>, normal: vec3<f32>, up: vec3<f32>, layer: i32, start: 
         return hidden;
     }
     // It met nothing: the sky, in the ray's own direction.
-    let sky = project(ray, normal, up, right);
+    let sky = select(project(ray, normal, up, right), equirect(ray), cubed());
     if (sky.z > 0.5 && textureLoad(distances, texel(sky.xy), layer, 0).r < 0.0) {
         let c = textureSampleLevel(colours, colours_sampler, sky.xy, layer, 0.0).rgb;
         return vec4<f32>(radiance(c), 1.0);
@@ -233,6 +291,29 @@ fn fragment(in: VertexOutput) -> @location(0) vec4<f32> {
     let eye = view.world_position.xyz;
     let start = in.world_position.xyz;
     let ray = normalize(start - eye);
+
+    if (cubed()) {
+        var seen = vec3<f32>(0.0);
+        var sure = 0.0;
+        let count = i32(shape.w);
+        for (var k = 0; k < count; k = k + 1) {
+            let p = probes[k];
+            if (p.w < 0.0) {
+                continue;
+            }
+            let told = march(p.xyz, normal, up, i32(p.w), start, ray);
+            seen = seen + told.rgb * told.a;
+            sure = sure + told.a;
+        }
+        var light = vec3<f32>(0.0);
+        if (sure > 0.0) {
+            light = seen / sure;
+        } else if (count > 0) {
+            let on = equirect(ray);
+            light = radiance(textureSampleLevel(colours, colours_sampler, on.xy, i32(probes[0].w), 0.0).rgb);
+        }
+        return vec4<f32>(light * scale.x * view.exposure, 1.0);
+    }
 
     // The tiles around where the ray leaves: their centres on a lattice of
     // 3 m, the ray's place between them.

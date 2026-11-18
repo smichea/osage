@@ -70,11 +70,25 @@ pub struct IncomingLight {
     pub distances: Handle<Image>,
     #[uniform(6)]
     pub scale: Vec4,
+    /// A trial (`--cube-probes`): the probes inside the walker's cube, where
+    /// each stands and its layer (-1: none), instead of the block's tiles.
+    #[uniform(7)]
+    pub probes: [Vec4; 5],
+    /// Their pictures' width and height, 1 when they are used, how many.
+    #[uniform(8)]
+    pub shape: Vec4,
 }
 
 impl Material for IncomingLight {
     fn fragment_shader() -> ShaderRef {
         "embedded://paris/light.wesl".into()
+    }
+
+    /// Drawn with what is seen through, after the opaque things (its alpha
+    /// is 1): the faces show light already, which traced light's denoiser
+    /// (T4), filtering the opaque picture by each surface's colour, blurred.
+    fn alpha_mode(&self) -> AlphaMode {
+        AlphaMode::Blend
     }
 }
 
@@ -236,8 +250,11 @@ fn ask(
             let _ = fetcher.asks.send(Ask::Need { source, walker: id });
         }
         (Source::Folder(_), _) => {
-            let wanted: Vec<String> =
-                tiles::needed(me.eyes(), me.speed, HORIZON).into_iter().map(|t| t.key()).collect();
+            let wanted: Vec<String> = if options.cube_probes > 0 {
+                cube_keys(Block::of(me.eyes()).cube, options.cube_probes)
+            } else {
+                tiles::needed(me.eyes(), me.speed, HORIZON).into_iter().map(|t| t.key()).collect()
+            };
             for key in wanted {
                 let there = store.present.as_ref().is_some_and(|p| p.contains(&key));
                 if there && store.asked.insert(key.clone()) {
@@ -287,6 +304,8 @@ fn faces(
             colours: colours.clone(),
             distances: distances.clone(),
             scale: Vec4::new(NITS, 0.0, 0.0, 0.0),
+            probes: [Vec4::new(0.0, 0.0, 0.0, -1.0); 5],
+            shape: Vec4::new(1.0, 1.0, 0.0, 0.0),
         });
         let entity = commands
             .spawn((
@@ -305,14 +324,14 @@ fn faces(
 /// Arrays of one empty layer, until light comes.
 fn empty(images: &mut Assets<Image>) -> (Handle<Image>, Handle<Image>) {
     (
-        images.add(array(1, 1, TextureFormat::Rgb10a2Unorm, vec![0; 4])),
-        images.add(array(1, 1, TextureFormat::R32Float, (-1f32).to_le_bytes().to_vec())),
+        images.add(array((1, 1), 1, TextureFormat::Rgb10a2Unorm, vec![0; 4])),
+        images.add(array((1, 1), 1, TextureFormat::R32Float, (-1f32).to_le_bytes().to_vec())),
     )
 }
 
-fn array(side: u32, layers: u32, format: TextureFormat, data: Vec<u8>) -> Image {
+fn array((width, height): (u32, u32), layers: u32, format: TextureFormat, data: Vec<u8>) -> Image {
     let mut image = Image::new(
-        Extent3d { width: side, height: side, depth_or_array_layers: layers },
+        Extent3d { width, height, depth_or_array_layers: layers },
         TextureDimension::D2,
         data,
         format,
@@ -359,6 +378,56 @@ fn arrays(
         return;
     }
     store.changed = false;
+    if options.cube_probes > 0 {
+        let probes = cube_probes(&store, &options, block.cube);
+        let moved = store.block != Some(block);
+        if !moved && probes.len() == store.drawn {
+            return;
+        }
+        store.block = Some(block);
+        store.drawn = probes.len();
+        if let Some((centre, drawn)) = probes.first().cloned() {
+            let done = fetcher.lights.0.clone();
+            let _ = thread::Builder::new().name("paris-environment".to_owned()).spawn(move || {
+                let (diffuse, specular) = environment_seen(&drawn, centre);
+                let _ = done.send((block, diffuse, specular));
+            });
+        }
+        let size = probes.first().map_or((1, 1), |(_, d)| (d.width, d.height));
+        let (colours, distances) = if probes.is_empty() {
+            empty(&mut images)
+        } else {
+            let mut colour = Vec::new();
+            let mut distance = Vec::new();
+            for (_, drawn) in &probes {
+                colour.extend(drawn.radiance.iter().flat_map(|v| v.to_le_bytes()));
+                distance.extend(drawn.distance.iter().flat_map(|v| v.to_le_bytes()));
+            }
+            let layers = probes.len() as u32;
+            (
+                images.add(array(size, layers, TextureFormat::Rgb10a2Unorm, colour)),
+                images.add(array(size, layers, TextureFormat::R32Float, distance)),
+            )
+        };
+        let mut at = [Vec4::new(0.0, 0.0, 0.0, -1.0); 5];
+        for (layer, (centre, _)) in probes.iter().enumerate().take(5) {
+            at[layer] = centre.extend(layer as f32);
+        }
+        let (lo, hi) = (block.min(), block.max());
+        for (index, face) in Face::ALL.into_iter().enumerate() {
+            let (entity, handle) = &faces.0[index];
+            if let Some(mut material) = materials.get_mut(handle) {
+                material.low = lo.extend(index as f32);
+                material.high = hi.extend(size.0 as f32);
+                material.probes = at;
+                material.shape = Vec4::new(size.0 as f32, size.1 as f32, 1.0, probes.len().min(5) as f32);
+                material.colours = colours.clone();
+                material.distances = distances.clone();
+            }
+            place_face(&mut places, *entity, face, lo, hi, options.whole);
+        }
+        return;
+    }
     let mine: Vec<(Tile, Arc<light::Drawn>)> =
         block.tiles().into_iter().filter_map(|t| store.tiles.get(&t.key()).map(|d| (t, d.clone()))).collect();
     let moved = store.block != Some(block);
@@ -388,8 +457,8 @@ fn arrays(
         }
         let layers = mine.len() as u32;
         (
-            images.add(array(side, layers, TextureFormat::Rgb10a2Unorm, colour)),
-            images.add(array(side, layers, TextureFormat::R32Float, distance)),
+            images.add(array((side, side), layers, TextureFormat::Rgb10a2Unorm, colour)),
+            images.add(array((side, side), layers, TextureFormat::R32Float, distance)),
         )
     };
     for glow in &glows {
@@ -415,20 +484,7 @@ fn arrays(
             material.colours = colours.clone();
             material.distances = distances.clone();
         }
-        // The face's quad, facing into the block.
-        let normal = face.normal();
-        let centre = (lo + hi) / 2.0 + normal * (hi - lo) / 2.0;
-        let size = (hi - lo) * (Vec3::ONE - normal.abs());
-        let (up, width, height) = match face.axis() {
-            0 => (Vec3::Y, size.z, size.y),
-            1 => (Vec3::Z, size.x, size.z),
-            _ => (Vec3::Y, size.x, size.y),
-        };
-        if let Ok((mut place, mut visibility)) = places.get_mut(*entity) {
-            *place =
-                Transform::from_translation(centre).looking_to(normal, up).with_scale(Vec3::new(width, height, 1.0));
-            *visibility = if options.whole { Visibility::Hidden } else { Visibility::Inherited };
-        }
+        place_face(&mut places, *entity, face, lo, hi, options.whole);
         let (sum, n) = mine
             .iter()
             .filter(|(t, _)| t.face == face)
@@ -444,24 +500,96 @@ fn arrays(
     }
 }
 
-/// The mean radiance a tile's probe saw coming in: over the half sphere
-/// out of the block (the fisheye's circle within 90 of its 100 degrees).
+/// A face's quad on the block's surface, facing into the block.
+fn place_face(
+    places: &mut Query<(&mut Transform, &mut Visibility)>,
+    entity: Entity,
+    face: Face,
+    lo: Vec3,
+    hi: Vec3,
+    whole: bool,
+) {
+    let normal = face.normal();
+    let centre = (lo + hi) / 2.0 + normal * (hi - lo) / 2.0;
+    let size = (hi - lo) * (Vec3::ONE - normal.abs());
+    let (up, width, height) = match face.axis() {
+        0 => (Vec3::Y, size.z, size.y),
+        1 => (Vec3::Z, size.x, size.z),
+        _ => (Vec3::Y, size.x, size.y),
+    };
+    if let Ok((mut place, mut visibility)) = places.get_mut(entity) {
+        *place = Transform::from_translation(centre).looking_to(normal, up).with_scale(Vec3::new(width, height, 1.0));
+        *visibility = if whole { Visibility::Hidden } else { Visibility::Inherited };
+    }
+}
+
+/// The names of a cube's first `count` probes (`tools/bistro/cube-probes.py`).
+fn cube_keys(cube: IVec3, count: usize) -> Vec<String> {
+    (0..count.min(5)).map(|k| format!("c_{}_{}_{}_{k}", cube.x, cube.y, cube.z)).collect()
+}
+
+/// The cube's probes that have come, each with where it stands (its
+/// `meta.json` in the street's folder: walking alone only).
+fn cube_probes(store: &Store, options: &Options, cube: IVec3) -> Vec<(Vec3, Arc<light::Drawn>)> {
+    cube_keys(cube, options.cube_probes)
+        .into_iter()
+        .filter_map(|key| {
+            let drawn = store.tiles.get(&key)?.clone();
+            let meta = std::fs::read_to_string(options.street.join("tiles").join(&key).join("meta.json")).ok()?;
+            let meta: serde_json::Value = serde_json::from_str(&meta).ok()?;
+            let c = meta["centre"].as_array()?;
+            let at = |i: usize| c.get(i).and_then(|v| v.as_f64()).map(|v| v as f32);
+            Some((Vec3::new(at(0)?, at(1)?, at(2)?), drawn))
+        })
+        .collect()
+}
+
+/// What comes into the block from each direction as a probe inside it saw
+/// it (equirectangular: the middle column north, east to its right).
+fn environment_seen(drawn: &light::Drawn, _centre: Vec3) -> (Image, Image) {
+    let (w, h) = (drawn.width as usize, drawn.height as usize);
+    let sample = |d: Vec3| -> Vec3 {
+        let d = d.normalize_or(Vec3::Y);
+        let lon = d.x.atan2(-d.z);
+        let lat = d.y.clamp(-1.0, 1.0).asin();
+        let u = 0.5 + lon / std::f32::consts::TAU;
+        let v = 0.5 - lat / std::f32::consts::PI;
+        let (col, row) = (((u * w as f32) as usize).min(w - 1), ((v * h as f32) as usize).min(h - 1));
+        let packed = drawn.radiance[row * w + col];
+        let band = |shift: u32| light::decode_radiance(((packed >> shift) & 1023) as f32 / 1023.0);
+        Vec3::new(band(0), band(10), band(20))
+    };
+    osage_render::sky_light::cubemaps(sample)
+}
+
+/// The radiance a lamp on a tile shines with to light as the tile's
+/// probe saw light come in: what a surface lying on the tile gathers, the
+/// light of the half sphere out of the block weighed by the cosine of its
+/// angle (the fisheye's circle within 90 of its 100 degrees; an
+/// equidistant fisheye's pixel spans sin θ / θ of solid angle). A plain
+/// mean left the cobbles a third too dark against Cycles: the bright sky
+/// overhead counts most.
 fn mean_radiance(drawn: &light::Drawn) -> Vec3 {
     let (w, h) = (drawn.width as usize, drawn.height as usize);
-    let (mut sum, mut n) = (Vec3::ZERO, 0);
-    for row in (0..h).step_by(4) {
-        for col in (0..w).step_by(4) {
+    let half_field = (tiles::PROBE_FOV / 2.0).to_radians();
+    let (mut sum, mut weight) = (Vec3::ZERO, 0.0);
+    let step = (w / 96).max(1);
+    for row in (0..h).step_by(step) {
+        for col in (0..w).step_by(step) {
             let (u, v) = ((col as f32 + 0.5) / w as f32 * 2.0 - 1.0, (row as f32 + 0.5) / h as f32 * 2.0 - 1.0);
-            if u * u + v * v > 0.81 {
+            let theta = (u * u + v * v).sqrt() * half_field;
+            if theta >= std::f32::consts::FRAC_PI_2 {
                 continue;
             }
+            let solid = if theta > 1e-4 { theta.sin() / theta } else { 1.0 };
+            let w8 = theta.cos() * solid;
             let packed = drawn.radiance[row * w + col];
             let band = |shift: u32| light::decode_radiance(((packed >> shift) & 1023) as f32 / 1023.0);
-            sum += Vec3::new(band(0), band(10), band(20));
-            n += 1;
+            sum += Vec3::new(band(0), band(10), band(20)) * w8;
+            weight += w8;
         }
     }
-    if n > 0 { sum / n as f32 } else { Vec3::ZERO }
+    if weight > 0.0 { sum / weight } else { Vec3::ZERO }
 }
 
 /// What comes into `block` from each direction, seen from its centre: the

@@ -13,7 +13,12 @@
 # g2-standard-8 machine (one NVIDIA L4) runs on-vm-bake.sh and is deleted
 # when this script exits, or by Google after three hours if this script
 # dies first. Blender, the scene, the street and the source go up from
-# this machine; the packed tiles, the shots and the logs come back to OUT.
+# this machine (OSAGE_BAKE_REUSE=gs://…/RUN: Blender, the scene and the
+# street copied from an earlier run instead; OSAGE_BAKE_PACKED=DIR: those
+# tiles, packed already, and no bake, only the shots; OSAGE_BAKE_CUBE=X,Y,Z:
+# that cube's probes baked instead, `cube-probes.py`, left raw in the
+# bucket as RUN/raw.tar); the packed tiles, the shots and the logs come
+# back to OUT.
 
 set -euo pipefail
 
@@ -51,8 +56,19 @@ blender_dir=${OSAGE_BLENDER_DIR:-$HOME/.local/opt/blender-5.2.4-linux-x64}
 # The source as it stands, new files included.
 (cd "$root" && git ls-files -z --cached --others --exclude-standard | tar --null -T - -cf "$stage/source.tar")
 cp "$tiles" "$stage/tiles.json"
-gcloud storage cp "$stage/blender.tar.zst" "$stage/scene.tar" "$stage/street.tar" "$stage/source.tar" \
-  "$stage/tiles.json" "$run/in/"
+if [ -n "${OSAGE_BAKE_REUSE:-}" ]; then
+  gcloud storage cp "$OSAGE_BAKE_REUSE/in/blender.tar.zst" "$OSAGE_BAKE_REUSE/in/scene.tar" \
+    "$OSAGE_BAKE_REUSE/in/street.tar" "$run/in/"
+else
+  gcloud storage cp "$stage/blender.tar.zst" "$stage/scene.tar" "$stage/street.tar" "$run/in/"
+fi
+gcloud storage cp "$stage/source.tar" "$stage/tiles.json" "$run/in/"
+packed=
+if [ -n "${OSAGE_BAKE_PACKED:-}" ]; then
+  tar -C "$(dirname "$OSAGE_BAKE_PACKED")" -cf "$stage/tiles.tar" "$(basename "$OSAGE_BAKE_PACKED")"
+  gcloud storage cp "$stage/tiles.tar" "$run/in/"
+  packed=1
+fi
 
 for candidate in asia-southeast1-b asia-southeast1-a asia-southeast1-c; do
   if g compute instances create "$name" --zone "$candidate" --machine-type "${OSAGE_BAKE_MACHINE:-g2-standard-8}" \
@@ -61,7 +77,7 @@ for candidate in asia-southeast1-b asia-southeast1-a asia-southeast1-c; do
     --image-family osage-bench --image-project "$project" --boot-disk-size 100GB --boot-disk-type pd-balanced \
     --subnet bench --service-account "bench-vm@$project.iam.gserviceaccount.com" \
     --scopes https://www.googleapis.com/auth/devstorage.read_write \
-    --metadata "osage-run=$run,osage-size=$size,osage-samples=$samples" \
+    --metadata "^@^osage-run=$run@osage-size=$size@osage-samples=$samples@osage-packed=$packed@osage-cube=${OSAGE_BAKE_CUBE:-}" \
     --metadata-from-file startup-script="$here/on-vm-bake.sh" --labels osage=bake; then
     zone=$candidate
     break
@@ -77,7 +93,8 @@ for _ in $(seq 700); do
   sleep 15
   progress=$(gcloud storage cat "$run/progress.txt" 2>/dev/null || true)
   if [ "$progress" != "$seen" ]; then
-    diff <(echo "$seen") <(echo "$progress") | sed -n 's/^> //p'
+    # diff says 1 when they differ, which they do.
+    diff <(echo "$seen") <(echo "$progress") | sed -n 's/^> //p' || true
     seen=$progress
   fi
   status=$(gcloud storage cat "$run/done" 2>/dev/null) && break

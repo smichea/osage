@@ -82,14 +82,18 @@ fn shoot(
     mut all: Local<u32>,
     mut taken: Local<Option<u32>>,
     mut timed: Local<(f32, u32)>,
+    mut settled: Local<f32>,
     time: Res<Time>,
+    traced: Res<osage_render::TracedLight>,
     mut exit: MessageWriter<AppExit>,
 ) {
     let (Some(shot), Some(picture)) = (&options.shot, picture) else { return };
     *frames += 1;
     *all += 1;
     if let Some(at) = *taken {
-        if *frames > at + 30 {
+        // Gone once the picture is on disk: on a fast GPU, 30 frames came
+        // before it was read back, and it was lost.
+        if (*frames > at + 30 && shot.file.exists()) || *frames > at + 3000 {
             exit.write(AppExit::Success);
         }
         return;
@@ -99,13 +103,18 @@ fn shoot(
     // picture of what there is after a while.
     let come = store.drawn > 0 && store.received >= store.drawn && store.lit == store.block;
     let ready = street && (come || *all > 1500);
-    // Some frames after, for the pipelines and the light.
+    // Some frames and seconds after, for the pipelines and the textures
+    // to reach the GPU (on a fast one, 60 frames are a quarter of a second)
+    // and, traced, for the light to gather frame after frame.
     const SETTLE: u32 = 60;
+    let seconds = if traced.0 { 6.0 } else { 2.0 };
     if !ready {
         *frames = 0;
+        *settled = 0.0;
         return;
     }
-    if *frames < SETTLE {
+    *settled += time.delta_secs();
+    if *frames < SETTLE || *settled < seconds {
         // The last half of the settling frames, timed.
         if *frames > SETTLE / 2 {
             timed.0 += time.delta_secs();

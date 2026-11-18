@@ -6,7 +6,7 @@
 //!
 //!     paris [ws://HOST:7878] [--tier T1..T4] [--street DIR] [--offline] [--fov DEGREES]
 //!           [--shot FILE --at X,Y,Z --heading DEGREES] [--film DIR SECONDS --heading DEGREES]
-//!           [--plain] [--whole]
+//!           [--plain] [--whole] [--cube-probes HOW_MANY]
 //!
 //! The walker goes where the keys say (W A S D or Z Q S D, the arrows;
 //! Shift runs), looks where the mouse does once the window is clicked
@@ -51,6 +51,9 @@ pub struct Options {
     pub plain: bool,
     /// The whole street drawn from its model, the block's faces hidden.
     pub whole: bool,
+    /// A trial: the light from this many probes inside the walker's cube
+    /// (`tools/bistro/cube-probes.py`) instead of the block's tiles; 0 none.
+    pub cube_probes: usize,
 }
 
 /// A walk straight ahead, filmed.
@@ -89,7 +92,7 @@ fn main() -> anyhow::Result<()> {
     let mut street: Option<PathBuf> = None;
     let (mut shot_file, mut at, mut heading) = (None, None, 0.0f32);
     let mut fov = 70.0f32;
-    let (mut plain, mut whole) = (false, false);
+    let (mut plain, mut whole, mut cube_probes) = (false, false, 0usize);
     let mut film: Option<(PathBuf, f32)> = None;
     let mut args = std::env::args().skip(1);
     while let Some(arg) = args.next() {
@@ -108,6 +111,7 @@ fn main() -> anyhow::Result<()> {
             "--fov" => fov = need(args.next(), "--fov DEGREES")?.parse::<f32>()?,
             "--plain" => plain = true,
             "--whole" => whole = true,
+            "--cube-probes" => cube_probes = need(args.next(), "--cube-probes HOW_MANY (1 to 5)")?.parse()?,
             "--film" => {
                 let folder = PathBuf::from(need(args.next(), "--film DIR SECONDS")?);
                 let seconds = need(args.next(), "--film DIR SECONDS")?.parse::<f32>()?;
@@ -131,7 +135,7 @@ fn main() -> anyhow::Result<()> {
     let online = server.is_some();
     let film = film.map(|(folder, seconds)| Film { folder, seconds, heading });
     let offscreen = shot.is_some() || film.is_some();
-    let options = Options { street, server, shot: shot.clone(), fov, film, plain, whole };
+    let options = Options { street, server, shot: shot.clone(), fov, film, plain, whole, cube_probes };
 
     let assets = AssetPlugin { file_path: root.to_string_lossy().into_owned(), ..default() };
     let mut app = App::new();

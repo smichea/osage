@@ -72,6 +72,23 @@ The whole street drawn from its model by the client at T3, without the light com
 
 What remains is sharpness: the tiles' 384 px over 200 degrees, 16 samples denoised, against the picture's nine times finer pixels.
 
+## Sharp tiles, traced light, probes inside the cube (2026-11-18, evening)
+
+On a rented NVIDIA L4 (`tools/bistro/cloud-bake.sh`, the render bench's project), the 30 tiles of the starting block baked at 2048 px and 256 samples (58 s a tile on OptiX), and the picture to measure against at 1280 × 720 and 1024 samples. Against it (PSNR on sRGB pictures, from the scene camera's place):
+
+| Light | Picture | Street beyond | Left facade | Right facade | Unseen by any probe | Per cube crossed |
+|---|---|---|---|---|---|---|
+| 30 surface tiles, 384 px | 22.3 dB | 25.7 dB | 21.6 dB | 21.8 dB | — | ~0.4 MB |
+| 30 surface tiles, 2048 px | 25.9 dB | 29.6 dB | 26.3 dB | 23.5 dB | 3.8 % | ~4–5 MB |
+| the same, holes filled from behind | 26.2 dB | 29.3 dB | 27.0 dB | 25.6 dB | 3.8 % | ~4–5 MB |
+| 1 probe at the cube's centre | 27.2 dB | 30.9 dB | 22.8 dB | 28.2 dB | — | 0.86 MB |
+| **5 probes inside the cube** | **28.4 dB** | **31.7 dB** | **29.1 dB** | **28.6 dB** | **0.04 %** | 4.3 MB |
+
+1. **Sharpness is the tiles'.** At 2048 px the facades, lanterns and far buildings come out as in Cycles; the client draws it at 19–25 ms a frame on the Iris Xe (T3). A tile weighs 355 KiB (light 251, distance 84, sky 20).
+2. **What the surface tiles cannot do.** Where an object stands near the block (bollards, a kerb, pilasters, window jambs, 0.5–2 m beyond a face), the eye, 3–5 m back, sees behind it what no probe on the face sees: 3.8 % of the picture here. Stretching the object over the hole drew bollards as stairs; filling the hole with what the probe saw just beside and behind the object (`light.wesl`'s `beside`) hides that, but guesses.
+3. **Probes inside the walker's cube** (`tools/bistro/cube-probes.py`, the client's `--cube-probes`): full spheres (equirectangular, 4096 × 2048, 256 samples, 2.9 min each on the L4) at the eyes' height, at the cube's centre and 0.75 m towards its corners; the block's surfaces made transparent to the camera's rays (from 30 cm over the ground: the street and its kerbs stay), so that each sees what comes into the block. Seen from nearly where the eye is, objects near the block hide nothing it sees: the holes fall a hundredfold, the stairs, broken awnings and striped facade go, 28.4 dB. One probe alone does as well beyond the street's end but leaves the left facade's jambs open (22.8 dB there).
+4. **Traced (T4), on the L4**: drawn after the opaque pass, so that the traced light's denoiser leaves them, the faces come out exactly as at T3 (24.9 dB over the picture, 5 ms a frame). The block itself is lit by its faces as lamps of their tiles' light, weighed by the cosine: its cobbles come out at 0.64 of Cycles. A ray leaving the block should take the tiles' light in its own direction, inside Solari: not done.
+
 ## Next
 
 1. The whole street baked, at 1024–1536 px and more samples: about 2 000 tiles, a cloud GPU's work (hours on the laptop's processor for 384 px).
