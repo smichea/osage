@@ -39,6 +39,8 @@ osage-procedural = { path = "crates/osage-procedural" }
 osage-content = { path = "crates/osage-content" }
 osage-props = { path = "crates/osage-props" }
 osage-hologram = { path = "crates/osage-hologram" }
+osage-hologram-stream = { path = "crates/osage-hologram-stream" }
+osage-cubes = { path = "crates/osage-cubes" }
 osage-humans = { path = "crates/osage-humans" }
 osage-music = { path = "crates/osage-music" }
 osage-voice = { path = "crates/osage-voice" }

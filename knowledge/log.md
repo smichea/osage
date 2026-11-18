@@ -1,5 +1,9 @@
 # Knowledge Update Log
 
+## 2026-11-18
+* **Creation**: Added the modules [osage-cubes](/modules/osage-cubes.md) — nested cubes around a viewer, each level centred on its cube, coarse holograms carved by finer neighbourhoods — and [osage-hologram-stream](/modules/osage-hologram-stream.md) — a hologram's views in blocks of AV1 video along the angle, sent as the viewer needs them (D-134).
+* **Update**: [osage-hologram](/modules/osage-hologram.md) draws streamed holograms (`stream::StreamPlugin`), their window filled as views come.
+
 ## 2026-11-14
 * **Update**: [osage-update](/modules/osage-update.md): `kart-update` takes the programs' zip of its own system, Windows or a Mac with Apple silicon, and runs a Mac's `.command` launchers again with `exec` (D-127).
 

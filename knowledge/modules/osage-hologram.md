@@ -24,9 +24,11 @@ Test the idea of texturing objects with how they look from every viewing angle �
 
 `HologramPlugin` draws a `Hologram` (a folder of views baked on magenta, its grid, the photographed sphere, a stand-in rectangle): its views loaded and stacked into one texture array, an unlit material whose shader (`hologram.wesl`) blends, for each pixel, the four views around the direction of the eye, each sampled where its orthographic camera saw the point; magenta is nothing, partly magenta edges unmixed. `hologram-view` films a model and its hologram side by side; `hologram-street` times a street of 40 facades as models, holograms, or both by distance; `hologram-forest` a plot of 120 trees (about 500 million faces) as trees or as its hologram (`HOLOGRAM_FOREST` bakes such a plot, `HOLOGRAM_ASPECT` frames it wide and low, `HOLOGRAM_KEY=black` with `masked` tells the object by depth). A stand-in may be a box (`stand_depth`). Views stay on the CPU, only their stacks go to the GPU; with `window`, only a window of views around the direction it is seen from, slid as the camera moves. Holograms drawn from one folder share one stack. A hologram may fade in over a range of distances (`fade_in`) as its model's visibility range fades the model out.
 
+`stream::StreamPlugin` draws holograms whose views come from a server ([osage-hologram-stream](/modules/osage-hologram-stream.md), D-134): an entity with `Streamed` (a server, the hologram's folder there, a window) gets its `stream.json`, then a few times a second tells the server where the viewer is, in the hologram's frame, and how fast it goes; the blocks the server answers are fetched and decoded by threads of their own, and their views fill the hologram's window as they come — where one has not come yet, the nearest that has stands in for it. `hologram-stream-view SERVER PATH OUT` films a streamed hologram turning round it and prints what came over the network.
+
 # Interfaces
 
-`HologramPlugin`, `Hologram { folder, grid, centre, radius, stand, flat, lit, fade_in }`, `DepthMaterial`, `NormalMaterial`, `decode_depth`, `HologramMaterial`, `Views`; `Grid { azimuths, elevations }`, `Grid::new`, `Grid::facade`, `Grid::direction(azimuth, elevation)`, `Grid::path`, `Grid::name(row, column)`; the `hologram-bake` program.
+`HologramPlugin`, `Hologram { folder, grid, centre, radius, stand, flat, lit, fade_in }`, `stream::{StreamPlugin, Streamed, Stream}`, `DepthMaterial`, `NormalMaterial`, `decode_depth`, `HologramMaterial`, `Views`; `Grid { azimuths, elevations }`, `Grid::new`, `Grid::facade`, `Grid::direction(azimuth, elevation)`, `Grid::path`, `Grid::name(row, column)`; the `hologram-bake` program.
 
 # Invariants
 
@@ -37,6 +39,7 @@ Test the idea of texturing objects with how they look from every viewing angle �
 - Research: `research/09-holographic-textures.md` (first results: ×5–10 smaller than independent images at good quality when views are 2.5° apart).
 
 - Used by [kart-native](/modules/kart-native.md): apartment and factory blocks behind Harbour Town (D-132). Direction: in 3D only what physics needs, the rest holograms (D-133).
+- Streamed by [osage-hologram-stream](/modules/osage-hologram-stream.md), as the nested cubes of [osage-cubes](/modules/osage-cubes.md) list them (D-134).
 
 # Reuse
 

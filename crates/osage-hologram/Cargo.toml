@@ -14,6 +14,8 @@ repository.workspace = true
 [dependencies]
 bevy = { workspace = true, features = ["3d", "jpeg", "png"] }
 osage-content.workspace = true
+osage-hologram-stream.workspace = true
+crossbeam-channel.workspace = true
 osage-props.workspace = true
 anyhow.workspace = true
 serde.workspace = true

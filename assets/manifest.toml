@@ -15829,3 +15829,17 @@ licence = "CC0-1.0"
 author = "Poly Haven"
 source = "https://polyhaven.com/a/island_tree_03"
 used_by = "osage-hologram: hologram-forest (D-133)"
+
+# NVIDIA's Open Research Content Archive (ORCA): Amazon Lumberyard's Bistro, a
+# Paris street of 2.8 million triangles and the café inside, CC BY 4.0 — the
+# street of the Paris world, photographed into holograms (D-134). Cite as
+# "Amazon Lumberyard Bistro, Open Research Content Archive (ORCA), 2017".
+
+[[asset]]
+path = "assets/orca/bistro/Bistro_v5_2.zip"
+url = "https://developer.nvidia.com/bistro"
+sha256 = "0d50e3c724c6c5da19f8eb99ad3f53e36fec37ffa2df9621f9ccf0603f3934e1"
+licence = "CC-BY-4.0"
+author = "Amazon Lumberyard (NVIDIA ORCA)"
+source = "https://developer.nvidia.com/orca/amazon-lumberyard-bistro"
+used_by = "worlds/paris: the street its holograms are photographed from (D-134)"

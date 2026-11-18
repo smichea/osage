@@ -1,0 +1,35 @@
+# SPDX-FileCopyrightText: The osage contributors
+# SPDX-License-Identifier: MIT OR Apache-2.0
+
+[package]
+name = "osage-hologram-stream"
+description = "Holograms as streams: a field of views cut into blocks, each a short AV1 video along the viewing angle, sent and decoded block by block"
+license = "MIT OR Apache-2.0"
+publish = false
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+
+[[bin]]
+name = "hologram-pack"
+path = "src/bin/hologram-pack.rs"
+
+[[bin]]
+name = "hologram-serve"
+path = "src/bin/hologram-serve.rs"
+
+[dependencies]
+anyhow.workspace = true
+libc = "0.2.191"
+png = "0.18.1"
+# The AV1 decoder: dav1d's Rust port; its assembly (feature `asm`) needs nasm
+# to build on x86-64.
+rav1d = { version = "1.1.0", default-features = false, features = ["bitdepth_8", "bitdepth_16"] }
+serde.workspace = true
+serde_json.workspace = true
+
+[features]
+default = ["asm"]
+# rav1d's hand-written SIMD, several times faster; nasm builds it on x86-64.
+asm = ["rav1d/asm"]

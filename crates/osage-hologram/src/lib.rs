@@ -13,6 +13,8 @@
 //! step of angle away from it, as each frame of a film follows one a step
 //! of time away.
 
+pub mod stream;
+
 use std::f32::consts::PI;
 
 use bevy::{
@@ -352,7 +354,7 @@ pub struct Hologram {
 struct Stacks(std::collections::HashMap<(String, bool), Stack>);
 
 /// A folder's stacked views, depths and normals.
-type Stack = (Handle<Image>, Handle<Image>, Handle<Image>);
+pub(crate) type Stack = (Handle<Image>, Handle<Image>, Handle<Image>);
 
 /// A hologram whose views, depths and normals are loading.
 #[derive(Component)]
@@ -360,16 +362,19 @@ struct Loading(Vec<Handle<Image>>, Vec<Handle<Image>>, Vec<Handle<Image>>);
 
 /// A hologram's material, once made.
 #[derive(Component)]
-struct Drawn(Handle<HologramMaterial>);
+pub(crate) struct Drawn(pub(crate) Handle<HologramMaterial>);
 
-/// A windowed hologram's views, depths and normals on the CPU, and the
-/// window its arrays hold now (first column, first row).
+/// A windowed hologram's views, depths and normals on the CPU, by row and
+/// column of its grid (none where a streamed view has not come yet), and
+/// the window its arrays hold now (first column, first row).
 #[derive(Component)]
-struct Sources {
-    views: Vec<Handle<Image>>,
-    depths: Vec<Handle<Image>>,
-    normals: Vec<Handle<Image>>,
-    at: Option<(usize, usize)>,
+pub(crate) struct Sources {
+    pub(crate) views: Vec<Option<Handle<Image>>>,
+    pub(crate) depths: Vec<Option<Handle<Image>>>,
+    pub(crate) normals: Vec<Option<Handle<Image>>>,
+    pub(crate) at: Option<(usize, usize)>,
+    /// Views have come since the window was made: it is made again.
+    pub(crate) stale: bool,
 }
 
 #[allow(clippy::type_complexity)]
@@ -379,7 +384,7 @@ struct Sources {
 fn assemble(
     mut commands: Commands,
     server: Res<AssetServer>,
-    new: Query<(Entity, &Hologram), (Without<Loading>, Without<Drawn>)>,
+    new: Query<(Entity, &Hologram), (Without<Loading>, Without<Drawn>, Without<stream::Stream>)>,
     loading: Query<(Entity, &Hologram, &Loading)>,
     mut images: ResMut<Assets<Image>>,
     mut meshes: ResMut<Assets<Mesh>>,
@@ -449,7 +454,9 @@ fn assemble(
                         let (width, height) = hologram.window.unwrap_or((columns, rows));
                         let (width, height) = (width.min(columns).max(1), height.min(rows).max(1));
                         let first = |set: &Vec<Handle<Image>>| {
-                            window(set, columns, (0, 0), (width, height))
+                            let set: Vec<_> = set.iter().cloned().map(Some).collect();
+                            window(&set, columns, (0, 0), (width, height))
+                                .unwrap_or_default()
                                 .into_iter()
                                 .filter_map(|h| images.get(&h).cloned())
                                 .collect::<Vec<_>>()
@@ -471,55 +478,18 @@ fn assemble(
             commands.entity(entity).remove::<Loading>().insert(Drawn(Handle::default()));
             continue;
         };
-        let grid = &hologram.grid;
-        let step = |v: &[f32]| if v.len() > 1 { v[1] - v[0] } else { 1.0 };
-        let material = materials.add(ExtendedMaterial {
-            base: StandardMaterial {
-                unlit: !hologram.lit,
-                alpha_mode: AlphaMode::Blend,
-                perceptual_roughness: 0.85,
-                ..default()
-            },
-            extension: Views {
-                grid: Vec4::new(grid.azimuths[0], step(&grid.azimuths), grid.elevations[0], step(&grid.elevations)),
-                shape: Vec4::new(
-                    grid.azimuths.len() as f32,
-                    grid.elevations.len() as f32,
-                    if hologram.flat { 0.0 } else { 1.0 },
-                    if hologram.lit { 1.0 } else { 0.0 },
-                ),
-                frame: Vec4::ZERO,
-                turn: Vec4::new(1.0, 0.0, 0.0, 0.0),
-                views: Some(stack),
-                depths: Some(depth_stack),
-                normals: Some(normal_stack),
-                framing: Vec4::new(hologram.aspect, if hologram.masked { 1.0 } else { 0.0 }, 0.0, 0.0),
-                window: match hologram.window {
-                    Some((width, height)) => Vec4::new(
-                        0.0,
-                        0.0,
-                        width.min(grid.azimuths.len()).max(1) as f32,
-                        height.min(grid.elevations.len()).max(1) as f32,
-                    ),
-                    None => Vec4::ZERO,
-                },
-            },
-        });
+        let material = materials.add(material_of(hologram, (stack, depth_stack, normal_stack)));
         if windowed {
+            let some = |set: &Vec<Handle<Image>>| set.iter().cloned().map(Some).collect();
             commands.entity(entity).insert(Sources {
-                views: views.clone(),
-                depths: depths.clone(),
-                normals: normals.clone(),
+                views: some(views),
+                depths: some(depths),
+                normals: some(normals),
                 at: Some((0, 0)),
+                stale: false,
             });
         }
-        let (centre, half) = hologram.stand;
-        let (quad, centre) = if hologram.stand_depth > 0.0 {
-            let box_centre = centre - Vec3::Z * hologram.stand_depth / 2.0;
-            (meshes.add(Cuboid::new(half.x * 2.0, half.y * 2.0, hologram.stand_depth)), box_centre)
-        } else {
-            (meshes.add(Rectangle::new(half.x * 2.0, half.y * 2.0)), centre)
-        };
+        let (quad, centre) = stand_in(hologram, &mut meshes);
         commands.entity(entity).remove::<Loading>().insert(Drawn(material.clone())).with_child((
             Mesh3d(quad),
             MeshMaterial3d(material),
@@ -530,9 +500,59 @@ fn assemble(
     }
 }
 
+/// A hologram's material, drawing from these stacks of views, depths and
+/// normals (its whole grid, or its first window).
+pub(crate) fn material_of(hologram: &Hologram, (views, depths, normals): Stack) -> HologramMaterial {
+    let grid = &hologram.grid;
+    let step = |v: &[f32]| if v.len() > 1 { v[1] - v[0] } else { 1.0 };
+    ExtendedMaterial {
+        base: StandardMaterial {
+            unlit: !hologram.lit,
+            alpha_mode: AlphaMode::Blend,
+            perceptual_roughness: 0.85,
+            ..default()
+        },
+        extension: Views {
+            grid: Vec4::new(grid.azimuths[0], step(&grid.azimuths), grid.elevations[0], step(&grid.elevations)),
+            shape: Vec4::new(
+                grid.azimuths.len() as f32,
+                grid.elevations.len() as f32,
+                if hologram.flat { 0.0 } else { 1.0 },
+                if hologram.lit { 1.0 } else { 0.0 },
+            ),
+            frame: Vec4::ZERO,
+            turn: Vec4::new(1.0, 0.0, 0.0, 0.0),
+            views: Some(views),
+            depths: Some(depths),
+            normals: Some(normals),
+            framing: Vec4::new(hologram.aspect, if hologram.masked { 1.0 } else { 0.0 }, 0.0, 0.0),
+            window: match hologram.window {
+                Some((width, height)) => Vec4::new(
+                    0.0,
+                    0.0,
+                    width.min(grid.azimuths.len()).max(1) as f32,
+                    height.min(grid.elevations.len()).max(1) as f32,
+                ),
+                None => Vec4::ZERO,
+            },
+        },
+    }
+}
+
+/// The shape a hologram is drawn on, and where its centre stands.
+pub(crate) fn stand_in(hologram: &Hologram, meshes: &mut Assets<Mesh>) -> (Handle<Mesh>, Vec3) {
+    let (centre, half) = hologram.stand;
+    if hologram.stand_depth > 0.0 {
+        let box_centre = centre - Vec3::Z * hologram.stand_depth / 2.0;
+        (meshes.add(Cuboid::new(half.x * 2.0, half.y * 2.0, hologram.stand_depth)), box_centre)
+    } else {
+        (meshes.add(Rectangle::new(half.x * 2.0, half.y * 2.0)), centre)
+    }
+}
+
 /// The views stacked into one texture array, if all are the same size and
 /// kind of 8-bit RGBA.
-fn stack<'a>(views: impl Iterator<Item = &'a Image>) -> Option<Image> {
+pub(crate) fn stack<'a>(views: impl Iterator<Item = &'a Image>) -> Option<Image> {
     let mut data = Vec::new();
     let mut first: Option<(u32, u32, bevy::render::render_resource::TextureFormat)> = None;
     let mut layers = 0;
@@ -587,18 +607,26 @@ fn slide(
         let needed = |f: f32, n: usize| (f.floor() as usize, (f.floor() as usize + 1).min(n - 1));
         let ((c0, c1), (r0, r1)) = (needed(fa, columns), needed(fe, rows));
         let inside = sources.at.is_some_and(|(x, y)| c0 >= x && c1 < x + width && r0 >= y && r1 < y + height);
-        if inside {
+        if inside && !sources.stale {
             continue;
         }
         let first =
             |f: f32, size: usize, n: usize| ((f.floor() as i64 - (size as i64 - 2) / 2).max(0) as usize).min(n - size);
         let (x, y) = (first(fa, width, columns), first(fe, height, rows));
-        let pick = |set: &Vec<Handle<Image>>| window(set, columns, (x, y), (width, height));
-        let (views, depths, normals) = (pick(&sources.views), pick(&sources.depths), pick(&sources.normals));
+        let pick = |set: &Vec<Option<Handle<Image>>>| window(set, columns, (x, y), (width, height));
+        let (Some(views), Some(depths), Some(normals)) =
+            (pick(&sources.views), pick(&sources.depths), pick(&sources.normals))
+        else {
+            continue;
+        };
+        let whole = |set: &[Handle<Image>]| -> Option<Vec<&Image>> {
+            let got: Vec<&Image> = set.iter().filter_map(|v| images.get(v)).collect();
+            (got.len() == width * height).then_some(got)
+        };
         let made = (
-            stack(views.iter().filter_map(|v| images.get(v))),
-            stack(depths.iter().filter_map(|v| images.get(v))),
-            stack(normals.iter().filter_map(|v| images.get(v))),
+            whole(&views).and_then(|v| stack(v.into_iter())),
+            whole(&depths).and_then(|v| stack(v.into_iter())),
+            whole(&normals).and_then(|v| stack(v.into_iter())),
         );
         let (Some(colour), Some(depth), Some(normal)) = made else { continue };
         let Some(mut material) = materials.get_mut(material) else { continue };
@@ -607,21 +635,54 @@ fn slide(
         material.extension.normals = Some(images.add(normal));
         material.extension.window = Vec4::new(x as f32, y as f32, width as f32, height as f32);
         sources.at = Some((x, y));
+        sources.stale = false;
     }
 }
 
 /// The views of a window of the grid (first column and row, columns and
-/// rows), in the order the shader reads them: row by row.
-fn window(
-    set: &[Handle<Image>],
+/// rows), in the order the shader reads them: row by row. Where a view has
+/// not come (a streamed hologram's), the nearest that has stands in for it;
+/// none when no view has come at all.
+pub(crate) fn window(
+    set: &[Option<Handle<Image>>],
     columns: usize,
     (x, y): (usize, usize),
     (width, height): (usize, usize),
-) -> Vec<Handle<Image>> {
+) -> Option<Vec<Handle<Image>>> {
     (y..y + height)
-        .flat_map(|row| (x..x + width).map(move |column| row * columns + column))
-        .filter_map(|i| set.get(i).cloned())
+        .flat_map(|row| (x..x + width).map(move |column| (row, column)))
+        .map(|(row, column)| nearest(set, columns, row, column))
         .collect()
+}
+
+/// The view at (row, column) of a grid of `columns`, or the nearest there is.
+fn nearest(set: &[Option<Handle<Image>>], columns: usize, row: usize, column: usize) -> Option<Handle<Image>> {
+    let columns = columns.max(1);
+    let rows = set.len().div_ceil(columns);
+    let at = |r: usize, c: usize| set.get(r * columns + c).and_then(Clone::clone);
+    if let Some(view) = at(row, column) {
+        return Some(view);
+    }
+    // Ring after ring around it.
+    for d in 1..rows.max(columns) as i64 {
+        for dr in -d..=d {
+            for dc in -d..=d {
+                if dr.abs() != d && dc.abs() != d {
+                    continue;
+                }
+                let (r, c) = (row as i64 + dr, column as i64 + dc);
+                if r >= 0
+                    && c >= 0
+                    && (r as usize) < rows
+                    && (c as usize) < columns
+                    && let Some(view) = at(r as usize, c as usize)
+                {
+                    return Some(view);
+                }
+            }
+        }
+    }
+    None
 }
 
 /// Keeps each hologram's material told where it stands and how it is turned.
