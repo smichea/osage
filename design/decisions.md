@@ -1194,3 +1194,10 @@ Date: 2026-11-18 · the maintainer: "nous divisons le monde en blocks (cube dans
 - **Measured:** a forest plot's 102 MB of views become 20.8 MB of blocks; turned round it, a camera was sent 51 of 105 views (7.8 MB). One thread decodes a view of 1024 × 256 px in about 40 ms (colour, depth, outline).
 - **Test world:** a street of Paris, Amazon Lumberyard's Bistro (NVIDIA ORCA, CC BY 4.0: 2.8 million triangles, the café inside), its views photographed offline by a path tracer (Blender's Cycles, a tool outside the repository) for their realism, its walls and ground kept for physics (D-133). A real street (IGN's BD TOPO, Panoramax's photographs, both under the Licence Ouverte) was looked at first and left: it would have needed a scene learnt from photographs.
 - **Open:** the carving in the hologram's shader; how many views a world's plan holds, and its baking time; the light of the 3D cube matching that baked in the holograms; normals' cost; decoding on the GPU.
+
+## D-135 — The 3 m cubes around the viewer in 3D, ray traced; holograms from the 9 m cubes on
+
+Date: 2026-11-18 · the maintainer: "pour moi il faut faire du raytracing sur les 9 cubes internes et utiliser le flux hologramme sur les 6 faces des cubes de 9m entourant les 9 cubes de 3m".
+
+- **Decision (changes D-134):** the 3 m cube the viewer is in and its 26 neighbours — a block of 9 m centred on the viewer, 9 cubes on the floor it walks — are drawn in 3D, ray traced where the hardware can (T4) and rasterised elsewhere. Holograms begin with the 9 m cubes around that block, drawn on their six faces, then 27 m and 81 m as before; no hologram is nearer than a 3 m cube, where holograms are weakest (research/09: close up they need far more resolution). The 9 m cubes keep their grid, carved where the 3D block reaches into them, rather than 9 m blocks re-centred every 3 m (27 times as many to bake).
+- **So:** no 3 m hologram is ever baked, the most numerous; the 3D block and the holograms, both path traced, light alike.

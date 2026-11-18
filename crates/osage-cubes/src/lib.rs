@@ -1,18 +1,19 @@
 // SPDX-FileCopyrightText: The osage contributors
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-//! Nested cubes (D-134): what a viewer sees in 3D, what as holograms, and
-//! which views of those holograms it needs soon.
+//! Nested cubes (D-134, D-135): what a viewer sees in 3D, what as
+//! holograms, and which views of those holograms it needs soon.
 //!
 //! A world is cut into cubes of 81 m, 27 m, 9 m and 3 m, each level's grid
 //! starting at the world's origin. The 3 m cube the viewer is in is the
-//! centre: drawn in 3D, with its 26 neighbours around it as holograms. When
-//! the viewer steps into a neighbour, that one becomes the centre and the
-//! neighbourhood slides by one cube. Each coarser level does the same at its
-//! own pace: the 27 cubes of 9 m around the 9 m cube the viewer is in, the
-//! 27 of 27 m around its 27 m cube, then every 81 m cube of the world
-//! ([`shown`]). A coarser level's neighbourhood holds the finer one, but
-//! they do not line up — the finer is centred on a smaller cube — so each
+//! centre: it and its 26 neighbours, a block of 9 m around the viewer, are
+//! drawn in 3D (ray traced where the hardware can). When the viewer steps
+//! into a neighbour, that one becomes the centre and the block slides by one
+//! cube. Holograms begin beyond it, each coarser level centred the same way
+//! at its own pace: the 27 cubes of 9 m around the 9 m cube the viewer is
+//! in, the 27 of 27 m around its 27 m cube, then every 81 m cube of the
+//! world ([`shown`]). A coarser neighbourhood holds the finer one, but they
+//! do not line up — the finer is centred on a smaller cube — so each
 //! hologram is drawn without what lies inside the next finer neighbourhood
 //! (its [`Region`], told point by point by the hologram's depth): every
 //! place is drawn once, by the finest level around it. Cubes with nothing
@@ -37,8 +38,10 @@ use serde::{Deserialize, Serialize};
 
 /// The side of a cube at each level, m.
 pub const SIZES: [f32; 4] = [81.0, 27.0, 9.0, 3.0];
-/// The finest level: the viewer's own cube there is drawn in 3D.
+/// The finest level: the 3 m cubes around the viewer are drawn in 3D.
 pub const FINEST: u8 = 3;
+/// The finest level drawn as holograms.
+pub const FINEST_HOLOGRAM: u8 = FINEST - 1;
 
 /// A cube: its level (0 for 81 m, 3 for 3 m) and its place in that level's
 /// grid, which starts at the world's origin.
@@ -144,19 +147,30 @@ impl Region {
     }
 }
 
-/// A cube drawn as a hologram, without what lies in `carve` (the next finer
-/// neighbourhood, drawn by its own cubes); `carve` is none at the finest level.
+/// A cube drawn as a hologram, without what lies in `carve`: the next finer
+/// neighbourhood, drawn by its own cubes, in 3D or as holograms.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Hologram {
     pub cube: Cube,
-    pub carve: Option<Region>,
+    pub carve: Region,
 }
 
-/// What a viewer sees: its own finest cube in 3D, other cubes as holograms.
+/// What a viewer sees: the 3 m cubes around it in 3D (`models`, the first
+/// the one it is in), the others as holograms.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Shown {
-    pub model: Cube,
+    pub models: Vec<Cube>,
     pub holograms: Vec<Hologram>,
+}
+
+/// The 27 cubes of a cube's neighbourhood, the cube first.
+fn neighbourhood(c: Cube) -> impl Iterator<Item = Cube> {
+    std::iter::once(c).chain(
+        (-1..=1)
+            .flat_map(|dx| (-1..=1).flat_map(move |dy| (-1..=1).map(move |dz| (dx, dy, dz))))
+            .filter(|&d| d != (0, 0, 0))
+            .map(move |(dx, dy, dz)| Cube { level: c.level, x: c.x + dx, y: c.y + dy, z: c.z + dz }),
+    )
 }
 
 /// What a viewer at `eye` sees, in a world whose 81 m cubes with something
@@ -164,29 +178,16 @@ pub struct Shown {
 /// something in it.
 pub fn shown(eye: Vec3, tops: &[Cube], filled: impl Fn(Cube) -> bool) -> Shown {
     let centre = |level| Cube::containing(eye, level);
+    let models = neighbourhood(centre(FINEST)).filter(|&c| filled(c)).collect();
     let mut holograms = Vec::new();
-    for level in 0..=FINEST {
-        let carve = (level < FINEST).then(|| Region::around(centre(level + 1)));
-        let cubes: Vec<Cube> = if level == 0 {
-            tops.to_vec()
-        } else {
-            let c = centre(level);
-            (-1..=1)
-                .flat_map(|dx| (-1..=1).flat_map(move |dy| (-1..=1).map(move |dz| (dx, dy, dz))))
-                .map(|(dx, dy, dz)| Cube { level, x: c.x + dx, y: c.y + dy, z: c.z + dz })
-                .filter(|&cube| filled(cube))
-                .collect()
-        };
-        for cube in cubes {
-            // The centre of the finest level is drawn in 3D; a cube the finer
-            // neighbourhood holds whole is drawn by that one.
-            if (level == FINEST && cube == centre(FINEST)) || carve.is_some_and(|r| r.holds(cube)) {
-                continue;
-            }
-            holograms.push(Hologram { cube, carve });
-        }
+    for level in 0..=FINEST_HOLOGRAM {
+        let carve = Region::around(centre(level + 1));
+        let cubes: Vec<Cube> =
+            if level == 0 { tops.to_vec() } else { neighbourhood(centre(level)).filter(|&c| filled(c)).collect() };
+        // A cube the finer neighbourhood holds whole is drawn by that one.
+        holograms.extend(cubes.into_iter().filter(|&c| !carve.holds(c)).map(|cube| Hologram { cube, carve }));
     }
-    Shown { model: centre(FINEST), holograms }
+    Shown { models, holograms }
 }
 
 /// Directions about an axis: those within `half_angle` (radians) of it.
@@ -359,15 +360,16 @@ mod tests {
         let (tops, area) = world();
         for eye in inside(area).take(60) {
             let shown = shown(eye, &tops, |_| true);
-            assert!(shown.model.contains(eye));
-            assert_eq!(shown.model.level, FINEST);
+            assert!(shown.models[0].contains(eye));
+            assert_eq!(shown.models.len(), 27);
+            assert!(shown.models.iter().all(|c| c.level == FINEST));
+            assert!(shown.holograms.iter().all(|h| h.cube.level <= FINEST_HOLOGRAM));
             for p in inside(area).chain([eye, eye + Vec3::X * 2.9, eye - Vec3::Z * 8.9, eye + Vec3::Y * 26.0]) {
                 if !area.contains(p) {
                     continue;
                 }
-                let drawn =
-                    shown.holograms.iter().filter(|h| h.cube.contains(p) && !h.carve.is_some_and(|r| r.contains(p)));
-                let times = drawn.count() + usize::from(shown.model.contains(p));
+                let drawn = shown.holograms.iter().filter(|h| h.cube.contains(p) && !h.carve.contains(p));
+                let times = drawn.count() + shown.models.iter().filter(|c| c.contains(p)).count();
                 assert_eq!(times, 1, "{p} drawn {times} times, the viewer at {eye}");
             }
         }
@@ -379,15 +381,17 @@ mod tests {
         let eye = Vec3::new(10.5, 1.6, 10.5);
         let before = shown(eye, &tops, |_| true);
         let after = shown(eye + Vec3::X * 3.0, &tops, |_| true);
-        assert_eq!(after.model, Cube { x: before.model.x + 1, ..before.model });
-        let finest =
-            |s: &Shown| -> Vec<Cube> { s.holograms.iter().map(|h| h.cube).filter(|c| c.level == FINEST).collect() };
-        assert!(finest(&after).contains(&before.model), "the old centre is a hologram again");
-        assert_eq!(finest(&after).len(), 26);
-        for cube in finest(&after) {
-            let d =
-                (cube.x - after.model.x).abs().max((cube.y - after.model.y).abs()).max((cube.z - after.model.z).abs());
-            assert_eq!(d, 1, "{cube:?} is not a neighbour of the centre");
+        assert_eq!(after.models[0], Cube { x: before.models[0].x + 1, ..before.models[0] });
+        assert!(after.models.contains(&before.models[0]), "the old centre is still in 3D, beside the new");
+        for cube in &after.models {
+            let c = after.models[0];
+            let d = (cube.x - c.x).abs().max((cube.y - c.y).abs()).max((cube.z - c.z).abs());
+            assert!(d <= 1, "{cube:?} is not around the centre");
+        }
+        // No hologram inside the block in 3D around the viewer.
+        for h in &after.holograms {
+            assert!(!Region::around(after.models[0]).holds(h.cube));
+            assert!(h.carve.contains(eye + Vec3::X * 3.0));
         }
     }
 
@@ -395,9 +399,10 @@ mod tests {
     fn empty_cubes_are_left_out() {
         let tops = [Cube { level: 0, x: 0, y: 0, z: 0 }];
         let eye = Vec3::new(40.0, 1.6, 40.0);
-        let shown = shown(eye, &tops, |c| c.y == 0 && c.level < 3);
-        assert!(shown.holograms.iter().all(|h| h.cube.y == 0 && h.cube.level < 3));
-        assert_eq!(shown.model, Cube::containing(eye, 3));
+        let shown = shown(eye, &tops, |c| c.y == 0);
+        assert!(shown.holograms.iter().all(|h| h.cube.y == 0));
+        assert!(shown.models.iter().all(|c| c.y == 0));
+        assert_eq!(shown.models[0], Cube::containing(eye, 3));
     }
 
     #[test]
