@@ -184,21 +184,25 @@ pub struct Drawn {
 
 /// Back from the three files: each frame's light, as drawn.
 pub fn decode(radiance: &[u8], distance: &[u8], sky: &[u8]) -> anyhow::Result<Vec<Drawn>> {
-    let colours = crate::decode::planes(radiance)?;
-    let depths = crate::decode::planes(distance)?;
-    let masks = crate::decode::planes(sky)?;
+    // The colour beside the distance and the sky.
+    let (colours, rest) = std::thread::scope(|scope| {
+        let others = scope
+            .spawn(|| -> anyhow::Result<_> { Ok((crate::decode::planes(distance)?, crate::decode::planes(sky)?)) });
+        let colours = crate::decode::planes(radiance);
+        (colours, others.join())
+    });
+    let colours = colours?;
+    let (depths, masks) = rest.map_err(|_| anyhow::anyhow!("decoding the distance panicked"))??;
     ensure!(colours.len() == depths.len() && depths.len() == masks.len(), "files of different lengths");
     let mut out = Vec::new();
     for ((c, d), m) in colours.iter().zip(&depths).zip(&masks) {
         let (width, height) = (c.width, c.height);
-        let rgb = c.rgb();
-        let mut radiance = Vec::with_capacity(rgb.len());
-        for [r, g, b] in rgb {
-            let q = |v: f32| (v.clamp(0.0, 1.0) * 1023.0).round() as u32;
-            radiance.push(q(r) | (q(g) << 10) | (q(b) << 20) | (3 << 30));
-        }
-        let grey = d.grey();
-        let open = m.grey();
+        let (rgb, (grey, open)) = std::thread::scope(|scope| {
+            let greys = scope.spawn(|| (d.grey(), m.grey()));
+            (c.rgb(), greys.join().expect("greys"))
+        });
+        let q = |v: f32| (v.clamp(0.0, 1.0) * 1023.0).round() as u32;
+        let radiance = rgb.iter().map(|&[r, g, b]| q(r) | (q(g) << 10) | (q(b) << 20) | (3 << 30)).collect();
         let distance = grey.iter().zip(&open).map(|(&g, &o)| if o > 0.5 { -1.0 } else { decode_distance(g) }).collect();
         out.push(Drawn { width, height, radiance, distance });
     }

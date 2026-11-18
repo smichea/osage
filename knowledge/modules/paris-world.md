@@ -6,7 +6,7 @@ resource: https://github.com/smichea/osage/tree/main/worlds/paris/world
 licence: MIT OR Apache-2.0
 status: draft
 tags: [paris, world, streaming, light]
-generated: { by: "claude-code/claude-opus-5-5", at: "2026-11-18T12:00:00Z" }
+generated: { by: "claude-code/claude-opus-5-5", at: "2026-11-18T13:40:00Z" }
 ---
 
 # Purpose
@@ -23,7 +23,7 @@ A small world to show a street as real as a photograph, walked on foot, where a 
 
 # Architecture
 
-`walk::Walk` reads the grid; `step` moves a walker by its stride (forward and right relative to its heading, walking or running), sliding along what stops it and never up a step higher than 0.4 m; the server moves walkers with it and each client predicts its own the same way. `tiles::Block::of(eyes)` is a walker's block and `tiles()` its 30 tiles; `tiles::reachable(eyes, speed, horizon)` the cubes the walker can reach by then, `probe_keys(cube)` a cube's probes, and `needed_light(eyes, speed, horizon, there)` what to send, cube by cube: its probes where they are baked, else its block's tiles. `ParisWorld` (a world module) gives each person and agent a walker at the street's start, takes their `paris.stroll/1` intents, steps them every tick, announces its server of light in `paris.world/1`, and tells `Walkers` where each walker is. `paris-server` loads the grid and the baked tiles, serves the world, and beside it answers `/need?walker=ID` from the walker's place and speed in the world — not from what its client says — then sends each probe's or tile's files (a probe's `meta.json` says where it stands). `paris-tiles` lists the tiles a street needs, for the baker.
+`walk::Walk` reads the grid; `step` moves a walker by its stride (forward and right relative to its heading, walking or running), sliding along what stops it and never up a step higher than 0.4 m; the server moves walkers with it and each client predicts its own the same way. `tiles::Block::of(eyes)` is a walker's block and `tiles()` its 30 tiles; `tiles::reachable(eyes, speed, horizon)` the cubes the walker can reach by then, `probe_keys(cube)` a cube's probes, and `needed_light(eyes, speed, horizon, there)` what to send, the walker's cube and then the nearest first: the centres' probes of the cubes that have them, then the tiles of those that do not, then the other probes. `ParisWorld` (a world module) gives each person and agent a walker at the street's start, takes their `paris.stroll/1` intents, steps them every tick, announces its server of light in `paris.world/1`, and tells `Walkers` where each walker is. `paris-server` loads the grid and the baked tiles, serves the world, and beside it answers `/need?walker=ID` from the walker's place and speed in the world — not from what its client says — then sends each probe's or tile's files (a probe's `meta.json` says where it stands). `paris-tiles` lists the tiles a street needs, for the baker.
 
 # Interfaces
 

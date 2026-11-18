@@ -100,36 +100,53 @@ impl Planes {
             if self.full { ((1u32 << (self.bits - 1)) as f32, self.max) } else { (128.0 * scale, 224.0 * scale) };
         let (columns, rows) = (between(width, self.halved.0), between(height, self.halved.1));
         let cw = self.chroma_width as usize;
-        let mut out = Vec::with_capacity((width * height) as usize);
-        let (mut u, mut v) = (vec![0.0f32; cw], vec![0.0f32; cw]);
-        for (y, &(first, second, ty)) in rows.iter().enumerate() {
-            for i in 0..cw {
-                let (a, b) = (first * cw + i, second * cw + i);
-                u[i] = self.cb[a] + (self.cb[b] - self.cb[a]) * ty;
-                v[i] = self.cr[a] + (self.cr[b] - self.cr[a]) * ty;
+        let w = width as usize;
+        let mut out = vec![[0.0f32; 3]; w * height as usize];
+        // Bands of rows side by side: a light's picture has millions of
+        // pixels, and this took longer than decoding it.
+        let threads =
+            if out.len() > 1 << 20 { std::thread::available_parallelism().map_or(1, |n| n.get()).min(4) } else { 1 };
+        let band = rows.len().div_ceil(threads).max(1);
+        std::thread::scope(|scope| {
+            for (k, part) in out.chunks_mut(band * w).enumerate() {
+                let (rows, columns) = (&rows, &columns);
+                scope.spawn(move || {
+                    let (mut u, mut v) = (vec![0.0f32; cw], vec![0.0f32; cw]);
+                    for (j, pixels) in part.chunks_mut(w).enumerate() {
+                        let y = k * band + j;
+                        let (first, second, ty) = rows[y];
+                        for i in 0..cw {
+                            let (a, b) = (first * cw + i, second * cw + i);
+                            u[i] = self.cb[a] + (self.cb[b] - self.cb[a]) * ty;
+                            v[i] = self.cr[a] + (self.cr[b] - self.cr[a]) * ty;
+                        }
+                        let row = &self.luma[y * w..(y + 1) * w];
+                        for (x, &(a, b, tx)) in columns.iter().enumerate() {
+                            let (pu, pv) = (u[a] + (u[b] - u[a]) * tx, v[a] + (v[b] - v[a]) * tx);
+                            let yy = (row[x] - y_low) / y_span;
+                            if self.identity {
+                                pixels[x] = [(pv - y_low) / y_span, yy, (pu - y_low) / y_span];
+                                continue;
+                            }
+                            let (pb, pr) = ((pu - c_mid) / c_span, (pv - c_mid) / c_span);
+                            let r = yy + 2.0 * (1.0 - self.kr) * pr;
+                            let b = yy + 2.0 * (1.0 - self.kb) * pb;
+                            let g = (yy - self.kr * r - self.kb * b) / (1.0 - self.kr - self.kb);
+                            pixels[x] = [r, g, b];
+                        }
+                    }
+                });
             }
-            let row = &self.luma[y * width as usize..(y + 1) * width as usize];
-            for (x, &(a, b, tx)) in columns.iter().enumerate() {
-                let (pu, pv) = (u[a] + (u[b] - u[a]) * tx, v[a] + (v[b] - v[a]) * tx);
-                let yy = (row[x] - y_low) / y_span;
-                if self.identity {
-                    out.push([(pv - y_low) / y_span, yy, (pu - y_low) / y_span]);
-                    continue;
-                }
-                let (pb, pr) = ((pu - c_mid) / c_span, (pv - c_mid) / c_span);
-                let r = yy + 2.0 * (1.0 - self.kr) * pr;
-                let b = yy + 2.0 * (1.0 - self.kb) * pb;
-                let g = (yy - self.kr * r - self.kb * b) / (1.0 - self.kr - self.kb);
-                out.push([r, g, b]);
-            }
-        }
+        });
         out
     }
 }
 
-/// The pictures of an IVF file at full precision.
+/// The pictures of an IVF file at full precision. A light's picture is
+/// large (4096 × 2048 for a probe inside a cube): four threads decode its
+/// tiles side by side, about twice as fast as one.
 pub fn planes(file: &[u8]) -> anyhow::Result<Vec<Planes>> {
-    let mut decoder = Decoder::new()?;
+    let mut decoder = Decoder::with_threads(4)?;
     let mut pictures = Vec::new();
     for frame in ivf::frames(file)? {
         decoder.send(frame, |picture| pictures.push(extract(picture)))?;
@@ -203,15 +220,19 @@ struct Decoder {
 }
 
 impl Decoder {
+    /// One thread a block: blocks are decoded side by side.
     fn new() -> anyhow::Result<Self> {
+        Self::with_threads(1)
+    }
+
+    fn with_threads(threads: i32) -> anyhow::Result<Self> {
         let mut settings = MaybeUninit::<Dav1dSettings>::uninit();
         // SAFETY: the settings are written whole by dav1d_default_settings.
         let mut settings = unsafe {
             dav1d_default_settings(NonNull::new(settings.as_mut_ptr()).context("settings")?);
             settings.assume_init()
         };
-        // One thread a block: blocks are decoded side by side.
-        settings.n_threads = 1;
+        settings.n_threads = threads;
         settings.max_frame_delay = 1;
         let mut context: Option<Dav1dContext> = None;
         // SAFETY: both pointers are to live locals.

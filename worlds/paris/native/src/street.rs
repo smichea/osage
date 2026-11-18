@@ -161,15 +161,18 @@ fn bounds(mesh: &Mesh) -> Option<(Vec3, Vec3)> {
     (lo.cmple(hi).all()).then_some((lo, hi))
 }
 
-/// Shows the meshes that reach into the walker's block, hides the others.
+/// Shows the meshes that reach into the block drawn, hides the others.
 fn show(
     me: Res<Me>,
     options: Res<crate::Options>,
+    light: Res<crate::light::Store>,
     mut last: Local<Option<Block>>,
     mut pieces: Query<(&Piece, &mut Visibility)>,
     added: Query<(), Added<Piece>>,
 ) {
-    let block = Block::of(me.eyes());
+    // The block whose light is drawn: it stays a moment after the walker
+    // steps out of its cube, until the next one's light has come.
+    let block = light.block.unwrap_or_else(|| Block::of(me.eyes()));
     if *last == Some(block) && added.is_empty() {
         return;
     }

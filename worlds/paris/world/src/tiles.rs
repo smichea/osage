@@ -189,25 +189,36 @@ pub fn needed_probes(eye: Vec3, speed: f32, horizon: f32) -> Vec<String> {
     reachable(eye, speed, horizon).into_iter().flat_map(probe_keys).collect()
 }
 
-/// The light such a walker needs, cube by cube: the cube's probes where
-/// `there` says they are (D-137), else its block's surface tiles (D-136);
-/// only what is there.
+/// The light such a walker needs, the nearest cube first (a client decodes
+/// in that order): its cubes' probes where `there` says they are (D-137),
+/// else their blocks' surface tiles (D-136); only what is there, each once.
+/// First the centres' probes, with which alone a client can draw a cube;
+/// then the tiles of the cubes without probes; then the other probes.
 pub fn needed_light(eye: Vec3, speed: f32, horizon: f32, there: impl Fn(&str) -> bool) -> Vec<String> {
-    let mut keys = BTreeSet::new();
-    for cube in reachable(eye, speed, horizon) {
-        let probes = probe_keys(cube);
-        if there(&probes[0]) {
-            keys.extend(probes.into_iter().filter(|k| there(k)));
-        } else {
-            keys.extend(Block { cube }.tiles().into_iter().map(|t| t.key()).filter(|k| there(k)));
+    let mut seen = BTreeSet::new();
+    let mut keys = Vec::new();
+    let mut add = |key: String| {
+        if there(&key) && seen.insert(key.clone()) {
+            keys.push(key);
         }
+    };
+    let cubes = reachable(eye, speed, horizon);
+    let (baked, bare): (Vec<IVec3>, Vec<IVec3>) = cubes.iter().partition(|&&cube| there(&probe_keys(cube)[0]));
+    for &cube in &baked {
+        add(probe_keys(cube).swap_remove(0));
     }
-    keys.into_iter().collect()
+    for &cube in &bare {
+        Block { cube }.tiles().into_iter().for_each(|t| add(t.key()));
+    }
+    for &cube in &baked {
+        probe_keys(cube).into_iter().skip(1).for_each(&mut add);
+    }
+    keys
 }
 
 /// The cubes a walker whose eyes are at `eye` can reach within `horizon`
-/// seconds at `speed` m/s, and a metre more: on its layer, and the next one
-/// up or down when its eyes are near it.
+/// seconds at `speed` m/s, and a metre more, the nearest first: on its
+/// layer, and the next one up or down when its eyes are near it.
 pub fn reachable(eye: Vec3, speed: f32, horizon: f32) -> Vec<IVec3> {
     let reach = speed.max(0.0) * horizon.max(0.0) + 1.0;
     let mut layers = BTreeSet::new();
@@ -228,10 +239,14 @@ pub fn reachable(eye: Vec3, speed: f32, horizon: f32) -> Vec<IVec3> {
             if nearest.distance(eye) > reach {
                 continue;
             }
-            cubes.extend(layers.iter().map(|&y| IVec3::new(x, y, z)));
+            let gap = nearest.distance(eye);
+            cubes.extend(layers.iter().map(|&y| (gap, IVec3::new(x, y, z))));
         }
     }
-    cubes
+    // The walker's own cube first, then by how near each comes.
+    let own = (eye / CUBE).floor().as_ivec3();
+    cubes.sort_by(|a, b| (a.1 != own).cmp(&(b.1 != own)).then(a.0.total_cmp(&b.0)));
+    cubes.into_iter().map(|(_, cube)| cube).collect()
 }
 
 #[cfg(test)]

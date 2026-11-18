@@ -162,6 +162,7 @@ fn film(
     if (*frame).is_multiple_of(3) {
         let _ = std::fs::create_dir_all(&film.folder);
         let file = film.folder.join(format!("{:05}.png", *frame / 3));
+        debug!(picture = *frame / 3, feet = ?me.feet, light = ?store.block, "paris: filming");
         commands.spawn(Screenshot::image(picture.image.clone())).observe(save_to_disk(file));
     }
 }

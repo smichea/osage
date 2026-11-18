@@ -89,6 +89,16 @@ On a rented NVIDIA L4 (`tools/bistro/cloud-bake.sh`, the render bench's project)
 3. **Probes inside the walker's cube** (`tools/bistro/cube-probes.py`, the client's `--cube-probes`): full spheres (equirectangular, 4096 × 2048, 256 samples, 2.9 min each on the L4) at the eyes' height, at the cube's centre and 0.75 m towards its corners; the block's surfaces made transparent to the camera's rays (from 30 cm over the ground: the street and its kerbs stay), so that each sees what comes into the block. Seen from nearly where the eye is, objects near the block hide nothing it sees: the holes fall a hundredfold, the stairs, broken awnings and striped facade go, 28.4 dB. One probe alone does as well beyond the street's end but leaves the left facade's jambs open (22.8 dB there).
 4. **Traced (T4), on the L4**: drawn after the opaque pass, so that the traced light's denoiser leaves them, the faces come out exactly as at T3 (24.9 dB over the picture, 5 ms a frame). The block itself is lit by its faces as lamps of their tiles' light, weighed by the cosine: its cobbles come out at 0.64 of Cycles. A ray leaving the block should take the tiles' light in its own direction, inside Solari: not done.
 
+## Walking with the probes (D-137)
+
+The five probes of four more cubes along a walk baked (4096 × 2048, 128 samples, about 8 min a cube on the L4), the client walked 7 s online, `paris-server` sending each cube's probes as the walker's place and speed in the world asked (`needed_light`), or its block's surface tiles where it had none: 194 sendings, 16.9 MB, about 19 Mbit/s. A probe takes the laptop's processor 1.3 to 2 s to decode (AV1 and the colour's conversion, both now on several threads; 2.1 to 2.6 s before), and the walker enters a cube every two. What made the walk whole:
+
+1. **The centres' probes first**, of every cube within reach, then the tiles of the cubes without probes, then the other probes; a client draws a cube from its centre's alone (27.2 dB) and again once all five have come.
+2. **The server asked on a thread of its own**: behind probes a second long each, its answers came three seconds late.
+3. **The block drawn stays** while the next one's light is on its way and the eyes are still inside it (a walker who steps into a neighbouring cube is): its faces, its light, its meshes. Falling back on surface tiles that had not all come drew black boxes.
+
+The picture is then whole along the walk, sharp in the cubes with probes, the tiles' blur in the one without; 52 ms a frame on the Iris Xe while it decodes.
+
 ## Next
 
 1. The whole street baked, at 1024–1536 px and more samples: about 2 000 tiles, a cloud GPU's work (hours on the laptop's processor for 384 px).

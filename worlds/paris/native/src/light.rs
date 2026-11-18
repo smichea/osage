@@ -35,7 +35,9 @@ use crate::{NITS, Options, walker::Me};
 const HORIZON: f32 = 2.0;
 /// How often the light is asked for, seconds.
 const PERIOD: f64 = 0.25;
-const WORKERS: usize = 3;
+/// Threads fetching and decoding light: a probe (4096 × 2048) takes about
+/// a second of one; more than four starve the picture of the processor.
+const WORKERS: usize = 4;
 
 pub struct LightPlugin;
 
@@ -116,8 +118,11 @@ pub struct Store {
     pub lit: Option<Block>,
     /// Where each probe that has come stands (D-137: its `meta.json`).
     centres: HashMap<String, Vec3>,
-    /// Whether the block drawn now takes its light from its cube's probes.
+    /// Whether the server has been asked what the walker needs and not answered.
+    needing: bool,
+    /// Whether the block drawn now takes its light from probes, and whose.
     cubed: bool,
+    probes_of: Option<IVec3>,
     changed: bool,
 }
 
@@ -149,10 +154,24 @@ type Lit = (Block, Image, Image);
 
 #[derive(Resource)]
 struct Fetcher {
+    /// What to fetch: the server's needs, the tiles and the cubes' centre
+    /// probes first (a cube can be drawn with its centre's alone), then the
+    /// other probes.
     asks: Sender<Ask>,
+    later: Sender<Ask>,
+    /// The server asked what the walker needs, on a thread of its own: behind
+    /// probes a second long each, the answers came seconds late.
+    needs: Sender<Ask>,
     gots: Receiver<Got>,
     /// The environment lights made from blocks' light, as they are done.
     lights: (Sender<Lit>, Receiver<Lit>),
+}
+
+impl Fetcher {
+    /// Where a tile or probe waits: a cube's other probes after the rest.
+    fn queue(&self, key: &str) -> &Sender<Ask> {
+        if key.starts_with("c_") && !key.ends_with("_0") { &self.later } else { &self.asks }
+    }
 }
 
 /// The six faces of the block, as entities with their materials.
@@ -166,16 +185,28 @@ struct Faces([(Entity, Handle<IncomingLight>); 6]);
 struct Glow;
 
 fn start(mut commands: Commands, options: Res<Options>, mut store: ResMut<Store>) {
-    let (asks, to_workers) = crossbeam_channel::unbounded::<Ask>();
+    let (asks, first) = crossbeam_channel::unbounded::<Ask>();
+    let (later, rest) = crossbeam_channel::unbounded::<Ask>();
     let (from_workers, gots) = crossbeam_channel::unbounded::<Got>();
+    let (needs, asked) = crossbeam_channel::unbounded::<Ask>();
+    {
+        let (from_workers, (keep, never)) = (from_workers.clone(), crossbeam_channel::unbounded::<Ask>());
+        thread::Builder::new()
+            .name("paris-need".to_owned())
+            .spawn(move || {
+                let _keep = keep;
+                work(asked, never, from_workers)
+            })
+            .expect("the need thread");
+    }
     for i in 0..WORKERS {
-        let (to_workers, from_workers) = (to_workers.clone(), from_workers.clone());
+        let (first, rest, from_workers) = (first.clone(), rest.clone(), from_workers.clone());
         thread::Builder::new()
             .name(format!("paris-light-{i}"))
-            .spawn(move || work(to_workers, from_workers))
+            .spawn(move || work(first, rest, from_workers))
             .expect("a light thread");
     }
-    commands.insert_resource(Fetcher { asks, gots, lights: crossbeam_channel::unbounded() });
+    commands.insert_resource(Fetcher { asks, later, needs, gots, lights: crossbeam_channel::unbounded() });
     if options.server.is_none() {
         let index = options.street.join("tiles/index.json");
         let present = std::fs::read_to_string(&index)
@@ -187,9 +218,17 @@ fn start(mut commands: Commands, options: Res<Options>, mut store: ResMut<Store>
     }
 }
 
-fn work(asks: Receiver<Ask>, gots: Sender<Got>) {
+fn work(first: Receiver<Ask>, rest: Receiver<Ask>, gots: Sender<Got>) {
     let mut clients: HashMap<String, Client> = HashMap::new();
-    for ask in asks {
+    loop {
+        // What comes first, first.
+        let ask = match first.try_recv() {
+            Ok(ask) => ask,
+            Err(_) => crossbeam_channel::select! {
+                recv(first) -> ask => match ask { Ok(ask) => ask, Err(_) => return },
+                recv(rest) -> ask => match ask { Ok(ask) => ask, Err(_) => return },
+            },
+        };
         let got = match ask {
             Ask::Need { source: Source::Server(address), walker } => {
                 let client = clients.entry(address.clone()).or_insert_with(|| Client::new(address));
@@ -216,7 +255,10 @@ fn work(asks: Receiver<Ask>, gots: Sender<Got>) {
                 match (fetch("colour.ivf"), fetch("depth.ivf"), fetch("mask.ivf")) {
                     (Ok(c), Ok(d), Ok(m)) => {
                         let bytes = (c.len() + d.len() + m.len()) as u64;
-                        match light::decode(&c, &d, &m).map(|mut v| v.pop()) {
+                        let started = std::time::Instant::now();
+                        let decoded = light::decode(&c, &d, &m).map(|mut v| v.pop());
+                        debug!(key, ms = started.elapsed().as_millis() as u64, "paris: light decoded");
+                        match decoded {
                             Ok(Some(drawn)) => Got::Tile { key, drawn, bytes, centre },
                             Ok(None) => Got::Failed(format!("{key}: no picture")),
                             Err(e) => Got::Failed(format!("{key}: {e}")),
@@ -268,7 +310,11 @@ fn ask(
     let Some(source) = source(&options, &server) else { return };
     match (&source, walker.0) {
         (Source::Server(_), Some(id)) => {
-            let _ = fetcher.asks.send(Ask::Need { source, walker: id });
+            // One question at a time.
+            if !store.needing {
+                store.needing = true;
+                let _ = fetcher.needs.send(Ask::Need { source, walker: id });
+            }
         }
         (Source::Folder(_), _) => {
             // The probes of the cubes within reach (D-137), or their blocks'
@@ -279,7 +325,7 @@ fn ask(
             });
             for key in wanted {
                 if store.asked.insert(key.clone()) {
-                    let _ = fetcher.asks.send(Ask::Tile { source: source.clone(), key });
+                    let _ = fetcher.queue(&key).send(Ask::Tile { source: source.clone(), key });
                 }
             }
         }
@@ -291,14 +337,17 @@ fn receive(options: Res<Options>, server: Res<LightServer>, fetcher: Res<Fetcher
     for got in fetcher.gots.try_iter() {
         match got {
             Got::Needed(keys) => {
+                store.needing = false;
                 let Some(source) = source(&options, &server) else { continue };
+                debug!(new = keys.iter().filter(|k| !store.asked.contains(*k)).count(), "paris: light needed");
                 for key in keys {
                     if store.asked.insert(key.clone()) {
-                        let _ = fetcher.asks.send(Ask::Tile { source: source.clone(), key });
+                        let _ = fetcher.queue(&key).send(Ask::Tile { source: source.clone(), key });
                     }
                 }
             }
             Got::Tile { key, drawn, bytes, centre } => {
+                debug!(key, placed = centre.is_some(), "paris: light came");
                 store.bytes += bytes;
                 store.received += 1;
                 if let Some(centre) = centre {
@@ -307,7 +356,12 @@ fn receive(options: Res<Options>, server: Res<LightServer>, fetcher: Res<Fetcher
                 store.tiles.insert(key, Arc::new(drawn));
                 store.changed = true;
             }
-            Got::Failed(what) => warn!(what, "paris: the light"),
+            Got::Failed(what) => {
+                if what.starts_with("need") {
+                    store.needing = false;
+                }
+                warn!(what, "paris: the light");
+            }
         }
     }
 }
@@ -402,19 +456,35 @@ fn arrays(
         return;
     }
     store.changed = false;
-    // The cube's probes where they have come (D-137); else the block's
-    // surface tiles (D-136).
+    // The cube's probes (D-137); while they are on their way, the probes
+    // drawn already, of the cube just left, which stand in this block too;
+    // where the cube has none, the block's surface tiles (D-136).
     let probes =
         if options.cube_probes > 0 { cube_probes(&store, options.cube_probes, block.cube) } else { Vec::new() };
+    // Neither this cube's probes (its centre's) nor its block's tiles all
+    // here, and the eyes still inside the block drawn (a walker who has just
+    // stepped into a neighbouring cube is): that block stays as it is, its
+    // faces, its light and its meshes, until the new one's light has come.
+    let tiled = block.tiles().iter().all(|t| store.tiles.contains_key(&t.key()));
+    let holds = store.block.is_some_and(|drawn| drawn != block && drawn.contains(me.eyes()));
+    debug!(cube = ?block.cube, probes = probes.len(), tiled, holds, "paris: the block's light");
+    if probes.is_empty() && !tiled && holds {
+        return;
+    }
     if !probes.is_empty() {
-        let moved = store.block != Some(block) || !store.cubed;
-        if !moved && probes.len() == store.drawn {
+        // Drawn again with the centre's probe alone, then once all have come:
+        // stacking them costs the frame a few hundred megabytes of copying.
+        let same = store.probes_of == Some(block.cube) && store.cubed;
+        let all = probes.len() >= options.cube_probes.min(tiles::PROBES);
+        if store.block == Some(block) && same && (probes.len() == store.drawn || !all) {
             return;
         }
+        let relit = !same;
         store.block = Some(block);
         store.drawn = probes.len();
         store.cubed = true;
-        if let Some((centre, drawn)) = probes.first().cloned() {
+        store.probes_of = Some(block.cube);
+        if let (true, Some((centre, drawn))) = (relit, probes.first().cloned()) {
             let done = fetcher.lights.0.clone();
             let _ = thread::Builder::new().name("paris-environment".to_owned()).spawn(move || {
                 let (diffuse, specular) = environment_seen(&drawn, centre);
@@ -478,6 +548,7 @@ fn arrays(
     store.block = Some(block);
     store.drawn = mine.len();
     store.cubed = false;
+    store.probes_of = None;
     // The block lit by its own light, on a thread: what comes in from each
     // direction, seen from its centre.
     if !mine.is_empty() {
@@ -518,6 +589,9 @@ fn arrays(
         if let Some(mut material) = materials.get_mut(handle) {
             material.low = lo.extend(index as f32);
             material.high = hi.extend(side as f32);
+            // The block's tiles, not probes.
+            material.shape = Vec4::new(side as f32, side as f32, 0.0, 0.0);
+            material.probes = [Vec4::new(0.0, 0.0, 0.0, -1.0); 5];
             material.layers = [
                 IVec4::new(layers[0], layers[1], layers[2], layers[3]),
                 IVec4::new(layers[4], layers[5], layers[6], layers[7]),
@@ -566,16 +640,13 @@ fn place_face(
 }
 
 /// The cube's first `count` probes that have come, each with where it
-/// stands; none unless its centre's has.
+/// stands, its centre's first; none until its centre's has.
 fn cube_probes(store: &Store, count: usize, cube: IVec3) -> Vec<(Vec3, Arc<light::Drawn>)> {
     let keys = tiles::probe_keys(cube);
-    if !store.centres.contains_key(&keys[0]) {
+    if !store.centres.contains_key(&keys[0]) || !store.tiles.contains_key(&keys[0]) {
         return Vec::new();
     }
-    keys.into_iter()
-        .take(count)
-        .filter_map(|key| Some((*store.centres.get(&key)?, store.tiles.get(&key)?.clone())))
-        .collect()
+    keys.into_iter().take(count).filter_map(|k| Some((*store.centres.get(&k)?, store.tiles.get(&k)?.clone()))).collect()
 }
 
 /// What a probe inside the cube saw come in through the half sphere
