@@ -30,6 +30,8 @@ cube=$(metadata osage-cube || echo "")
 # Seconds of a walk filmed at T4 from the scene's camera down the street,
 # through the cubes whose probes are baked (none: no film).
 film=$(metadata osage-film || echo "")
+# Solari's realtime light setting by setting, drawn plain (any value: yes).
+variants=$(metadata osage-variants || echo "")
 work=/var/tmp/osage
 rm -rf "$work" && mkdir -p "$work/out" && cd "$work"
 
@@ -135,6 +137,20 @@ for shot in T4-grain T4-reference T4-reference-plain; do
     --shot "../out/$shot.png" --at 24.82,1.96,-61.65 --heading 161.4 >"../out/$shot.log" 2>&1 ||
     say "the $shot shot failed (see out/$shot.log)"
 done
+if [ -n "$variants" ]; then
+  say "Solari's settings, one by one"
+  variant() { # NAME ENV=VALUE
+    env "$2" timeout 900 ./target/release/paris --offline --tier T4 --fov 46.7 --plain \
+      --shot "../out/T4-plain-$1.png" --at 24.82,1.96,-61.65 --heading 161.4 >"../out/T4-plain-$1.log" 2>&1 ||
+      say "the T4-plain-$1 shot failed (see out/T4-plain-$1.log)"
+  }
+  variant unfiltered OSAGE_DENOISE=0
+  variant no-restir OSAGE_SOLARI=restir=0
+  variant cap-1 OSAGE_SOLARI=confidence_weight_cap=1
+  variant di-32 OSAGE_SOLARI=primary_di_samples=32,secondary_di_samples=16
+  variant bounces-8 OSAGE_SOLARI=max_bounces=8
+  variant cells-5cm OSAGE_SOLARI=world_cache_position_base_cell_size=0.05
+fi
 if [ -n "$film" ]; then
   say "filming"
   timeout 900 ./target/release/paris --offline --tier T4 --film ../out/film-T4 "$film" \

@@ -90,9 +90,17 @@ impl Planes {
     /// Red, green and blue, 0..1, through the stream's matrix and range; the
     /// chroma between its samples, bilinear.
     pub fn rgb(&self) -> Vec<[f32; 3]> {
+        self.rgb_as([0.0; 3], |r, g, b| [r, g, b])
+    }
+
+    /// Each pixel's red, green and blue, 0..1, made into a `T` as they are
+    /// converted, on the bands' threads: a light's radiance packed straight
+    /// into its 10 bits a band took three times the conversion, on one
+    /// thread, from a hundred megabytes of floats between.
+    pub fn rgb_as<T: Copy + Send + Sync>(&self, zero: T, make: impl Fn(f32, f32, f32) -> T + Sync) -> Vec<T> {
         let (width, height) = (self.width, self.height);
         if self.cb.is_empty() {
-            return self.grey().into_iter().map(|v| [v, v, v]).collect();
+            return self.grey().into_iter().map(|v| make(v, v, v)).collect();
         }
         let scale = (1u32 << (self.bits - 8)) as f32;
         let (y_low, y_span) = if self.full { (0.0, self.max) } else { (16.0 * scale, 219.0 * scale) };
@@ -101,7 +109,7 @@ impl Planes {
         let (columns, rows) = (between(width, self.halved.0), between(height, self.halved.1));
         let cw = self.chroma_width as usize;
         let w = width as usize;
-        let mut out = vec![[0.0f32; 3]; w * height as usize];
+        let mut out = vec![zero; w * height as usize];
         // Bands of rows side by side: a light's picture has millions of
         // pixels, and this took longer than decoding it.
         let threads =
@@ -109,7 +117,7 @@ impl Planes {
         let band = rows.len().div_ceil(threads).max(1);
         std::thread::scope(|scope| {
             for (k, part) in out.chunks_mut(band * w).enumerate() {
-                let (rows, columns) = (&rows, &columns);
+                let (rows, columns, make) = (&rows, &columns, &make);
                 scope.spawn(move || {
                     let (mut u, mut v) = (vec![0.0f32; cw], vec![0.0f32; cw]);
                     for (j, pixels) in part.chunks_mut(w).enumerate() {
@@ -125,14 +133,14 @@ impl Planes {
                             let (pu, pv) = (u[a] + (u[b] - u[a]) * tx, v[a] + (v[b] - v[a]) * tx);
                             let yy = (row[x] - y_low) / y_span;
                             if self.identity {
-                                pixels[x] = [(pv - y_low) / y_span, yy, (pu - y_low) / y_span];
+                                pixels[x] = make((pv - y_low) / y_span, yy, (pu - y_low) / y_span);
                                 continue;
                             }
                             let (pb, pr) = ((pu - c_mid) / c_span, (pv - c_mid) / c_span);
                             let r = yy + 2.0 * (1.0 - self.kr) * pr;
                             let b = yy + 2.0 * (1.0 - self.kb) * pb;
                             let g = (yy - self.kr * r - self.kb * b) / (1.0 - self.kr - self.kb);
-                            pixels[x] = [r, g, b];
+                            pixels[x] = make(r, g, b);
                         }
                     }
                 });

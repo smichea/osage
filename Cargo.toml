@@ -49,11 +49,13 @@ osage-report = { path = "crates/osage-report" }
 anyhow = "1.0.104"
 base64ct = { version = "1.8.3", features = ["alloc"] }
 bevy = { version = "0.20.1", default-features = false }
+bytemuck = "1.25.2"
 crossbeam-channel = "0.5.17"
 futures-util = "0.3.34"
 getrandom = "0.4.3"
 half = "2.7.1"
 hmac = "0.13.0"
+libc = "0.2.191"
 libm = "0.2.16"
 lewton = "0.10.2"
 p256 = { version = "0.14.0", features = ["ecdsa"] }

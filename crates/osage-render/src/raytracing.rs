@@ -112,9 +112,36 @@ fn camera(mut commands: Commands, cameras: Query<Entity, Added<OsageCamera>>) {
             // ReSTIR: samples reused between pixels and frames. Without a
             // denoiser (DLSS's, not built here) the sunlit asphalt sparkled
             // with noise; the L4 had the frame time for it (16.7 ms of 33).
-            camera.insert((SolariLighting { restir: true, ..default() }, crate::denoise::Denoised));
+            camera.insert((tuned(SolariLighting { restir: true, ..default() }), crate::denoise::Denoised));
         }
     }
+}
+
+/// `OSAGE_SOLARI=key=value,…`: Solari's realtime settings changed, to
+/// measure them (`restir`, `confidence_weight_cap`, `primary_di_samples`,
+/// `secondary_di_samples`, `max_bounces`, and the light cache's
+/// `world_cache_*`); a key not known is told and left.
+fn tuned(mut lighting: SolariLighting) -> SolariLighting {
+    let Ok(asked) = std::env::var("OSAGE_SOLARI") else { return lighting };
+    for pair in asked.split(',').filter(|p| !p.is_empty()) {
+        let Some((key, value)) = pair.split_once('=') else { continue };
+        let (number, whole) = (value.parse::<f32>().ok(), value.parse::<u32>().ok());
+        match (key.trim(), number, whole) {
+            ("restir", _, Some(n)) => lighting.restir = n != 0,
+            ("confidence_weight_cap", Some(v), _) => lighting.confidence_weight_cap = v,
+            ("primary_di_samples", _, Some(n)) => lighting.primary_di_samples = n,
+            ("secondary_di_samples", _, Some(n)) => lighting.secondary_di_samples = n,
+            ("max_bounces", _, Some(n)) => lighting.max_bounces = n,
+            ("world_cache_max_temporal_samples", Some(v), _) => lighting.world_cache_max_temporal_samples = v,
+            ("world_cache_direct_light_sample_count", _, Some(n)) => lighting.world_cache_direct_light_sample_count = n,
+            ("world_cache_max_gi_ray_distance", Some(v), _) => lighting.world_cache_max_gi_ray_distance = v,
+            ("world_cache_position_base_cell_size", Some(v), _) => lighting.world_cache_position_base_cell_size = v,
+            ("world_cache_position_lod_scale", Some(v), _) => lighting.world_cache_position_lod_scale = v,
+            _ => warn!(pair, "OSAGE_SOLARI: not a setting of Solari's"),
+        }
+    }
+    info!(asked, "T4: Solari's realtime settings changed (OSAGE_SOLARI)");
+    lighting
 }
 
 /// A mesh as Solari takes it: position, normal, texture coordinates and

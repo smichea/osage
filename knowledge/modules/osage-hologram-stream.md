@@ -25,7 +25,7 @@ Send a hologram's views from the server that keeps them to the client that draws
 
 # Interfaces
 
-`light::{Light, Drawn, encode, decode, Quality, encode_radiance, decode_radiance, encode_distance, decode_distance}`, `decode::{planes, Planes}`, `Series`, `Block`, `Tiling` (`views`, `blocks`, `block_of`, `blocks_of`), `Grid` (`from_steps`, `direction`), `views_within`, `Packed`, `depth_to_grey`, `grey_to_depth`; `ivf::{frames, write}`; `decode::{block, depths, Picture}`; `encode::{block, pad, Quality}` (needs ffmpeg with libsvtav1 and libaom); `http::{serve, Client, Need}`; the programs `hologram-pack`, `hologram-serve` and `light-pack`.
+`light::{Light, Drawn, encode, decode, Quality, encode_radiance, decode_radiance, encode_distance, decode_distance}`, `decode::{planes, Planes}` (`Planes::rgb_as` makes each pixel's colour into what the caller packs as it converts: a light's radiance straight into 10 bits a band), `Series`, `Block`, `Tiling` (`views`, `blocks`, `block_of`, `blocks_of`), `Grid` (`from_steps`, `direction`), `views_within`, `Packed`, `depth_to_grey`, `grey_to_depth`; `ivf::{frames, write}`; `decode::{block, depths, Picture}`; `encode::{block, pad, Quality}` (needs ffmpeg with libsvtav1 and libaom); `http::{serve, Client, Need}`; the programs `hologram-pack`, `hologram-serve` and `light-pack`.
 
 # Invariants
 

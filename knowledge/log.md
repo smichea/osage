@@ -1,6 +1,7 @@
 # Knowledge Update Log
 
 ## 2026-11-19
+* **Update**: a smoother walk: [osage-paris-native](/modules/paris-native.md) writes each probe into its layer of the cube's arrays from the render world, a band a frame, and decodes at a lower priority; [osage-hologram-stream](/modules/osage-hologram-stream.md) packs a light's radiance as it converts it (`Planes::rgb_as`).
 * **Update**: the traced block under a dome of the light coming in (D-138): [osage-paris-native](/modules/paris-native.md) cuts the street to the walker's block for the rays and shines the centre probe's light round it, its floor at 0.88 of Cycles from 0.71; [ray-traced light](/techniques/ray-traced-light.md) traces a thing drawn with another mesh anew.
 * **Update**: [osage-paris-native](/modules/paris-native.md) sets out from `--at`, facing `--heading`, for a walk too; [ray-traced light](/techniques/ray-traced-light.md) draws with Solari's reference path tracer under `OSAGE_PATHTRACE=1`.
 

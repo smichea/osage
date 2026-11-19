@@ -197,12 +197,12 @@ pub fn decode(radiance: &[u8], distance: &[u8], sky: &[u8]) -> anyhow::Result<Ve
     let mut out = Vec::new();
     for ((c, d), m) in colours.iter().zip(&depths).zip(&masks) {
         let (width, height) = (c.width, c.height);
-        let (rgb, (grey, open)) = std::thread::scope(|scope| {
+        // The radiance packed in its 10 bits a band as it is converted.
+        let q = |v: f32| (v.clamp(0.0, 1.0) * 1023.0 + 0.5) as u32;
+        let (radiance, (grey, open)) = std::thread::scope(|scope| {
             let greys = scope.spawn(|| (d.grey(), m.grey()));
-            (c.rgb(), greys.join().expect("greys"))
+            (c.rgb_as(0u32, |r, g, b| q(r) | (q(g) << 10) | (q(b) << 20) | (3 << 30)), greys.join().expect("greys"))
         });
-        let q = |v: f32| (v.clamp(0.0, 1.0) * 1023.0).round() as u32;
-        let radiance = rgb.iter().map(|&[r, g, b]| q(r) | (q(g) << 10) | (q(b) << 20) | (3 << 30)).collect();
         let distance = grey.iter().zip(&open).map(|(&g, &o)| if o > 0.5 { -1.0 } else { decode_distance(g) }).collect();
         out.push(Drawn { width, height, radiance, distance });
     }
@@ -281,5 +281,48 @@ mod tests {
                 assert!(d < 0.0, "the sky stays the sky");
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod bench {
+    /// Where a probe's decoding spends its time (`OSAGE_PROBE=DIR`, a packed
+    /// probe's folder): `cargo test --release -p osage-hologram-stream
+    /// where_a_probe_spends -- --ignored --nocapture`.
+    #[test]
+    #[ignore]
+    fn where_a_probe_spends_its_decoding() {
+        let Some(dir) = std::env::var_os("OSAGE_PROBE").map(std::path::PathBuf::from) else { return };
+        let read = |name: &str| std::fs::read(dir.join(name)).expect("a packed probe");
+        let (c, d, m) = (read("colour.ivf"), read("depth.ivf"), read("mask.ivf"));
+        let time = |what: &str, f: &mut dyn FnMut()| {
+            let started = std::time::Instant::now();
+            f();
+            println!("{what}: {:.0} ms", started.elapsed().as_secs_f64() * 1000.0);
+        };
+        let (mut colours, mut depths, mut masks) = (Vec::new(), Vec::new(), Vec::new());
+        time("AV1, colour", &mut || colours = crate::decode::planes(&c).unwrap());
+        time("AV1, distance", &mut || depths = crate::decode::planes(&d).unwrap());
+        time("AV1, sky", &mut || masks = crate::decode::planes(&m).unwrap());
+        let mut rgb = Vec::new();
+        time("YUV to RGB, as floats", &mut || rgb = colours[0].rgb());
+        let q = |v: f32| (v.clamp(0.0, 1.0) * 1023.0 + 0.5) as u32;
+        time("YUV to RGB, packed in 10 bits as converted", &mut || {
+            assert!(!colours[0].rgb_as(0u32, |r, g, b| q(r) | (q(g) << 10) | (q(b) << 20)).is_empty())
+        });
+        let (mut grey, mut open) = (Vec::new(), Vec::new());
+        time("distance and sky to floats", &mut || (grey, open) = (depths[0].grey(), masks[0].grey()));
+        time("radiance packed in 10 bits", &mut || {
+            let q = |v: f32| (v.clamp(0.0, 1.0) * 1023.0).round() as u32;
+            let packed: Vec<u32> =
+                rgb.iter().map(|&[r, g, b]| q(r) | (q(g) << 10) | (q(b) << 20) | (3 << 30)).collect();
+            assert!(!packed.is_empty());
+        });
+        time("distance through its curve", &mut || {
+            let d: Vec<f32> =
+                grey.iter().zip(&open).map(|(&g, &o)| if o > 0.5 { -1.0 } else { super::decode_distance(g) }).collect();
+            assert!(!d.is_empty());
+        });
+        time("all of decode()", &mut || assert_eq!(super::decode(&c, &d, &m).unwrap().len(), 1));
     }
 }

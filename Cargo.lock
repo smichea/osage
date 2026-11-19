@@ -5118,7 +5118,9 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "bevy",
+ "bytemuck",
  "crossbeam-channel",
+ "libc",
  "osage-content",
  "osage-hologram-stream",
  "osage-humans",

@@ -13,7 +13,7 @@
 use std::{
     collections::{HashMap, HashSet},
     path::PathBuf,
-    sync::Arc,
+    sync::{Arc, Mutex},
     thread,
 };
 
@@ -22,8 +22,15 @@ use bevy::{
     image::ImageSampler,
     mesh::{Indices, PrimitiveTopology},
     prelude::*,
-    render::render_resource::{
-        AsBindGroup, Extent3d, TextureDimension, TextureFormat, TextureViewDescriptor, TextureViewDimension,
+    render::{
+        Render, RenderApp, RenderSystems,
+        render_asset::RenderAssets,
+        render_resource::{
+            AsBindGroup, Extent3d, Origin3d, TexelCopyBufferLayout, TexelCopyTextureInfo, TextureAspect,
+            TextureDimension, TextureFormat, TextureUsages, TextureViewDescriptor, TextureViewDimension,
+        },
+        renderer::RenderQueue,
+        texture::GpuImage,
     },
     shader::ShaderRef,
 };
@@ -50,9 +57,90 @@ impl Plugin for LightPlugin {
             .init_resource::<Store>()
             .init_resource::<LightServer>()
             .init_resource::<WalkerId>()
+            .init_resource::<Layers>()
             .add_systems(Startup, (start, faces, dome))
             .add_systems(Update, (ask, receive, arrays, lit).chain());
     }
+
+    fn finish(&self, app: &mut App) {
+        let layers = app.world().resource::<Layers>().clone();
+        if let Some(render) = app.get_sub_app_mut(RenderApp) {
+            render.insert_resource(layers).add_systems(Render, write_layers.in_set(RenderSystems::PrepareResources));
+        }
+    }
+}
+
+/// The probes' light to write into their layers of the cube's texture
+/// arrays, shared with the render world, which writes them straight from
+/// the decoded light: nothing is copied on the main thread, and a probe goes
+/// to the GPU once, when it has come (stacking the cube's probes again into
+/// new arrays each time one came held the picture up to 0.9 s).
+#[derive(Resource, Clone, Default)]
+struct Layers(Arc<Mutex<Uploads>>);
+
+#[derive(Default)]
+struct Uploads {
+    /// What is still to write, in the order it came.
+    pending: Vec<Layer>,
+    /// Each array's layers written whole (a bit each): those the faces may
+    /// read.
+    written: HashMap<AssetId<Image>, u8>,
+}
+
+/// A probe's light, or its distances, for a layer of an array, and how many
+/// of its rows are written.
+struct Layer {
+    image: AssetId<Image>,
+    layer: u32,
+    drawn: Arc<light::Drawn>,
+    distance: bool,
+    row: u32,
+}
+
+/// What the render world writes a frame, bytes: a probe's two layers
+/// (64 MiB at 4096 × 2048) written at once held a frame 15 to 90 ms on an
+/// Iris Xe, several at once up to 0.66 s.
+const WRITTEN_A_FRAME: u64 = 16 << 20;
+
+/// Writes, in bands of rows, the layers whose arrays are on the GPU, so
+/// much a frame; the rest waits for the next.
+fn write_layers(layers: Res<Layers>, images: Res<RenderAssets<GpuImage>>, queue: Res<RenderQueue>) {
+    let Ok(mut uploads) = layers.0.lock() else { return };
+    let Uploads { pending, written } = &mut *uploads;
+    let mut spent = 0u64;
+    pending.retain_mut(|layer| {
+        if spent >= WRITTEN_A_FRAME {
+            return true;
+        }
+        let Some(gpu) = images.get(layer.image) else { return true };
+        let (width, height) = (layer.drawn.width, layer.drawn.height);
+        let row_bytes = 4 * width as u64;
+        let rows = (((WRITTEN_A_FRAME - spent) / row_bytes).max(1) as u32).min(height - layer.row);
+        let (from, to) = ((layer.row * width) as usize, ((layer.row + rows) * width) as usize);
+        let bytes: &[u8] = if layer.distance {
+            bytemuck::cast_slice(&layer.drawn.distance[from..to])
+        } else {
+            bytemuck::cast_slice(&layer.drawn.radiance[from..to])
+        };
+        queue.write_texture(
+            TexelCopyTextureInfo {
+                texture: &gpu.texture,
+                mip_level: 0,
+                origin: Origin3d { x: 0, y: layer.row, z: layer.layer },
+                aspect: TextureAspect::All,
+            },
+            bytes,
+            TexelCopyBufferLayout { offset: 0, bytes_per_row: Some(4 * width), rows_per_image: Some(rows) },
+            Extent3d { width, height: rows, depth_or_array_layers: 1 },
+        );
+        spent += rows as u64 * row_bytes;
+        layer.row += rows;
+        if layer.row < height {
+            return true;
+        }
+        *written.entry(layer.image).or_default() |= 1 << layer.layer;
+        false
+    });
 }
 
 /// The light on one face of the block.
@@ -126,6 +214,13 @@ pub struct Store {
     cubed: bool,
     probes_of: Option<IVec3>,
     changed: bool,
+    /// The texture arrays of the cube the eyes are in, a layer a probe,
+    /// filled as its probes come; which probes have been sent to them, which
+    /// are written whole (a bit each), and which the faces show.
+    arrays: Option<(IVec3, Handle<Image>, Handle<Image>)>,
+    sent: u8,
+    written: u8,
+    shown: u8,
 }
 
 #[derive(Clone)]
@@ -223,7 +318,21 @@ fn start(mut commands: Commands, options: Res<Options>, mut store: ResMut<Store>
     }
 }
 
+/// Decoding gives way to the picture: a fetching thread, and the threads it
+/// starts (rav1d's, the colour's conversion), which inherit it, run at a
+/// lower priority than the frame's, so that a busy processor draws first and
+/// decodes after.
+fn give_way() {
+    #[cfg(target_os = "linux")]
+    // SAFETY: setpriority on the calling thread (`who` 0) changes nothing but
+    // its scheduling weight; it reads and writes no memory of ours.
+    unsafe {
+        libc::setpriority(libc::PRIO_PROCESS, 0, 10);
+    }
+}
+
 fn work(first: Receiver<Ask>, rest: Receiver<Ask>, gots: Sender<Got>) {
+    give_way();
     let mut clients: HashMap<String, Client> = HashMap::new();
     loop {
         // What comes first, first.
@@ -544,6 +653,24 @@ fn empty(images: &mut Assets<Image>) -> (Handle<Image>, Handle<Image>) {
     )
 }
 
+/// Texture arrays of `layers` layers, uninitialised: written layer by layer
+/// in the render world (`write_layers`).
+fn layered((width, height): (u32, u32), layers: u32, format: TextureFormat) -> Image {
+    let mut image = Image::new_uninit(
+        Extent3d { width, height, depth_or_array_layers: layers },
+        TextureDimension::D2,
+        format,
+        RenderAssetUsages::RENDER_WORLD,
+    );
+    // The layers not written yet are cleared when first drawn: as a render
+    // target, by the GPU at once, not by copying a buffer of zeros.
+    image.texture_descriptor.usage |= TextureUsages::RENDER_ATTACHMENT;
+    image.texture_view_descriptor =
+        Some(TextureViewDescriptor { dimension: Some(TextureViewDimension::D2Array), ..default() });
+    image.sampler = ImageSampler::linear();
+    image
+}
+
 fn array((width, height): (u32, u32), layers: u32, format: TextureFormat, data: Vec<u8>) -> Image {
     let mut image = Image::new(
         Extent3d { width, height, depth_or_array_layers: layers },
@@ -588,17 +715,60 @@ fn arrays(
     traced: Res<osage_render::TracedLight>,
     options: Res<Options>,
     dome: Option<Res<Dome>>,
+    layers: Res<Layers>,
 ) {
     let block = Block::of(me.eyes());
+    // The probes written whole into the arrays since: drawn with them.
+    if let (Some((_, colours, distances)), Ok(uploads)) = (store.arrays.clone(), layers.0.lock()) {
+        let written = |image: &Handle<Image>| uploads.written.get(&image.id()).copied().unwrap_or(0);
+        let both = written(&colours) & written(&distances);
+        if both != store.written {
+            store.written = both;
+            store.changed = true;
+        }
+    }
     if store.block == Some(block) && !store.changed {
         return;
     }
     store.changed = false;
+    let started = std::time::Instant::now();
     // The cube's probes (D-137); while they are on their way, the probes
     // drawn already, of the cube just left, which stand in this block too;
     // where the cube has none, the block's surface tiles (D-136).
-    let probes =
+    let decoded =
         if options.cube_probes > 0 { cube_probes(&store, options.cube_probes, block.cube) } else { Vec::new() };
+    // This cube's arrays, filled as its probes decode, each written once
+    // into its layer by the render world (`Layers`), a band a frame.
+    if let Some((_, _, first)) = decoded.first() {
+        if !matches!(&store.arrays, Some((cube, ..)) if *cube == block.cube) {
+            let size = (first.width, first.height);
+            store.arrays = Some((
+                block.cube,
+                images.add(layered(size, tiles::PROBES as u32, TextureFormat::Rgb10a2Unorm)),
+                images.add(layered(size, tiles::PROBES as u32, TextureFormat::R32Float)),
+            ));
+            (store.sent, store.written) = (0, 0);
+        }
+        if let (Some((_, colours, distances)), Ok(mut uploads)) = (store.arrays.clone(), layers.0.lock()) {
+            // What was on its way to arrays no longer filled goes.
+            let mine = |image: &AssetId<Image>| *image == colours.id() || *image == distances.id();
+            uploads.pending.retain(|l| mine(&l.image));
+            uploads.written.retain(|image, _| mine(image));
+            let sent = store.sent;
+            for (k, _, drawn) in decoded.iter().filter(|(k, _, _)| sent & 1 << k == 0) {
+                for (image, distance) in [(colours.id(), false), (distances.id(), true)] {
+                    uploads.pending.push(Layer { image, layer: *k as u32, drawn: drawn.clone(), distance, row: 0 });
+                }
+                store.sent |= 1 << k;
+            }
+        }
+    }
+    // The probes the faces can show: written whole, the centre's first.
+    let probes: Vec<_> = if store.written & 1 != 0 {
+        decoded.iter().filter(|(k, _, _)| store.written & 1 << k != 0).cloned().collect()
+    } else {
+        Vec::new()
+    };
     // Neither this cube's probes (its centre's) nor its block's tiles all
     // here, and the eyes still inside the block drawn (a walker who has just
     // stepped into a neighbouring cube is): that block stays as it is, its
@@ -610,11 +780,10 @@ fn arrays(
         return;
     }
     if !probes.is_empty() {
-        // Drawn again with the centre's probe alone, then once all have come:
-        // stacking them costs the frame a few hundred megabytes of copying.
+        // Drawn with the probes written, the centre's first.
         let same = store.probes_of == Some(block.cube) && store.cubed;
-        let all = probes.len() >= options.cube_probes.min(tiles::PROBES);
-        if store.block == Some(block) && same && (probes.len() == store.drawn || !all) {
+        let shown = probes.iter().fold(0u8, |bits, (k, _, _)| bits | 1 << k);
+        if store.block == Some(block) && same && shown == store.shown {
             return;
         }
         let relit = !same;
@@ -622,7 +791,7 @@ fn arrays(
         store.drawn = probes.len();
         store.cubed = true;
         store.probes_of = Some(block.cube);
-        if let (true, Some((centre, drawn))) = (relit, probes.first().cloned()) {
+        if let (true, Some((_, centre, drawn))) = (relit, probes.first().cloned()) {
             let (done, domed) = (fetcher.lights.0.clone(), dome.is_some());
             let _ = thread::Builder::new().name("paris-environment".to_owned()).spawn(move || {
                 let (diffuse, specular) = environment_seen(&drawn);
@@ -630,25 +799,14 @@ fn arrays(
                 let _ = done.send((block, diffuse, specular, dome));
             });
         }
-        let size = probes.first().map_or((1, 1), |(_, d)| (d.width, d.height));
-        let (colours, distances) = if probes.is_empty() {
-            empty(&mut images)
-        } else {
-            let mut colour = Vec::new();
-            let mut distance = Vec::new();
-            for (_, drawn) in &probes {
-                colour.extend(drawn.radiance.iter().flat_map(|v| v.to_le_bytes()));
-                distance.extend(drawn.distance.iter().flat_map(|v| v.to_le_bytes()));
-            }
-            let layers = probes.len() as u32;
-            (
-                images.add(array(size, layers, TextureFormat::Rgb10a2Unorm, colour)),
-                images.add(array(size, layers, TextureFormat::R32Float, distance)),
-            )
-        };
+        let size = probes.first().map_or((1, 1), |(_, _, d)| (d.width, d.height));
+        let Some((_, colours, distances)) = store.arrays.clone() else { return };
+        store.shown = shown;
+        debug!(cube = ?block.cube, probes = probes.len(), ms = started.elapsed().as_micros() as f32 / 1000.0, "paris: the block's arrays told");
+        // The probes that have come, the centre's first, each with its layer.
         let mut at = [Vec4::new(0.0, 0.0, 0.0, -1.0); 5];
-        for (layer, (centre, _)) in probes.iter().enumerate().take(5) {
-            at[layer] = centre.extend(layer as f32);
+        for (slot, (k, centre, _)) in probes.iter().enumerate().take(5) {
+            at[slot] = centre.extend(*k as f32);
         }
         // Traced (T4), the block is lit by the dome (`lit`), shining what the
         // centre probe saw come in, direction by direction: no face is a lamp.
@@ -680,6 +838,7 @@ fn arrays(
     store.drawn = mine.len();
     store.cubed = false;
     store.probes_of = None;
+    store.shown = 0;
     // Lit by the tiles' lamps: the dome shines a probe's light.
     if let Some(dome) = &dome
         && let Ok((_, mut visibility)) = places.get_mut(dome.entity)
@@ -702,8 +861,8 @@ fn arrays(
         let mut colour = Vec::with_capacity(mine.len() * (side * side * 4) as usize);
         let mut distance = Vec::with_capacity(colour.capacity());
         for (_, drawn) in &mine {
-            colour.extend(drawn.radiance.iter().flat_map(|v| v.to_le_bytes()));
-            distance.extend(drawn.distance.iter().flat_map(|v| v.to_le_bytes()));
+            colour.extend_from_slice(bytemuck::cast_slice(&drawn.radiance));
+            distance.extend_from_slice(bytemuck::cast_slice(&drawn.distance));
         }
         let layers = mine.len() as u32;
         (
@@ -778,12 +937,16 @@ fn place_face(
 
 /// The cube's first `count` probes that have come, each with where it
 /// stands, its centre's first; none until its centre's has.
-fn cube_probes(store: &Store, count: usize, cube: IVec3) -> Vec<(Vec3, Arc<light::Drawn>)> {
+fn cube_probes(store: &Store, count: usize, cube: IVec3) -> Vec<(usize, Vec3, Arc<light::Drawn>)> {
     let keys = tiles::probe_keys(cube);
     if !store.centres.contains_key(&keys[0]) || !store.tiles.contains_key(&keys[0]) {
         return Vec::new();
     }
-    keys.into_iter().take(count).filter_map(|k| Some((*store.centres.get(&k)?, store.tiles.get(&k)?.clone()))).collect()
+    keys.into_iter()
+        .take(count)
+        .enumerate()
+        .filter_map(|(k, key)| Some((k, *store.centres.get(&key)?, store.tiles.get(&key)?.clone())))
+        .collect()
 }
 
 /// What a probe inside the cube saw come in from direction `d`

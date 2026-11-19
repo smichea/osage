@@ -140,6 +140,7 @@ fn film(
     time: Res<Time>,
     mut walked: Local<f32>,
     mut frame: Local<u32>,
+    mut times: Local<Vec<f32>>,
     mut exit: MessageWriter<AppExit>,
 ) {
     let (Some(film), Some(picture)) = (&options.film, picture) else { return };
@@ -148,10 +149,21 @@ fn film(
     }
     *walked += time.delta_secs();
     *frame += 1;
+    times.push(1000.0 * time.delta_secs());
+    if time.delta_secs() > 0.1 {
+        debug!(ms = 1000.0 * time.delta_secs(), "paris: a long frame");
+    }
     if *walked > film.seconds {
+        // How smooth the walk was: the frames' times in order.
+        times.sort_by(f32::total_cmp);
+        let at = |q: f32| times[((times.len() - 1) as f32 * q) as usize];
         info!(
             frames = *frame,
             frame_ms = 1000.0 * *walked / *frame as f32,
+            median_ms = at(0.5),
+            p95_ms = at(0.95),
+            max_ms = at(1.0),
+            over_50_ms = times.iter().filter(|&&t| t > 50.0).count(),
             tiles = store.received,
             megabytes = store.bytes as f64 / 1e6,
             "paris: filmed"
