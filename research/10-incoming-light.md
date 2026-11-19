@@ -134,6 +134,19 @@ Measured against the former client, alternately, while other programs loaded the
 
 **What a whole street would ask (D-139).** With only five cubes baked, the walk hid how much the rule of D-137 asks: simulated down the whole street baked, every cube within reach in every direction, five probes each, comes to 9.3 probes a second walking (45 at the start) and 31 running — fifteen and more of the laptop's cores to decode. Sent along the walker's way, centres only, the four cubes beside its own for turns, its own cube whole when it stands: 1.4 probes a second walking, 3.7 running, nine standing. On the laptop's film: nine probes decoded instead of twenty-five, 180 frames in the 7 s, a median of 17 ms (load 3.8).
 
+**Lighter probes (D-140).** The five probes of the scene camera's cube packed again, the client's picture against Cycles:
+
+| Probes | Picture | Colour a probe | A probe decoded |
+|---|---|---|---|
+| as baked, quality 10 | 28.3 dB | 729 KiB | 546 ms |
+| packed again, 10 | 28.3 dB | 697 KiB | 590 ms |
+| 18 | 28.1 dB | 366 KiB | 482 ms |
+| 26 | 28.0 dB | 237 KiB | 408 ms |
+| 34 | 27.6 dB | 137 KiB | 406 ms |
+| half the size, 10 | 26.9 dB | 261 KiB | 169 ms |
+
+Packing again costs nothing; the quality past 18–26 buys bytes, not decoding (which goes with the pixels); half the size decodes 3.2 times faster, blurred. Now packed at 22 (28.0 dB standing), the halves sent to a runner: running down the five cubes on the laptop, each cube's centre came in time, the frames' median 21 ms.
+
 Two remedies tried and set aside. **The GPU's AV1 decoder** (VA-API on the Iris Xe) decodes the colour (Main profile, 10-bit 4:2:0) but neither the distance (12-bit, Professional profile) nor the sky's mask (monochrome): 0.41 s for the colour instead of 0.67 with dav1d on four threads, a third of a probe's decoding at best. **A cube's five probes as one video** (the centre's frame alone, the four others predicted from it): 3.5–3.9 MB a cube instead of 4.3–4.6 (−16 %), but no less to decode — one thread, the four probes after the centre: 1.56 s of CPU as pictures of their own, 1.79 s joined after the centre's (re-decoded: the colour 1.04 → 1.02 s, the distance 0.32 → 0.66 s at quality 1, the mask 0.20 → 0.12 s). A first measure through five ffmpeg processes had made it look three times faster.
 
 ## Next

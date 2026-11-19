@@ -45,6 +45,50 @@ pub struct Light {
     pub distance: Vec<f32>,
 }
 
+impl Light {
+    /// Back from what a client draws: the radiance off its 10-bit curve,
+    /// the sky's distance infinite (to pack a light again, D-140).
+    pub fn from_drawn(drawn: &Drawn) -> Self {
+        let band = |packed: u32, shift: u32| decode_radiance(((packed >> shift) & 1023) as f32 / 1023.0);
+        Self {
+            width: drawn.width,
+            height: drawn.height,
+            radiance: drawn.radiance.iter().map(|&p| [band(p, 0), band(p, 10), band(p, 20)]).collect(),
+            distance: drawn.distance.iter().map(|&d| if d < 0.0 { f32::INFINITY } else { d }).collect(),
+        }
+    }
+
+    /// Half as wide and high (D-140: sent to a running walker): each
+    /// pixel the mean radiance of the four under it, and the distance of the
+    /// nearest of them (what the march must not see through); the sky only
+    /// where all four are.
+    pub fn half(&self) -> Self {
+        let (width, height) = (self.width / 2, self.height / 2);
+        let w = self.width as usize;
+        let mut radiance = Vec::with_capacity((width * height) as usize);
+        let mut distance = Vec::with_capacity((width * height) as usize);
+        for y in 0..height as usize {
+            for x in 0..width as usize {
+                let at = [
+                    (2 * y) * w + 2 * x,
+                    (2 * y) * w + 2 * x + 1,
+                    (2 * y + 1) * w + 2 * x,
+                    (2 * y + 1) * w + 2 * x + 1,
+                ];
+                let mut sum = [0.0f32; 3];
+                for &i in &at {
+                    for (s, v) in sum.iter_mut().zip(self.radiance[i]) {
+                        *s += v / 4.0;
+                    }
+                }
+                radiance.push(sum);
+                distance.push(at.iter().map(|&i| self.distance[i]).fold(f32::INFINITY, f32::min));
+            }
+        }
+        Self { width, height, radiance, distance }
+    }
+}
+
 /// A radiance band to the curve's 0..1.
 pub fn encode_radiance(l: f32) -> f32 {
     ((1.0 + CURVE_K * l.clamp(0.0, BRIGHTEST)).ln() / (1.0 + CURVE_K * BRIGHTEST).ln()).clamp(0.0, 1.0)
@@ -76,8 +120,10 @@ pub struct Quality {
 }
 
 impl Default for Quality {
+    /// Radiance at 22 (D-140): against Cycles, 0.2 dB under 10 for a third
+    /// of its bytes.
     fn default() -> Self {
-        Self { radiance: 10, distance: 1, preset: 6 }
+        Self { radiance: 22, distance: 1, preset: 6 }
     }
 }
 
@@ -212,6 +258,20 @@ pub fn decode(radiance: &[u8], distance: &[u8], sky: &[u8]) -> anyhow::Result<Ve
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_light_at_half_its_size_keeps_its_mean_and_its_nearest() {
+        let light = Light {
+            width: 4,
+            height: 2,
+            radiance: (0..8).map(|i| [i as f32, 1.0, 0.0]).collect(),
+            distance: vec![5.0, 2.0, f32::INFINITY, f32::INFINITY, 3.0, 4.0, f32::INFINITY, 9.0],
+        };
+        let half = light.half();
+        assert_eq!((half.width, half.height), (2, 1));
+        assert_eq!(half.radiance[0], [(0.0 + 1.0 + 4.0 + 5.0) / 4.0, 1.0, 0.0]);
+        assert_eq!(half.distance, vec![2.0, 9.0], "the nearest; the sky only where all four are");
+    }
 
     #[test]
     fn the_curves_keep_a_hundred_levels_a_doubling_and_come_back() {

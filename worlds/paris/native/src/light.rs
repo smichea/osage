@@ -217,11 +217,15 @@ pub struct Store {
     /// The texture arrays of the cube the eyes are in, a layer a probe,
     /// filled as its probes come; which probes have been sent to them, which
     /// are written whole (a bit each), and which the faces show.
-    arrays: Option<(IVec3, Handle<Image>, Handle<Image>)>,
+    arrays: Option<Arrays>,
     sent: u8,
     written: u8,
     shown: u8,
 }
+
+/// A cube's texture arrays: the cube, their size, the light's and the
+/// distances'.
+type Arrays = (IVec3, (u32, u32), Handle<Image>, Handle<Image>);
 
 #[derive(Clone)]
 enum Source {
@@ -364,8 +368,11 @@ fn work(first: Receiver<Ask>, rest: Receiver<Ask>, gots: Sender<Got>) {
                     }
                 };
                 // A probe inside a cube (D-137) says where it stands.
-                let centre =
-                    if key.starts_with("c_") { fetch("meta.json").ok().and_then(|m| centre(&m)) } else { None };
+                let centre = if key.starts_with("c_") || key.starts_with("h_") {
+                    fetch("meta.json").ok().and_then(|m| centre(&m))
+                } else {
+                    None
+                };
                 match (fetch("colour.ivf"), fetch("depth.ivf"), fetch("mask.ivf")) {
                     (Ok(c), Ok(d), Ok(m)) => {
                         let bytes = (c.len() + d.len() + m.len()) as u64;
@@ -719,7 +726,7 @@ fn arrays(
 ) {
     let block = Block::of(me.eyes());
     // The probes written whole into the arrays since: drawn with them.
-    if let (Some((_, colours, distances)), Ok(uploads)) = (store.arrays.clone(), layers.0.lock()) {
+    if let (Some((_, _, colours, distances)), Ok(uploads)) = (store.arrays.clone(), layers.0.lock()) {
         let written = |image: &Handle<Image>| uploads.written.get(&image.id()).copied().unwrap_or(0);
         let both = written(&colours) & written(&distances);
         if both != store.written {
@@ -740,16 +747,18 @@ fn arrays(
     // This cube's arrays, filled as its probes decode, each written once
     // into its layer by the render world (`Layers`), a band a frame.
     if let Some((_, _, first)) = decoded.first() {
-        if !matches!(&store.arrays, Some((cube, ..)) if *cube == block.cube) {
-            let size = (first.width, first.height);
+        let size = (first.width, first.height);
+        // Made again for the probes of another size (D-140: walking after running).
+        if !matches!(&store.arrays, Some((cube, made, ..)) if *cube == block.cube && *made == size) {
             store.arrays = Some((
                 block.cube,
+                size,
                 images.add(layered(size, tiles::PROBES as u32, TextureFormat::Rgb10a2Unorm)),
                 images.add(layered(size, tiles::PROBES as u32, TextureFormat::R32Float)),
             ));
             (store.sent, store.written) = (0, 0);
         }
-        if let (Some((_, colours, distances)), Ok(mut uploads)) = (store.arrays.clone(), layers.0.lock()) {
+        if let (Some((_, _, colours, distances)), Ok(mut uploads)) = (store.arrays.clone(), layers.0.lock()) {
             // What was on its way to arrays no longer filled goes.
             let mine = |image: &AssetId<Image>| *image == colours.id() || *image == distances.id();
             uploads.pending.retain(|l| mine(&l.image));
@@ -800,7 +809,7 @@ fn arrays(
             });
         }
         let size = probes.first().map_or((1, 1), |(_, _, d)| (d.width, d.height));
-        let Some((_, colours, distances)) = store.arrays.clone() else { return };
+        let Some((_, _, colours, distances)) = store.arrays.clone() else { return };
         store.shown = shown;
         debug!(cube = ?block.cube, probes = probes.len(), ms = started.elapsed().as_micros() as f32 / 1000.0, "paris: the block's arrays told");
         // The probes that have come, the centre's first, each with its layer.
@@ -939,8 +948,14 @@ fn place_face(
 /// stands, its centre's first; none until its centre's has.
 fn cube_probes(store: &Store, count: usize, cube: IVec3) -> Vec<(usize, Vec3, Arc<light::Drawn>)> {
     let keys = tiles::probe_keys(cube);
-    if !store.centres.contains_key(&keys[0]) || !store.tiles.contains_key(&keys[0]) {
-        return Vec::new();
+    let came = |key: &str| store.centres.contains_key(key) && store.tiles.contains_key(key);
+    if !came(&keys[0]) {
+        // Running, the centre at half its size (D-140), alone.
+        let half = tiles::half_key(&keys[0]);
+        return match (came(&half), store.centres.get(&half), store.tiles.get(&half)) {
+            (true, Some(&at), Some(drawn)) => vec![(0, at, drawn.clone())],
+            _ => Vec::new(),
+        };
     }
     keys.into_iter()
         .take(count)

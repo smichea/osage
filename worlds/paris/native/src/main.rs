@@ -5,7 +5,7 @@
 //! (D-136).
 //!
 //!     paris [ws://HOST:7878] [--tier T1..T4] [--street DIR] [--offline] [--fov DEGREES]
-//!           [--at X,Y,Z] [--heading DEGREES] [--shot FILE] [--film DIR SECONDS]
+//!           [--at X,Y,Z] [--heading DEGREES] [--shot FILE] [--film DIR SECONDS [--run]]
 //!           [--plain] [--whole] [--cube-probes HOW_MANY]
 //!
 //! The walker goes where the keys say (W A S D or Z Q S D, the arrows;
@@ -17,8 +17,9 @@
 //! walker is and how fast it goes. `--offline` walks without a server,
 //! taking the light from the street's own folder; `--shot` draws one
 //! picture from where the walker sets out (`--at` is needed) once the
-//! light has come, saves it and leaves; `--film` walks straight ahead for
-//! SECONDS from there and saves every third picture in DIR. The street's folder (`--street`) is what `tools/bistro/export.py`
+//! light has come, saves it and leaves; `--film` walks (`--run`: runs)
+//! straight ahead for SECONDS from there and saves every third picture in
+//! DIR. The street's folder (`--street`) is what `tools/bistro/export.py`
 //! and the tiles' bake made (default: `orca/bistro/out` under the asset
 //! manifest's content). Two options serve measures against Cycles:
 //! `--plain` shows the radiance as it is, clipped at white, without
@@ -66,6 +67,8 @@ pub struct Options {
 pub struct Film {
     pub folder: PathBuf,
     pub seconds: f32,
+    /// Running, not walking (`--run`).
+    pub run: bool,
 }
 
 /// One picture from a place, then leave.
@@ -96,7 +99,7 @@ fn main() -> anyhow::Result<()> {
     let mut street: Option<PathBuf> = None;
     let (mut shot_file, mut at, mut heading) = (None, None, 0.0f32);
     let mut fov = 70.0f32;
-    let (mut plain, mut whole, mut cube_probes) = (false, false, osage_world_paris::tiles::PROBES);
+    let (mut plain, mut whole, mut cube_probes, mut run) = (false, false, osage_world_paris::tiles::PROBES, false);
     let mut film: Option<(PathBuf, f32)> = None;
     let mut args = std::env::args().skip(1);
     while let Some(arg) = args.next() {
@@ -114,6 +117,7 @@ fn main() -> anyhow::Result<()> {
             "--heading" => heading = need(args.next(), "--heading DEGREES")?.parse::<f32>()?.to_radians(),
             "--fov" => fov = need(args.next(), "--fov DEGREES")?.parse::<f32>()?,
             "--plain" => plain = true,
+            "--run" => run = true,
             "--whole" => whole = true,
             "--cube-probes" => cube_probes = need(args.next(), "--cube-probes HOW_MANY (0 to 5)")?.parse()?,
             "--film" => {
@@ -137,7 +141,7 @@ fn main() -> anyhow::Result<()> {
         None => None,
     };
     let online = server.is_some();
-    let film = film.map(|(folder, seconds)| Film { folder, seconds });
+    let film = film.map(|(folder, seconds)| Film { folder, seconds, run });
     let offscreen = shot.is_some() || film.is_some();
     let options = Options { street, server, shot: shot.clone(), fov, film, plain, whole, cube_probes, at, heading };
 

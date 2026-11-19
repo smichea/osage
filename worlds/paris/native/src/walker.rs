@@ -140,7 +140,8 @@ fn film(
     }
     let ready = placed.is_some_and(|p| p.0) && store.drawn > 0;
     me.heading = options.heading;
-    me.stride = Stride { forward: if ready { 1.0 } else { 0.0 }, right: 0.0, heading: options.heading, run: false };
+    let run = options.film.as_ref().is_some_and(|f| f.run);
+    me.stride = Stride { forward: if ready { 1.0 } else { 0.0 }, right: 0.0, heading: options.heading, run };
 }
 
 /// The walker's own steps, taken here at once.

@@ -3,7 +3,7 @@
 
 //! Packs tiles of light into AV1 (D-136, D-137):
 //!
-//!     light-pack RAW OUT [CRF [DEPTH_CRF]]
+//!     light-pack [--again] [--half] RAW OUT [CRF [DEPTH_CRF]]
 //!
 //! RAW holds a folder a tile or probe, as `tools/bistro/tiles.py` and
 //! `tools/bistro/cube-probes.py` write them (`radiance.f32`, `distance.f32`,
@@ -14,20 +14,66 @@
 //! as it is.
 //! Each tile is decoded back as a client would, and the packer reports what
 //! the tiles weigh and how close they come back.
+//!
+//! `--again` packs again what is packed already (RAW's folders packed, not
+//! raw: decoded and encoded at CRF, D-140), in place if OUT is RAW. `--half`
+//! also packs each probe inside a cube (`c_X_Y_Z_K`) at half its size, as
+//! `h_X_Y_Z_K`, for a running walker (D-140).
 
-use std::{path::PathBuf, sync::Mutex};
+use std::{
+    path::{Path, PathBuf},
+    sync::Mutex,
+};
 
 use anyhow::Context as _;
 use osage_hologram_stream::light::{self, Light, Quality};
 
-fn floats(path: &std::path::Path) -> anyhow::Result<Vec<f32>> {
+/// What a folder of RAW holds: raw floats (`tiles.py`, `cube-probes.py`),
+/// or, packed already, its light decoded back (`--again`).
+fn load(folder: &Path, meta: &serde_json::Value) -> anyhow::Result<Light> {
+    if folder.join("distance.f32").exists() {
+        let (width, height) = (meta["width"].as_u64().unwrap_or(0) as u32, meta["height"].as_u64().unwrap_or(0) as u32);
+        let radiance = floats(&folder.join("radiance.f32"))?;
+        return Ok(Light {
+            width,
+            height,
+            radiance: radiance.as_chunks::<3>().0.to_vec(),
+            distance: floats(&folder.join("distance.f32"))?,
+        });
+    }
+    let read =
+        |name: &str| std::fs::read(folder.join(name)).with_context(|| format!("{}", folder.join(name).display()));
+    let drawn =
+        light::decode(&read("colour.ivf")?, &read("depth.ivf")?, &read("mask.ivf")?)?.pop().context("no picture")?;
+    Ok(Light::from_drawn(&drawn))
+}
+
+/// A packed light's files and its `meta.json` in `target`.
+fn write(target: &Path, encoded: &light::Encoded, meta: &serde_json::Value) -> anyhow::Result<()> {
+    std::fs::create_dir_all(target)?;
+    std::fs::write(target.join("colour.ivf"), &encoded.radiance)?;
+    std::fs::write(target.join("depth.ivf"), &encoded.distance)?;
+    std::fs::write(target.join("mask.ivf"), &encoded.sky)?;
+    std::fs::write(target.join("meta.json"), serde_json::to_string_pretty(meta)? + "\n")?;
+    Ok(())
+}
+
+fn floats(path: &Path) -> anyhow::Result<Vec<f32>> {
     let bytes = std::fs::read(path).with_context(|| format!("{}", path.display()))?;
     Ok(bytes.as_chunks::<4>().0.iter().map(|b| f32::from_le_bytes(*b)).collect())
 }
 
 fn main() -> anyhow::Result<()> {
-    let mut args = std::env::args().skip(1);
-    let usage = "light-pack RAW OUT [CRF [DEPTH_CRF]]";
+    let mut args = std::env::args().skip(1).peekable();
+    let usage = "light-pack [--again] [--half] RAW OUT [CRF [DEPTH_CRF]]";
+    let (mut again, mut half) = (false, false);
+    while let Some(flag) = args.next_if(|a| a.starts_with("--")) {
+        match flag.as_str() {
+            "--again" => again = true,
+            "--half" => half = true,
+            other => anyhow::bail!("{other}: {usage}"),
+        }
+    }
     let raw = PathBuf::from(args.next().context(usage)?);
     let out = PathBuf::from(args.next().context(usage)?);
     let mut quality = Quality::default();
@@ -40,8 +86,9 @@ fn main() -> anyhow::Result<()> {
     std::fs::create_dir_all(&out)?;
     let mut keys: Vec<String> = std::fs::read_dir(&raw)?
         .filter_map(|e| e.ok())
-        .filter(|e| e.path().join("distance.f32").exists())
+        .filter(|e| e.path().join("distance.f32").exists() || (again && e.path().join("colour.ivf").exists()))
         .map(|e| e.file_name().to_string_lossy().into_owned())
+        .filter(|key| !key.starts_with("h_"))
         .collect();
     keys.sort();
     let next = Mutex::new(keys.iter());
@@ -54,28 +101,26 @@ fn main() -> anyhow::Result<()> {
                     loop {
                         let Some(key) = next.lock().unwrap().next() else { return Ok(()) };
                         let target = out.join(key);
-                        if target.join("mask.ivf").exists() {
+                        if !again && target.join("mask.ivf").exists() {
                             continue;
                         }
                         let folder = raw.join(key);
                         let meta: serde_json::Value =
                             serde_json::from_str(&std::fs::read_to_string(folder.join("meta.json"))?)?;
-                        let (width, height) =
-                            (meta["width"].as_u64().unwrap_or(0) as u32, meta["height"].as_u64().unwrap_or(0) as u32);
-                        let radiance = floats(&folder.join("radiance.f32"))?;
-                        let distance = floats(&folder.join("distance.f32"))?;
-                        let light = Light {
-                            width,
-                            height,
-                            radiance: radiance.as_chunks::<3>().0.to_vec(),
-                            distance: distance.clone(),
-                        };
+                        let light = load(&folder, &meta)?;
+                        let (radiance, distance) = (light.radiance.len() * 3, light.distance.len());
                         let encoded = light::encode(std::slice::from_ref(&light), quality)?;
-                        std::fs::create_dir_all(&target)?;
-                        std::fs::write(target.join("colour.ivf"), &encoded.radiance)?;
-                        std::fs::write(target.join("depth.ivf"), &encoded.distance)?;
-                        std::fs::write(target.join("mask.ivf"), &encoded.sky)?;
-                        std::fs::copy(folder.join("meta.json"), target.join("meta.json"))?;
+                        write(&target, &encoded, &meta)?;
+                        // A probe inside a cube, at half its size too.
+                        if half && key.starts_with("c_") {
+                            let small = light.half();
+                            let mut told = meta.clone();
+                            told["width"] = small.width.into();
+                            told["height"] = small.height.into();
+                            told["key"] = key.replacen("c_", "h_", 1).into();
+                            let encoded = light::encode(std::slice::from_ref(&small), quality)?;
+                            write(&out.join(key.replacen("c_", "h_", 1)), &encoded, &told)?;
+                        }
                         // How close it comes back: the radiance's error,
                         // relative, where it is not dark.
                         let back = light::decode(&encoded.radiance, &encoded.distance, &encoded.sky)?;
@@ -103,7 +148,7 @@ fn main() -> anyhow::Result<()> {
                             }
                         }
                         let mut totals = totals.lock().unwrap();
-                        totals.0 += (radiance.len() * 4 + distance.len() * 4) as u64;
+                        totals.0 += (radiance * 4 + distance * 4) as u64;
                         totals.1 += encoded.radiance.len() as u64;
                         totals.2 += encoded.distance.len() as u64;
                         totals.3 += encoded.sky.len() as u64;
