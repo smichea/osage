@@ -50,11 +50,11 @@ pub const TICK_HZ: u32 = 30;
 /// A walker stops this long after its last intent.
 const INTENT_LIFETIME: Duration = Duration::from_millis(500);
 
-/// Where a walker's eyes are and how fast it goes.
+/// Where a walker's eyes are and where it goes, m/s.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Seen {
     pub eyes: Vec3,
-    pub speed: f32,
+    pub velocity: Vec3,
 }
 
 /// Every walker as last seen, by its replicated id: for the server that
@@ -95,7 +95,7 @@ struct Striding {
     stride: walk::Stride,
     sequence: u64,
     received: Duration,
-    speed: f32,
+    velocity: Vec3,
 }
 
 impl Plugin for ParisWorld {
@@ -227,7 +227,7 @@ fn step(time: Res<Time>, grid: Res<Grid>, mut walkers: Query<(&mut Striding, &mu
         let from = transform.translation;
         transform.translation = grid.0.step(from, &stride, dt);
         transform.rotation = Quat::from_rotation_y(stride.heading);
-        striding.speed = if dt > 0.0 { from.distance(transform.translation) / dt } else { 0.0 };
+        striding.velocity = if dt > 0.0 { (transform.translation - from) / dt } else { Vec3::ZERO };
     }
 }
 
@@ -236,6 +236,6 @@ fn tell(walkers: Res<Walkers>, seen: Query<(&Replicated, &Transform, &Striding)>
     let Ok(mut all) = walkers.0.lock() else { return };
     all.clear();
     for (id, transform, striding) in &seen {
-        all.insert(id.0, Seen { eyes: transform.translation + Vec3::Y * walk::EYES, speed: striding.speed });
+        all.insert(id.0, Seen { eyes: transform.translation + Vec3::Y * walk::EYES, velocity: striding.velocity });
     }
 }

@@ -434,7 +434,7 @@ fn ask(
             // The probes of the cubes within reach (D-137), or their blocks'
             // surface tiles where those are not baked (D-136).
             let probes = options.cube_probes > 0;
-            let wanted = tiles::needed_light(me.eyes(), me.speed, HORIZON, |k| {
+            let wanted = tiles::needed_light(me.eyes(), me.velocity, HORIZON, |k| {
                 store.present.as_ref().is_some_and(|p| p.contains(k)) && (probes || !k.starts_with("c_"))
             });
             for key in wanted {

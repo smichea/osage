@@ -65,9 +65,9 @@ fn main() -> anyhow::Result<()> {
     let need: Arc<http::Need> = Arc::new(move |query: &str| {
         let id = query.split('&').find_map(|kv| kv.strip_prefix("walker="))?.parse::<u64>().ok()?;
         let walker = *seen.0.lock().ok()?.get(&id)?;
-        // The probes inside the cubes the walker can reach (D-137), or their
-        // blocks' surface tiles where those are not baked (D-136).
-        let wanted = tiles::needed_light(walker.eyes, walker.speed, horizon, |k| present.contains(k));
+        // The probes inside the cubes on the walker's way (D-137, D-139), or
+        // their blocks' surface tiles where those are not baked (D-136).
+        let wanted = tiles::needed_light(walker.eyes, walker.velocity, horizon, |k| present.contains(k));
         serde_json::to_string(&wanted).ok()
     });
     http::serve(listener, tiles_folder, need)?;

@@ -31,8 +31,9 @@ pub struct Me {
     /// Radians, up positive.
     pub pitch: f32,
     pub stride: Stride,
-    /// How fast it went over the last frame, m/s.
+    /// How fast it went over the last frame, m/s, and where.
     pub speed: f32,
+    pub velocity: Vec3,
 }
 
 impl Me {
@@ -57,10 +58,18 @@ fn setup(mut commands: Commands, grid: Res<Grid>, options: Res<Options>) {
             pitch: 0.0,
             stride: Stride { heading: shot.heading, ..Stride::default() },
             speed: 0.0,
+            velocity: Vec3::ZERO,
         },
         None => {
             let (feet, heading) = (options.at.map_or(grid.0.start, |eyes| eyes - Vec3::Y * EYES), options.heading);
-            Me { feet, heading, pitch: 0.0, stride: Stride { heading, ..Stride::default() }, speed: 0.0 }
+            Me {
+                feet,
+                heading,
+                pitch: 0.0,
+                stride: Stride { heading, ..Stride::default() },
+                speed: 0.0,
+                velocity: Vec3::ZERO,
+            }
         }
     };
     // osage-render draws the scene into its picture, shown in the window or
@@ -143,7 +152,8 @@ fn step(time: Res<Time>, grid: Res<Grid>, options: Res<Options>, mut me: ResMut<
     let from = me.feet;
     let stride = me.stride;
     me.feet = grid.0.step(from, &stride, dt);
-    me.speed = if dt > 0.0 { from.distance(me.feet) / dt } else { 0.0 };
+    me.velocity = if dt > 0.0 { (me.feet - from) / dt } else { Vec3::ZERO };
+    me.speed = me.velocity.length();
 }
 
 fn follow(me: Res<Me>, mut cameras: Query<&mut Transform, With<OsageCamera>>) {
