@@ -123,10 +123,15 @@ for tier in T4 T3; do
 done
 # The traced light unfiltered, to tell the filter's part from Solari's; and
 # Solari's reference path tracer, to tell its realtime estimator's part.
-for shot in T4-grain T4-reference; do
+for shot in T4-grain T4-reference T4-reference-plain; do
   reference=0
-  [ "$shot" = T4-reference ] && reference=1
-  OSAGE_DENOISE=0 OSAGE_PATHTRACE=$reference timeout 900 ./target/release/paris --offline --tier T4 --fov 46.7 \
+  plain=
+  case $shot in
+  T4-reference) reference=1 ;;
+  T4-reference-plain) reference=1 plain=--plain ;;
+  esac
+  # shellcheck disable=SC2086 # the option is a word or none
+  OSAGE_DENOISE=0 OSAGE_PATHTRACE=$reference timeout 900 ./target/release/paris --offline --tier T4 --fov 46.7 $plain \
     --shot "../out/$shot.png" --at 24.82,1.96,-61.65 --heading 161.4 >"../out/$shot.log" 2>&1 ||
     say "the $shot shot failed (see out/$shot.log)"
 done
