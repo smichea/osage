@@ -100,6 +100,7 @@ The five probes of four more cubes along a walk baked (4096 × 2048, 128 samples
 The picture is then whole along the walk, sharp in the cubes with probes, the tiles' blur in the one without; 52 ms a frame on the Iris Xe while it decodes.
 
 On the L4, from the scene camera's place with the cube's probes: 28.5 dB at T3, the cobbles at 0.99 of Cycles. At T4 the block is traced and lit by its faces as lamps of the centre probe's light through each (as in the tiles' case, about 0.64 of Cycles on the cobbles). Without the lamps, the rays leaving the block met nothing and Solari's realtime path took the camera's environment map — the centre probe's light, direction by direction — alone: the cobbles fell to 0.20. Lighting the traced block by the light coming in, ray by ray, is left to an RTX machine to work out. Meanwhile the lamps are scaled for the floor in the middle of the block to gather from them, over the half sphere above weighed by the cosine, what the centre probe saw come in: 27.3 dB over the picture at T4 (24.9 with the tiles' plain lamps), the cobbles at 0.71 of Cycles, all beyond the block as at T3.
+With ReSTIR off as well (Solari's world cache alone), the environment map left the cobbles at exactly 0.20 again: the realtime path does not seem to take the camera's environment map here at all, whichever way it gathers. To be found on a machine that traces rays, before the lamps can go.
 
 ## Next
 
