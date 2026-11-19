@@ -5,20 +5,20 @@
 //! (D-136).
 //!
 //!     paris [ws://HOST:7878] [--tier T1..T4] [--street DIR] [--offline] [--fov DEGREES]
-//!           [--shot FILE --at X,Y,Z --heading DEGREES] [--film DIR SECONDS --heading DEGREES]
+//!           [--at X,Y,Z] [--heading DEGREES] [--shot FILE] [--film DIR SECONDS]
 //!           [--plain] [--whole] [--cube-probes HOW_MANY]
 //!
 //! The walker goes where the keys say (W A S D or Z Q S D, the arrows;
 //! Shift runs), looks where the mouse does once the window is clicked
-//! (Escape lets the mouse go). Around it, the 9 cubes of 3 m of its block
+//! (Escape lets the mouse go); it sets out from `--at` (the eyes), facing
+//! `--heading`, or from the start of the street's walk. Around it, the 9 cubes of 3 m of its block
 //! are drawn from the street's model; beyond them, the light coming into
 //! the block, as the world's server of light sends it from where the
 //! walker is and how fast it goes. `--offline` walks without a server,
 //! taking the light from the street's own folder; `--shot` draws one
-//! picture from a place (`--at`, the eyes) once the light has come, saves
-//! it and leaves; `--film` walks straight ahead for SECONDS from where the
-//! walker arrives, facing `--heading`, and saves every third picture in
-//! DIR. The street's folder (`--street`) is what `tools/bistro/export.py`
+//! picture from where the walker sets out (`--at` is needed) once the
+//! light has come, saves it and leaves; `--film` walks straight ahead for
+//! SECONDS from there and saves every third picture in DIR. The street's folder (`--street`) is what `tools/bistro/export.py`
 //! and the tiles' bake made (default: `orca/bistro/out` under the asset
 //! manifest's content). Two options serve measures against Cycles:
 //! `--plain` shows the radiance as it is, clipped at white, without
@@ -55,6 +55,10 @@ pub struct Options {
     /// How many of the probes inside the walker's cube to take the light
     /// from (D-137), 5 unless told; 0: the block's surface tiles (D-136).
     pub cube_probes: usize,
+    /// Where the walker's eyes set out, if not from the start of the
+    /// street's walk, and the way it faces, radians.
+    pub at: Option<Vec3>,
+    pub heading: f32,
 }
 
 /// A walk straight ahead, filmed.
@@ -62,7 +66,6 @@ pub struct Options {
 pub struct Film {
     pub folder: PathBuf,
     pub seconds: f32,
-    pub heading: f32,
 }
 
 /// One picture from a place, then leave.
@@ -134,9 +137,9 @@ fn main() -> anyhow::Result<()> {
         None => None,
     };
     let online = server.is_some();
-    let film = film.map(|(folder, seconds)| Film { folder, seconds, heading });
+    let film = film.map(|(folder, seconds)| Film { folder, seconds });
     let offscreen = shot.is_some() || film.is_some();
-    let options = Options { street, server, shot: shot.clone(), fov, film, plain, whole, cube_probes };
+    let options = Options { street, server, shot: shot.clone(), fov, film, plain, whole, cube_probes, at, heading };
 
     let assets = AssetPlugin { file_path: root.to_string_lossy().into_owned(), ..default() };
     let mut app = App::new();

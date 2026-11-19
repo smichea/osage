@@ -59,8 +59,8 @@ fn setup(mut commands: Commands, grid: Res<Grid>, options: Res<Options>) {
             speed: 0.0,
         },
         None => {
-            let heading = options.film.as_ref().map_or(0.0, |f| f.heading);
-            Me { feet: grid.0.start, heading, pitch: 0.0, stride: Stride { heading, ..Stride::default() }, speed: 0.0 }
+            let (feet, heading) = (options.at.map_or(grid.0.start, |eyes| eyes - Vec3::Y * EYES), options.heading);
+            Me { feet, heading, pitch: 0.0, stride: Stride { heading, ..Stride::default() }, speed: 0.0 }
         }
     };
     // osage-render draws the scene into its picture, shown in the window or
@@ -126,10 +126,12 @@ fn film(
     store: Res<crate::light::Store>,
     mut me: ResMut<Me>,
 ) {
-    let Some(film) = &options.film else { return };
+    if options.film.is_none() {
+        return;
+    }
     let ready = placed.is_some_and(|p| p.0) && store.drawn > 0;
-    me.heading = film.heading;
-    me.stride = Stride { forward: if ready { 1.0 } else { 0.0 }, right: 0.0, heading: film.heading, run: false };
+    me.heading = options.heading;
+    me.stride = Stride { forward: if ready { 1.0 } else { 0.0 }, right: 0.0, heading: options.heading, run: false };
 }
 
 /// The walker's own steps, taken here at once.
@@ -145,8 +147,13 @@ fn step(time: Res<Time>, grid: Res<Grid>, options: Res<Options>, mut me: ResMut<
 }
 
 fn follow(me: Res<Me>, mut cameras: Query<&mut Transform, With<OsageCamera>>) {
+    let (eyes, look) = (me.eyes(), Quat::from_euler(EulerRot::YXZ, me.heading, me.pitch, 0.0));
     for mut camera in &mut cameras {
-        camera.translation = me.eyes();
-        camera.rotation = Quat::from_euler(EulerRot::YXZ, me.heading, me.pitch, 0.0);
+        // Written only when the eyes move: a camera marked as moved starts
+        // the reference path tracer's average again every frame.
+        if camera.translation != eyes || camera.rotation != look {
+            camera.translation = eyes;
+            camera.rotation = look;
+        }
     }
 }

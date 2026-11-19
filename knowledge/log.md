@@ -2,6 +2,7 @@
 
 ## 2026-11-19
 * **Update**: the traced block under a dome of the light coming in (D-138): [osage-paris-native](/modules/paris-native.md) cuts the street to the walker's block for the rays and shines the centre probe's light round it, its floor at 0.88 of Cycles from 0.71; [ray-traced light](/techniques/ray-traced-light.md) traces a thing drawn with another mesh anew.
+* **Update**: [osage-paris-native](/modules/paris-native.md) sets out from `--at`, facing `--heading`, for a walk too; [ray-traced light](/techniques/ray-traced-light.md) draws with Solari's reference path tracer under `OSAGE_PATHTRACE=1`.
 
 ## 2026-11-18
 * **Update**: walking with the probes inside the cubes (D-137): [osage-world-paris](/modules/paris-world.md) sends the centres' probes first; [osage-paris-native](/modules/paris-native.md) asks the server on a thread of its own and keeps the block drawn until the next one's light has come; [osage-hologram-stream](/modules/osage-hologram-stream.md) decodes a light's picture on several threads.

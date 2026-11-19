@@ -21,7 +21,10 @@ use bevy::{
     mesh::{Indices, PrimitiveTopology, VertexAttributeValues},
     prelude::*,
     render::render_resource::TextureUsages,
-    solari::prelude::{RaytracingMesh3d, SolariLighting, SolariPlugins},
+    solari::{
+        pathtracer::{Pathtracer, PathtracingPlugin},
+        prelude::{RaytracingMesh3d, SolariLighting, SolariPlugins},
+    },
 };
 
 use crate::{Emitter, NotTraced, OsageCamera, Tier, TracedLight, ground::GroundMaterial};
@@ -41,6 +44,9 @@ impl Plugin for RayTracingPlugin {
                 (camera, remeshed.before(doubles), doubles, forget, stand_ins, emitters, glows, untrace),
             )
             .add_systems(PostUpdate, hidden.after(bevy::camera::visibility::VisibilitySystems::VisibilityPropagate));
+        if reference() {
+            app.add_plugins(PathtracingPlugin).add_systems(PostUpdate, restart);
+        }
     }
 
     fn finish(&self, app: &mut App) {
@@ -91,15 +97,23 @@ struct HiddenDouble(Handle<Mesh>);
 /// hardware traces rays: without, the deferred picture is lit as usual.
 fn camera(mut commands: Commands, cameras: Query<Entity, Added<OsageCamera>>) {
     for camera in &cameras {
-        commands.entity(camera).insert((
+        let mut camera = commands.entity(camera);
+        camera.insert((Msaa::Off, CameraMainTextureUsages::default().with(TextureUsages::STORAGE_BINDING)));
+        if reference() {
+            // The prepasses Solari's realtime light requires: the opaque
+            // materials are drawn deferred all the same.
+            camera.insert((
+                Pathtracer::default(),
+                bevy::core_pipeline::prepass::DeferredPrepass,
+                bevy::core_pipeline::prepass::DepthPrepass,
+                bevy::core_pipeline::prepass::MotionVectorPrepass,
+            ));
+        } else {
             // ReSTIR: samples reused between pixels and frames. Without a
             // denoiser (DLSS's, not built here) the sunlit asphalt sparkled
             // with noise; the L4 had the frame time for it (16.7 ms of 33).
-            SolariLighting { restir: true, ..default() },
-            crate::denoise::Denoised,
-            Msaa::Off,
-            CameraMainTextureUsages::default().with(TextureUsages::STORAGE_BINDING),
-        ));
+            camera.insert((SolariLighting { restir: true, ..default() }, crate::denoise::Denoised));
+        }
     }
 }
 
@@ -194,6 +208,43 @@ fn doubles(
                 commands.entity(entity).insert(Untraced);
             }
             None => {}
+        }
+    }
+}
+
+/// `OSAGE_PATHTRACE=1`: Solari's reference path tracer draws the picture
+/// instead of its realtime light — every bounce traced, unfiltered, its
+/// samples averaged while the scene stays as it is — to measure the realtime
+/// light against. Seconds a picture: not for play.
+fn reference() -> bool {
+    std::env::var("OSAGE_PATHTRACE").is_ok_and(|v| v == "1")
+}
+
+/// The reference path tracer's average starts again whenever the traced
+/// scene changes (it does by itself when the camera moves): a thing traced
+/// or no longer, moved, a material, the environment.
+#[allow(clippy::type_complexity)]
+fn restart(
+    mut materials: MessageReader<AssetEvent<StandardMaterial>>,
+    added: Query<(), Added<RaytracingMesh3d>>,
+    mut removed: RemovedComponents<RaytracingMesh3d>,
+    moved: Query<(), (With<RaytracingMesh3d>, Changed<GlobalTransform>)>,
+    lit: Query<(), (With<Pathtracer>, Changed<bevy::light::EnvironmentMapLight>)>,
+    mut cameras: Query<&mut Pathtracer>,
+    mut frames: Local<u32>,
+) {
+    let changed = (materials.read().count() > 0)
+        | !added.is_empty()
+        | (removed.read().count() > 0)
+        | !moved.is_empty()
+        | !lit.is_empty();
+    if changed && *frames > 0 {
+        info!(frames = *frames, "reference path tracer: the scene changed, its average starts again");
+    }
+    *frames = if changed { 0 } else { *frames + 1 };
+    for mut pathtracer in &mut cameras {
+        if pathtracer.reset != changed {
+            pathtracer.reset = changed;
         }
     }
 }

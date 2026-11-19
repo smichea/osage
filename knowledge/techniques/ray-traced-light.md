@@ -44,7 +44,7 @@ Building with the `raytracing` feature turns on Bevy's `dfg_lut` for every PBR s
 
 # Oracle
 
-[The render bench](/oracles/render-bench.md) on the cloud GPU: T4's frame times and screenshots. The crate's tests: a coloured mesh's double has exactly the four attributes and 32-bit indices; a line list and an empty mesh have none. Night: the bench with `--sky night --rain`, whose T4 must not be black.
+[The render bench](/oracles/render-bench.md) on the cloud GPU: T4's frame times and screenshots. The crate's tests: a coloured mesh's double has exactly the four attributes and 32-bit indices; a line list and an empty mesh have none. Night: the bench with `--sky night --rain`, whose T4 must not be black. `OSAGE_PATHTRACE=1` draws with Solari's reference path tracer instead of its realtime light — every bounce traced, unfiltered, averaged while the traced scene stays as it is — to measure the realtime light against.
 
 # Reuse
 
