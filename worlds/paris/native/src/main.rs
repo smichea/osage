@@ -25,6 +25,7 @@
 //! tonemapping or bloom; `--whole` draws the whole street from its model,
 //! no light coming in, to tell the renderer's part from the light's.
 
+mod clip;
 mod hud;
 mod light;
 mod look;

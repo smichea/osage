@@ -7,7 +7,8 @@
 //! by threads of their own; the current block's put in two texture arrays
 //! and drawn on the block's six faces, from inside (`light.wesl`). The same
 //! light lights the block: what comes in from each direction, seen from
-//! the block's centre, made into the camera's environment light.
+//! the block's centre, made into the camera's environment light; traced
+//! (T4), shone by a dome round the block, the rays' sky.
 
 use std::{
     collections::{HashMap, HashSet},
@@ -19,6 +20,7 @@ use std::{
 use bevy::{
     asset::{RenderAssetUsages, embedded_asset},
     image::ImageSampler,
+    mesh::{Indices, PrimitiveTopology},
     prelude::*,
     render::render_resource::{
         AsBindGroup, Extent3d, TextureDimension, TextureFormat, TextureViewDescriptor, TextureViewDimension,
@@ -48,7 +50,7 @@ impl Plugin for LightPlugin {
             .init_resource::<Store>()
             .init_resource::<LightServer>()
             .init_resource::<WalkerId>()
-            .add_systems(Startup, (start, faces))
+            .add_systems(Startup, (start, faces, dome))
             .add_systems(Update, (ask, receive, arrays, lit).chain());
     }
 }
@@ -150,7 +152,9 @@ enum Got {
 }
 
 /// A block's environment light: its two cubemaps.
-type Lit = (Block, Image, Image);
+/// A block's environment light, made; with the dome's centre and picture
+/// when it is lit by the probes of its cube and traced.
+type Lit = (Block, Image, Image, Option<(Vec3, Image)>);
 
 #[derive(Resource)]
 struct Fetcher {
@@ -178,9 +182,10 @@ impl Fetcher {
 #[derive(Resource)]
 struct Faces([(Entity, Handle<IncomingLight>); 6]);
 
-/// A face's light for traced rays (T4 only): the mean of what its tiles
-/// saw coming in, as a lamp the size of the face, the coarse light that
-/// lights the block (D-136). Remade for each block.
+/// A face's light for traced rays (T4 only), where the block is lit by its
+/// surface tiles: the mean of what its tiles saw coming in, as a lamp the
+/// size of the face, the coarse light that lights the block (D-136); with
+/// its cube's probes the dome lights it instead. Remade for each block.
 #[derive(Component)]
 struct Glow;
 
@@ -366,6 +371,138 @@ fn receive(options: Res<Options>, server: Res<LightServer>, fetcher: Res<Fetcher
     }
 }
 
+/// Traced (T4), the light coming in as the sky of the rays (D-138): a
+/// sphere round the block, facing in, shining what the centre probe saw
+/// come in from each direction. The rays see the block alone (`street` cuts
+/// what reaches out of it): one that leaves it meets the dome and takes the
+/// light that came in from its own direction. (Solari's realtime path took
+/// next to nothing from the camera's environment map, research 10; lamps on
+/// the faces gave each face's light as one.)
+#[derive(Resource)]
+struct Dome {
+    entity: Entity,
+    material: Handle<StandardMaterial>,
+}
+
+/// The dome's radius, m: beyond the street seen, and within the 50 m
+/// Solari's light cache traces its rays to (`world_cache_max_gi_ray_distance`);
+/// farther, a ray of the cache that met nothing would take the environment
+/// map's light besides the dome's, counted twice.
+const DOME_RADIUS: f32 = 40.0;
+/// Its picture of the light, columns (half as many rows).
+const DOME_WIDTH: usize = 1024;
+
+fn dome(
+    mut commands: Commands,
+    traced: Res<osage_render::TracedLight>,
+    options: Res<Options>,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut standard: ResMut<Assets<StandardMaterial>>,
+) {
+    // The whole street drawn (`--whole`), its light is traced through it.
+    if !traced.0 || options.whole {
+        return;
+    }
+    let material = standard.add(StandardMaterial {
+        base_color: Color::BLACK,
+        emissive: LinearRgba::rgb(NITS, NITS, NITS),
+        // A luminance already: the traced glows leave it as it is.
+        emissive_exposure_weight: 1.0,
+        double_sided: true,
+        cull_mode: None,
+        ..default()
+    });
+    let entity = commands
+        .spawn((
+            Mesh3d(meshes.add(dome_mesh())),
+            MeshMaterial3d(material.clone()),
+            Transform::default(),
+            Visibility::Hidden,
+            bevy::light::NotShadowCaster,
+        ))
+        .id();
+    commands.insert_resource(Dome { entity, material });
+}
+
+/// A sphere of `DOME_RADIUS`, facing in, its picture equirectangular as a
+/// probe's: the middle column north (-z), east to its right, the top row up.
+fn dome_mesh() -> Mesh {
+    let (sectors, stacks) = (96usize, 48usize);
+    let (mut positions, mut normals, mut uvs) = (Vec::new(), Vec::new(), Vec::new());
+    for i in 0..=stacks {
+        let v = i as f32 / stacks as f32;
+        let lat = (0.5 - v) * std::f32::consts::PI;
+        for j in 0..=sectors {
+            let u = j as f32 / sectors as f32;
+            let lon = (u - 0.5) * std::f32::consts::TAU;
+            let d = Vec3::new(lat.cos() * lon.sin(), lat.sin(), -lat.cos() * lon.cos());
+            positions.push((d * DOME_RADIUS).to_array());
+            normals.push((-d).to_array());
+            uvs.push([u, v]);
+        }
+    }
+    let row = sectors + 1;
+    let mut indices = Vec::with_capacity(stacks * sectors * 6);
+    for i in 0..stacks {
+        for j in 0..sectors {
+            let (a, b, c, d) = (i * row + j, i * row + j + 1, (i + 1) * row + j, (i + 1) * row + j + 1);
+            // Wound to face the centre.
+            indices.extend([a, c, b, b, c, d].map(|k| k as u32));
+        }
+    }
+    Mesh::new(PrimitiveTopology::TriangleList, RenderAssetUsages::default())
+        .with_inserted_attribute(Mesh::ATTRIBUTE_POSITION, positions)
+        .with_inserted_attribute(Mesh::ATTRIBUTE_NORMAL, normals)
+        .with_inserted_attribute(Mesh::ATTRIBUTE_UV_0, uvs)
+        .with_inserted_indices(Indices::U32(indices))
+}
+
+/// What a probe saw come in, as the dome's picture: `DOME_WIDTH` columns,
+/// each texel the mean of the probe's under it, radiance in half floats.
+fn dome_picture(drawn: &light::Drawn) -> Image {
+    let curve: Vec<f32> = (0..1024).map(|c| light::decode_radiance(c as f32 / 1023.0)).collect();
+    let (w, h) = (drawn.width as usize, drawn.height as usize);
+    let (dw, dh) = (DOME_WIDTH.min(w), (DOME_WIDTH / 2).min(h));
+    let (sx, sy) = ((w / dw).max(1), (h / dh).max(1));
+    let mut data = Vec::with_capacity(dw * dh * 8);
+    for y in 0..dh {
+        for x in 0..dw {
+            let mut sum = Vec3::ZERO;
+            for yy in 0..sy {
+                for xx in 0..sx {
+                    let packed = drawn.radiance[(y * sy + yy) * w + x * sx + xx];
+                    let band = |shift: u32| curve[((packed >> shift) & 1023) as usize];
+                    sum += Vec3::new(band(0), band(10), band(20));
+                }
+            }
+            let c = sum / (sx * sy) as f32;
+            for v in [c.x, c.y, c.z, 1.0] {
+                data.extend(half(v).to_le_bytes());
+            }
+        }
+    }
+    let size = Extent3d { width: dw as u32, height: dh as u32, depth_or_array_layers: 1 };
+    let mut image =
+        Image::new(size, TextureDimension::D2, data, TextureFormat::Rgba16Float, RenderAssetUsages::default());
+    image.sampler = ImageSampler::linear();
+    image
+}
+
+/// A light's value as a half float, rounded (no light is negative).
+fn half(v: f32) -> u16 {
+    let bits = v.max(0.0).to_bits();
+    let exponent = ((bits >> 23) & 0xff) as i32 - 127 + 15;
+    let mantissa = bits & 0x7f_ffff;
+    if exponent <= 0 {
+        return 0;
+    }
+    if exponent >= 31 {
+        return 0x7c00;
+    }
+    let value = ((exponent as u16) << 10) | (mantissa >> 13) as u16;
+    if mantissa & 0x1000 != 0 { value + 1 } else { value }
+}
+
 fn faces(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
@@ -450,6 +587,7 @@ fn arrays(
     quads: Query<&Mesh3d>,
     traced: Res<osage_render::TracedLight>,
     options: Res<Options>,
+    dome: Option<Res<Dome>>,
 ) {
     let block = Block::of(me.eyes());
     if store.block == Some(block) && !store.changed {
@@ -484,11 +622,12 @@ fn arrays(
         store.drawn = probes.len();
         store.cubed = true;
         store.probes_of = Some(block.cube);
-        if let (true, Some((_, drawn))) = (relit, probes.first().cloned()) {
-            let done = fetcher.lights.0.clone();
+        if let (true, Some((centre, drawn))) = (relit, probes.first().cloned()) {
+            let (done, domed) = (fetcher.lights.0.clone(), dome.is_some());
             let _ = thread::Builder::new().name("paris-environment".to_owned()).spawn(move || {
                 let (diffuse, specular) = environment_seen(&drawn);
-                let _ = done.send((block, diffuse, specular));
+                let dome = domed.then(|| (centre, dome_picture(&drawn)));
+                let _ = done.send((block, diffuse, specular, dome));
             });
         }
         let size = probes.first().map_or((1, 1), |(_, d)| (d.width, d.height));
@@ -511,24 +650,12 @@ fn arrays(
         for (layer, (centre, _)) in probes.iter().enumerate().take(5) {
             at[layer] = centre.extend(layer as f32);
         }
+        // Traced (T4), the block is lit by the dome (`lit`), shining what the
+        // centre probe saw come in, direction by direction: no face is a lamp.
         for glow in &glows {
             commands.entity(glow).despawn();
         }
         let (lo, hi) = (block.min(), block.max());
-        // Traced (T4), the block is lit by its faces as lamps: Solari's
-        // realtime path barely lights it from its environment map (research
-        // 10). Each face shines what the centre probe saw come in through it,
-        // all scaled for the floor in the middle of the block to gather from
-        // them what the probe saw come in.
-        let lamps = match (traced.0, probes.first()) {
-            (true, Some((centre, drawn))) => {
-                let shine = Face::ALL.map(|face| seen_through(drawn, face.normal()));
-                let scale = lamps_scale(drawn, &shine, *centre, &block);
-                debug!(scale, "paris: the faces' lamps");
-                Some(shine.map(|l| l * scale))
-            }
-            _ => None,
-        };
         for (index, face) in Face::ALL.into_iter().enumerate() {
             let (entity, handle) = &faces.0[index];
             if let Some(mut material) = materials.get_mut(handle) {
@@ -540,14 +667,6 @@ fn arrays(
                 material.distances = distances.clone();
             }
             place_face(&mut places, *entity, face, lo, hi, options.whole);
-            if let (Ok(quad), Some(lamps)) = (quads.get(*entity), lamps) {
-                let luminance = lamps[index] * NITS;
-                let lamp = osage_render::Emitter(LinearRgba::rgb(luminance.x, luminance.y, luminance.z));
-                let glow = commands
-                    .spawn((Mesh3d(quad.0.clone()), lamp, Transform::default(), Visibility::Inherited, Glow))
-                    .id();
-                commands.entity(*entity).add_child(glow);
-            }
         }
         return;
     }
@@ -561,13 +680,19 @@ fn arrays(
     store.drawn = mine.len();
     store.cubed = false;
     store.probes_of = None;
+    // Lit by the tiles' lamps: the dome shines a probe's light.
+    if let Some(dome) = &dome
+        && let Ok((_, mut visibility)) = places.get_mut(dome.entity)
+    {
+        *visibility = Visibility::Hidden;
+    }
     // The block lit by its own light, on a thread: what comes in from each
     // direction, seen from its centre.
     if !mine.is_empty() {
         let (tiles, done) = (mine.clone(), fetcher.lights.0.clone());
         let _ = thread::Builder::new().name("paris-environment".to_owned()).spawn(move || {
             let (diffuse, specular) = environment(&block, &tiles);
-            let _ = done.send((block, diffuse, specular));
+            let _ = done.send((block, diffuse, specular, None));
         });
     }
     let side = mine.first().map_or(1, |(_, d)| d.width);
@@ -676,67 +801,6 @@ fn seen_towards(drawn: &light::Drawn, d: Vec3) -> Vec3 {
     Vec3::new(band(0), band(10), band(20))
 }
 
-/// How much the faces' lamps (`shine`, in `Face::ALL`'s order) must be
-/// scaled for the floor in the middle of the block, under the centre probe,
-/// to gather from them as much light as the probe saw come in: over the
-/// half sphere above, weighed by the cosine, each direction's lamp being
-/// the face it leaves the block by.
-fn lamps_scale(drawn: &light::Drawn, shine: &[Vec3; 6], centre: Vec3, block: &Block) -> f32 {
-    let luminance = |v: Vec3| 0.2126 * v.x + 0.7152 * v.y + 0.0722 * v.z;
-    let floor = centre - Vec3::Y * osage_world_paris::walk::EYES;
-    let (lo, hi) = (block.min(), block.max());
-    let (mut seen, mut lit) = (0.0f32, 0.0f32);
-    const N: usize = 48;
-    for i in 0..N {
-        for j in 0..N {
-            // Directions spread as the cosine over the half sphere above.
-            let (u, v) = ((i as f32 + 0.5) / N as f32, (j as f32 + 0.5) / N as f32);
-            let (sine, phi) = (u.sqrt(), v * std::f32::consts::TAU);
-            let d = Vec3::new(sine * phi.cos(), (1.0 - u).sqrt(), sine * phi.sin());
-            let leave = |axis: usize| {
-                if d[axis].abs() < 1e-6 {
-                    f32::INFINITY
-                } else if d[axis] > 0.0 {
-                    (hi[axis] - floor[axis]) / d[axis]
-                } else {
-                    (lo[axis] - floor[axis]) / d[axis]
-                }
-            };
-            let axis = (0..3).min_by(|&a, &b| leave(a).total_cmp(&leave(b))).unwrap_or(1);
-            lit += luminance(shine[axis * 2 + usize::from(d[axis] > 0.0)]);
-            seen += luminance(seen_towards(drawn, d));
-        }
-    }
-    if lit > 0.0 { (seen / lit).clamp(0.25, 4.0) } else { 1.0 }
-}
-
-/// What a probe inside the cube saw come in through the half sphere
-/// around `out`, weighed by the cosine: the radiance a lamp facing in from
-/// that side of the block shines with.
-fn seen_through(drawn: &light::Drawn, out: Vec3) -> Vec3 {
-    let (w, h) = (drawn.width as usize, drawn.height as usize);
-    let step = (w / 256).max(1);
-    let (mut sum, mut weight) = (Vec3::ZERO, 0.0);
-    for row in (0..h).step_by(step) {
-        let lat = std::f32::consts::FRAC_PI_2 - (row as f32 + 0.5) / h as f32 * std::f32::consts::PI;
-        for col in (0..w).step_by(step) {
-            let lon = ((col as f32 + 0.5) / w as f32 - 0.5) * std::f32::consts::TAU;
-            let d = Vec3::new(lat.cos() * lon.sin(), lat.sin(), -lat.cos() * lon.cos());
-            let cosine = d.dot(out);
-            if cosine <= 0.0 {
-                continue;
-            }
-            // An equirectangular pixel spans the cosine of its latitude.
-            let w8 = cosine * lat.cos();
-            let packed = drawn.radiance[row * w + col];
-            let band = |shift: u32| light::decode_radiance(((packed >> shift) & 1023) as f32 / 1023.0);
-            sum += Vec3::new(band(0), band(10), band(20)) * w8;
-            weight += w8;
-        }
-    }
-    if weight > 0.0 { sum / weight } else { Vec3::ZERO }
-}
-
 /// What comes into the block from each direction as a probe inside it saw
 /// it (equirectangular: the middle column north, east to its right).
 fn environment_seen(drawn: &light::Drawn) -> (Image, Image) {
@@ -826,15 +890,20 @@ fn environment(block: &Block, tiles: &[(Tile, Arc<light::Drawn>)]) -> (Image, Im
     osage_render::sky_light::cubemaps(sample)
 }
 
-/// The environment light of the block the walker is in, once made.
+/// The environment light of the block the walker is in, once made; traced,
+/// the dome round it shining the light that came in.
+#[allow(clippy::too_many_arguments)]
 fn lit(
     mut commands: Commands,
     fetcher: Res<Fetcher>,
     mut store: ResMut<Store>,
     mut images: ResMut<Assets<Image>>,
     cameras: Query<Entity, With<osage_render::OsageCamera>>,
+    dome: Option<Res<Dome>>,
+    mut standard: ResMut<Assets<StandardMaterial>>,
+    mut places: Query<(&mut Transform, &mut Visibility)>,
 ) {
-    for (block, diffuse, specular) in fetcher.lights.1.try_iter() {
+    for (block, diffuse, specular, domed) in fetcher.lights.1.try_iter() {
         if store.block != Some(block) {
             continue;
         }
@@ -847,6 +916,77 @@ fn lit(
                 ..default()
             });
         }
+        if let (Some(dome), Some((centre, picture))) = (dome.as_ref(), domed) {
+            if let Some(mut material) = standard.get_mut(&dome.material) {
+                material.emissive_texture = Some(images.add(picture));
+            }
+            if let Ok((mut place, mut visibility)) = places.get_mut(dome.entity) {
+                place.translation = centre;
+                *visibility = Visibility::Inherited;
+            }
+        }
         store.lit = Some(block);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use bevy::mesh::VertexAttributeValues;
+
+    use super::*;
+
+    #[test]
+    fn the_dome_faces_in_and_is_mapped_as_a_probe() {
+        let mesh = dome_mesh();
+        let Some(VertexAttributeValues::Float32x3(positions)) = mesh.attribute(Mesh::ATTRIBUTE_POSITION) else {
+            panic!("positions")
+        };
+        let Some(VertexAttributeValues::Float32x3(normals)) = mesh.attribute(Mesh::ATTRIBUTE_NORMAL) else {
+            panic!("normals")
+        };
+        let Some(VertexAttributeValues::Float32x2(uvs)) = mesh.attribute(Mesh::ATTRIBUTE_UV_0) else { panic!("uvs") };
+        for ((p, n), uv) in positions.iter().zip(normals).zip(uvs) {
+            let d = Vec3::from(*p) / DOME_RADIUS;
+            assert!((d.length() - 1.0).abs() < 1e-4);
+            assert!((Vec3::from(*n) + d).length() < 1e-4, "facing in");
+            // A probe's picture: u = ½ + atan2(x, -z) / 2π, v = ½ - asin(y) / π.
+            let v = 0.5 - d.y.clamp(-1.0, 1.0).asin() / std::f32::consts::PI;
+            assert!((uv[1] - v).abs() < 1e-4, "{uv:?} {d}");
+            if d.y.abs() < 0.999 && uv[0] > 1e-4 && uv[0] < 1.0 - 1e-4 {
+                let u = 0.5 + d.x.atan2(-d.z) / std::f32::consts::TAU;
+                assert!((uv[0] - u).abs() < 1e-4, "{uv:?} {d}");
+            }
+        }
+        // Wound to face the centre: each triangle's normal points in.
+        let Some(Indices::U32(indices)) = mesh.indices() else { panic!("indices") };
+        assert!(indices.len() / 3 < 65_536, "a light Solari samples");
+        for t in indices.chunks(3) {
+            let [a, b, c] = [t[0], t[1], t[2]].map(|i| Vec3::from(positions[i as usize]));
+            let normal = (b - a).cross(c - a);
+            if normal.length() > 1e-3 {
+                assert!(normal.dot((a + b + c) / 3.0) < 0.0);
+            }
+        }
+    }
+
+    #[test]
+    fn the_dome_picture_is_the_probe_s_light_in_half_floats() {
+        for (v, bits) in [(0.0f32, 0u16), (1.0, 0x3c00), (0.5, 0x3800), (64.0, 0x5400), (1.0 / 3.0, 0x3555)] {
+            assert_eq!(half(v), bits, "{v}");
+        }
+        let c = light::encode_radiance(2.0);
+        let q = (c * 1023.0).round() as u32;
+        let drawn = light::Drawn {
+            width: 8,
+            height: 4,
+            radiance: vec![q | (q << 10) | (q << 20) | (3 << 30); 32],
+            distance: vec![1.0; 32],
+        };
+        let picture = dome_picture(&drawn);
+        assert_eq!((picture.width(), picture.height()), (8, 4));
+        let data = picture.data.as_ref().expect("data");
+        let red = u16::from_le_bytes([data[0], data[1]]);
+        // The probe's light as it came, ten bits of its curve.
+        assert_eq!(red, half(light::decode_radiance(q as f32 / 1023.0)), "{red:#x}");
     }
 }

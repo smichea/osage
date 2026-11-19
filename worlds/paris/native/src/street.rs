@@ -18,7 +18,7 @@ use bevy::{
 use osage_render::OsageCamera;
 use osage_world_paris::tiles::Block;
 
-use crate::{NITS, walker::Me};
+use crate::{NITS, clip, walker::Me};
 
 /// The street's model and its sky, under the asset manifest's content.
 const MODEL: &str = "orca/bistro/out/bistro.gltf";
@@ -42,11 +42,13 @@ struct Model {
     lit: bool,
 }
 
-/// A mesh of the street, and the box it fills in the world.
+/// A mesh of the street, the box it fills in the world, and the mesh
+/// itself (drawn cut to the block when traced).
 #[derive(Component)]
 pub struct Piece {
     min: Vec3,
     max: Vec3,
+    mesh: Handle<Mesh>,
 }
 
 /// Whether the street is placed, for whoever waits on it.
@@ -142,7 +144,7 @@ fn place(
                 MeshMaterial3d(material),
                 place,
                 Visibility::Hidden,
-                Piece { min, max },
+                Piece { min, max, mesh: primitive.mesh.clone() },
             ));
             count += 1;
         }
@@ -162,12 +164,18 @@ fn bounds(mesh: &Mesh) -> Option<(Vec3, Vec3)> {
 }
 
 /// Shows the meshes that reach into the block drawn, hides the others.
+/// Traced (T4), each is cut to the block: the rays see the block alone, and
+/// what lies beyond comes in as the light its probes saw (`clip`). Drawn,
+/// nothing changes: from inside the block the faces hide all beyond it.
+#[allow(clippy::too_many_arguments)]
 fn show(
     me: Res<Me>,
     options: Res<crate::Options>,
     light: Res<crate::light::Store>,
+    traced: Res<osage_render::TracedLight>,
+    mut meshes: ResMut<Assets<Mesh>>,
     mut last: Local<Option<Block>>,
-    mut pieces: Query<(&Piece, &mut Visibility)>,
+    mut pieces: Query<(&Piece, &Transform, &mut Visibility, &mut Mesh3d)>,
     added: Query<(), Added<Piece>>,
 ) {
     // The block whose light is drawn: it stays a moment after the walker
@@ -178,12 +186,37 @@ fn show(
     }
     *last = Some(block);
     let (lo, hi) = (block.min() - 0.01, block.max() + 0.01);
-    for (piece, mut visibility) in &mut pieces {
+    let cut = traced.0 && !options.whole;
+    let mut parts = 0;
+    for (piece, place, mut visibility, mut mesh) in &mut pieces {
         let reaches = options.whole || (piece.min.cmple(hi).all() && piece.max.cmpge(lo).all());
-        let wanted = if reaches { Visibility::Inherited } else { Visibility::Hidden };
+        let mut wanted = if reaches { Visibility::Inherited } else { Visibility::Hidden };
+        if cut {
+            let inside = piece.min.cmpge(lo).all() && piece.max.cmple(hi).all();
+            let shape = if !reaches || inside {
+                Some(piece.mesh.clone())
+            } else {
+                match meshes.get(&piece.mesh).map(|whole| clip::clip(whole, place, lo, hi)) {
+                    Some(clip::Cut::Part(part)) => {
+                        parts += 1;
+                        Some(meshes.add(*part))
+                    }
+                    Some(clip::Cut::Nothing) => None,
+                    Some(clip::Cut::Whole) | None => Some(piece.mesh.clone()),
+                }
+            };
+            match shape {
+                Some(shape) if mesh.0 != shape => mesh.0 = shape,
+                Some(_) => {}
+                None => wanted = Visibility::Hidden,
+            }
+        }
         if *visibility != wanted {
             *visibility = wanted;
         }
+    }
+    if cut {
+        debug!(cube = ?block.cube, parts, "paris: the street cut to the block for the rays");
     }
 }
 

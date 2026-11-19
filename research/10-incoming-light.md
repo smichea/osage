@@ -102,9 +102,27 @@ The picture is then whole along the walk, sharp in the cubes with probes, the ti
 On the L4, from the scene camera's place with the cube's probes: 28.5 dB at T3, the cobbles at 0.99 of Cycles. At T4 the block is traced and lit by its faces as lamps of the centre probe's light through each (as in the tiles' case, about 0.64 of Cycles on the cobbles). Without the lamps, the rays leaving the block met nothing and Solari's realtime path took the camera's environment map — the centre probe's light, direction by direction — alone: the cobbles fell to 0.20. Lighting the traced block by the light coming in, ray by ray, is left to an RTX machine to work out. Meanwhile the lamps are scaled for the floor in the middle of the block to gather from them, over the half sphere above weighed by the cosine, what the centre probe saw come in: 27.3 dB over the picture at T4 (24.9 with the tiles' plain lamps), the cobbles at 0.71 of Cycles, all beyond the block as at T3.
 With ReSTIR off as well (Solari's world cache alone), the environment map left the cobbles at exactly 0.20 again: the realtime path does not seem to take the camera's environment map here at all, whichever way it gathers. To be found on a machine that traces rays, before the lamps can go.
 
+## The traced block under a dome (D-138, 2026-11-19)
+
+The block traced at T4, on the L4, from the scene camera's place, with the cube's probes:
+
+| The block's light for the rays | Picture | Floor (traced) |
+|---|---|---|
+| Its faces as lamps of the centre probe's light, scaled | 27.3 dB | 0.71 |
+| A dome round it, shining the centre probe's light, direction by direction | 28.0 dB | 0.86 |
+| The same, the street cut to the block for the rays | 28.1 dB | 0.88 |
+| The same, unfiltered | 27.7 dB | 0.81 |
+| T3 (raster, the same light as its environment map) | 28.5 dB | 0.99 |
+
+The floor is measured where the block's own cobbles are seen (the picture's lowest tenth); the street beyond the block, drawn by the faces, is 0.98 at T3 and T4 alike.
+
+1. **A dome.** A sphere of 40 m radius round the block, facing in, its picture the centre probe's (1024 × 512, half floats): an emissive mesh, which Solari samples as a light, triangle by triangle. A ray that leaves the block meets it and takes the light that came in from its own direction, where lamps on the faces gave each face's mean light. 40 m keeps the dome within the 50 m Solari's light cache traces to: a ray of the cache that met nothing would take the camera's environment map besides the dome.
+2. **The rays see the block alone.** A mesh is shown when its box reaches into the block; four buildings did here, up to 34 m high, and were traced whole: they hid the light the probes saw beyond the block (Cycles' light) and lit the floor from Solari's instead. Each mesh that reaches out of the block is now cut at its surface (`clip.rs`, Sutherland–Hodgman, its attributes interpolated along the cuts); drawn at T3 with the cut, the picture is the same to 55.9 dB.
+3. **What is left.** In radiance (both drawn plain), the traced floor is 0.895 of T3's under the same light. Not the denoiser: without it the floor is darker still (0.81, grain darkening through AgX's curve), and none of it is black — not a normal map's normals turned from the eye. The street's materials are all alpha-masked and Solari traces them opaque, but their colour textures are opaque throughout: the eye sees the same layer as the rays. The pixel's light is one ReSTIR sample weighed; the 10 % is to be found inside Solari's realtime estimator.
+
 ## Next
 
 1. The whole street baked, at 1024–1536 px and more samples: about 2 000 tiles, a cloud GPU's work (hours on the laptop's processor for 384 px).
 2. Tiles of neighbouring planes as one video (they differ by a few metres of parallax), for the stream.
 3. Probes between tiles' centres where walls stand near a face, to see behind depth edges.
-4. The block traced at T4 (Solari): its faces are lamps of their tiles' mean light for the rays; tried on an RTX card.
+4. The traced block's floor 10 % darker than T3's under the same light (D-138): Solari's realtime estimator, ReSTIR on and off, against a path traced reference of the same block and dome.

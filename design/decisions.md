@@ -1219,3 +1219,12 @@ Date: 2026-11-18 · the maintainer, shown the client against Cycles with both (r
 - **Why:** a probe on the block's surface stands a metre from what lies just outside the block, the eye 3 to 5 m back; the eye sees behind a bollard, a kerb or a door's jamb what no such probe sees (3.8 % of the measured picture), and those holes can only be guessed. From inside the cube, 0.04 %; 28.4 dB against Cycles from 26.2.
 - **Cost:** a probe weighs about 860 KiB (4096 × 2048, AV1), 4.3 MB a cube, about 16 Mbit/s walking; a cube's five take 15 min of an L4 at 256 samples.
 - **Transition:** where a cube's probes are not baked yet, the client falls back on the block's surface tiles (D-136).
+
+## D-138 — Traced, the rays see the block alone, under a dome of the light coming in
+
+Date: 2026-11-19 · the traced block (T4) lit by its faces as lamps came out at 0.71 of Cycles on its floor (research 10); "le client trace en ray tracing les cubes autour du promeneur ; le serveur ne lui envoie que la lumière qui entre par la surface de ce bloc".
+
+- **Decision (D-135's tracing, D-137's light):** at T4 the rays see the walker's block alone: a mesh of the street that reaches out of it is cut at its surface for the rays and the eye (from inside the block the faces hide all beyond it anyway). What lies beyond comes in from a dome of 40 m radius round the block, facing in and shining what the cube's centre probe saw come in from each direction (a 1024 × 512 picture of it); a ray leaving the block meets the dome and takes the light that came in from its own direction. The faces are no longer lamps where the cube has probes; a cube without them keeps D-136's lamps of its tiles.
+- **Why:** the probes were taken with the block transparent (D-137): what they saw is all that lies beyond it, lit as Cycles lit it. Traced whole, a building whose corner stood in the block hid that light from the floor and lit it again from Solari's light instead; lamps of a face's mean light lost the light's direction and had to be scaled by hand. Under the dome and cut to the block: the floor at 0.88 of Cycles from 0.71, 28.1 dB over the picture from 27.3 (T3 28.5).
+- **Radius:** within the 50 m Solari's light cache traces its rays to: farther, a ray of the cache that met nothing would take the camera's environment map besides the dome, the light counted twice.
+- **Left:** the traced floor still 10 % darker than T3's under the same light (0.895 in radiance); not the denoiser (unfiltered, 0.81 through AgX's curve), to be found in Solari's realtime estimator.

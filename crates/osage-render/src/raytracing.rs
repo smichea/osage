@@ -36,7 +36,10 @@ impl Plugin for RayTracingPlugin {
         app.add_plugins((SolariPlugins, crate::denoise::DenoisePlugin))
             .init_resource::<Doubles>()
             .init_resource::<Glows>()
-            .add_systems(Update, (camera, doubles, stand_ins, emitters, glows, untrace))
+            .add_systems(
+                Update,
+                (camera, remeshed.before(doubles), doubles, forget, stand_ins, emitters, glows, untrace),
+            )
             .add_systems(PostUpdate, hidden.after(bevy::camera::visibility::VisibilitySystems::VisibilityPropagate));
     }
 
@@ -191,6 +194,29 @@ fn doubles(
                 commands.entity(entity).insert(Untraced);
             }
             None => {}
+        }
+    }
+}
+
+/// A mesh a world draws anew (cut otherwise, as the Paris client cuts its
+/// street to the walker's block) is traced anew: its old double leaves the
+/// traced scene, and the new one is made in its place.
+#[allow(clippy::type_complexity)]
+fn remeshed(
+    mut commands: Commands,
+    changed: Query<Entity, (Changed<Mesh3d>, Or<(With<RaytracingMesh3d>, With<HiddenDouble>, With<Untraced>)>)>,
+) {
+    for entity in &changed {
+        commands.entity(entity).remove::<(RaytracingMesh3d, HiddenDouble, Untraced)>();
+    }
+}
+
+/// A mesh gone, its double goes with it (a world that cuts its meshes as
+/// the walker goes makes new ones all the while).
+fn forget(mut events: MessageReader<AssetEvent<Mesh>>, mut doubles: ResMut<Doubles>) {
+    for event in events.read() {
+        if let AssetEvent::Removed { id } | AssetEvent::Unused { id } = event {
+            doubles.0.remove(id);
         }
     }
 }

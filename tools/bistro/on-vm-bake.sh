@@ -8,9 +8,10 @@
 # tiles come packed (`osage-packed`: no bake, only the shots); fetches Blender,
 # the scene, the street and the source from `in/` there; bakes the tiles
 # and the picture to measure against on the GPU while the client builds on
-# the processors; packs the tiles; draws the client at T4 and T3 from where
-# the scene's camera stands; and puts back under `out/` what it made, then
-# `done` with a one-line status. Then it powers off; cloud-bake.sh deletes it.
+# the processors; packs the tiles; draws the client at T4 and T3, and at T4
+# unfiltered, from where the scene's camera stands; and puts back under `out/`
+# what it made, then `done` with a one-line status. Then it powers off;
+# cloud-bake.sh deletes it.
 
 set -uo pipefail
 # Start-up scripts run with a bare environment: gcloud lives in /snap/bin.
@@ -117,5 +118,8 @@ for tier in T4 T3; do
       --at 24.82,1.96,-61.65 --heading 161.4 >"../out/$shot.log" 2>&1 || say "the $shot shot failed (see out/$shot.log)"
   done
 done
+# The traced light unfiltered, to tell the filter's part from Solari's.
+OSAGE_DENOISE=0 timeout 900 ./target/release/paris --offline --tier T4 --fov 46.7 --shot ../out/T4-grain.png \
+  --at 24.82,1.96,-61.65 --heading 161.4 >../out/T4-grain.log 2>&1 || say "the T4-grain shot failed (see out/T4-grain.log)"
 cd "$work"
 finish ok
