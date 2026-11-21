@@ -99,9 +99,9 @@ fn shoot(
         return;
     }
     let street = placed.is_some_and(|p| p.0);
-    // The block's light has come and lights it — or, never forever, a
-    // picture of what there is after a while.
-    let come = store.drawn > 0 && store.received >= store.drawn && store.lit == store.block;
+    // The block's light has come and lights it, its probes' tiles all sent
+    // (D-141) — or, never forever, a picture of what there is after a while.
+    let come = store.drawn > 0 && store.received >= store.drawn && store.lit == store.block && !store.halved;
     let ready = street && (come || *all > 1500);
     // Some frames and seconds after, for the pipelines and the textures
     // to reach the GPU (on a fast one, 60 frames are a quarter of a second)

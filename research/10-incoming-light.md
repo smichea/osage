@@ -149,6 +149,17 @@ Packing again costs nothing; the quality past 18–26 buys bytes, not decoding (
 
 Two remedies tried and set aside. **The GPU's AV1 decoder** (VA-API on the Iris Xe) decodes the colour (Main profile, 10-bit 4:2:0) but neither the distance (12-bit, Professional profile) nor the sky's mask (monochrome): 0.41 s for the colour instead of 0.67 with dav1d on four threads, a third of a probe's decoding at best. **A cube's five probes as one video** (the centre's frame alone, the four others predicted from it): 3.5–3.9 MB a cube instead of 4.3–4.6 (−16 %), but no less to decode — one thread, the four probes after the centre: 1.56 s of CPU as pictures of their own, 1.79 s joined after the centre's (re-decoded: the colour 1.04 → 1.02 s, the distance 0.32 → 0.66 s at quality 1, the mask 0.20 → 0.12 s). A first measure through five ffmpeg processes had made it look three times faster.
 
+**Where the walker looks (D-141).** A view reads 15–26 % of each probe's panorama, its middle third 5–11 %. Each probe inside a cube is now packed as 16 × 8 tiles of 256 pixels, every one a key frame carrying its sequence header, so that any of them decodes alone (SVT-AV1 with `keyint=1`: ffmpeg's `-g 1` does not reach it; libaom with `-g 1` and without looking ahead, which failed to allocate its noise filter's buffers and would have filtered a tile with the next ones); the half (D-140) is packed beside it. The client draws the half at once, doubled into the probe's layer, then decodes the tiles four at a time from where the walker looks outwards — running, those within 35° (the middle of the picture: its corners are 55° off at 70° of field); walking, within 70°; standing, all — and writes each over the half, after it.
+
+| Measure | Tiles | Whole probe |
+|---|---|---|
+| Radiance against the probe as baked, quality 22 | 5.1 % off, 235 KiB | 4.1 % off, 305 KiB |
+| … tiles at quality 16 | 4.3 % off, 323 KiB | |
+| Decoding, one probe (laptop, load 6–7) | 128 tiles: 1.07 s on one thread, 0.37 s on four; a tile 5 ms in the sky, about 10 in the street | 0.55–0.64 s on four threads; its half 0.16–0.19 s |
+| Standing, against Cycles | every tile: 27.9 dB | 28.0 dB; the halves alone, doubled: 26.6 dB |
+
+Tiles that are key frames each alone need about six levels of quality more than a probe's single picture to come back as close (why, not yet looked into). The tiles bring the halves' 26.6 dB back to 27.9, mostly on the façades and the sky. Filmed against D-140 on the laptop, alternately, two rounds (load 3.6–11): walking 7 s, 155/156 and 123/211 frames, medians 20.5/23.6 and 16.8/17.1 ms, 25/30 and 30/31 over 50 ms; running 2.5 s, medians 20.5/25.5 and 22.4/21.4 ms, 11/9 and 11/8 over 50 ms (D-140/D-141). No smoother, within the load's noise; running, D-141 decoded four batches of four tiles a cube, the middle of the view sharp where D-140 showed the halves; 9.8 MB down the five cubes against 7.8. Standing before setting out, every tile of the cube is decoded (640 in about two seconds).
+
 ## Next
 
 1. The whole street baked, at 1024–1536 px and more samples: about 2 000 tiles, a cloud GPU's work (hours on the laptop's processor for 384 px).

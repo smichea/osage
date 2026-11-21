@@ -9,9 +9,15 @@
 //! light lights the block: what comes in from each direction, seen from
 //! the block's centre, made into the camera's environment light; traced
 //! (T4), shone by a dome round the block, the rays' sky.
+//!
+//! A probe packed as tiles (D-141) comes at half its size first, doubled
+//! into its layer, and as its tiles, fetched whole and decoded a few at a
+//! time from where the walker looks outwards, each written over the half
+//! where it belongs.
 
 use std::{
     collections::{HashMap, HashSet},
+    f32::consts::{PI, TAU},
     path::PathBuf,
     sync::{Arc, Mutex},
     thread,
@@ -47,6 +53,17 @@ const PERIOD: f64 = 0.25;
 /// Threads fetching and decoding light: a probe (4096 × 2048) takes about
 /// a second of one; more than four starve the picture of the processor.
 const WORKERS: usize = 4;
+/// A probe's tiles a thread decodes at once (D-141): about 35 ms.
+const PART: usize = 4;
+/// Decodings of tiles asked at once: enough to keep the threads busy, few
+/// enough that the tiles follow where the walker looks.
+const PARTS_OUT: usize = 2 * WORKERS;
+/// How far from where the walker looks its cube's tiles are decoded
+/// (D-141), radians: running, the middle of the picture (its corners lie
+/// 55° off at 70° of field); walking, all of it, and a margin for the
+/// probes standing beside the eyes; standing, all round.
+const RUNNING_CONE: f32 = 35.0 * PI / 180.0;
+const WALKING_CONE: f32 = 70.0 * PI / 180.0;
 
 pub struct LightPlugin;
 
@@ -59,7 +76,7 @@ impl Plugin for LightPlugin {
             .init_resource::<WalkerId>()
             .init_resource::<Layers>()
             .add_systems(Startup, (start, faces, dome))
-            .add_systems(Update, (ask, receive, arrays, lit).chain());
+            .add_systems(Update, (ask, receive, arrays, ask_parts, lit).chain());
     }
 
     fn finish(&self, app: &mut App) {
@@ -95,6 +112,21 @@ struct Layer {
     drawn: Arc<light::Drawn>,
     distance: bool,
     row: u32,
+    /// Where its top left goes in the layer: the corner, a probe's light
+    /// whole; or one of its tiles (D-141), where it belongs.
+    at: UVec2,
+    /// A probe's light whole (the faces may read the layer once it is
+    /// written), not a tile over it.
+    whole: bool,
+}
+
+/// A probe's light, whole, for its layer `k` of the cube's arrays.
+fn push_whole(uploads: &mut Uploads, arrays: &Arrays, k: usize, drawn: &Arc<light::Drawn>) {
+    let (_, _, colours, distances) = arrays;
+    for (image, distance) in [(colours.id(), false), (distances.id(), true)] {
+        let (drawn, at) = (drawn.clone(), UVec2::ZERO);
+        uploads.pending.push(Layer { image, layer: k as u32, drawn, distance, row: 0, at, whole: true });
+    }
 }
 
 /// What the render world writes a frame, bytes: a probe's two layers
@@ -103,16 +135,25 @@ struct Layer {
 const WRITTEN_A_FRAME: u64 = 16 << 20;
 
 /// Writes, in bands of rows, the layers whose arrays are on the GPU, so
-/// much a frame; the rest waits for the next.
+/// much a frame; the rest waits for the next. A tile waits for its layer's
+/// light whole, which would write over it.
 fn write_layers(layers: Res<Layers>, images: Res<RenderAssets<GpuImage>>, queue: Res<RenderQueue>) {
     let Ok(mut uploads) = layers.0.lock() else { return };
     let Uploads { pending, written } = &mut *uploads;
     let mut spent = 0u64;
-    pending.retain_mut(|layer| {
-        if spent >= WRITTEN_A_FRAME {
-            return true;
+    // The layers a light whole is still to be written into, this frame.
+    let mut unfinished: HashSet<(AssetId<Image>, u32)> = HashSet::new();
+    let wait = |layer: &Layer, unfinished: &mut HashSet<(AssetId<Image>, u32)>| {
+        if layer.whole {
+            unfinished.insert((layer.image, layer.layer));
         }
-        let Some(gpu) = images.get(layer.image) else { return true };
+        true
+    };
+    pending.retain_mut(|layer| {
+        if spent >= WRITTEN_A_FRAME || (!layer.whole && unfinished.contains(&(layer.image, layer.layer))) {
+            return wait(layer, &mut unfinished);
+        }
+        let Some(gpu) = images.get(layer.image) else { return wait(layer, &mut unfinished) };
         let (width, height) = (layer.drawn.width, layer.drawn.height);
         let row_bytes = 4 * width as u64;
         let rows = (((WRITTEN_A_FRAME - spent) / row_bytes).max(1) as u32).min(height - layer.row);
@@ -126,7 +167,7 @@ fn write_layers(layers: Res<Layers>, images: Res<RenderAssets<GpuImage>>, queue:
             TexelCopyTextureInfo {
                 texture: &gpu.texture,
                 mip_level: 0,
-                origin: Origin3d { x: 0, y: layer.row, z: layer.layer },
+                origin: Origin3d { x: layer.at.x, y: layer.at.y + layer.row, z: layer.layer },
                 aspect: TextureAspect::All,
             },
             bytes,
@@ -136,9 +177,11 @@ fn write_layers(layers: Res<Layers>, images: Res<RenderAssets<GpuImage>>, queue:
         spent += rows as u64 * row_bytes;
         layer.row += rows;
         if layer.row < height {
-            return true;
+            return wait(layer, &mut unfinished);
         }
-        *written.entry(layer.image).or_default() |= 1 << layer.layer;
+        if layer.whole {
+            *written.entry(layer.image).or_default() |= 1 << layer.layer;
+        }
         false
     });
 }
@@ -221,11 +264,43 @@ pub struct Store {
     sent: u8,
     written: u8,
     shown: u8,
+    /// The probes packed as tiles (D-141), by key: their files, and the
+    /// tiles decoded so far.
+    parts: HashMap<String, Parts>,
+    /// Decodings of tiles asked and not answered.
+    parts_out: usize,
+    /// The layers whose light, at half its size, is being doubled to fill
+    /// them (D-141), a bit each.
+    doubling: u8,
+    /// Each layer's tiles sent to the arrays (D-141), a bit each.
+    tiled: [u128; tiles::PROBES],
+    /// Whether a probe of the cube shows some of its light at half its size
+    /// still, its tiles not all sent (D-141).
+    pub halved: bool,
 }
 
 /// A cube's texture arrays: the cube, their size, the light's and the
 /// distances'.
 type Arrays = (IVec3, (u32, u32), Handle<Image>, Handle<Image>);
+
+/// A probe packed as tiles (D-141): its three files, fetched whole, and the
+/// tiles decoded where the walker looks.
+struct Parts {
+    files: Arc<[Vec<u8>; 3]>,
+    /// Tiles across and down.
+    grid: (u32, u32),
+    /// The tiles asked to decode, a bit each.
+    asked: u128,
+    decoded: HashMap<usize, Arc<light::Drawn>>,
+}
+
+/// A probe's light whole for a layer of a cube's arrays, doubled from half
+/// its size: the cube, the layer.
+type Doubled = (IVec3, usize, Arc<light::Drawn>);
+
+/// A probe of the walker's cube: its layer, where it stands, the light its
+/// layer starts with, and whether that is at half its size.
+type Probe = (usize, Vec3, Arc<light::Drawn>, bool);
 
 #[derive(Clone)]
 enum Source {
@@ -234,8 +309,20 @@ enum Source {
 }
 
 enum Ask {
-    Need { source: Source, walker: u64 },
-    Tile { source: Source, key: String },
+    Need {
+        source: Source,
+        walker: u64,
+    },
+    Tile {
+        source: Source,
+        key: String,
+    },
+    /// Some tiles of a probe packed as tiles (D-141), to decode.
+    Part {
+        key: String,
+        files: Arc<[Vec<u8>; 3]>,
+        tiles: Vec<usize>,
+    },
 }
 
 enum Got {
@@ -246,6 +333,19 @@ enum Got {
         drawn: light::Drawn,
         bytes: u64,
         centre: Option<Vec3>,
+    },
+    /// A probe packed as tiles (D-141), fetched, not decoded.
+    Tiles {
+        key: String,
+        files: Arc<[Vec<u8>; 3]>,
+        grid: (u32, u32),
+        bytes: u64,
+        centre: Option<Vec3>,
+    },
+    /// Some of its tiles, decoded (none if they could not be).
+    Parts {
+        key: String,
+        tiles: Vec<(usize, light::Drawn)>,
     },
     Failed(String),
 }
@@ -265,15 +365,21 @@ struct Fetcher {
     /// The server asked what the walker needs, on a thread of its own: behind
     /// probes a second long each, the answers came seconds late.
     needs: Sender<Ask>,
+    /// Tiles of probes to decode (D-141): after what comes first, before the
+    /// cubes' other probes.
+    parts: Sender<Ask>,
     gots: Receiver<Got>,
     /// The environment lights made from blocks' light, as they are done.
     lights: (Sender<Lit>, Receiver<Lit>),
+    /// The layers' light doubled from half its size, as it is done.
+    doubled: (Sender<Doubled>, Receiver<Doubled>),
 }
 
 impl Fetcher {
     /// Where a tile or probe waits: a cube's other probes after the rest.
     fn queue(&self, key: &str) -> &Sender<Ask> {
-        if key.starts_with("c_") && !key.ends_with("_0") { &self.later } else { &self.asks }
+        let probe = key.starts_with("c_") || key.starts_with("h_");
+        if probe && !key.ends_with("_0") { &self.later } else { &self.asks }
     }
 }
 
@@ -291,6 +397,7 @@ struct Glow;
 fn start(mut commands: Commands, options: Res<Options>, mut store: ResMut<Store>) {
     let (asks, first) = crossbeam_channel::unbounded::<Ask>();
     let (later, rest) = crossbeam_channel::unbounded::<Ask>();
+    let (parts, tiles) = crossbeam_channel::unbounded::<Ask>();
     let (from_workers, gots) = crossbeam_channel::unbounded::<Got>();
     let (needs, asked) = crossbeam_channel::unbounded::<Ask>();
     {
@@ -299,18 +406,26 @@ fn start(mut commands: Commands, options: Res<Options>, mut store: ResMut<Store>
             .name("paris-need".to_owned())
             .spawn(move || {
                 let _keep = keep;
-                work(asked, never, from_workers)
+                work(asked, never.clone(), never, from_workers)
             })
             .expect("the need thread");
     }
     for i in 0..WORKERS {
-        let (first, rest, from_workers) = (first.clone(), rest.clone(), from_workers.clone());
+        let (first, tiles, rest, from_workers) = (first.clone(), tiles.clone(), rest.clone(), from_workers.clone());
         thread::Builder::new()
             .name(format!("paris-light-{i}"))
-            .spawn(move || work(first, rest, from_workers))
+            .spawn(move || work(first, tiles, rest, from_workers))
             .expect("a light thread");
     }
-    commands.insert_resource(Fetcher { asks, later, needs, gots, lights: crossbeam_channel::unbounded() });
+    commands.insert_resource(Fetcher {
+        asks,
+        later,
+        needs,
+        parts,
+        gots,
+        lights: crossbeam_channel::unbounded(),
+        doubled: crossbeam_channel::unbounded(),
+    });
     if options.server.is_none() {
         let index = options.street.join("tiles/index.json");
         let present = std::fs::read_to_string(&index)
@@ -335,15 +450,16 @@ fn give_way() {
     }
 }
 
-fn work(first: Receiver<Ask>, rest: Receiver<Ask>, gots: Sender<Got>) {
+fn work(first: Receiver<Ask>, parts: Receiver<Ask>, rest: Receiver<Ask>, gots: Sender<Got>) {
     give_way();
     let mut clients: HashMap<String, Client> = HashMap::new();
     loop {
-        // What comes first, first.
-        let ask = match first.try_recv() {
+        // What comes first, first; then the tiles where the walker looks.
+        let ask = match first.try_recv().or_else(|_| parts.try_recv()) {
             Ok(ask) => ask,
             Err(_) => crossbeam_channel::select! {
                 recv(first) -> ask => match ask { Ok(ask) => ask, Err(_) => return },
+                recv(parts) -> ask => match ask { Ok(ask) => ask, Err(_) => return },
                 recv(rest) -> ask => match ask { Ok(ask) => ask, Err(_) => return },
             },
         };
@@ -367,12 +483,25 @@ fn work(first: Receiver<Ask>, rest: Receiver<Ask>, gots: Sender<Got>) {
                         Source::Folder(folder) => std::fs::read(folder.join(&key).join(file)),
                     }
                 };
-                // A probe inside a cube (D-137) says where it stands.
-                let centre = if key.starts_with("c_") || key.starts_with("h_") {
-                    fetch("meta.json").ok().and_then(|m| centre(&m))
-                } else {
-                    None
-                };
+                // A probe inside a cube (D-137) says where it stands, and
+                // whether it is packed as tiles (D-141).
+                let meta = if key.starts_with("c_") || key.starts_with("h_") { fetch("meta.json").ok() } else { None };
+                let centre = meta.as_deref().and_then(centre);
+                let grid = meta.as_deref().and_then(tiled);
+                if let Some(grid) = grid {
+                    let files = (fetch("tiles-colour.ivf"), fetch("tiles-depth.ivf"), fetch("tiles-mask.ivf"));
+                    let got = match files {
+                        (Ok(c), Ok(d), Ok(m)) => {
+                            let bytes = (c.len() + d.len() + m.len()) as u64;
+                            Got::Tiles { key, files: Arc::new([c, d, m]), grid, bytes, centre }
+                        }
+                        (Err(e), ..) | (_, Err(e), _) | (.., Err(e)) => Got::Failed(format!("{key}: {e}")),
+                    };
+                    if gots.send(got).is_err() {
+                        return;
+                    }
+                    continue;
+                }
                 match (fetch("colour.ivf"), fetch("depth.ivf"), fetch("mask.ivf")) {
                     (Ok(c), Ok(d), Ok(m)) => {
                         let bytes = (c.len() + d.len() + m.len()) as u64;
@@ -388,11 +517,33 @@ fn work(first: Receiver<Ask>, rest: Receiver<Ask>, gots: Sender<Got>) {
                     (Err(e), ..) | (_, Err(e), _) | (.., Err(e)) => Got::Failed(format!("{key}: {e}")),
                 }
             }
+            Ask::Part { key, files, tiles } => {
+                let started = std::time::Instant::now();
+                let [c, d, m] = &*files;
+                let decoded = light::decode_tiles(c, d, m, &tiles);
+                debug!(key, tiles = tiles.len(), ms = started.elapsed().as_millis() as u64, "paris: tiles decoded");
+                match decoded {
+                    Ok(drawn) => Got::Parts { key, tiles: tiles.into_iter().zip(drawn).collect() },
+                    Err(e) => {
+                        warn!(key, "paris: tiles: {e}");
+                        Got::Parts { key, tiles: Vec::new() }
+                    }
+                }
+            }
         };
         if gots.send(got).is_err() {
             return;
         }
     }
+}
+
+/// A probe's tiles across and down, from its `meta.json`, when it is packed
+/// as tiles (D-141): at most 128, a bit each.
+fn tiled(meta: &[u8]) -> Option<(u32, u32)> {
+    let meta: serde_json::Value = serde_json::from_slice(meta).ok()?;
+    let grid = meta["tiles"].as_array()?;
+    let (columns, rows) = (grid.first()?.as_u64()? as u32, grid.get(1)?.as_u64()? as u32);
+    (columns > 0 && rows > 0 && columns * rows <= 128).then_some((columns, rows))
 }
 
 /// Where a probe stands, from its `meta.json`.
@@ -475,6 +626,25 @@ fn receive(options: Res<Options>, server: Res<LightServer>, fetcher: Res<Fetcher
                     store.centres.insert(key.clone(), centre);
                 }
                 store.tiles.insert(key, Arc::new(drawn));
+                store.changed = true;
+            }
+            Got::Tiles { key, files, grid, bytes, centre } => {
+                debug!(key, "paris: light came, as tiles");
+                store.bytes += bytes;
+                store.received += 1;
+                if let Some(centre) = centre {
+                    store.centres.insert(key.clone(), centre);
+                }
+                store.parts.insert(key, Parts { files, grid, asked: 0, decoded: HashMap::new() });
+            }
+            Got::Parts { key, tiles } => {
+                store.parts_out = store.parts_out.saturating_sub(1);
+                if let Some(parts) = store.parts.get_mut(&key) {
+                    for (t, drawn) in tiles {
+                        parts.asked |= 1 << t;
+                        parts.decoded.insert(t, Arc::new(drawn));
+                    }
+                }
                 store.changed = true;
             }
             Got::Failed(what) => {
@@ -725,6 +895,17 @@ fn arrays(
     layers: Res<Layers>,
 ) {
     let block = Block::of(me.eyes());
+    // The layers' light doubled from half its size (D-141), sent to them.
+    for (cube, k, drawn) in fetcher.doubled.1.try_iter() {
+        let bit = 1 << k;
+        let Some(arrays) = store.arrays.clone().filter(|a| a.0 == cube && store.doubling & bit != 0) else { continue };
+        store.doubling &= !bit;
+        if let Ok(mut uploads) = layers.0.lock() {
+            push_whole(&mut uploads, &arrays, k, &drawn);
+            store.sent |= bit;
+            store.changed = true;
+        }
+    }
     // The probes written whole into the arrays since: drawn with them.
     if let (Some((_, _, colours, distances)), Ok(uploads)) = (store.arrays.clone(), layers.0.lock()) {
         let written = |image: &Handle<Image>| uploads.written.get(&image.id()).copied().unwrap_or(0);
@@ -745,10 +926,13 @@ fn arrays(
     let decoded =
         if options.cube_probes > 0 { cube_probes(&store, options.cube_probes, block.cube) } else { Vec::new() };
     // This cube's arrays, filled as its probes decode, each written once
-    // into its layer by the render world (`Layers`), a band a frame.
-    if let Some((_, _, first)) = decoded.first() {
-        let size = (first.width, first.height);
-        // Made again for the probes of another size (D-140: walking after running).
+    // into its layer by the render world (`Layers`), a band a frame; a
+    // probe at half its size doubled first (D-141), its tiles written over
+    // it as they are decoded.
+    if let Some((_, _, first, half)) = decoded.first() {
+        let scale = if *half { 2 } else { 1 };
+        let size = (first.width * scale, first.height * scale);
+        // Made again for the probes of another size.
         if !matches!(&store.arrays, Some((cube, made, ..)) if *cube == block.cube && *made == size) {
             store.arrays = Some((
                 block.cube,
@@ -756,25 +940,59 @@ fn arrays(
                 images.add(layered(size, tiles::PROBES as u32, TextureFormat::Rgb10a2Unorm)),
                 images.add(layered(size, tiles::PROBES as u32, TextureFormat::R32Float)),
             ));
-            (store.sent, store.written) = (0, 0);
+            (store.sent, store.written, store.doubling, store.tiled) = (0, 0, 0, [0; tiles::PROBES]);
         }
-        if let (Some((_, _, colours, distances)), Ok(mut uploads)) = (store.arrays.clone(), layers.0.lock()) {
+        let store = &mut *store;
+        if let (Some(arrays), Ok(mut uploads)) = (store.arrays.clone(), layers.0.lock()) {
             // What was on its way to arrays no longer filled goes.
+            let (_, _, colours, distances) = &arrays;
             let mine = |image: &AssetId<Image>| *image == colours.id() || *image == distances.id();
             uploads.pending.retain(|l| mine(&l.image));
             uploads.written.retain(|image, _| mine(image));
-            let sent = store.sent;
-            for (k, _, drawn) in decoded.iter().filter(|(k, _, _)| sent & 1 << k == 0) {
-                for (image, distance) in [(colours.id(), false), (distances.id(), true)] {
-                    uploads.pending.push(Layer { image, layer: *k as u32, drawn: drawn.clone(), distance, row: 0 });
+            for (k, _, drawn, half) in &decoded {
+                let bit = 1 << k;
+                let scale = if *half { 2 } else { 1 };
+                if (store.sent | store.doubling) & bit != 0 || (drawn.width * scale, drawn.height * scale) != size {
+                    continue;
                 }
-                store.sent |= 1 << k;
+                if *half {
+                    // Doubled on a thread of its own: eight million pixels.
+                    store.doubling |= bit;
+                    let (done, drawn, cube, k) = (fetcher.doubled.0.clone(), drawn.clone(), block.cube, *k);
+                    let _ = thread::Builder::new().name("paris-double".to_owned()).spawn(move || {
+                        give_way();
+                        let _ = done.send((cube, k, Arc::new(drawn.doubled())));
+                    });
+                } else {
+                    push_whole(&mut uploads, &arrays, *k, drawn);
+                    store.sent |= bit;
+                }
+            }
+            // The tiles decoded, over their layers' light once it is on its way.
+            for (k, key) in tiles::probe_keys(block.cube).iter().enumerate() {
+                let Some(parts) = store.parts.get(key).filter(|_| store.sent & 1 << k != 0) else { continue };
+                let columns = parts.grid.0 as usize;
+                for (&t, drawn) in &parts.decoded {
+                    let at = UVec2::new((t % columns) as u32 * drawn.width, (t / columns) as u32 * drawn.height);
+                    if store.tiled[k] & 1 << t != 0 || at.x + drawn.width > size.0 || at.y + drawn.height > size.1 {
+                        continue;
+                    }
+                    for (image, distance) in [(colours.id(), false), (distances.id(), true)] {
+                        let (layer, drawn) = (k as u32, drawn.clone());
+                        uploads.pending.push(Layer { image, layer, drawn, distance, row: 0, at, whole: false });
+                    }
+                    store.tiled[k] |= 1 << t;
+                }
             }
         }
+        let keys = tiles::probe_keys(block.cube);
+        store.halved = decoded.iter().any(|(k, _, _, half)| {
+            *half && store.parts.get(&keys[*k]).is_none_or(|p| store.tiled[*k].count_ones() < p.grid.0 * p.grid.1)
+        });
     }
     // The probes the faces can show: written whole, the centre's first.
-    let probes: Vec<_> = if store.written & 1 != 0 {
-        decoded.iter().filter(|(k, _, _)| store.written & 1 << k != 0).cloned().collect()
+    let probes: Vec<Probe> = if store.written & 1 != 0 {
+        decoded.iter().filter(|(k, ..)| store.written & 1 << k != 0).cloned().collect()
     } else {
         Vec::new()
     };
@@ -791,7 +1009,7 @@ fn arrays(
     if !probes.is_empty() {
         // Drawn with the probes written, the centre's first.
         let same = store.probes_of == Some(block.cube) && store.cubed;
-        let shown = probes.iter().fold(0u8, |bits, (k, _, _)| bits | 1 << k);
+        let shown = probes.iter().fold(0u8, |bits, (k, ..)| bits | 1 << k);
         if store.block == Some(block) && same && shown == store.shown {
             return;
         }
@@ -800,7 +1018,7 @@ fn arrays(
         store.drawn = probes.len();
         store.cubed = true;
         store.probes_of = Some(block.cube);
-        if let (true, Some((_, centre, drawn))) = (relit, probes.first().cloned()) {
+        if let (true, Some((_, centre, drawn, _))) = (relit, probes.first().cloned()) {
             let (done, domed) = (fetcher.lights.0.clone(), dome.is_some());
             let _ = thread::Builder::new().name("paris-environment".to_owned()).spawn(move || {
                 let (diffuse, specular) = environment_seen(&drawn);
@@ -808,13 +1026,12 @@ fn arrays(
                 let _ = done.send((block, diffuse, specular, dome));
             });
         }
-        let size = probes.first().map_or((1, 1), |(_, _, d)| (d.width, d.height));
-        let Some((_, _, colours, distances)) = store.arrays.clone() else { return };
+        let Some((_, size, colours, distances)) = store.arrays.clone() else { return };
         store.shown = shown;
         debug!(cube = ?block.cube, probes = probes.len(), ms = started.elapsed().as_micros() as f32 / 1000.0, "paris: the block's arrays told");
         // The probes that have come, the centre's first, each with its layer.
         let mut at = [Vec4::new(0.0, 0.0, 0.0, -1.0); 5];
-        for (slot, (k, centre, _)) in probes.iter().enumerate().take(5) {
+        for (slot, (k, centre, ..)) in probes.iter().enumerate().take(5) {
             at[slot] = centre.extend(*k as f32);
         }
         // Traced (T4), the block is lit by the dome (`lit`), shining what the
@@ -944,24 +1161,131 @@ fn place_face(
     }
 }
 
-/// The cube's first `count` probes that have come, each with where it
-/// stands, its centre's first; none until its centre's has.
-fn cube_probes(store: &Store, count: usize, cube: IVec3) -> Vec<(usize, Vec3, Arc<light::Drawn>)> {
-    let keys = tiles::probe_keys(cube);
-    let came = |key: &str| store.centres.contains_key(key) && store.tiles.contains_key(key);
-    if !came(&keys[0]) {
-        // Running, the centre at half its size (D-140), alone.
-        let half = tiles::half_key(&keys[0]);
-        return match (came(&half), store.centres.get(&half), store.tiles.get(&half)) {
-            (true, Some(&at), Some(drawn)) => vec![(0, at, drawn.clone())],
-            _ => Vec::new(),
-        };
-    }
-    keys.into_iter()
+/// The cube's first `count` probes whose light has come, each with where it
+/// stands, the light its layer starts with, whole or at half its size
+/// (D-140; D-141: doubled, its tiles written over it), its centre's first;
+/// none until its centre's has.
+fn cube_probes(store: &Store, count: usize, cube: IVec3) -> Vec<Probe> {
+    let came = |key: &str| Some((*store.centres.get(key)?, store.tiles.get(key)?.clone()));
+    let probes: Vec<Probe> = tiles::probe_keys(cube)
+        .iter()
         .take(count)
         .enumerate()
-        .filter_map(|(k, key)| Some((k, *store.centres.get(&key)?, store.tiles.get(&key)?.clone())))
-        .collect()
+        .filter_map(|(k, key)| {
+            let ((centre, drawn), half) =
+                came(key).map(|c| (c, false)).or_else(|| came(&tiles::half_key(key)).map(|c| (c, true)))?;
+            Some((k, centre, drawn, half))
+        })
+        .collect();
+    if probes.first().is_some_and(|(k, ..)| *k == 0) { probes } else { Vec::new() }
+}
+
+/// The cube of a probe inside a cube, from its key (`c_X_Y_Z_K`).
+fn probe_cube(key: &str) -> Option<IVec3> {
+    let mut parts = key.split('_').skip(1).map(|v| v.parse::<i32>().ok());
+    Some(IVec3::new(parts.next()??, parts.next()??, parts.next()??))
+}
+
+/// How far each tile of a probe (equirectangular, `columns` × `rows` tiles,
+/// row by row from the top left) lies from `forward`, radians: from the
+/// nearest of its corners, sides' middles and middle; none for the one it
+/// is in.
+fn tile_angles((columns, rows): (u32, u32), forward: Vec3) -> Vec<f32> {
+    let forward = forward.normalize_or(Vec3::NEG_Z);
+    let direction = |u: f32, v: f32| {
+        let (lon, lat) = ((u - 0.5) * TAU, (0.5 - v) * PI);
+        Vec3::new(lat.cos() * lon.sin(), lat.sin(), -lat.cos() * lon.cos())
+    };
+    // The tile the walker looks into.
+    let (u, v) = (0.5 + forward.x.atan2(-forward.z) / TAU, 0.5 - forward.y.clamp(-1.0, 1.0).asin() / PI);
+    let into = ((u * columns as f32) as u32).min(columns - 1) + ((v * rows as f32) as u32).min(rows - 1) * columns;
+    let mut out = Vec::with_capacity((columns * rows) as usize);
+    for row in 0..rows {
+        for column in 0..columns {
+            let mut nearest = PI;
+            for (a, b) in [0.0, 0.5, 1.0].into_iter().flat_map(|a| [0.0, 0.5, 1.0].map(|b| (a, b))) {
+                let d = direction((column as f32 + a) / columns as f32, (row as f32 + b) / rows as f32);
+                nearest = nearest.min(d.dot(forward).clamp(-1.0, 1.0).acos());
+            }
+            out.push(if row * columns + column == into { 0.0 } else { nearest });
+        }
+    }
+    out
+}
+
+/// Where the walker looks, the tiles of its cube's probes packed as tiles
+/// (D-141), decoded from the middle of its view outwards, a few at a time:
+/// running, the middle alone; walking, the whole view; standing, all round.
+/// Then those of the centre of the cube it goes to, for when it gets there.
+/// The tiles decoded for cubes left behind go.
+fn ask_parts(
+    me: Res<Me>,
+    options: Res<Options>,
+    fetcher: Res<Fetcher>,
+    mut store: ResMut<Store>,
+    mut last: Local<Option<IVec3>>,
+) {
+    if options.cube_probes == 0 {
+        return;
+    }
+    let cube = Block::of(me.eyes()).cube;
+    if *last != Some(cube) {
+        *last = Some(cube);
+        for (key, parts) in &mut store.parts {
+            let near = probe_cube(key).is_some_and(|c| (c - cube).abs().max_element() <= 1);
+            if !near && !parts.decoded.is_empty() {
+                parts.decoded.clear();
+                parts.asked = 0;
+            }
+        }
+    }
+    if store.parts_out >= PARTS_OUT {
+        return;
+    }
+    let forward = Quat::from_euler(EulerRot::YXZ, me.heading, me.pitch, 0.0) * Vec3::NEG_Z;
+    let speed = Vec2::new(me.velocity.x, me.velocity.z).length();
+    let cone = if speed > tiles::RUNNING {
+        RUNNING_CONE
+    } else if speed < tiles::STANDING {
+        PI
+    } else {
+        WALKING_CONE
+    };
+    let mut keys: Vec<String> = tiles::probe_keys(cube).into_iter().take(options.cube_probes).collect();
+    let own = keys.len();
+    // The next cube on its way, a metre and a half ahead at most.
+    let way = Vec3::new(me.velocity.x, 0.0, me.velocity.z).normalize_or_zero();
+    let next = (1..=15).map(|i| Block::of(me.eyes() + way * (i as f32 / 10.0)).cube).find(|c| *c != cube);
+    if let Some(next) = next.filter(|_| speed >= tiles::STANDING) {
+        keys.extend(tiles::probe_keys(next).into_iter().take(1));
+    }
+    // Each tile wanted: whether its cube is the walker's, how far from where
+    // the walker looks, whose, which.
+    let mut wanted: Vec<(bool, f32, usize, usize)> = Vec::new();
+    let mut angles: HashMap<(u32, u32), Vec<f32>> = HashMap::new();
+    for (order, key) in keys.iter().enumerate() {
+        let Some(parts) = store.parts.get(key) else { continue };
+        let angles = angles.entry(parts.grid).or_insert_with(|| tile_angles(parts.grid, forward));
+        for (t, &angle) in angles.iter().enumerate() {
+            if parts.asked & 1 << t == 0 && angle <= cone {
+                wanted.push((order >= own, angle, order, t));
+            }
+        }
+    }
+    wanted.sort_by(|a, b| a.0.cmp(&b.0).then(a.1.total_cmp(&b.1)).then(a.2.cmp(&b.2)));
+    let store = &mut *store;
+    while store.parts_out < PARTS_OUT
+        && let Some(&(_, _, order, _)) = wanted.first()
+    {
+        let tiles: Vec<usize> = wanted.iter().filter(|w| w.2 == order).take(PART).map(|w| w.3).collect();
+        wanted.retain(|w| w.2 != order || !tiles.contains(&w.3));
+        let Some(parts) = store.parts.get_mut(&keys[order]) else { break };
+        for &t in &tiles {
+            parts.asked |= 1 << t;
+        }
+        let _ = fetcher.parts.send(Ask::Part { key: keys[order].clone(), files: parts.files.clone(), tiles });
+        store.parts_out += 1;
+    }
 }
 
 /// What a probe inside the cube saw come in from direction `d`
@@ -1112,6 +1436,23 @@ mod tests {
     use bevy::mesh::VertexAttributeValues;
 
     use super::*;
+
+    #[test]
+    fn the_tiles_nearest_where_the_walker_looks_come_first() {
+        // Looking north, level: the four tiles meeting at the picture's
+        // middle are looked into, the one behind is farthest.
+        let angles = tile_angles((16, 8), Vec3::NEG_Z);
+        assert_eq!(angles.len(), 128);
+        for t in [3 * 16 + 7, 3 * 16 + 8, 4 * 16 + 7, 4 * 16 + 8] {
+            assert!(angles[t] < 1e-3, "tile {t}: {}", angles[t]);
+        }
+        assert!(angles[3 * 16] > 140f32.to_radians(), "behind: {}", angles[3 * 16].to_degrees());
+        // Looking east and a little up: into the tile there.
+        let east = tile_angles((16, 8), Vec3::new(1.0, 0.2, 0.0));
+        let (column, row) = ((0.75f32 * 16.0) as usize, ((0.5 - 0.2f32.atan2(1.0) / PI) * 8.0) as usize);
+        assert_eq!(east[row * 16 + column], 0.0);
+        assert_eq!(probe_cube("c_8_0_-21_3"), Some(IVec3::new(8, 0, -21)));
+    }
 
     #[test]
     fn the_dome_faces_in_and_is_mapped_as_a_probe() {

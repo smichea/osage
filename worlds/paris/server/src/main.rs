@@ -17,7 +17,9 @@
 //! (2 s unless told), from where it is in the world and how fast it goes —
 //! not from what its client says — then sends each at
 //! `/h/KEY/{colour,depth,mask}.ivf` (and `meta.json`, where a probe
-//! stands). Clients learn its port from the world's `paris.world/1`.
+//! stands), or, for a probe packed as tiles (D-141),
+//! `/h/KEY/tiles-{colour,depth,mask}.ivf`. Clients learn its port from the
+//! world's `paris.world/1`.
 
 use std::{collections::HashSet, net::TcpListener, path::PathBuf, sync::Arc};
 

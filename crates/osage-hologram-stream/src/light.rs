@@ -27,6 +27,8 @@ use std::{
 
 use anyhow::{Context as _, ensure};
 
+use crate::decode::Planes;
+
 /// The brightest radiance kept; brighter is clipped.
 pub const BRIGHTEST: f32 = 64.0;
 /// How much the curve stretches the dark: a level at L = 1 / CURVE_K is
@@ -56,6 +58,25 @@ impl Light {
             radiance: drawn.radiance.iter().map(|&p| [band(p, 0), band(p, 10), band(p, 20)]).collect(),
             distance: drawn.distance.iter().map(|&d| if d < 0.0 { f32::INFINITY } else { d }).collect(),
         }
+    }
+
+    /// The light cut into `columns` × `rows` tiles of equal size, row by
+    /// row from the top left (D-141: a probe's tiles, each decoded alone).
+    pub fn tiles(&self, columns: u32, rows: u32) -> Vec<Self> {
+        let (tw, th) = (self.width / columns, self.height / rows);
+        let mut out = Vec::with_capacity((columns * rows) as usize);
+        for row in 0..rows {
+            for column in 0..columns {
+                let (mut radiance, mut distance) = (Vec::new(), Vec::new());
+                for y in row * th..(row + 1) * th {
+                    let from = (y * self.width + column * tw) as usize;
+                    radiance.extend_from_slice(&self.radiance[from..from + tw as usize]);
+                    distance.extend_from_slice(&self.distance[from..from + tw as usize]);
+                }
+                out.push(Self { width: tw, height: th, radiance, distance });
+            }
+        }
+        out
     }
 
     /// Half as wide and high (D-140: sent to a running walker): each
@@ -117,13 +138,16 @@ pub struct Quality {
     /// libaom's for distance; 0 keeps it exact, 1 within a few levels.
     pub distance: u8,
     pub preset: u8,
+    /// Every frame a key frame, its sequence header with it: each decodes
+    /// alone (a probe's tiles, D-141).
+    pub intra: bool,
 }
 
 impl Default for Quality {
     /// Radiance at 22 (D-140): against Cycles, 0.2 dB under 10 for a third
     /// of its bytes.
     fn default() -> Self {
-        Self { radiance: 22, distance: 1, preset: 6 }
+        Self { radiance: 22, distance: 1, preset: 6, intra: false }
     }
 }
 
@@ -163,6 +187,13 @@ pub fn encode(lights: &[Light], quality: Quality) -> anyhow::Result<Encoded> {
         sky.extend(open.iter().map(|&o| if o { 255u8 } else { 0 }));
     }
     let size = format!("{width}x{height}");
+    // Key frames only (D-141): `-g 1` for libaom, which must not look
+    // ahead (it failed to allocate its noise filter's buffers, and the
+    // frames ahead are other tiles); SVT-AV1 is told apart, and filters
+    // nothing across frames when every one is a key frame.
+    let gop = if quality.intra { "1" } else { "9999" };
+    let svt: &[&str] = if quality.intra { &["-svtav1-params", "keyint=1"] } else { &[] };
+    let aom: &[&str] = if quality.intra { &["-lag-in-frames", "0"] } else { &[] };
     let colour = ffmpeg(
         &["-f", "rawvideo", "-pix_fmt", "rgb48le", "-s", &size, "-r", "30", "-i", "pipe:0"],
         &[
@@ -178,28 +209,44 @@ pub fn encode(lights: &[Light], quality: Quality) -> anyhow::Result<Encoded> {
             &quality.preset.to_string(),
             "-crf",
             &quality.radiance.to_string(),
-        ],
+        ]
+        .iter()
+        .chain(svt)
+        .copied()
+        .collect::<Vec<_>>(),
+        gop,
         radiance,
     )?;
     let depth = ffmpeg(
         &["-f", "rawvideo", "-pix_fmt", "gray12le", "-s", &size, "-r", "30", "-i", "pipe:0"],
-        &["-c:v", "libaom-av1", "-crf", &quality.distance.to_string(), "-b:v", "0", "-cpu-used", "6", "-row-mt", "1"],
+        &["-c:v", "libaom-av1", "-crf", &quality.distance.to_string(), "-b:v", "0", "-cpu-used", "6", "-row-mt", "1"]
+            .iter()
+            .chain(aom)
+            .copied()
+            .collect::<Vec<_>>(),
+        gop,
         distance,
     )?;
     let mask = ffmpeg(
         &["-f", "rawvideo", "-pix_fmt", "gray", "-s", &size, "-r", "30", "-i", "pipe:0"],
-        &["-c:v", "libaom-av1", "-crf", "0", "-b:v", "0", "-cpu-used", "6", "-row-mt", "1"],
+        &["-c:v", "libaom-av1", "-crf", "0", "-b:v", "0", "-cpu-used", "6", "-row-mt", "1"]
+            .iter()
+            .chain(aom)
+            .copied()
+            .collect::<Vec<_>>(),
+        gop,
         sky,
     )?;
     Ok(Encoded { radiance: colour, distance: depth, sky: mask })
 }
 
-fn ffmpeg(input: &[&str], codec: &[&str], raw: Vec<u8>) -> anyhow::Result<Vec<u8>> {
+/// `gop`: the most frames from a key frame to the next.
+fn ffmpeg(input: &[&str], codec: &[&str], gop: &str, raw: Vec<u8>) -> anyhow::Result<Vec<u8>> {
     let mut child = Command::new("ffmpeg")
         .args(["-hide_banner", "-loglevel", "error"])
         .args(input)
         .args(codec)
-        .args(["-g", "9999", "-f", "ivf", "pipe:1"])
+        .args(["-g", gop, "-f", "ivf", "pipe:1"])
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
@@ -212,8 +259,10 @@ fn ffmpeg(input: &[&str], codec: &[&str], raw: Vec<u8>) -> anyhow::Result<Vec<u8
     let mut errors = String::new();
     child.stderr.take().context("ffmpeg's errors")?.read_to_string(&mut errors)?;
     let status = child.wait()?;
-    writer.join().map_err(|_| anyhow::anyhow!("writing to ffmpeg panicked"))??;
+    let written = writer.join().map_err(|_| anyhow::anyhow!("writing to ffmpeg panicked"))?;
+    // What ffmpeg says first: its input breaks off when it stops.
     ensure!(status.success(), "ffmpeg: {errors}");
+    written?;
     Ok(out)
 }
 
@@ -239,9 +288,23 @@ pub fn decode(radiance: &[u8], distance: &[u8], sky: &[u8]) -> anyhow::Result<Ve
     });
     let colours = colours?;
     let (depths, masks) = rest.map_err(|_| anyhow::anyhow!("decoding the distance panicked"))??;
+    drawn(&colours, &depths, &masks)
+}
+
+/// Some tiles of a probe packed as key frames (D-141), each decoded alone,
+/// in the order asked.
+pub fn decode_tiles(radiance: &[u8], distance: &[u8], sky: &[u8], which: &[usize]) -> anyhow::Result<Vec<Drawn>> {
+    let colours = crate::decode::planes_of(radiance, which)?;
+    let depths = crate::decode::planes_of(distance, which)?;
+    let masks = crate::decode::planes_of(sky, which)?;
+    drawn(&colours, &depths, &masks)
+}
+
+/// The decoded pictures as a client draws them.
+fn drawn(colours: &[Planes], depths: &[Planes], masks: &[Planes]) -> anyhow::Result<Vec<Drawn>> {
     ensure!(colours.len() == depths.len() && depths.len() == masks.len(), "files of different lengths");
     let mut out = Vec::new();
-    for ((c, d), m) in colours.iter().zip(&depths).zip(&masks) {
+    for ((c, d), m) in colours.iter().zip(depths).zip(masks) {
         let (width, height) = (c.width, c.height);
         // The radiance packed in its 10 bits a band as it is converted.
         let q = |v: f32| (v.clamp(0.0, 1.0) * 1023.0 + 0.5) as u32;
@@ -255,9 +318,71 @@ pub fn decode(radiance: &[u8], distance: &[u8], sky: &[u8]) -> anyhow::Result<Ve
     Ok(out)
 }
 
+impl Drawn {
+    /// Tiles of one size put back together, `columns` a row, row by row from
+    /// the top left (as [`Light::tiles`] cut them).
+    pub fn joined(tiles: &[Self], columns: u32) -> anyhow::Result<Self> {
+        let first = tiles.first().context("no tile")?;
+        let (tw, th) = (first.width as usize, first.height as usize);
+        ensure!(tiles.iter().all(|t| (t.width, t.height) == (first.width, first.height)), "tiles of different sizes");
+        ensure!(
+            columns > 0 && tiles.len().is_multiple_of(columns as usize),
+            "{} tiles in rows of {columns}",
+            tiles.len()
+        );
+        let (columns, rows) = (columns as usize, tiles.len() / columns as usize);
+        let (width, height) = (tw * columns, th * rows);
+        let mut radiance = vec![0; width * height];
+        let mut distance = vec![0.0; width * height];
+        for (k, tile) in tiles.iter().enumerate() {
+            let (x0, y0) = ((k % columns) * tw, (k / columns) * th);
+            for y in 0..th {
+                let to = (y0 + y) * width + x0;
+                radiance[to..to + tw].copy_from_slice(&tile.radiance[y * tw..(y + 1) * tw]);
+                distance[to..to + tw].copy_from_slice(&tile.distance[y * tw..(y + 1) * tw]);
+            }
+        }
+        Ok(Self { width: width as u32, height: height as u32, radiance, distance })
+    }
+
+    /// Twice as wide and high, each pixel four (D-141: a probe at half its
+    /// size under its tiles, until they come).
+    pub fn doubled(&self) -> Self {
+        let (w, h) = (self.width as usize, self.height as usize);
+        let mut radiance = Vec::with_capacity(4 * w * h);
+        let mut distance = Vec::with_capacity(4 * w * h);
+        for y in 0..h {
+            let row = y * w..(y + 1) * w;
+            for _ in 0..2 {
+                radiance.extend(self.radiance[row.clone()].iter().flat_map(|&v| [v, v]));
+                distance.extend(self.distance[row.clone()].iter().flat_map(|&v| [v, v]));
+            }
+        }
+        Self { width: self.width * 2, height: self.height * 2, radiance, distance }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_light_is_cut_in_tiles_row_by_row() {
+        let light = Light {
+            width: 4,
+            height: 2,
+            radiance: (0..8).map(|i| [i as f32, 0.0, 0.0]).collect(),
+            distance: (0..8).map(|i| i as f32).collect(),
+        };
+        let tiles = light.tiles(2, 2);
+        assert_eq!(tiles.len(), 4);
+        assert_eq!(tiles[1].distance, vec![2.0, 3.0], "the top row's second tile");
+        assert_eq!(tiles[2].distance, vec![4.0, 5.0]);
+        let drawn = Drawn { width: 2, height: 1, radiance: vec![1, 2], distance: vec![5.0, -1.0] };
+        let doubled = drawn.doubled();
+        assert_eq!((doubled.width, doubled.height), (4, 2));
+        assert_eq!(doubled.radiance, vec![1, 1, 2, 2, 1, 1, 2, 2]);
+    }
 
     #[test]
     fn a_light_at_half_its_size_keeps_its_mean_and_its_nearest() {
@@ -342,6 +467,38 @@ mod tests {
             }
         }
     }
+
+    #[test]
+    fn a_probe_s_tiles_decode_alone_in_any_order() {
+        let ffmpeg = Command::new("ffmpeg").arg("-version").stdout(Stdio::null()).status();
+        if !ffmpeg.is_ok_and(|s| s.success()) {
+            return;
+        }
+        let (width, height) = (256u32, 128u32);
+        let mut radiance = Vec::new();
+        let mut distance = Vec::new();
+        for y in 0..height {
+            for x in 0..width {
+                let t = x as f32 / width as f32;
+                radiance.push([0.2 + 3.0 * t, 0.5 + y as f32 / 64.0, 0.1 + 0.05 * (x / 64) as f32]);
+                distance.push(if y < 64 && x < 64 { f32::INFINITY } else { 2.0 + 20.0 * t });
+            }
+        }
+        let light = Light { width, height, radiance, distance };
+        let tiles = light.tiles(4, 2);
+        let encoded = encode(&tiles, Quality { intra: true, ..Quality::default() }).unwrap();
+        let all = decode(&encoded.radiance, &encoded.distance, &encoded.sky).unwrap();
+        assert_eq!(all.len(), 8);
+        let some = decode_tiles(&encoded.radiance, &encoded.distance, &encoded.sky, &[6, 0, 3]).unwrap();
+        assert_eq!(some.len(), 3);
+        for (got, k) in some.iter().zip([6, 0, 3]) {
+            assert_eq!(got, &all[k], "tile {k} decoded alone as among all");
+        }
+        let whole = Drawn::joined(&all, 4).unwrap();
+        assert_eq!((whole.width, whole.height), (width, height));
+        assert_eq!(whole.distance[64 * 256 + 70], all[5].distance[6], "a pixel of the second row's second tile");
+        assert!(some[1].distance.iter().all(|&d| d < 0.0), "the first tile is all sky");
+    }
 }
 
 #[cfg(test)]
@@ -384,5 +541,39 @@ mod bench {
             assert!(!d.is_empty());
         });
         time("all of decode()", &mut || assert_eq!(super::decode(&c, &d, &m).unwrap().len(), 1));
+    }
+
+    /// What a tiled probe's decoding costs (`OSAGE_PROBE=DIR`, a folder
+    /// packed with `light-pack --tiles`, D-141): every tile, on one thread
+    /// and on four; and the tiles nearest a view.
+    #[test]
+    #[ignore]
+    fn what_a_probe_s_tiles_cost_to_decode() {
+        let Some(dir) = std::env::var_os("OSAGE_PROBE").map(std::path::PathBuf::from) else { return };
+        let read = |name: &str| std::fs::read(dir.join(name)).expect("a probe packed as tiles");
+        let (c, d, m) = (read("tiles-colour.ivf"), read("tiles-depth.ivf"), read("tiles-mask.ivf"));
+        let count = crate::ivf::frames(&c).unwrap().len();
+        let time = |what: &str, f: &mut dyn FnMut()| {
+            let started = std::time::Instant::now();
+            f();
+            println!("{what}: {:.0} ms", started.elapsed().as_secs_f64() * 1000.0);
+        };
+        let all: Vec<usize> = (0..count).collect();
+        time(&format!("{count} tiles, one thread"), &mut || {
+            assert_eq!(super::decode_tiles(&c, &d, &m, &all).unwrap().len(), count)
+        });
+        time(&format!("{count} tiles, four threads"), &mut || {
+            std::thread::scope(|scope| {
+                for part in all.chunks(count.div_ceil(4)) {
+                    let (c, d, m) = (&c, &d, &m);
+                    scope.spawn(move || super::decode_tiles(c, d, m, part).unwrap());
+                }
+            })
+        });
+        for n in [1, 8, 16, 32] {
+            time(&format!("{n} tiles, one thread"), &mut || {
+                assert_eq!(super::decode_tiles(&c, &d, &m, &all[..n]).unwrap().len(), n)
+            });
+        }
     }
 }

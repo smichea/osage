@@ -3,7 +3,7 @@
 
 //! Packs tiles of light into AV1 (D-136, D-137):
 //!
-//!     light-pack [--again] [--half] RAW OUT [CRF [DEPTH_CRF]]
+//!     light-pack [--again] [--half] [--tiles[=CRF]] RAW OUT [CRF [DEPTH_CRF]]
 //!
 //! RAW holds a folder a tile or probe, as `tools/bistro/tiles.py` and
 //! `tools/bistro/cube-probes.py` write them (`radiance.f32`, `distance.f32`,
@@ -18,7 +18,14 @@
 //! `--again` packs again what is packed already (RAW's folders packed, not
 //! raw: decoded and encoded at CRF, D-140), in place if OUT is RAW. `--half`
 //! also packs each probe inside a cube (`c_X_Y_Z_K`) at half its size, as
-//! `h_X_Y_Z_K`, for a running walker (D-140).
+//! `h_X_Y_Z_K`, for a running walker (D-140). `--tiles` packs each probe
+//! inside a cube as [`COLUMNS`] × [`ROWS`] tiles instead, each a key frame
+//! that decodes alone (`tiles-colour.ivf`, `tiles-depth.ivf`,
+//! `tiles-mask.ivf`; `"tiles": [COLUMNS, ROWS]` in its `meta.json`): a
+//! client decodes those it looks at over the half (D-141), which it packs
+//! too (as `--half`). Their radiance is at its own CRF, [`TILE_CRF`] unless
+//! told: at a whole picture's CRF, key frames each alone came back a
+//! quarter further off.
 
 use std::{
     path::{Path, PathBuf},
@@ -26,7 +33,36 @@ use std::{
 };
 
 use anyhow::Context as _;
-use osage_hologram_stream::light::{self, Light, Quality};
+use osage_hologram_stream::light::{self, Drawn, Light, Quality};
+
+/// A probe's tiles across and down (`--tiles`): 256 pixels square for a
+/// probe of 4096 × 2048.
+const COLUMNS: u32 = 16;
+const ROWS: u32 = 8;
+/// The tiles' radiance CRF: as close as a whole probe at 22 (D-140), for
+/// 8 % more bytes.
+const TILE_CRF: u8 = 16;
+
+/// The files of a packed light, whole or as tiles.
+const WHOLE: [&str; 3] = ["colour.ivf", "depth.ivf", "mask.ivf"];
+const TILED: [&str; 3] = ["tiles-colour.ivf", "tiles-depth.ivf", "tiles-mask.ivf"];
+
+/// Whether a folder holds a packed light, whole or as tiles.
+fn packed(folder: &Path) -> bool {
+    folder.join(WHOLE[2]).exists() || folder.join(TILED[2]).exists()
+}
+
+/// A packed light decoded back, whole or from its tiles.
+fn decoded(folder: &Path, meta: &serde_json::Value) -> anyhow::Result<Drawn> {
+    let read =
+        |name: &str| std::fs::read(folder.join(name)).with_context(|| format!("{}", folder.join(name).display()));
+    if folder.join(TILED[2]).exists() {
+        let columns = meta["tiles"][0].as_u64().context("a tiled light's columns")? as u32;
+        let tiles = light::decode(&read(TILED[0])?, &read(TILED[1])?, &read(TILED[2])?)?;
+        return Drawn::joined(&tiles, columns);
+    }
+    light::decode(&read(WHOLE[0])?, &read(WHOLE[1])?, &read(WHOLE[2])?)?.pop().context("no picture")
+}
 
 /// What a folder of RAW holds: raw floats (`tiles.py`, `cube-probes.py`),
 /// or, packed already, its light decoded back (`--again`).
@@ -41,19 +77,22 @@ fn load(folder: &Path, meta: &serde_json::Value) -> anyhow::Result<Light> {
             distance: floats(&folder.join("distance.f32"))?,
         });
     }
-    let read =
-        |name: &str| std::fs::read(folder.join(name)).with_context(|| format!("{}", folder.join(name).display()));
-    let drawn =
-        light::decode(&read("colour.ivf")?, &read("depth.ivf")?, &read("mask.ivf")?)?.pop().context("no picture")?;
-    Ok(Light::from_drawn(&drawn))
+    Ok(Light::from_drawn(&decoded(folder, meta)?))
 }
 
-/// A packed light's files and its `meta.json` in `target`.
+/// A packed light's files and its `meta.json` in `target`, whole or as
+/// tiles (`meta` says), the other form's files gone.
 fn write(target: &Path, encoded: &light::Encoded, meta: &serde_json::Value) -> anyhow::Result<()> {
     std::fs::create_dir_all(target)?;
-    std::fs::write(target.join("colour.ivf"), &encoded.radiance)?;
-    std::fs::write(target.join("depth.ivf"), &encoded.distance)?;
-    std::fs::write(target.join("mask.ivf"), &encoded.sky)?;
+    let (names, others) = if meta.get("tiles").is_some() { (TILED, WHOLE) } else { (WHOLE, TILED) };
+    for (name, bytes) in names.iter().zip([&encoded.radiance, &encoded.distance, &encoded.sky]) {
+        std::fs::write(target.join(name), bytes)?;
+    }
+    for name in others {
+        if target.join(name).exists() {
+            std::fs::remove_file(target.join(name))?;
+        }
+    }
     std::fs::write(target.join("meta.json"), serde_json::to_string_pretty(meta)? + "\n")?;
     Ok(())
 }
@@ -65,12 +104,14 @@ fn floats(path: &Path) -> anyhow::Result<Vec<f32>> {
 
 fn main() -> anyhow::Result<()> {
     let mut args = std::env::args().skip(1).peekable();
-    let usage = "light-pack [--again] [--half] RAW OUT [CRF [DEPTH_CRF]]";
-    let (mut again, mut half) = (false, false);
+    let usage = "light-pack [--again] [--half] [--tiles[=CRF]] RAW OUT [CRF [DEPTH_CRF]]";
+    let (mut again, mut half, mut tiled) = (false, false, None);
     while let Some(flag) = args.next_if(|a| a.starts_with("--")) {
         match flag.as_str() {
             "--again" => again = true,
             "--half" => half = true,
+            "--tiles" => (tiled, half) = (Some(TILE_CRF), true),
+            tiles if tiles.starts_with("--tiles=") => (tiled, half) = (Some(tiles["--tiles=".len()..].parse()?), true),
             other => anyhow::bail!("{other}: {usage}"),
         }
     }
@@ -86,7 +127,7 @@ fn main() -> anyhow::Result<()> {
     std::fs::create_dir_all(&out)?;
     let mut keys: Vec<String> = std::fs::read_dir(&raw)?
         .filter_map(|e| e.ok())
-        .filter(|e| e.path().join("distance.f32").exists() || (again && e.path().join("colour.ivf").exists()))
+        .filter(|e| e.path().join("distance.f32").exists() || (again && packed(&e.path())))
         .map(|e| e.file_name().to_string_lossy().into_owned())
         .filter(|key| !key.starts_with("h_"))
         .collect();
@@ -101,20 +142,33 @@ fn main() -> anyhow::Result<()> {
                     loop {
                         let Some(key) = next.lock().unwrap().next() else { return Ok(()) };
                         let target = out.join(key);
-                        if !again && target.join("mask.ivf").exists() {
+                        if !again && packed(&target) {
                             continue;
                         }
                         let folder = raw.join(key);
-                        let meta: serde_json::Value =
+                        let mut meta: serde_json::Value =
                             serde_json::from_str(&std::fs::read_to_string(folder.join("meta.json"))?)?;
                         let light = load(&folder, &meta)?;
                         let (radiance, distance) = (light.radiance.len() * 3, light.distance.len());
-                        let encoded = light::encode(std::slice::from_ref(&light), quality)?;
+                        let probe = key.starts_with("c_");
+                        let encoded = if let Some(crf) = tiled.filter(|_| probe) {
+                            meta["tiles"] = serde_json::json!([COLUMNS, ROWS]);
+                            let tiles = Quality { radiance: crf, intra: true, ..quality };
+                            light::encode(&light.tiles(COLUMNS, ROWS), tiles)?
+                        } else {
+                            if let Some(told) = meta.as_object_mut() {
+                                told.remove("tiles");
+                            }
+                            light::encode(std::slice::from_ref(&light), quality)?
+                        };
                         write(&target, &encoded, &meta)?;
                         // A probe inside a cube, at half its size too.
-                        if half && key.starts_with("c_") {
+                        if half && probe {
                             let small = light.half();
                             let mut told = meta.clone();
+                            if let Some(told) = told.as_object_mut() {
+                                told.remove("tiles");
+                            }
                             told["width"] = small.width.into();
                             told["height"] = small.height.into();
                             told["key"] = key.replacen("c_", "h_", 1).into();
@@ -123,7 +177,7 @@ fn main() -> anyhow::Result<()> {
                         }
                         // How close it comes back: the radiance's error,
                         // relative, where it is not dark.
-                        let back = light::decode(&encoded.radiance, &encoded.distance, &encoded.sky)?;
+                        let back = [decoded(&target, &meta)?];
                         let mut worst: f32 = 0.0;
                         let mut sum = 0.0f32;
                         let mut n = 0;
@@ -169,7 +223,7 @@ fn main() -> anyhow::Result<()> {
     // the cubes beside the blocks' tiles).
     let mut packed: Vec<String> = std::fs::read_dir(&out)?
         .filter_map(|e| e.ok())
-        .filter(|e| e.path().join("mask.ivf").exists())
+        .filter(|e| packed(&e.path()))
         .map(|e| e.file_name().to_string_lossy().into_owned())
         .collect();
     packed.sort();

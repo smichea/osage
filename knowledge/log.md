@@ -1,6 +1,7 @@
 # Knowledge Update Log
 
 ## 2026-11-19
+* **Update**: probes as tiles, decoded where the walker looks (D-141): [osage-hologram-stream](/modules/osage-hologram-stream.md) packs each probe inside a cube as tiles that decode alone; [osage-world-paris](/modules/paris-world.md) sends the halves first, then the probes whole; [osage-paris-native](/modules/paris-native.md) draws the half at once and writes the tiles over it from the middle of the view outwards.
 * **Update**: lighter probes (D-140): [osage-hologram-stream](/modules/osage-hologram-stream.md) packs at quality 22 and at half the size; [osage-world-paris](/modules/paris-world.md) sends a runner the halves; [osage-paris-native](/modules/paris-native.md) draws the best size it has.
 * **Update**: the light sent along the walker's way (D-139): [osage-world-paris](/modules/paris-world.md) sends the centres' probes of the cubes on its way and beside it, its own cube whole only when it stands, from its velocity; [osage-paris-native](/modules/paris-native.md) asks the same walking alone.
 * **Update**: a smoother walk: [osage-paris-native](/modules/paris-native.md) writes each probe into its layer of the cube's arrays from the render world, a band a frame, and decodes at a lower priority; [osage-hologram-stream](/modules/osage-hologram-stream.md) packs a light's radiance as it converts it (`Planes::rgb_as`).

@@ -150,6 +150,22 @@ impl Planes {
     }
 }
 
+/// The pictures of some frames of an IVF file of key frames only (each
+/// with its sequence header: a probe's tiles, D-141), decoded alone, in the
+/// order asked, on one thread (they are small; the callers decode several
+/// side by side).
+pub fn planes_of(file: &[u8], which: &[usize]) -> anyhow::Result<Vec<Planes>> {
+    let frames = ivf::frames(file)?;
+    let mut decoder = Decoder::with_threads(1)?;
+    let mut pictures = Vec::new();
+    for &i in which {
+        let frame = frames.get(i).with_context(|| format!("no frame {i} of {}", frames.len()))?;
+        decoder.send(frame, |picture| pictures.push(extract(picture)))?;
+    }
+    decoder.drain(|picture| pictures.push(extract(picture)))?;
+    pictures.into_iter().collect()
+}
+
 /// The pictures of an IVF file at full precision. A light's picture is
 /// large (4096 × 2048 for a probe inside a cube): four threads decode its
 /// tiles side by side, about twice as fast as one.

@@ -180,14 +180,15 @@ pub const BESIDE: f32 = 1.0;
 /// sent too (D-139).
 pub const STANDING: f32 = 0.5;
 
-/// Over this speed, m/s, a walker runs (walking 1.4, running 4): the
-/// centres' probes are sent at half their size, where they are packed so
-/// (D-140: decoded three times faster, blurred only at the sides, where a
-/// runner's eyes are not).
+/// Over this speed, m/s, a walker runs (walking 1.4, running 4): a client
+/// decodes its probes' tiles in the middle of its view alone, the rest at
+/// half their size (D-141: blurred at the sides, where a runner's eyes are
+/// not; D-140 sent it the centres at half their size instead of whole).
 pub const RUNNING: f32 = 2.5;
 
 /// A probe's key at half its size (D-140, `light-pack --half`):
-/// `h_X_Y_Z_K` for `c_X_Y_Z_K`.
+/// `h_X_Y_Z_K` for `c_X_Y_Z_K`; a client draws it first, doubled, under the
+/// probe's tiles (D-141).
 pub fn half_key(key: &str) -> String {
     key.replacen("c_", "h_", 1)
 }
@@ -232,12 +233,14 @@ pub fn ahead(eye: Vec3, velocity: Vec3, horizon: f32) -> Vec<IVec3> {
 /// needs within `horizon` seconds (D-139), in the order a client should
 /// decode it: of the cubes on its way (`ahead`) and the four beside its own,
 /// into which it could turn, the centres' probes first (D-137: with its
-/// centre's alone a client draws a cube); then the surface tiles of the
-/// cubes without probes (D-136); then, standing, its own cube's four other
-/// probes; running, the centres at half their size (D-140). Only what
-/// `there` says is there, each once. All five probes of
-/// every cube within reach, as before, came to nine probes a second walking
-/// down the whole street, fifteen of a laptop's cores to decode.
+/// centre's alone a client draws a cube), at half their size where they are
+/// packed so (D-141: a quarter of the decoding, drawn at once); then the
+/// surface tiles of the cubes without probes (D-136); then the centres
+/// whole, which a client packed as tiles decodes where the walker looks
+/// (D-141); then, standing, its own cube's four other probes, at half their
+/// size first. Only what `there` says is there, each once. All five probes
+/// of every cube within reach, as before, came to nine probes a second
+/// walking down the whole street, fifteen of a laptop's cores to decode.
 pub fn needed_light(eye: Vec3, velocity: Vec3, horizon: f32, there: impl Fn(&str) -> bool) -> Vec<String> {
     let mut seen = BTreeSet::new();
     let mut keys = Vec::new();
@@ -259,14 +262,18 @@ pub fn needed_light(eye: Vec3, velocity: Vec3, horizon: f32, there: impl Fn(&str
         cubes.iter().partition(|&&cube| there(&centre(cube)) || there(&half_key(&centre(cube))));
     for &cube in &baked {
         let (full, half) = (centre(cube), half_key(&centre(cube)));
-        let small = (speed > RUNNING && there(&half)) || !there(&full);
-        add(if small { half } else { full });
+        add(if there(&half) { half } else { full });
     }
     for &cube in &bare {
         Block { cube }.tiles().into_iter().for_each(|t| add(t.key()));
     }
+    for &cube in &baked {
+        add(centre(cube));
+    }
     if speed < STANDING && baked.contains(&own) {
-        probe_keys(own).into_iter().skip(1).for_each(&mut add);
+        let others: Vec<String> = probe_keys(own).into_iter().skip(1).collect();
+        others.iter().map(|k| half_key(k)).for_each(&mut add);
+        others.into_iter().for_each(&mut add);
     }
     keys
 }
@@ -296,11 +303,20 @@ mod tests {
         let running = needed_light(eye, Vec3::new(0.0, 0.0, 4.0), 2.0, baked);
         assert!(running.contains(&"c_8_0_-19_0".to_owned()) && running.contains(&"c_8_0_-18_0".to_owned()));
         assert!(!running.contains(&"c_10_0_-20_0".to_owned()), "two cubes to the side");
-        // Running where the halves are packed: the centres at half their size.
+        // Where the halves are packed (D-141): the centres at half their size
+        // first, then whole, running or not.
         let halved = |k: &str| k.starts_with("c_") || k.starts_with("h_");
-        let running = needed_light(eye, Vec3::new(0.0, 0.0, 4.0), 2.0, halved);
-        assert!(running.iter().all(|k| k.starts_with("h_") && k.ends_with("_0")), "{running:?}");
-        assert!(needed_light(eye, Vec3::new(0.0, 0.0, 1.4), 2.0, halved).iter().all(|k| k.starts_with("c_")));
+        for velocity in [Vec3::new(0.0, 0.0, 4.0), Vec3::new(0.0, 0.0, 1.4)] {
+            let light = needed_light(eye, velocity, 2.0, halved);
+            let whole = light.iter().position(|k| k.starts_with("c_")).expect("the centres whole");
+            assert!(light[..whole].iter().all(|k| k.starts_with("h_") && k.ends_with("_0")), "{light:?}");
+            assert!(light[whole..].iter().all(|k| k.starts_with("c_") && k.ends_with("_0")), "{light:?}");
+            assert_eq!(2 * whole, light.len(), "each centre at half its size, then whole");
+        }
+        // Standing: its own cube's others too, at half their size first.
+        let standing = needed_light(eye, Vec3::ZERO, 2.0, halved);
+        let at = |key: &str| standing.iter().position(|k| k == key).expect(key);
+        assert!(at("c_8_0_-21_0") < at("h_8_0_-21_1") && at("h_8_0_-21_4") < at("c_8_0_-21_1"), "{standing:?}");
         // A cube without probes: its block's tiles.
         let only = |k: &str| k.starts_with("c_8_0_-21_") || !(k.starts_with("c_") || k.starts_with("h_"));
         let light = needed_light(Vec3::new(25.0, 1.9, -58.6), Vec3::ZERO, 2.0, only);
