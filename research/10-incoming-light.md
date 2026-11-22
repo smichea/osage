@@ -202,6 +202,20 @@ The maintainer's question: instead of five probes inside the walker's cube, the 
 
 The eight neighbours bring much (3.4 dB on the near façade over the centre alone), nothing is seen through or twice; what is left is blur near the block: the probe nearest the eye stands 0.7 m off and the next 2.3 m, where the cube's five all stand within 1.5 m. Keeping only the probes whose look is most like the eye's changed nothing. The march through nine probes a pixel costs 95 ms a frame: it should keep three or four. How much of the picture no probe saw was not measured.
 
+## The street's meshes round the block, lit by the probes (a trial, 2026-11-22)
+
+The maintainer's next thought: draw the geometry of the eight blocks round the walker's too, and mix it with the probes. First step, with the probes as they are: `paris --ring` draws the street's meshes out to 13.5 m from the block's middle with the light the cube's five probes saw of each point — no march, the mesh says where the point is, and a probe saw it if what it saw that way lies as far —, the faces standing on the ring's outer surface. (The meshes are the model's own, not simplified yet; those drawn lit in the block reach out of it uncut, the same surface with the probes' light going before them.)
+
+| From the scene camera, against Cycles | The faces' march (five probes) | The ring |
+|---|---|---|
+| Picture | 28.0 dB | 28.0 dB |
+| Floor | 30.2 dB | 31.4 dB |
+| Left façade, right façade | 28.8, 28.3 dB | 28.2, 28.3 dB |
+| Seen by no probe | not measured | 0.02 % of the picture |
+| A frame standing, Iris Xe | 57 ms | 33 ms |
+
+Edges come out where the model has them (a bollard against a wall, a kerb); the walls stay as blurred as the probes are: their sharpness would come from the model's own textures, the probes giving the light alone — which asks for probes baked with the light apart from the surfaces' colour.
+
 ## Next
 
 1. The whole street baked, at 1024–1536 px and more samples: about 2 000 tiles, a cloud GPU's work (hours on the laptop's processor for 384 px).

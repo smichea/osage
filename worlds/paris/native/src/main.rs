@@ -6,7 +6,7 @@
 //!
 //!     paris [ws://HOST:7878] [--tier T1..T4] [--street DIR] [--offline] [--fov DEGREES]
 //!           [--at X,Y,Z] [--heading DEGREES] [--shot FILE] [--film DIR SECONDS [--run]]
-//!           [--plain] [--whole] [--cube-probes HOW_MANY] [--block-probes]
+//!           [--plain] [--whole] [--cube-probes HOW_MANY] [--block-probes] [--ring]
 //!
 //! The walker goes where the keys say (W A S D or Z Q S D, the arrows;
 //! Shift runs), looks where the mouse does once the window is clicked
@@ -58,6 +58,9 @@ pub struct Options {
     pub cube_probes: usize,
     /// A trial: the block drawn from the centre probes of its nine cubes.
     pub block_probes: bool,
+    /// A trial: the eight blocks round the walker's drawn too, from the
+    /// street's model, coloured by what the probes saw of them.
+    pub ring: bool,
     /// Where the walker's eyes set out, if not from the start of the
     /// street's walk, and the way it faces, radians.
     pub at: Option<Vec3>,
@@ -102,7 +105,7 @@ fn main() -> anyhow::Result<()> {
     let (mut shot_file, mut at, mut heading) = (None, None, 0.0f32);
     let mut fov = 70.0f32;
     let (mut plain, mut whole, mut cube_probes, mut run) = (false, false, osage_world_paris::tiles::PROBES, false);
-    let mut block_probes = false;
+    let (mut block_probes, mut ring) = (false, false);
     let mut film: Option<(PathBuf, f32)> = None;
     let mut args = std::env::args().skip(1);
     while let Some(arg) = args.next() {
@@ -124,6 +127,7 @@ fn main() -> anyhow::Result<()> {
             "--whole" => whole = true,
             "--cube-probes" => cube_probes = need(args.next(), "--cube-probes HOW_MANY (0 to 5)")?.parse()?,
             "--block-probes" => block_probes = true,
+            "--ring" => ring = true,
             "--film" => {
                 let folder = PathBuf::from(need(args.next(), "--film DIR SECONDS")?);
                 let seconds = need(args.next(), "--film DIR SECONDS")?.parse::<f32>()?;
@@ -147,8 +151,20 @@ fn main() -> anyhow::Result<()> {
     let online = server.is_some();
     let film = film.map(|(folder, seconds)| Film { folder, seconds, run });
     let offscreen = shot.is_some() || film.is_some();
-    let options =
-        Options { street, server, shot: shot.clone(), fov, film, plain, whole, cube_probes, block_probes, at, heading };
+    let options = Options {
+        street,
+        server,
+        shot: shot.clone(),
+        fov,
+        film,
+        plain,
+        whole,
+        cube_probes,
+        block_probes,
+        ring,
+        at,
+        heading,
+    };
 
     let assets = AssetPlugin { file_path: root.to_string_lossy().into_owned(), ..default() };
     let mut app = App::new();

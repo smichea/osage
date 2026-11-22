@@ -51,6 +51,14 @@ pub struct Piece {
     mesh: Handle<Mesh>,
 }
 
+/// A trial (`--ring`): a mesh of the street drawn round the block with the
+/// light the probes saw of it, and the box it fills.
+#[derive(Component)]
+struct Around {
+    min: Vec3,
+    max: Vec3,
+}
+
 /// Whether the street is placed, for whoever waits on it.
 #[derive(Resource, Default)]
 pub struct Placed(pub bool);
@@ -76,6 +84,8 @@ fn place(
     gltf_materials: Res<Assets<GltfMaterial>>,
     meshes: Res<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
+    options: Res<crate::Options>,
+    ring: Res<crate::light::Ring>,
 ) {
     if model.placed {
         return;
@@ -146,6 +156,16 @@ fn place(
                 Visibility::Hidden,
                 Piece { min, max, mesh: primitive.mesh.clone() },
             ));
+            if options.ring {
+                commands.spawn((
+                    Mesh3d(primitive.mesh.clone()),
+                    MeshMaterial3d(ring.0.clone()),
+                    place,
+                    Visibility::Hidden,
+                    bevy::light::NotShadowCaster,
+                    Around { min, max },
+                ));
+            }
             count += 1;
         }
     }
@@ -176,6 +196,7 @@ fn show(
     mut meshes: ResMut<Assets<Mesh>>,
     mut last: Local<Option<Block>>,
     mut pieces: Query<(&Piece, &Transform, &mut Visibility, &mut Mesh3d)>,
+    mut around: Query<(&Around, &mut Visibility), Without<Piece>>,
     added: Query<(), Added<Piece>>,
 ) {
     // The block whose light is drawn: it stays a moment after the walker
@@ -187,6 +208,15 @@ fn show(
     *last = Some(block);
     let (lo, hi) = (block.min() - 0.01, block.max() + 0.01);
     let cut = traced.0 && !options.whole;
+    // The trial's meshes round the block: those that reach into the ring.
+    let out = Vec3::new(crate::light::RING - 4.5, 1e3, crate::light::RING - 4.5);
+    for (piece, mut visibility) in &mut around {
+        let reaches = piece.min.cmple(hi + out).all() && piece.max.cmpge(lo - out).all();
+        let wanted = if reaches { Visibility::Inherited } else { Visibility::Hidden };
+        if *visibility != wanted {
+            *visibility = wanted;
+        }
+    }
     let mut parts = 0;
     for (piece, place, mut visibility, mut mesh) in &mut pieces {
         let reaches = options.whole || (piece.min.cmple(hi).all() && piece.max.cmpge(lo).all());

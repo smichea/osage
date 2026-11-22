@@ -256,6 +256,9 @@ pub struct IncomingLight {
     /// Their pictures' width and height, 1 when they are used, how many.
     #[uniform(8)]
     pub shape: Vec4,
+    /// Drawn on the street's own meshes round the block (a trial, `--ring`),
+    /// not on the block's faces: solid, with the other solid things.
+    pub solid: bool,
 }
 
 impl Material for IncomingLight {
@@ -267,7 +270,14 @@ impl Material for IncomingLight {
     /// is 1): the faces show light already, which traced light's denoiser
     /// (T4), filtering the opaque picture by each surface's colour, blurred.
     fn alpha_mode(&self) -> AlphaMode {
-        AlphaMode::Blend
+        if self.solid { AlphaMode::Opaque } else { AlphaMode::Blend }
+    }
+
+    /// Round the block, the street's meshes drawn lit reach out of it too
+    /// (they are not cut, but for the rays): the same surface drawn with
+    /// the probes' light goes before them.
+    fn depth_bias(&self) -> f32 {
+        if self.solid { 16.0 } else { 0.0 }
     }
 }
 
@@ -1051,6 +1061,7 @@ fn faces(
             scale: Vec4::new(NITS, 0.0, 0.0, 0.0),
             probes: [Vec4::new(0.0, 0.0, 0.0, -1.0); BLOCK_PROBES],
             shape: Vec4::new(1.0, 1.0, 0.0, 0.0),
+            solid: false,
         });
         let entity = commands
             .spawn((
@@ -1064,7 +1075,29 @@ fn faces(
         (entity, material)
     });
     commands.insert_resource(Faces(faces));
+    // The trial's material: the probes' light on the meshes round the block.
+    commands.insert_resource(Ring(materials.add(IncomingLight {
+        low: Vec4::ZERO,
+        high: Vec4::ZERO,
+        layers: [IVec4::splat(-1); 3],
+        colours,
+        distances,
+        scale: Vec4::new(NITS, 0.0, RING, 1.0),
+        probes: [Vec4::new(0.0, 0.0, 0.0, -1.0); BLOCK_PROBES],
+        shape: Vec4::new(1.0, 1.0, 0.0, 0.0),
+        solid: true,
+    })));
 }
+
+/// A trial (`--ring`): the material of the street's meshes round the block,
+/// out to `RING` metres from its middle (the eight blocks round it), which
+/// takes each point's light from the probes that saw it: no march, the mesh
+/// says where the point is. The faces stand on the ring's outer surface.
+#[derive(Resource)]
+pub struct Ring(pub Handle<IncomingLight>);
+pub const RING: f32 = 13.5;
+/// How high the ring's faces stand, m.
+const RING_HEIGHT: f32 = 40.0;
 
 /// Arrays of one empty layer, until light comes.
 fn empty(images: &mut Assets<Image>) -> (Handle<Image>, Handle<Image>) {
@@ -1138,6 +1171,7 @@ fn arrays(
     options: Res<Options>,
     dome: Option<Res<Dome>>,
     layers: Res<Layers>,
+    ring: Res<Ring>,
 ) {
     let block = Block::of(me.eyes());
     let store = &mut *store;
@@ -1371,7 +1405,22 @@ fn arrays(
                 material.colours = pool.colours.clone();
                 material.distances = pool.distances.clone();
             }
-            place_face(&mut places, *entity, face, lo, hi, options.whole);
+            if options.ring {
+                let out = Vec3::new(RING - 4.5, 0.0, RING - 4.5);
+                place_face(&mut places, *entity, face, lo - out, hi + out + Vec3::Y * RING_HEIGHT, options.whole);
+            } else {
+                place_face(&mut places, *entity, face, lo, hi, options.whole);
+            }
+        }
+        if let Some(mut material) = materials.get_mut(&ring.0) {
+            material.low = lo.extend(0.0);
+            material.high = hi.extend(pool.size.0 as f32);
+            material.probes = at;
+            material.shape =
+                Vec4::new(pool.size.0 as f32, pool.size.1 as f32, 1.0, probes.len().min(BLOCK_PROBES) as f32);
+            material.scale.y = if std::env::var_os("OSAGE_UNSEEN").is_some() { 1.0 } else { 0.0 };
+            material.colours = pool.colours.clone();
+            material.distances = pool.distances.clone();
         }
         return;
     }

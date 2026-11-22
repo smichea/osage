@@ -266,8 +266,58 @@ fn march(probe: vec3<f32>, normal: vec3<f32>, up: vec3<f32>, layer: i32, start: 
     return vec4<f32>(0.0);
 }
 
+// A trial: a point of the street's own meshes round the block, lit by the
+// probes that saw it. No march: the mesh says where the point is, and a
+// probe saw it if what it saw that way lies as far as the point.
+fn projected(point: vec3<f32>) -> vec4<f32> {
+    let lo = low.xyz;
+    let hi = high.xyz;
+    // Inside the block the street's meshes are drawn lit; beyond the ring,
+    // the faces.
+    if (all(point > lo) && all(point < hi)) {
+        discard;
+    }
+    let middle = 0.5 * (lo + hi);
+    if (abs(point.x - middle.x) > scale.z || abs(point.z - middle.z) > scale.z) {
+        discard;
+    }
+    let towards = normalize(point - view.world_position.xyz);
+    let texel_angle = 6.2831853 / shape.x;
+    var seen = vec3<f32>(0.0);
+    var sure = 0.0;
+    let count = i32(shape.w);
+    for (var k = 0; k < count; k = k + 1) {
+        let p = probes[k];
+        if (p.w < 0.0) {
+            continue;
+        }
+        let v = point - p.xyz;
+        let reach = length(v);
+        let on = equirect(v);
+        let d = textureLoad(distances, texel(on.xy), i32(p.w), 0).r;
+        if (d >= 0.0 && abs(reach - d) <= 0.03 + 0.02 * reach + 6.0 * texel_angle * reach) {
+            let angle = acos(clamp(dot(v / reach, towards), -1.0, 1.0));
+            let trust = exp(-(angle * angle) / (LIKENESS * LIKENESS)) + 1e-3;
+            seen = seen + radiance(textureSampleLevel(colours, colours_sampler, on.xy, i32(p.w), 0.0).rgb) * trust;
+            sure = sure + trust;
+        }
+    }
+    var light = vec3<f32>(1.0, 0.0, 1.0);
+    if (sure > 0.0) {
+        light = seen / sure;
+    } else if (scale.y < 0.5 && count > 0) {
+        // No probe saw it: what the centre's saw that way, in front of it.
+        let on = equirect(point - probes[0].xyz);
+        light = radiance(textureSampleLevel(colours, colours_sampler, on.xy, i32(probes[0].w), 0.0).rgb);
+    }
+    return vec4<f32>(light * scale.x * view.exposure, 1.0);
+}
+
 @fragment
 fn fragment(in: VertexOutput) -> @location(0) vec4<f32> {
+    if (scale.w > 0.5) {
+        return projected(in.world_position.xyz);
+    }
     let face = i32(low.w);
     let axis = face / 2;
     let positive = (face % 2) == 1;
