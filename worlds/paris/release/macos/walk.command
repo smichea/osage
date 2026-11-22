@@ -12,4 +12,5 @@ if xattr -p com.apple.quarantine paris >/dev/null 2>&1; then xattr -dr com.apple
 # (paris-update runs this file again once updated; exec, so that this
 # shell does not read on in it).
 if [ "$OSAGE_UPDATED" != 1 ] && [ -x paris-update ]; then exec ./paris-update --then "$PWD/$(basename "$0")" "$@"; fi
-./paris --offline --ring --block-probes "$@"
+# It sets out looking down the street.
+./paris --offline --ring --block-probes --at 24.82,1.96,-61.65 --heading 161.4 "$@"
