@@ -1518,7 +1518,12 @@ fn arrays(
             material.probes = at;
             material.shape =
                 Vec4::new(pool.size.0 as f32, pool.size.1 as f32, 1.0, probes.len().min(BLOCK_PROBES) as f32);
-            material.scale.y = if std::env::var_os("OSAGE_UNSEEN").is_some() { 1.0 } else { 0.0 };
+            material.scale.y = match std::env::var("OSAGE_RING_PICK").as_deref() {
+                Ok("best") => 2.0,
+                Ok("narrow") => 3.0,
+                _ if std::env::var_os("OSAGE_UNSEEN").is_some() => 1.0,
+                _ => 0.0,
+            };
             material.colours = pool.colours.clone();
             material.distances = pool.distances.clone();
             material.layers = [

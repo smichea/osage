@@ -292,6 +292,11 @@ fn projected(point: vec3<f32>, own: vec3<f32>) -> vec4<f32> {
     let texel_angle = 6.2831853 / shape.x;
     var seen = vec3<f32>(0.0);
     var sure = 0.0;
+    var best = 0.0;
+    // A trial (OSAGE_RING_PICK): 2, the probe that saw the point from
+    // nearest the eye's direction alone; 3, a narrower blend.
+    let pick = scale.y;
+    let likeness = select(LIKENESS, 0.05, pick > 2.5);
     let count = i32(shape.w);
     for (var k = 0; k < count; k = k + 1) {
         let p = probes[k];
@@ -304,7 +309,7 @@ fn projected(point: vec3<f32>, own: vec3<f32>) -> vec4<f32> {
         let d = textureLoad(distances, texel(on.xy), i32(p.w), 0).r;
         if (d >= 0.0 && abs(reach - d) <= 0.03 + 0.02 * reach + 6.0 * texel_angle * reach) {
             let angle = acos(clamp(dot(v / reach, towards), -1.0, 1.0));
-            let trust = exp(-(angle * angle) / (LIKENESS * LIKENESS)) + 1e-3;
+            let trust = exp(-(angle * angle) / (likeness * likeness)) + 1e-3;
             var told = radiance(textureSampleLevel(colours, colours_sampler, on.xy, i32(p.w), 0.0).rgb);
             if (tint.w > 0.5 && layers[k / 4][k % 4] > 0) {
                 // The light apart from the surface's colour as the probe saw
@@ -314,14 +319,24 @@ fn projected(point: vec3<f32>, own: vec3<f32>) -> vec4<f32> {
                     told = told * clamp(own / max(was, vec3<f32>(0.03)), vec3<f32>(0.25), vec3<f32>(4.0));
                 }
             }
-            seen = seen + told * trust;
-            sure = sure + trust;
+            if (pick > 1.5 && pick < 2.5) {
+                // The angle itself: the trust's floor would tie far probes.
+                let nearness = 1.0 / (angle + 1e-4);
+                if (nearness > best) {
+                    best = nearness;
+                    seen = told;
+                    sure = 1.0;
+                }
+            } else {
+                seen = seen + told * trust;
+                sure = sure + trust;
+            }
         }
     }
     var light = vec3<f32>(1.0, 0.0, 1.0);
     if (sure > 0.0) {
         light = seen / sure;
-    } else if (scale.y < 0.5 && count > 0) {
+    } else if ((pick < 0.5 || pick > 1.5) && count > 0) {
         // No probe saw it: what the centre's saw that way, in front of it.
         let on = equirect(point - probes[0].xyz);
         light = radiance(textureSampleLevel(colours, colours_sampler, on.xy, i32(probes[0].w), 0.0).rgb);

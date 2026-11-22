@@ -253,6 +253,15 @@ The left façade's 2 dB are lost by the nine centres themselves, ring or not, an
 
 A walk of 7 s through four cubes: with the ring and five probes, a median frame of 47 ms (113 frames, one over 250 ms); with the ring and nine centres, 66 ms (93 frames, two over 250 ms). Every cube entered was shown within 5 ms.
 
+### What the street's bake taught (2026-11-22)
+
+Two faults showed once the bake left the corridor, and the walk with it.
+
+- **Where a centre stands.** A probe stood over its cube's middle, on the first surface under the cube's top. The middle of a walked cube is sometimes inside a wall (cube 2,0,-8: the probe saw nothing and the batch stopped) or over a table or an awning: 22 of the 73 centres baked stood more than 0.5 m from where a walker stands, 11 of them 0.6 to 2.4 m too high. `tools/bistro/probe-spots.py` now gives each cube the cell of the walk's grid nearest its middle, and `cube-probes.py` takes it (`X,Y,Z:x,y,z`).
+- **Tiles that did not decode alone.** The 64 centres packed on the bake machine had one key frame in their colours and 127 frames leaning on it: SVT-AV1's `keyint=1` means every frame there (ffmpeg 9, Arch) and the first alone on Ubuntu's. A walk out of the corridor logged `AV1 data refused` for each. The tiles' colours go through libaom now, as their distances and masks did, which decoded alone from both machines: 274 KiB a probe against 305, as close (4.7 % against 4.8 %), 13 s a probe. `light-pack` decodes the last tile alone after packing, and fails if it cannot.
+
+**Which probe lights a wall.** The ring's left façade loses 2 dB with nine centres against the cube's five. Taking for each point the one centre that saw it from nearest the eye's direction (`OSAGE_RING_PICK=best`) gives 27.2 dB there against 26.3 blended, and 27.8 against 28.3 on the right one: 27.8 dB over the picture against 27.7. The cube's centre alone with the ring gives 27.3 on the left façade (26.9 over the picture, 20 ms a frame). So blending centres 3 m apart costs about 1 dB on that wall, and the rest of the gap to five probes (28.6) is what four more probes within a metre of the eye add; why they add it is not shown (they may average the bake's noise). Left as a trial, the blend unchanged.
+
 ## Next
 
 1. The whole street baked, at 1024–1536 px and more samples: about 2 000 tiles, a cloud GPU's work (hours on the laptop's processor for 384 px).

@@ -189,11 +189,19 @@ pub fn encode(lights: &[Light], quality: Quality) -> anyhow::Result<Encoded> {
     let size = format!("{width}x{height}");
     // Key frames only (D-141): `-g 1` for libaom, which must not look
     // ahead (it failed to allocate its noise filter's buffers, and the
-    // frames ahead are other tiles); SVT-AV1 is told apart, and filters
-    // nothing across frames when every one is a key frame.
+    // frames ahead are other tiles). The colours go through libaom too
+    // then: SVT-AV1's `keyint=1` makes every frame a key frame in one
+    // version and the first alone in another (Ubuntu's, on the bake
+    // machines), whose tiles no client can decode alone.
     let gop = if quality.intra { "1" } else { "9999" };
-    let svt: &[&str] = if quality.intra { &["-svtav1-params", "keyint=1"] } else { &[] };
     let aom: &[&str] = if quality.intra { &["-lag-in-frames", "0"] } else { &[] };
+    let crf = quality.radiance.to_string();
+    let preset = quality.preset.to_string();
+    let colours: &[&str] = if quality.intra {
+        &["-c:v", "libaom-av1", "-crf", &crf, "-b:v", "0", "-cpu-used", "6", "-row-mt", "1", "-lag-in-frames", "0"]
+    } else {
+        &["-c:v", "libsvtav1", "-preset", &preset, "-crf", &crf]
+    };
     let colour = ffmpeg(
         &["-f", "rawvideo", "-pix_fmt", "rgb48le", "-s", &size, "-r", "30", "-i", "pipe:0"],
         &[
@@ -203,15 +211,9 @@ pub fn encode(lights: &[Light], quality: Quality) -> anyhow::Result<Encoded> {
             "bt709",
             "-color_range",
             "tv",
-            "-c:v",
-            "libsvtav1",
-            "-preset",
-            &quality.preset.to_string(),
-            "-crf",
-            &quality.radiance.to_string(),
         ]
         .iter()
-        .chain(svt)
+        .chain(colours)
         .copied()
         .collect::<Vec<_>>(),
         gop,
@@ -237,6 +239,13 @@ pub fn encode(lights: &[Light], quality: Quality) -> anyhow::Result<Encoded> {
         gop,
         sky,
     )?;
+    if quality.intra && lights.len() > 1 {
+        // The last tile decodes alone, or the encoder leant on the frames before.
+        for (name, file) in [("colours", &colour), ("distances", &depth), ("masks", &mask)] {
+            crate::decode::planes_of(file, &[lights.len() - 1])
+                .with_context(|| format!("the {name}' frames are not all key frames: this ffmpeg's encoder ignores the setting"))?;
+        }
+    }
     Ok(Encoded { radiance: colour, distance: depth, sky: mask })
 }
 
