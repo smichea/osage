@@ -230,10 +230,12 @@ fn film(
         exit.write(AppExit::Success);
         return;
     }
-    if (*frame).is_multiple_of(3) {
+    // OSAGE_FILM_EVERY=1 saves every picture: a fault of one frame is seen.
+    let every = std::env::var("OSAGE_FILM_EVERY").ok().and_then(|n| n.parse::<u32>().ok()).unwrap_or(3).max(1);
+    if (*frame).is_multiple_of(every) {
         let _ = std::fs::create_dir_all(&film.folder);
-        let file = film.folder.join(format!("{:05}.png", *frame / 3));
-        debug!(picture = *frame / 3, feet = ?me.feet, light = ?store.block, "paris: filming");
+        let file = film.folder.join(format!("{:05}.png", *frame / every));
+        debug!(picture = *frame / every, feet = ?me.feet, light = ?store.block, "paris: filming");
         commands.spawn(Screenshot::image(picture.image.clone())).observe(save_to_disk(file));
     }
 }

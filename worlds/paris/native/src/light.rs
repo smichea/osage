@@ -109,7 +109,7 @@ impl Plugin for LightPlugin {
             .init_resource::<WalkerId>()
             .init_resource::<Layers>()
             .add_systems(Startup, (start, faces, dome))
-            .add_systems(Update, (ask, receive, arrays, ask_parts, lit).chain().after(Walking));
+            .add_systems(Update, (ask, receive, arrays.in_set(BlockTold), ask_parts, lit).chain().after(Walking));
     }
 
     fn finish(&self, app: &mut App) {
@@ -119,6 +119,11 @@ impl Plugin for LightPlugin {
         }
     }
 }
+
+/// The block drawn is settled for the frame: its faces placed, its
+/// materials told. What shows the block's meshes comes after.
+#[derive(SystemSet, Debug, Clone, PartialEq, Eq, Hash)]
+pub struct BlockTold;
 
 /// The probes' light to write into their layers of the cube's texture
 /// arrays, shared with the render world, which writes them straight from
@@ -1894,6 +1899,19 @@ fn environment(block: &Block, tiles: &[(Tile, Arc<light::Drawn>)]) -> (Image, Im
     osage_render::sky_light::cubemaps(sample)
 }
 
+/// The frames an environment light's pictures are held before the camera
+/// takes them.
+const ENVIRONMENT_WAIT: u32 = 2;
+
+/// An environment light made, its pictures added, waiting for the GPU.
+struct Made {
+    block: Block,
+    diffuse: Handle<Image>,
+    specular: Handle<Image>,
+    domed: Option<(Vec3, Image)>,
+    frames: u32,
+}
+
 /// The environment light of the block the walker is in, once made; traced,
 /// the dome round it shining the light that came in.
 #[allow(clippy::too_many_arguments)]
@@ -1906,12 +1924,26 @@ fn lit(
     dome: Option<Res<Dome>>,
     mut standard: ResMut<Assets<StandardMaterial>>,
     mut places: Query<(&mut Transform, &mut Visibility)>,
+    mut made: Local<Vec<Made>>,
 ) {
     for (block, diffuse, specular, domed) in fetcher.lights.1.try_iter() {
         if store.block != Some(block) {
             continue;
         }
-        let (diffuse_map, specular_map) = (images.add(diffuse), images.add(specular));
+        made.push(Made { block, diffuse: images.add(diffuse), specular: images.add(specular), domed, frames: 0 });
+    }
+    // A light is given to the camera once the GPU has its pictures: given
+    // in the frame they are added, the block's meshes are drawn without any
+    // light for a frame, black.
+    for one in made.iter_mut() {
+        one.frames += 1;
+    }
+    let ready: Vec<Made> = made.extract_if(.., |one| one.frames > ENVIRONMENT_WAIT).collect();
+    for Made { block, diffuse: diffuse_map, specular: specular_map, domed, .. } in ready {
+        if store.block != Some(block) {
+            continue;
+        }
+        debug!(cube = ?block.cube, "paris: the block's environment light given");
         for camera in &cameras {
             commands.entity(camera).insert(bevy::light::EnvironmentMapLight {
                 diffuse_map: diffuse_map.clone(),

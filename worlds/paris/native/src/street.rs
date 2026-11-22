@@ -30,7 +30,10 @@ pub struct StreetPlugin;
 
 impl Plugin for StreetPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(Startup, load).add_systems(Update, (place, show, sky));
+        // The block's meshes are shown in the frame its faces move, not the
+        // one after: a frame with the new block's faces and the old one's
+        // meshes has a black hole where the new cubes' meshes are not yet.
+        app.add_systems(Startup, load).add_systems(Update, (place, show.after(crate::light::BlockTold), sky));
     }
 }
 
