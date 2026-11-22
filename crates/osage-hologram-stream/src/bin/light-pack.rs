@@ -105,11 +105,12 @@ fn floats(path: &Path) -> anyhow::Result<Vec<f32>> {
 fn main() -> anyhow::Result<()> {
     let mut args = std::env::args().skip(1).peekable();
     let usage = "light-pack [--again] [--half] [--tiles[=CRF]] RAW OUT [CRF [DEPTH_CRF]]";
-    let (mut again, mut half, mut tiled) = (false, false, None);
+    let (mut again, mut half, mut tiled, mut albedo) = (false, false, None, false);
     while let Some(flag) = args.next_if(|a| a.starts_with("--")) {
         match flag.as_str() {
             "--again" => again = true,
             "--half" => half = true,
+            "--albedo" => albedo = true,
             "--tiles" => (tiled, half) = (Some(TILE_CRF), true),
             tiles if tiles.starts_with("--tiles=") => (tiled, half) = (Some(tiles["--tiles=".len()..].parse()?), true),
             other => anyhow::bail!("{other}: {usage}"),
@@ -125,6 +126,33 @@ fn main() -> anyhow::Result<()> {
         quality.distance = crf.parse()?;
     }
     std::fs::create_dir_all(&out)?;
+    if albedo {
+        // A trial: what colour each surface a probe saw is, apart from its
+        // light (`cube-probes.py`, OSAGE_ALBEDO), beside the probe's light.
+        for entry in std::fs::read_dir(&raw)?.filter_map(|e| e.ok()).filter(|e| e.path().join("albedo.f32").exists()) {
+            let meta: serde_json::Value =
+                serde_json::from_str(&std::fs::read_to_string(entry.path().join("meta.json"))?)?;
+            let (width, height) =
+                (meta["width"].as_u64().unwrap_or(0) as u32, meta["height"].as_u64().unwrap_or(0) as u32);
+            let colours = floats(&entry.path().join("albedo.f32"))?;
+            let light = Light {
+                width,
+                height,
+                radiance: colours.as_chunks::<3>().0.to_vec(),
+                distance: vec![1.0; (width * height) as usize],
+            };
+            let encoded = light::encode(std::slice::from_ref(&light), quality)?;
+            let target = out.join(entry.file_name());
+            std::fs::create_dir_all(&target)?;
+            std::fs::write(target.join("albedo.ivf"), &encoded.radiance)?;
+            println!(
+                "light-pack: {}: albedo.ivf, {} KiB",
+                entry.file_name().to_string_lossy(),
+                encoded.radiance.len() / 1024
+            );
+        }
+        return Ok(());
+    }
     let mut keys: Vec<String> = std::fs::read_dir(&raw)?
         .filter_map(|e| e.ok())
         .filter(|e| e.path().join("distance.f32").exists() || (again && packed(&e.path())))

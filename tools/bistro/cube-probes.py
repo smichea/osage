@@ -17,7 +17,10 @@ samples a pixel (256 unless given): column 0 looks south and the middle one
 north (-z), east to the right of it; row 0 straight up. In OUT/c_X_Y_Z_K/:
 `radiance.f32`, `distance.f32` (as `tiles.py` writes them) and `meta.json`.
 OSAGE_DEVICE=OPTIX (or CUDA) renders on the GPU; OSAGE_PROBES=N bakes the
-first N probes only (1: the cube's centre alone). Checks its own projection
+first N probes only (1: the cube's centre alone); OSAGE_ALBEDO=1 renders
+instead what colour each surface is, apart from its light (`albedo.f32`, one
+sample: a client that draws the surfaces' own textures takes the probes'
+light alone from the two). Checks its own projection
 against where each pixel's point lies, and says by how much it is off.
 """
 
@@ -116,6 +119,37 @@ def position_material():
     return material
 
 
+def albedo_materials():
+    """Every material shining its own base colour, lit by nothing: what a
+    surface is, apart from the light on it."""
+    for material in bpy.data.materials:
+        tree = material.node_tree
+        if tree is None:
+            continue
+        output = next((n for n in tree.nodes if n.bl_idname == "ShaderNodeOutputMaterial"), None)
+        principled = next((n for n in tree.nodes if n.bl_idname == "ShaderNodeBsdfPrincipled"), None)
+        if output is None or principled is None:
+            continue
+        nodes, links = tree.nodes, tree.links
+        glow = nodes.new("ShaderNodeEmission")
+        base = principled.inputs["Base Color"]
+        if base.links:
+            links.new(base.links[0].from_socket, glow.inputs["Color"])
+        else:
+            glow.inputs["Color"].default_value = base.default_value
+        shader = glow.outputs[0]
+        alpha = principled.inputs["Alpha"]
+        if alpha.links:
+            # Leaves and railings: seen through where they are cut out.
+            clear = nodes.new("ShaderNodeBsdfTransparent")
+            mix = nodes.new("ShaderNodeMixShader")
+            links.new(alpha.links[0].from_socket, mix.inputs["Fac"])
+            links.new(clear.outputs["BSDF"], mix.inputs[1])
+            links.new(shader, mix.inputs[2])
+            shader = mix.outputs["Shader"]
+        links.new(shader, output.inputs["Surface"])
+
+
 def panorama(name, origin, width):
     """A full sphere from `origin`, looking north (-z), up the sky."""
     data = bpy.data.cameras.new(name)
@@ -194,6 +228,9 @@ def main():
     lo.z = (ground.z if hit else lo.z) + 0.3
     # Made first, so that it is transparent inside the block too.
     position = position_material()
+    albedo = os.environ.get("OSAGE_ALBEDO")
+    if albedo:
+        albedo_materials()
     inside_hidden(lo, hi)
     depsgraph = bpy.context.evaluated_depsgraph_get()
     probes = []
@@ -208,6 +245,19 @@ def main():
     work = out / ".work"
     work.mkdir(parents=True, exist_ok=True)
     started = time.time()
+    if albedo:
+        setup(scene, width, 1, False)
+        scene.view_settings.view_transform = "Standard"
+        for key, centre, cam in probes:
+            render(scene, cam, work / f"{key}-albedo.exr")
+            folder = out / key
+            folder.mkdir(parents=True, exist_ok=True)
+            load(work / f"{key}-albedo.exr", width, height)[..., :3].astype("<f4").tofile(folder / "albedo.f32")
+            meta = {"width": width, "height": height, "key": key, "centre": list(centre), "cube": cube}
+            (folder / "meta.json").write_text(json.dumps(meta, indent=1) + "\n")
+            (work / f"{key}-albedo.exr").unlink()
+        print(f"cube-probes: the colours of {len(probes)} probes' surfaces in {time.time() - started:.0f} s", flush=True)
+        return
     setup(scene, width, samples, False)
     layer.material_override = None
     for key, _, cam in probes:

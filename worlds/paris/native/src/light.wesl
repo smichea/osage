@@ -38,6 +38,13 @@ import bevy_pbr::render::{
 @group(constants::MATERIAL_BIND_GROUP) @binding(7) var<uniform> probes: array<vec4<f32>, 9>;
 // Their pictures' width and height; z 1 when they are used; w how many.
 @group(constants::MATERIAL_BIND_GROUP) @binding(8) var<uniform> shape: vec4<f32>;
+// A trial (the street's meshes round the block): the mesh's own base colour,
+// what colour the probes saw each surface to be, and the base colour's
+// factor (w 1: the mesh's own colour is drawn, the probes give the light).
+@group(constants::MATERIAL_BIND_GROUP) @binding(9) var base: texture_2d<f32>;
+@group(constants::MATERIAL_BIND_GROUP) @binding(10) var base_sampler: sampler;
+@group(constants::MATERIAL_BIND_GROUP) @binding(11) var albedos: texture_2d_array<f32>;
+@group(constants::MATERIAL_BIND_GROUP) @binding(12) var<uniform> tint: vec4<f32>;
 
 const CUBE: f32 = 3.0;
 // Half the probes' field, radians (200 degrees).
@@ -269,7 +276,7 @@ fn march(probe: vec3<f32>, normal: vec3<f32>, up: vec3<f32>, layer: i32, start: 
 // A trial: a point of the street's own meshes round the block, lit by the
 // probes that saw it. No march: the mesh says where the point is, and a
 // probe saw it if what it saw that way lies as far as the point.
-fn projected(point: vec3<f32>) -> vec4<f32> {
+fn projected(point: vec3<f32>, own: vec3<f32>) -> vec4<f32> {
     let lo = low.xyz;
     let hi = high.xyz;
     // Inside the block the street's meshes are drawn lit; beyond the ring,
@@ -298,7 +305,16 @@ fn projected(point: vec3<f32>) -> vec4<f32> {
         if (d >= 0.0 && abs(reach - d) <= 0.03 + 0.02 * reach + 6.0 * texel_angle * reach) {
             let angle = acos(clamp(dot(v / reach, towards), -1.0, 1.0));
             let trust = exp(-(angle * angle) / (LIKENESS * LIKENESS)) + 1e-3;
-            seen = seen + radiance(textureSampleLevel(colours, colours_sampler, on.xy, i32(p.w), 0.0).rgb) * trust;
+            var told = radiance(textureSampleLevel(colours, colours_sampler, on.xy, i32(p.w), 0.0).rgb);
+            if (tint.w > 0.5 && layers[k / 4][k % 4] > 0) {
+                // The light apart from the surface's colour as the probe saw
+                // it, on the mesh's own colour: sharp as its texture.
+                let was = radiance(textureSampleLevel(albedos, colours_sampler, on.xy, i32(p.w), 0.0).rgb);
+                if (max(was.r, max(was.g, was.b)) > 0.03) {
+                    told = told * clamp(own / max(was, vec3<f32>(0.03)), vec3<f32>(0.25), vec3<f32>(4.0));
+                }
+            }
+            seen = seen + told * trust;
             sure = sure + trust;
         }
     }
@@ -316,7 +332,11 @@ fn projected(point: vec3<f32>) -> vec4<f32> {
 @fragment
 fn fragment(in: VertexOutput) -> @location(0) vec4<f32> {
     if (scale.w > 0.5) {
-        return projected(in.world_position.xyz);
+        var own = tint.rgb;
+        @if(VERTEX_UVS_A) {
+            own = own * textureSample(base, base_sampler, in.uv).rgb;
+        }
+        return projected(in.world_position.xyz, own);
     }
     let face = i32(low.w);
     let axis = face / 2;

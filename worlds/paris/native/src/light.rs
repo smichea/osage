@@ -164,7 +164,11 @@ fn push_whole(uploads: &mut Uploads, pool: &Pool, layer: usize, drawn: &Arc<ligh
 /// A layer lent to another probe: what was on its way to it goes, and the
 /// faces may not read it until the other's light is written there whole.
 fn forget(uploads: &mut Uploads, pool: &Pool, layer: usize) {
-    let mine = |image: &AssetId<Image>| *image == pool.colours.id() || *image == pool.distances.id();
+    let mine = |image: &AssetId<Image>| {
+        *image == pool.colours.id()
+            || *image == pool.distances.id()
+            || pool.albedos.as_ref().is_some_and(|albedos| *image == albedos.id())
+    };
     uploads.pending.retain(|l| !(mine(&l.image) && l.layer == layer as u32));
     for (image, written) in &mut uploads.written {
         if mine(image) {
@@ -259,6 +263,16 @@ pub struct IncomingLight {
     /// Drawn on the street's own meshes round the block (a trial, `--ring`),
     /// not on the block's faces: solid, with the other solid things.
     pub solid: bool,
+    /// The trial's second step: the mesh's own base colour texture and its
+    /// factor (w 1: the surfaces' own colours drawn, the probes giving the
+    /// light alone), and what colour the probes saw each surface to be.
+    #[texture(9)]
+    #[sampler(10)]
+    pub base: Option<Handle<Image>>,
+    #[texture(11, dimension = "2d_array")]
+    pub albedos: Handle<Image>,
+    #[uniform(12)]
+    pub tint: Vec4,
 }
 
 impl Material for IncomingLight {
@@ -337,6 +351,12 @@ pub struct Store {
     eyes_in: Option<(IVec3, Instant)>,
     pub entered: usize,
     pub shown_after: Vec<f32>,
+    /// A trial (`--ring`): the colours of the surfaces the probes saw, by
+    /// key, and the layers they are written in (a bit each).
+    albedos: HashMap<String, Arc<light::Drawn>>,
+    albedo_written: u16,
+    /// How many of the trial's materials have been told the probes.
+    ringed: usize,
 }
 
 impl Store {
@@ -358,6 +378,8 @@ struct Pool {
     size: (u32, u32),
     colours: Handle<Image>,
     distances: Handle<Image>,
+    /// A trial (`--ring`): the colours of the surfaces each probe saw.
+    albedos: Option<Handle<Image>>,
     layers: Vec<Option<Lent>>,
 }
 
@@ -382,6 +404,8 @@ struct Lent {
     written: bool,
     /// Its tiles sent over its light (D-141), a bit each.
     tiled: u128,
+    /// The colours of the surfaces it saw sent too (a trial).
+    albedo: bool,
 }
 
 /// A layer for a probe: its own already, or lent anew, and whose it was.
@@ -520,6 +544,11 @@ enum Got {
     Parts {
         key: String,
         tiles: Vec<(usize, light::Drawn)>,
+    },
+    /// A trial: the colours of the surfaces a probe saw.
+    Albedo {
+        key: String,
+        drawn: light::Drawn,
     },
     /// What could not be had: a tile or a probe (its key), or the server's
     /// answer.
@@ -693,7 +722,21 @@ fn work(queue: Queue, gots: Sender<Got>) {
     let mut clients: HashMap<String, Client> = HashMap::new();
     loop {
         let got = match queue.next() {
-            Ask::Tile { source, key } => fetched(&mut clients, &source, key),
+            Ask::Tile { source, key } => {
+                // A trial: the colours of the surfaces the probe saw, where
+                // the street's folder has them.
+                if let (Source::Folder(folder), true) = (&source, key.starts_with("c_"))
+                    && let Ok(file) = std::fs::read(folder.join(&key).join("albedo.ivf"))
+                    && let Ok(Some(planes)) = osage_hologram_stream::decode::planes(&file).map(|mut p| p.pop())
+                {
+                    let q = |v: f32| (v.clamp(0.0, 1.0) * 1023.0 + 0.5) as u32;
+                    let radiance = planes.rgb_as(0u32, |r, g, b| q(r) | (q(g) << 10) | (q(b) << 20) | (3 << 30));
+                    let drawn =
+                        light::Drawn { width: planes.width, height: planes.height, radiance, distance: Vec::new() };
+                    let _ = gots.send(Got::Albedo { key: key.clone(), drawn });
+                }
+                fetched(&mut clients, &source, key)
+            }
             Ask::Part { key, files, tiles } => {
                 let started = Instant::now();
                 let [c, d, m] = &*files;
@@ -895,6 +938,10 @@ fn receive(options: Res<Options>, server: Res<LightServer>, fetcher: Res<Fetcher
                 }
                 store.changed = true;
             }
+            Got::Albedo { key, drawn } => {
+                store.albedos.insert(key, Arc::new(drawn));
+                store.changed = true;
+            }
             Got::Failed { key, what } => {
                 match key {
                     // Not asked for again.
@@ -1062,6 +1109,9 @@ fn faces(
             probes: [Vec4::new(0.0, 0.0, 0.0, -1.0); BLOCK_PROBES],
             shape: Vec4::new(1.0, 1.0, 0.0, 0.0),
             solid: false,
+            base: None,
+            albedos: colours.clone(),
+            tint: Vec4::ZERO,
         });
         let entity = commands
             .spawn((
@@ -1076,17 +1126,23 @@ fn faces(
     });
     commands.insert_resource(Faces(faces));
     // The trial's material: the probes' light on the meshes round the block.
-    commands.insert_resource(Ring(materials.add(IncomingLight {
-        low: Vec4::ZERO,
-        high: Vec4::ZERO,
-        layers: [IVec4::splat(-1); 3],
-        colours,
-        distances,
-        scale: Vec4::new(NITS, 0.0, RING, 1.0),
-        probes: [Vec4::new(0.0, 0.0, 0.0, -1.0); BLOCK_PROBES],
-        shape: Vec4::new(1.0, 1.0, 0.0, 0.0),
-        solid: true,
-    })));
+    commands.insert_resource(Ring {
+        like: IncomingLight {
+            low: Vec4::ZERO,
+            high: Vec4::ZERO,
+            layers: [IVec4::splat(0); 3],
+            albedos: colours.clone(),
+            colours,
+            distances,
+            scale: Vec4::new(NITS, 0.0, RING, 1.0),
+            probes: [Vec4::new(0.0, 0.0, 0.0, -1.0); BLOCK_PROBES],
+            shape: Vec4::new(1.0, 1.0, 0.0, 0.0),
+            solid: true,
+            base: None,
+            tint: Vec4::ZERO,
+        },
+        all: Vec::new(),
+    });
 }
 
 /// A trial (`--ring`): the material of the street's meshes round the block,
@@ -1094,7 +1150,12 @@ fn faces(
 /// takes each point's light from the probes that saw it: no march, the mesh
 /// says where the point is. The faces stand on the ring's outer surface.
 #[derive(Resource)]
-pub struct Ring(pub Handle<IncomingLight>);
+pub struct Ring {
+    /// What each of its materials is made like (one for each of the
+    /// street's own, whose base colour it keeps), and all of them.
+    pub like: IncomingLight,
+    pub all: Vec<Handle<IncomingLight>>,
+}
 pub const RING: f32 = 13.5;
 /// How high the ring's faces stand, m.
 const RING_HEIGHT: f32 = 40.0;
@@ -1196,6 +1257,11 @@ fn arrays(
     if let (Some(pool), Ok(uploads)) = (&mut store.pool, layers.0.lock()) {
         let written = |image: &Handle<Image>| uploads.written.get(&image.id()).copied().unwrap_or(0);
         let both = written(&pool.colours) & written(&pool.distances);
+        let albedo = pool.albedos.as_ref().map_or(0, written);
+        if albedo != store.albedo_written {
+            store.albedo_written = albedo;
+            store.changed = true;
+        }
         for (layer, lent) in pool.layers.iter_mut().enumerate() {
             if let Some(lent) = lent
                 && lent.written != (both & 1 << layer != 0)
@@ -1230,7 +1296,9 @@ fn arrays(
         store.next = cubes.clone();
         store.changed = true;
     }
-    if store.block == Some(block) && !store.changed {
+    // The trial's materials are made as the street is placed: told then.
+    let ringed = store.ringed == ring.all.len();
+    if store.block == Some(block) && !store.changed && ringed {
         return;
     }
     store.changed = false;
@@ -1273,6 +1341,7 @@ fn arrays(
             size,
             colours: images.add(layered(size, layers as u32, TextureFormat::Rgb10a2Unorm)),
             distances: images.add(layered(size, layers as u32, TextureFormat::R32Float)),
+            albedos: options.ring.then(|| images.add(layered(size, layers as u32, TextureFormat::Rgb10a2Unorm))),
             layers: vec![None; layers],
         });
     }
@@ -1280,8 +1349,9 @@ fn arrays(
     if let (Some(pool), Ok(mut uploads)) = (&mut store.pool, layers.0.lock()) {
         // What was on its way to arrays no longer filled goes.
         let (colours, distances) = (pool.colours.id(), pool.distances.id());
-        uploads.pending.retain(|l| l.image == colours || l.image == distances);
-        uploads.written.retain(|image, _| *image == colours || *image == distances);
+        let albedos = pool.albedos.as_ref().map(|albedos| albedos.id());
+        uploads.pending.retain(|l| l.image == colours || l.image == distances || Some(l.image) == albedos);
+        uploads.written.retain(|image, _| *image == colours || *image == distances || Some(*image) == albedos);
         // A layer for each of this cube's probes, filled as they decode,
         // each written once by the render world (`Layers`), a band a frame;
         // a probe at half its size doubled first (D-141). Then one for the
@@ -1303,6 +1373,25 @@ fn arrays(
         // The tiles decoded (D-141), over their layers' light once it is on
         // its way: they are kept no longer.
         let size = pool.size;
+        if let Some(albedos) = albedos {
+            for (layer, lent) in pool.layers.iter_mut().enumerate() {
+                let Some(lent) = lent.as_mut().filter(|lent| !lent.albedo) else { continue };
+                let Some(drawn) = store.albedos.get(&tiles::probe_keys(lent.cube)[lent.k]) else { continue };
+                if (drawn.width, drawn.height) == size {
+                    let (layer, drawn, at) = (layer as u32, drawn.clone(), UVec2::ZERO);
+                    uploads.pending.push(Layer {
+                        image: albedos,
+                        layer,
+                        drawn,
+                        distance: false,
+                        row: 0,
+                        at,
+                        whole: true,
+                    });
+                    lent.albedo = true;
+                }
+            }
+        }
         for (layer, lent) in pool.layers.iter_mut().enumerate() {
             let Some(lent) = lent.as_mut().filter(|lent| lent.sent) else { continue };
             let Some(parts) = store.parts.get_mut(&tiles::probe_keys(lent.cube)[lent.k]) else { continue };
@@ -1351,10 +1440,12 @@ fn arrays(
     if !probes.is_empty() {
         // Drawn with the probes written, the centre's first.
         let same = store.probes_of == Some(block.cube) && store.cubed;
-        let shown = probes.iter().enumerate().fold(0u128, |bits, (slot, (layer, ..))| bits | 1 << (slot * 12 + layer));
-        if store.block == Some(block) && same && shown == store.shown {
+        let shown = probes.iter().enumerate().fold(0u128, |bits, (slot, (layer, ..))| bits | 1 << (slot * 12 + layer))
+            | (store.albedo_written as u128) << 110;
+        if store.block == Some(block) && same && shown == store.shown && ringed {
             return;
         }
+        store.ringed = ring.all.len();
         let relit = !same;
         store.block = Some(block);
         store.drawn = probes.len();
@@ -1412,7 +1503,16 @@ fn arrays(
                 place_face(&mut places, *entity, face, lo, hi, options.whole);
             }
         }
-        if let Some(mut material) = materials.get_mut(&ring.0) {
+        // The trial's meshes round the block: the same probes; and, where the
+        // colours of the surfaces a probe saw are written, the meshes' own
+        // colours drawn, the probe giving the light alone.
+        let mut coloured = [0i32; 12];
+        for (slot, (layer, ..)) in probes.iter().enumerate().take(BLOCK_PROBES) {
+            coloured[slot] = i32::from(store.albedo_written & 1 << layer != 0);
+        }
+        let own = std::env::var_os("OSAGE_RING_PLAIN").is_none();
+        for handle in &ring.all {
+            let Some(mut material) = materials.get_mut(handle) else { continue };
             material.low = lo.extend(0.0);
             material.high = hi.extend(pool.size.0 as f32);
             material.probes = at;
@@ -1421,6 +1521,15 @@ fn arrays(
             material.scale.y = if std::env::var_os("OSAGE_UNSEEN").is_some() { 1.0 } else { 0.0 };
             material.colours = pool.colours.clone();
             material.distances = pool.distances.clone();
+            material.layers = [
+                IVec4::new(coloured[0], coloured[1], coloured[2], coloured[3]),
+                IVec4::new(coloured[4], coloured[5], coloured[6], coloured[7]),
+                IVec4::new(coloured[8], coloured[9], coloured[10], coloured[11]),
+            ];
+            if let Some(albedos) = &pool.albedos {
+                material.albedos = albedos.clone();
+                material.tint.w = if own { 1.0 } else { 0.0 };
+            }
         }
         return;
     }
@@ -1882,7 +1991,7 @@ mod tests {
     fn a_probe_s_light_goes_to_its_layer_whole_or_doubled_first() {
         let images = Assets::<Image>::default();
         let (colours, distances) = (images.reserve_handle(), images.reserve_handle());
-        let mut pool = Pool { size: (4, 2), colours, distances, layers: vec![None; LAYERS] };
+        let mut pool = Pool { size: (4, 2), colours, distances, albedos: None, layers: vec![None; LAYERS] };
         let (mut uploads, mut parts) = (Uploads::default(), HashMap::new());
         let (done, doubled) = crossbeam_channel::unbounded();
         let (cube, next) = (IVec3::new(8, 0, -21), IVec3::new(8, 0, -20));

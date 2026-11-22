@@ -216,6 +216,17 @@ The maintainer's next thought: draw the geometry of the eight blocks round the w
 
 Edges come out where the model has them (a bollard against a wall, a kerb); the walls stay as blurred as the probes are: their sharpness would come from the model's own textures, the probes giving the light alone — which asks for probes baked with the light apart from the surfaces' colour.
 
+**Second step: the meshes' own colours, the probes' light.** For each probe, what colour each surface it saw is, apart from its light (`cube-probes.py` with `OSAGE_ALBEDO=1`: every material shining its base colour, one sample, 23 s a probe on the laptop's processor; `light-pack --albedo`: 450 KiB a probe). The ring's material then draws a point as the light the probe saw of it, divided by the colour the probe saw there and multiplied by the mesh's own base colour at that point: the model's textures give the detail, the probe the light.
+
+| From the scene camera, against Cycles | The probes' colour | The meshes' own colour |
+|---|---|---|
+| Picture | 28.0 dB | 28.0 dB |
+| Floor | 30.3 dB | 31.4 dB |
+| Left façade, right façade | 28.1, 28.3 dB | 28.4, 28.6 dB |
+| A frame standing, Iris Xe | 30 ms | 31 ms |
+
+To the eye the walls, the wood and the stone come out with their grain, where the probes blurred them; the measure moves little (what is left: the surfaces' relief, which Cycles shades and a base colour does not carry).
+
 ## Next
 
 1. The whole street baked, at 1024–1536 px and more samples: about 2 000 tiles, a cloud GPU's work (hours on the laptop's processor for 384 px).

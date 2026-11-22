@@ -85,7 +85,9 @@ fn place(
     meshes: Res<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
     options: Res<crate::Options>,
-    ring: Res<crate::light::Ring>,
+    mut ring: ResMut<crate::light::Ring>,
+    mut around: ResMut<Assets<crate::light::IncomingLight>>,
+    mut around_of: Local<HashMap<AssetId<StandardMaterial>, Handle<crate::light::IncomingLight>>>,
 ) {
     if model.placed {
         return;
@@ -151,15 +153,31 @@ fn place(
             let (min, max) = corners.fold((Vec3::MAX, Vec3::MIN), |(a, b), c| (a.min(c), b.max(c)));
             commands.spawn((
                 Mesh3d(primitive.mesh.clone()),
-                MeshMaterial3d(material),
+                MeshMaterial3d(material.clone()),
                 place,
                 Visibility::Hidden,
                 Piece { min, max, mesh: primitive.mesh.clone() },
             ));
             if options.ring {
+                // The same surface with the probes' light: its own base
+                // colour kept, for the light to be told from it.
+                let lit = around_of
+                    .entry(material.id())
+                    .or_insert_with(|| {
+                        let own = materials.get(&material);
+                        let colour = own.map_or(LinearRgba::WHITE, |m| m.base_color.to_linear());
+                        let handle = around.add(crate::light::IncomingLight {
+                            base: own.and_then(|m| m.base_color_texture.clone()),
+                            tint: Vec4::new(colour.red, colour.green, colour.blue, 0.0),
+                            ..ring.like.clone()
+                        });
+                        ring.all.push(handle.clone());
+                        handle
+                    })
+                    .clone();
                 commands.spawn((
                     Mesh3d(primitive.mesh.clone()),
-                    MeshMaterial3d(ring.0.clone()),
+                    MeshMaterial3d(lit),
                     place,
                     Visibility::Hidden,
                     bevy::light::NotShadowCaster,
