@@ -238,6 +238,21 @@ To the eye the walls, the wood and the stone come out with their grain, where th
 
 Clustering is the wrong tool here: it moves the façades' edges (a window's frame, a sill) by a cell, and it averages texture coordinates across seams, so that the meshes' own textures land wrong. A frame's time barely moves (39 to 32 ms): the triangles are not what costs, so simplifying would save what is sent, not what is drawn. What it asks for is a simplification that keeps edges and seams, done once when the street is made.
 
+### The ring with nine centres, each with its surfaces' colours
+
+The 93 probes packed in the street (five a cube along the corridor, one a cube elsewhere) now each have their `albedo.ivf`, baked on the laptop in about 50 minutes. Same view, T3, Iris Xe:
+
+| | Picture | Left façade | Right façade | Floor | Frame |
+|---|---|---|---|---|---|
+| Five probes of the cube, no ring | 27.9 dB | 28.8 dB | 28.1 dB | 29.5 dB | 57 ms |
+| Nine centres, no ring | 27.6 dB | 26.3 dB | 27.3 dB | 29.4 dB | 95 ms |
+| Ring, five probes | 28.0 dB | 28.6 dB | 28.5 dB | 30.6 dB | 33 ms |
+| Ring, nine centres | 27.7 dB | 26.3 dB | 28.3 dB | 30.5 dB | 54 ms |
+
+The left façade's 2 dB are lost by the nine centres themselves, ring or not, and the colours of all nine change nothing to it (26.1 with one centre's colours, 26.3 with nine). Why is not shown: the centres stand 3 to 4 m apart where the cube's five stand within a metre, so what they tell of one point of a wall differs more and is blended.
+
+A walk of 7 s through four cubes: with the ring and five probes, a median frame of 47 ms (113 frames, one over 250 ms); with the ring and nine centres, 66 ms (93 frames, two over 250 ms). Every cube entered was shown within 5 ms.
+
 ## Next
 
 1. The whole street baked, at 1024–1536 px and more samples: about 2 000 tiles, a cloud GPU's work (hours on the laptop's processor for 384 px).

@@ -65,7 +65,9 @@ def device(scene):
 def inside_hidden(lo, hi):
     """Every material: transparent to the camera's rays inside the block
     (Blender's frame, lo..hi; from lo's height up: the ground below stays,
-    or the probes would see under the street)."""
+    or the probes would see under the street). Tells the nodes holding the
+    block's bounds, for another block to be hidden instead (`hide`)."""
+    bounds = []
     for material in bpy.data.materials:
         tree = material.node_tree
         if tree is None:
@@ -85,6 +87,7 @@ def inside_hidden(lo, hi):
                 test.operation = op
                 links.new(split.outputs[name], test.inputs[0])
                 test.inputs[1].default_value = bound
+                bounds.append((test, axis, op == "LESS_THAN"))
                 if inside is None:
                     inside = test
                 else:
@@ -104,6 +107,13 @@ def inside_hidden(lo, hi):
         links.new(surface, mix.inputs[1])
         links.new(clear.outputs["BSDF"], mix.inputs[2])
         links.new(mix.outputs["Shader"], output.inputs["Surface"])
+    return bounds
+
+
+def hide(bounds, lo, hi):
+    """Another block transparent to the camera's rays."""
+    for test, axis, high in bounds:
+        test.inputs[1].default_value = (hi if high else lo)[axis]
 
 
 def position_material():
@@ -209,7 +219,8 @@ def main():
     rest = sys.argv[sys.argv.index("--") + 1 :] if "--" in sys.argv else []
     if len(rest) < 2:
         sys.exit(__doc__)
-    cube = [int(c) for c in rest[0].split(",")]
+    cubes = [[int(c) for c in one.split(",")] for one in rest[0].split(";")]
+    cube = cubes[0]
     out = pathlib.Path(rest[1]).resolve()
     width = int(rest[2]) if len(rest) > 2 else 4096
     height = width // 2
@@ -231,7 +242,42 @@ def main():
     albedo = os.environ.get("OSAGE_ALBEDO")
     if albedo:
         albedo_materials()
-    inside_hidden(lo, hi)
+    bounds = inside_hidden(lo, hi)
+    if albedo:
+        # The surfaces' colours take a sample: several cubes (X,Y,Z;X,Y,Z…)
+        # in one go, the scene loaded once.
+        setup(scene, width, 1, False)
+        scene.view_settings.view_transform = "Standard"
+        work = out / ".work"
+        work.mkdir(parents=True, exist_ok=True)
+        started = time.time()
+        for cube in cubes:
+            lo_g = [(cube[0] - 1) * CUBE, cube[1] * CUBE, (cube[2] - 1) * CUBE]
+            hi_g = [(cube[0] + 2) * CUBE, (cube[1] + 1) * CUBE, (cube[2] + 2) * CUBE]
+            lo, hi = Vector((lo_g[0], -hi_g[2], lo_g[1])), Vector((hi_g[0], -lo_g[2], hi_g[1]))
+            depsgraph = bpy.context.evaluated_depsgraph_get()
+            middle = blender(((cube[0] + 0.5) * CUBE, (cube[1] + 1) * CUBE - 0.01, (cube[2] + 0.5) * CUBE))
+            hit, ground, *_ = scene.ray_cast(depsgraph, middle, Vector((0, 0, -1)))
+            lo.z = (ground.z if hit else lo.z) + 0.3
+            hide(bounds, lo, hi)
+            for k, (dx, dz) in enumerate(OFFSETS[: int(os.environ.get("OSAGE_PROBES", len(OFFSETS)))]):
+                key = f"c_{cube[0]}_{cube[1]}_{cube[2]}_{k}"
+                folder = out / key
+                if (folder / "albedo.f32").exists():
+                    continue
+                x, z = (cube[0] + 0.5) * CUBE + dx, (cube[2] + 0.5) * CUBE + dz
+                top = blender((x, (cube[1] + 1) * CUBE - 0.01, z))
+                hit, ground, *_ = scene.ray_cast(depsgraph, top, Vector((0, 0, -1)))
+                centre = (x, (ground.z if hit else cube[1] * CUBE) + EYES, z)
+                cam = panorama(key, blender(centre), width)
+                render(scene, cam, work / f"{key}-albedo.exr")
+                folder.mkdir(parents=True, exist_ok=True)
+                load(work / f"{key}-albedo.exr", width, height)[..., :3].astype("<f4").tofile(folder / "albedo.f32")
+                meta = {"width": width, "height": height, "key": key, "centre": list(centre), "cube": cube}
+                (folder / "meta.json").write_text(json.dumps(meta, indent=1) + "\n")
+                (work / f"{key}-albedo.exr").unlink()
+                print(f"cube-probes: {key}: its surfaces' colours, {time.time() - started:.0f} s on", flush=True)
+        return
     depsgraph = bpy.context.evaluated_depsgraph_get()
     probes = []
     for k, (dx, dz) in enumerate(OFFSETS[: int(os.environ.get("OSAGE_PROBES", len(OFFSETS)))]):
@@ -245,19 +291,6 @@ def main():
     work = out / ".work"
     work.mkdir(parents=True, exist_ok=True)
     started = time.time()
-    if albedo:
-        setup(scene, width, 1, False)
-        scene.view_settings.view_transform = "Standard"
-        for key, centre, cam in probes:
-            render(scene, cam, work / f"{key}-albedo.exr")
-            folder = out / key
-            folder.mkdir(parents=True, exist_ok=True)
-            load(work / f"{key}-albedo.exr", width, height)[..., :3].astype("<f4").tofile(folder / "albedo.f32")
-            meta = {"width": width, "height": height, "key": key, "centre": list(centre), "cube": cube}
-            (folder / "meta.json").write_text(json.dumps(meta, indent=1) + "\n")
-            (work / f"{key}-albedo.exr").unlink()
-        print(f"cube-probes: the colours of {len(probes)} probes' surfaces in {time.time() - started:.0f} s", flush=True)
-        return
     setup(scene, width, samples, False)
     layer.material_override = None
     for key, _, cam in probes:
