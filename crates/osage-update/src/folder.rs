@@ -11,11 +11,13 @@
 //!   against the digest GitHub publishes, and unpacked over the folder.
 //!   Where the releases have no zip for the system, the programs are built
 //!   from source, and only the content is kept up to date.
-//! - The content: when the folder has none, or the release's content zip
-//!   is not the one installed: only the files that changed when the
-//!   release has a patch from the content installed
-//!   (`<content>-from-<digest>.zip`), else all of it. A folder installed
-//!   by hand takes the published content as its own.
+//! - The content, in one package or several (what never changes apart
+//!   from what does, so that a change of the one is not a download of the
+//!   other): for each, when the folder has none, or the release's zip is
+//!   not the one installed: only the files that changed when the release
+//!   has a patch from the one installed (`<package>-from-<digest>.zip`),
+//!   else all of it. A folder installed by hand takes the published
+//!   content as its own.
 //! - Offline, or anything failing: it says so, and the program starts as
 //!   it is.
 //! - `OSAGE_NO_UPDATE=1`, or a file named `no-update` in the folder, turns
@@ -44,12 +46,24 @@ pub struct Folder {
     pub prefix: &'static str,
     /// The programs' zip for this system, if the releases have one.
     pub programs: Option<&'static str>,
-    /// The content's zip.
-    pub content: &'static str,
+    /// The content's packages.
+    pub content: &'static [Package],
     /// The folder inside both zips.
     pub root: &'static str,
     /// What the requests to GitHub say they come from.
     pub agent: &'static str,
+}
+
+/// A package of content: a zip of the release, unpacked over the folder.
+pub struct Package {
+    /// What the messages call it: "content", "the street".
+    pub name: &'static str,
+    /// Its zip in the release: "osage-kart-content.zip".
+    pub zip: &'static str,
+    /// The line of `release.txt` that keeps the digest installed.
+    pub record: &'static str,
+    /// A file of it, from the folder: the package is there when it is.
+    pub marker: &'static str,
 }
 
 /// `name` with its first letter a capital, to start a sentence.
@@ -128,26 +142,28 @@ fn update(folder: &Folder, dir: &Path) -> Result<()> {
         _ => println!("  {} is up to date ({}).", capital(folder.name), record.get("tag").unwrap_or(&release.tag)),
     }
 
-    if let Some(asset) = release.asset(folder.content) {
-        let has_content = dir.join("assets").join("manifest.toml").exists();
-        match record.get("content") {
-            None if has_content => record.set("content", &asset.digest),
-            Some(installed) if has_content && installed == asset.digest => {}
+    for package in folder.content {
+        let Some(asset) = release.asset(package.zip) else { continue };
+        let here = dir.join(package.marker).exists();
+        match record.get(package.record) {
+            None if here => record.set(package.record, &asset.digest),
+            Some(installed) if here && installed == asset.digest => {}
             installed => {
                 // Only what changed, when the release has a patch from the
-                // content installed; else all of it.
-                match installed.filter(|_| has_content).and_then(|from| release.patch(folder.content, from)) {
+                // package installed; else all of it.
+                match installed.filter(|_| here).and_then(|from| release.patch(package.zip, from)) {
                     Some(patch) => {
-                        println!("  New content ({} MB of changes): downloading...", (patch.size / 1_000_000).max(1));
+                        let size = (patch.size / 1_000_000).max(1);
+                        println!("  New {} ({size} MB of changes): downloading...", package.name);
                         install(folder, patch, &aside, dir)?;
                     }
                     None => {
-                        println!("  New content ({} MB): downloading...", asset.size / 1_000_000);
+                        println!("  New {} ({} MB): downloading...", package.name, asset.size / 1_000_000);
                         install(folder, asset, &aside, dir)?;
                     }
                 }
-                record.set("content", &asset.digest);
-                println!("  Content updated.");
+                record.set(package.record, &asset.digest);
+                println!("  {} updated.", capital(package.name));
             }
         }
         record.write(&record_path)?;

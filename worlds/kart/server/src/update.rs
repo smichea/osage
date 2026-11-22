@@ -9,7 +9,7 @@
 //! Windows; play.command, host.command, join.command on a Mac) with
 //! `ARGS`. How: `osage_update::folder`.
 
-use osage_update::folder::{Folder, run};
+use osage_update::folder::{Folder, Package, run};
 
 fn main() {
     run(&Folder {
@@ -23,7 +23,12 @@ fn main() {
         } else {
             None
         },
-        content: "osage-kart-content.zip",
+        content: &[Package {
+            name: "content",
+            zip: "osage-kart-content.zip",
+            record: "content",
+            marker: "assets/manifest.toml",
+        }],
         root: "osage-kart",
         agent: "osage-kart-update",
     });

@@ -2,9 +2,10 @@
 # attaches both to a GitHub release whose tag starts with paris-v: paris
 # (the walk), paris-update (keeps the folder up to date and fetches the
 # street), walk.bat or walk.command and a README. The street — its model,
-# its textures and the light baked into its blocks — is attached to the
-# release separately (osage-paris-content.zip, tools/bistro/content-zip.sh),
-# from a machine that has it; the folder downloads it at its first start.
+# its textures — and the light baked into its blocks are attached to the
+# release separately (osage-paris-street.zip and osage-paris-light.zip,
+# tools/bistro/content-zip.sh), from a machine that has them; the folder
+# downloads them at its first start.
 name: release-paris
 
 on:

@@ -27,7 +27,7 @@ Walk in a street of Paris as real as its photographs, the client drawing in 3D o
 
 # Interfaces
 
-The program `paris` (`[ws://HOST:7878] [--tier T1..T4] [--street DIR] [--offline] [--fov DEGREES] [--at X,Y,Z] [--heading DEGREES] [--shot FILE] [--film DIR SECONDS] [--plain] [--whole] [--cube-probes N]`), built with `--features raytracing` to trace the block at T4. `look::TABLE`, the table of Blender's AgX it reads. The program `paris-update` and the launchers `worlds/paris/release/{windows/walk.bat, macos/walk.command}` (`paris --offline --ring --block-probes`), packed by the `release-paris` workflow for `paris-v…` releases; the street they download is `osage-paris-content.zip`, made by `tools/bistro/content-zip.sh` (D-143).
+The program `paris` (`[ws://HOST:7878] [--tier T1..T4] [--street DIR] [--offline] [--fov DEGREES] [--at X,Y,Z] [--heading DEGREES] [--shot FILE] [--film DIR SECONDS] [--plain] [--whole] [--cube-probes N]`), built with `--features raytracing` to trace the block at T4. `look::TABLE`, the table of Blender's AgX it reads. The program `paris-update` and the launchers `worlds/paris/release/{windows/walk.bat, macos/walk.command}` (`paris --offline --ring --block-probes`), packed by the `release-paris` workflow for `paris-v…` releases; what they download is `osage-paris-street.zip` (the scene) and `osage-paris-light.zip` (the baked light), made by `tools/bistro/content-zip.sh` (D-143).
 
 # Invariants
 
