@@ -94,8 +94,10 @@ else
       say "rendering on $device; baking the probes of cube $one, $size px wide, $samples samples"
       OSAGE_DEVICE=$device OSAGE_PROBES=${probes:-5} "$blender" -b scene/bistro/exterior.blend --python-exit-code 1 \
         --python tools/cube-probes.py -- "$one" raw "$size" "$samples" >>out/bake.log 2>&1 ||
-        finish "failed: the probes of $one (see out/bake.log)"
+        { say "failed: the probes of $one (see out/bake.log); going on"; echo "$one" >>out/failed.txt; }
     done
+    # One cube that fails does not lose the others: they go up, and pack.
+    [ -n "$(ls raw 2>/dev/null)" ] || finish "failed: no probe baked (see out/bake.log)"
     tar -cf raw.tar raw && gcloud storage cp raw.tar "$run/raw.tar" >/dev/null 2>&1 || finish "failed: the raw probes did not go up"
     if [ -n "$pack" ]; then
       wait "$builder" || finish "failed: the build (see out/build.log)"

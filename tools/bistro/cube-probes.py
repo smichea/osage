@@ -16,6 +16,8 @@ sphere, equirectangular, WIDTH x WIDTH/2 pixels (4096 unless given), SAMPLES
 samples a pixel (256 unless given): column 0 looks south and the middle one
 north (-z), east to the right of it; row 0 straight up. In OUT/c_X_Y_Z_K/:
 `radiance.f32`, `distance.f32` (as `tiles.py` writes them) and `meta.json`.
+A cube given as X,Y,Z:x,y,z has its centre probe's eyes at x,y,z (the walk's
+grid knows where one stands; tools/bistro/probe-spots.py lists them).
 OSAGE_DEVICE=OPTIX (or CUDA) renders on the GPU; OSAGE_PROBES=N bakes the
 first N probes only (1: the cube's centre alone); OSAGE_ALBEDO=1 renders
 instead what colour each surface is, apart from its light (`albedo.f32`, one
@@ -215,11 +217,33 @@ def directions(width, height):
     return np.stack([np.cos(lat) * np.sin(lon), np.sin(lat), -np.cos(lat) * np.cos(lon)], axis=-1)
 
 
+def eyes(scene, depsgraph, cube, spots, dx, dz):
+    """Where a probe's eyes stand (glTF's frame), `dx`, `dz` from the cube's
+    centre probe: EYES over the ground under them. The centre probe stands
+    at the cube's given spot, or over the cube's middle; the ground is looked
+    for from the spot's eyes down, under what hangs over a walker."""
+    spot = spots.get(tuple(cube))
+    if spot and dx == 0.0 and dz == 0.0:
+        return spot
+    x = (spot[0] if spot else (cube[0] + 0.5) * CUBE) + dx
+    z = (spot[2] if spot else (cube[2] + 0.5) * CUBE) + dz
+    top = blender((x, spot[1] if spot else (cube[1] + 1) * CUBE - 0.01, z))
+    hit, ground, *_ = scene.ray_cast(depsgraph, top, Vector((0, 0, -1)))
+    return (x, (ground.z if hit else cube[1] * CUBE) + EYES, z)
+
+
 def main():
     rest = sys.argv[sys.argv.index("--") + 1 :] if "--" in sys.argv else []
     if len(rest) < 2:
         sys.exit(__doc__)
-    cubes = [[int(c) for c in one.split(",")] for one in rest[0].split(";")]
+    # X,Y,Z:x,y,z: the eyes of the cube's centre probe stand at x,y,z, a
+    # place the walk's grid holds; a cube's middle may be inside a wall.
+    cubes, spots = [], {}
+    for one in rest[0].split(";"):
+        where, _, at = one.partition(":")
+        cubes.append([int(c) for c in where.split(",")])
+        if at:
+            spots[tuple(cubes[-1])] = tuple(float(v) for v in at.split(","))
     cube = cubes[0]
     out = pathlib.Path(rest[1]).resolve()
     width = int(rest[2]) if len(rest) > 2 else 4096
@@ -234,9 +258,7 @@ def main():
     # The street, its pavements and kerbs stay: hidden from 30 cm over the
     # ground under the cube's centre.
     depsgraph = bpy.context.evaluated_depsgraph_get()
-    middle = blender(((cube[0] + 0.5) * CUBE, (cube[1] + 1) * CUBE - 0.01, (cube[2] + 0.5) * CUBE))
-    hit, ground, *_ = scene.ray_cast(depsgraph, middle, Vector((0, 0, -1)))
-    lo.z = (ground.z if hit else lo.z) + 0.3
+    lo.z = eyes(scene, depsgraph, cube, spots, 0.0, 0.0)[1] - EYES + 0.3
     # Made first, so that it is transparent inside the block too.
     position = position_material()
     albedo = os.environ.get("OSAGE_ALBEDO")
@@ -256,19 +278,14 @@ def main():
             hi_g = [(cube[0] + 2) * CUBE, (cube[1] + 1) * CUBE, (cube[2] + 2) * CUBE]
             lo, hi = Vector((lo_g[0], -hi_g[2], lo_g[1])), Vector((hi_g[0], -lo_g[2], hi_g[1]))
             depsgraph = bpy.context.evaluated_depsgraph_get()
-            middle = blender(((cube[0] + 0.5) * CUBE, (cube[1] + 1) * CUBE - 0.01, (cube[2] + 0.5) * CUBE))
-            hit, ground, *_ = scene.ray_cast(depsgraph, middle, Vector((0, 0, -1)))
-            lo.z = (ground.z if hit else lo.z) + 0.3
+            lo.z = eyes(scene, depsgraph, cube, spots, 0.0, 0.0)[1] - EYES + 0.3
             hide(bounds, lo, hi)
             for k, (dx, dz) in enumerate(OFFSETS[: int(os.environ.get("OSAGE_PROBES", len(OFFSETS)))]):
                 key = f"c_{cube[0]}_{cube[1]}_{cube[2]}_{k}"
                 folder = out / key
                 if (folder / "albedo.f32").exists():
                     continue
-                x, z = (cube[0] + 0.5) * CUBE + dx, (cube[2] + 0.5) * CUBE + dz
-                top = blender((x, (cube[1] + 1) * CUBE - 0.01, z))
-                hit, ground, *_ = scene.ray_cast(depsgraph, top, Vector((0, 0, -1)))
-                centre = (x, (ground.z if hit else cube[1] * CUBE) + EYES, z)
+                centre = eyes(scene, depsgraph, cube, spots, dx, dz)
                 cam = panorama(key, blender(centre), width)
                 render(scene, cam, work / f"{key}-albedo.exr")
                 folder.mkdir(parents=True, exist_ok=True)
@@ -281,11 +298,7 @@ def main():
     depsgraph = bpy.context.evaluated_depsgraph_get()
     probes = []
     for k, (dx, dz) in enumerate(OFFSETS[: int(os.environ.get("OSAGE_PROBES", len(OFFSETS)))]):
-        x, z = (cube[0] + 0.5) * CUBE + dx, (cube[2] + 0.5) * CUBE + dz
-        top = blender((x, (cube[1] + 1) * CUBE - 0.01, z))
-        hit, ground, *_ = scene.ray_cast(depsgraph, top, Vector((0, 0, -1)))
-        y = (ground.z if hit else cube[1] * CUBE) + EYES
-        centre = (x, y, z)
+        centre = eyes(scene, depsgraph, cube, spots, dx, dz)
         key = f"c_{cube[0]}_{cube[1]}_{cube[2]}_{k}"
         probes.append((key, centre, panorama(key, blender(centre), width)))
     work = out / ".work"
@@ -329,9 +342,14 @@ def main():
         distance.astype("<f4").tofile(folder / "distance.f32")
         (work / f"{key}.exr").unlink()
         (work / f"{key}-position.exr").unlink()
+        if off.size == 0:
+            # Nothing further than half a metre: the probe stands inside a mesh.
+            print(f"cube-probes: {key} at {tuple(round(c, 2) for c in centre)} sees nothing", flush=True)
+            continue
         print(f"cube-probes: {key} at {tuple(round(c, 2) for c in centre)}; projection off by "
               f"{np.median(off):.2f} deg (median), {np.percentile(off, 99):.2f} (99th)", flush=True)
     print(f"cube-probes: {len(probes)} probes in {time.time() - started:.0f} s", flush=True)
 
 
-main()
+if __name__ == "__main__":
+    main()
