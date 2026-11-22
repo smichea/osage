@@ -113,6 +113,7 @@ To **open** a function to the world, the owner says so explicitly: `--open-led t
 | [02 — Mixed worlds, real devices and OpenDeviceDB](design/02-mixed-worlds-and-devices.md) | Real places captured and geo-anchored, real devices as live entities, AR participants, safe physical actuation through a local device bridge. Reference device layer: [OpenDeviceDB](https://opendevicedb.org) — not imposed | In part: the device bridge with read-only and pre-approved functions; places, AR and OpenDeviceDB are to come |
 | [03 — Rendering programme](design/03-rendering.md) | Towards the GTA 6 bar, together: one plugin per technique, fidelity tiers T1–T4, oracles, workstreams R1–R14, how to contribute a technique | Under way: every workstream started, T4 traces its light |
 | [04 — Kart programme](design/04-kart-programme.md) | The kart world to the play of the best arcade racers and a GTA 5–class look | Under way: play milestones M1–M4 done, M5–M6 in progress |
+| [05 — Regions and the light between them](design/05-regions-and-light.md) | A world held by several servers: probes near the player, a light field on the borders of fixed, overlapping regions, the light going a region a turn | Proposal: nothing built; the single-server probes it starts from are measured in research 10 |
 
 **Research.** The dated surveys (2026-11-09 to 11-10) that chose the direction, with their sources; claims that could not be verified are marked as such.
 
