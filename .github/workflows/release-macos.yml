@@ -29,6 +29,8 @@ env:
 
 jobs:
   macos:
+    # The kart's releases only: the Paris walk has its own workflow (release-paris).
+    if: startsWith(github.event.release.tag_name || inputs.tag, 'kart-v')
     name: macOS arm64 — kart game and world
     # Apple silicon, like the players' Macs.
     runs-on: macos-latest

@@ -15,8 +15,10 @@
 //!
 //! Downloads and unpacking use the system's own `curl` and `tar` (both on
 //! Windows 10 since 2018; `bsdtar` or `unzip` on Linux and macOS): no HTTP or archive code
-//! here. Mechanisms only: which repository, prefix and packages, and
-//! whether to ask first, are the caller's.
+//! here. The steps are mechanisms only; `folder` is the policy the worlds'
+//! updaters share, given a repository, a prefix and the packages' names.
+
+pub mod folder;
 
 use std::{
     collections::BTreeMap,

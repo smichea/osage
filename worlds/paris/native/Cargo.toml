@@ -15,7 +15,13 @@ repository.workspace = true
 name = "paris"
 path = "src/main.rs"
 
+# Keeps a downloaded folder up to date (osage-update), as kart-update does.
+[[bin]]
+name = "paris-update"
+path = "src/update.rs"
+
 [dependencies]
+osage-update.workspace = true
 osage-world-paris.workspace = true
 osage-hologram-stream.workspace = true
 osage-render.workspace = true

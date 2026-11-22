@@ -27,6 +27,12 @@ The first world: an original arcade kart racer — drifts, tricks, items, six ci
 
 **On a Mac with Apple silicon**: download `osage-kart-macos-arm64.zip`, unzip it and double-click `play.command`; the first time, allow it in System Settings › Privacy & Security ("Open Anyway"), and the folder downloads its content by itself. `play-two.command`, `host.command` and `join.command` do as on Windows, and the folder updates itself the same way.
 
+## Walk in Paris
+
+A second world, a test one: a street of Paris (Amazon Lumberyard's Bistro) to walk in on foot. The computer draws the street's model for 13 m round the walker; what lies beyond is light baked beforehand by a path tracer, shown from where the walker stands ([research 10](research/10-incoming-light.md)).
+
+**On Windows**: download `osage-paris-windows-x64.zip` from the [releases](https://github.com/smichea/osage/releases) (the ones named Paris), unzip it and run `walk.bat`. **On a Mac with Apple silicon**: download `osage-paris-macos-arm64.zip`, unzip it and double-click `walk.command`, allowing it the first time as for the kart. The first start downloads the street (about 1.3 GB); the folder updates itself before each walk. From source: `cargo run --release -p osage-paris-native -- --offline --ring --block-probes`, with the street in `assets/orca/bistro/out`.
+
 **From source** (Rust ≥ 1.90, Node ≥ 22):
 
 ```sh
@@ -96,6 +102,7 @@ To **open** a function to the world, the owner says so explicitly: `--open-led t
 | `crates/osage-render` | Rendering, one plugin per technique, configured per fidelity tier T1–T4 (sky, shadows, ambient occlusion, ray-traced light and its denoiser, post-processing, resolution, frame pacing) |
 | `crates/osage-content`, `osage-props`, `osage-procedural` | Content from the asset manifest; models placed by the thousand with levels of detail; scenery sculpted from simple shapes |
 | `crates/osage-update`, `osage-report`, `osage-music`, `osage-voice` | Self-updating releases, consented crash reports, music and radio, voice chat |
+| `worlds/paris` | The Paris walk: the world and its server of light (`world`, `server`), its client (`native`), its launchers (`release`) |
 | `worlds/kart` | osage kart: the world (`world`, `physics`, `server`), its clients (`native`, `client`) and its reusable components (`components/*`: tracks, items, bots, crowd, roadside, sound, cups, ghosts, records…) |
 | `spec/` | The protocol: specification text and `.proto` schemas |
 | `design/`, `knowledge/`, `research/` | Decisions and programmes; one card per module and technique; the surveys behind the direction |

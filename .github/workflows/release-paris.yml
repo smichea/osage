@@ -1,0 +1,114 @@
+# Builds the Paris walk for Windows and for macOS on Apple silicon, and
+# attaches both to a GitHub release whose tag starts with paris-v: paris
+# (the walk), paris-update (keeps the folder up to date and fetches the
+# street), walk.bat or walk.command and a README. The street — its model,
+# its textures and the light baked into its blocks — is attached to the
+# release separately (osage-paris-content.zip, tools/bistro/content-zip.sh),
+# from a machine that has it; the folder downloads it at its first start.
+name: release-paris
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag to attach the build to
+        required: true
+
+permissions:
+  contents: write
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  windows:
+    if: startsWith(github.event.release.tag_name || inputs.tag, 'paris-v')
+    name: Windows x64 — the Paris walk
+    runs-on: windows-latest
+    env:
+      TAG: ${{ github.event.release.tag_name || inputs.tag }}
+      # The C runtime inside the programs: nothing to install on the walker's
+      # PC (no Visual C++ Redistributable).
+      RUSTFLAGS: -C target-feature=+crt-static
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ env.TAG }}
+      - run: rustup toolchain install stable --profile minimal && rustup default stable
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+      # nasm assembles the AV1 decoder's SIMD (rav1d): the baked light is AV1.
+      - name: nasm
+        shell: bash
+        run: |
+          choco install nasm -y --no-progress
+          echo "C:\Program Files\NASM" >> "$GITHUB_PATH"
+      - run: cargo build --release -p osage-paris-native
+      # Microsoft's DirectX shader compiler beside the program: without it,
+      # Direct3D 12 falls back to the old compiler (FXC), which cannot compile
+      # the renderer's shaders. Pinned and checked, as for the kart.
+      - name: DirectX shader compiler
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DXC_TAG: v1.9.2609
+          DXC_ZIP: dxc_2026_09_29.zip
+          DXC_SHA256: ad31b1fc8443175d204f77a611fdb3ef2ec42759bdc2f1167368de24a4a7e7f1
+        run: |
+          gh release download "$DXC_TAG" -R microsoft/DirectXShaderCompiler -p "$DXC_ZIP" -D dxc
+          echo "$DXC_SHA256  dxc/$DXC_ZIP" | sha256sum -c -
+          7z x -odxc/x "dxc/$DXC_ZIP" > /dev/null
+      - name: Package
+        shell: bash
+        run: |
+          mkdir -p dist/osage-paris/LICENSES/directx-shader-compiler
+          cp dxc/x/bin/x64/dxcompiler.dll dxc/x/bin/x64/dxil.dll dist/osage-paris/
+          find dxc/x -maxdepth 2 -iname 'LICENSE*' -exec cp {} dist/osage-paris/LICENSES/directx-shader-compiler/ \;
+          cp target/release/paris.exe target/release/paris-update.exe dist/osage-paris/
+          # What the folder holds, for paris-update.exe.
+          printf '# What this folder holds, for its updater.\ncommit = %s\ntag = %s\n' "$(git rev-parse HEAD)" "$TAG" > dist/osage-paris/release.txt
+          cp worlds/paris/release/windows/walk.bat worlds/paris/release/windows/README.txt dist/osage-paris/
+          cp -r LICENSE LICENSE-EXCEPTIONS.md LICENSES dist/osage-paris/
+          cd dist && 7z a -tzip osage-paris-windows-x64.zip osage-paris
+      - name: Attach to the release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "$TAG" dist/osage-paris-windows-x64.zip --clobber
+
+  macos:
+    if: startsWith(github.event.release.tag_name || inputs.tag, 'paris-v')
+    name: macOS arm64 — the Paris walk
+    # Apple silicon, like the walkers' Macs.
+    runs-on: macos-latest
+    env:
+      TAG: ${{ github.event.release.tag_name || inputs.tag }}
+      # Every Mac with Apple silicon: they all came with macOS 11 or later.
+      MACOSX_DEPLOYMENT_TARGET: "11.0"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ env.TAG }}
+      - run: rustup toolchain install stable --profile minimal && rustup default stable
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+      - run: cargo build --release -p osage-paris-native
+      - name: Package
+        run: |
+          mkdir -p dist/osage-paris
+          cp target/release/paris target/release/paris-update dist/osage-paris/
+          # Apple silicon runs only signed programs: the linker signs them
+          # (ad hoc, no developer identity); check that they still are.
+          codesign --verify --strict dist/osage-paris/paris dist/osage-paris/paris-update
+          # What the folder holds, for paris-update.
+          printf '# What this folder holds, for its updater.\ncommit = %s\ntag = %s\n' "$(git rev-parse HEAD)" "$TAG" > dist/osage-paris/release.txt
+          cp worlds/paris/release/macos/walk.command worlds/paris/release/macos/README.txt dist/osage-paris/
+          chmod +x dist/osage-paris/walk.command
+          cp -R LICENSE LICENSE-EXCEPTIONS.md LICENSES dist/osage-paris/
+          # ditto keeps the programs' and the launcher's execute permission;
+          # no resource forks or extended attributes in the zip.
+          cd dist && ditto -c -k --norsrc --noextattr --keepParent osage-paris osage-paris-macos-arm64.zip
+      - name: Attach to the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "$TAG" dist/osage-paris-macos-arm64.zip --clobber

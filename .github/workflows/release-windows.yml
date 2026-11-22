@@ -26,6 +26,8 @@ env:
 
 jobs:
   windows:
+    # The kart's releases only: the Paris walk has its own workflow (release-paris).
+    if: startsWith(github.event.release.tag_name || inputs.tag, 'kart-v')
     name: Windows x64 — kart game and world
     runs-on: windows-latest
     env:

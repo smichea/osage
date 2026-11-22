@@ -5127,6 +5127,7 @@ dependencies = [
  "osage-props",
  "osage-render",
  "osage-sdk",
+ "osage-update",
  "osage-world-paris",
  "prost",
  "serde_json",
