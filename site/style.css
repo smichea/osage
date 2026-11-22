@@ -153,6 +153,9 @@ code { font: 500 0.9em/1.4 var(--mono); color: var(--text); background: rgba(255
 .split.top .split-copy { position: sticky; top: 96px; }
 .media { position: relative; }
 .media img { position: relative; z-index: 1; width: 100%; aspect-ratio: 16 / 10; object-fit: cover; border-radius: 22px; border: 1px solid var(--line-2); }
+.media video { position: relative; z-index: 1; display: block; width: 100%; aspect-ratio: 16 / 9; object-fit: cover; border-radius: 22px; border: 1px solid var(--line-2); }
+.media-note { position: relative; z-index: 1; margin-top: 12px; color: var(--soft); font-size: 13px; }
+.media-note a { color: inherit; text-decoration: underline; }
 .media-glow { position: absolute; inset: 8% -6% -10%; z-index: 0; filter: blur(56px); background: radial-gradient(50% 55% at 60% 60%, rgba(255, 150, 60, 0.26), transparent 70%); }
 
 .compare { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: clamp(40px, 5vw, 64px); }

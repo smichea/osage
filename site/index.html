@@ -46,6 +46,7 @@
       </a>
       <nav class="nav-links" aria-label="Main">
         <a href="#kart">Kart</a>
+        <a href="#paris">Paris</a>
         <a href="#rendering">Rendering</a>
         <a href="#tiers">Tiers</a>
         <a href="#start">Get started</a>
@@ -60,6 +61,7 @@
         <summary aria-label="Menu"><span></span><span></span><span></span></summary>
         <nav aria-label="Menu">
           <a href="#kart">Kart</a>
+          <a href="#paris">Paris</a>
           <a href="#rendering">Rendering</a>
           <a href="#tiers">Tiers</a>
           <a href="#start">Get started</a>
@@ -108,6 +110,15 @@
           <a class="button quiet small" href="https://github.com/smichea/osage/releases">All releases</a>
         </div>
         <div class="news">
+          <a class="news-card reveal" href="https://github.com/smichea/osage/releases/tag/paris-v0.1.0">
+            <img src="img/paris-walk-poster.webp" alt="" loading="lazy">
+            <div>
+              <p class="date">November 22, 2026</p>
+              <h3>A street of Paris to walk in</h3>
+              <p>A second world, a test one: the street drawn round you, everything beyond as light baked by a path tracer. One zip, Windows or Mac.</p>
+              <span class="tag">Release</span>
+            </div>
+          </a>
           <a class="news-card reveal" href="https://github.com/smichea/osage/releases/tag/kart-v0.13.5">
             <img src="img/tile-karts.webp" alt="" loading="lazy">
             <div>
@@ -133,15 +144,6 @@
               <h3>Ray-traced light, with our own denoiser</h3>
               <p>Tier T4 traces its light with Bevy Solari. osage filters the grain itself — no proprietary SDK — in 2.3 ms.</p>
               <span class="tag">Rendering</span>
-            </div>
-          </a>
-          <a class="news-card reveal" href="https://github.com/smichea/osage#readme">
-            <img src="img/tile-circuits.webp" alt="" loading="lazy">
-            <div>
-              <p class="date">November 14, 2026</p>
-              <h3>From research to implementation</h3>
-              <p>The engine's core runs and its first world is playable. The documentation now says what is built, and what is next.</p>
-              <span class="tag">Project</span>
             </div>
           </a>
         </div>
@@ -204,6 +206,29 @@
           <li>Music and radio</li>
           <li>Voice chat</li>
         </ul>
+      </div>
+    </section>
+
+    <!-- Paris -->
+    <section class="section" id="paris">
+      <div class="wrap split">
+        <div class="split-copy reveal">
+          <p class="eyebrow">Paris street · a test world</p>
+          <h2>A street of Paris, walked on foot.</h2>
+          <p>A second world to try: one street of Paris — Amazon Lumberyard's Bistro — to walk in. Your computer draws the street itself only for 13 metres round you. Everything beyond is light that a path tracer baked beforehand, kept as AV1 pictures with their distances, and shown from where you stand.</p>
+          <p>It is a test, not a game: you walk alone, and before this release the walk had run on Linux only. One zip to unzip, then <code>walk.bat</code> — on a Mac, <code>walk.command</code>; the first start downloads the street, about 1.3 GB.</p>
+          <div class="actions">
+            <a class="button" href="https://github.com/smichea/osage/releases/tag/paris-v0.1.0">Get the Paris street demo</a>
+            <a class="button outline" href="paris/">How it works</a>
+          </div>
+        </div>
+        <div class="media reveal">
+          <div class="media-glow warm" aria-hidden="true"></div>
+          <video autoplay muted loop playsinline preload="metadata" poster="img/paris-walk-poster.webp" aria-label="Eight seconds of a walk down a paved street of Paris, between shop fronts and bollards">
+            <source src="video/paris-walk.mp4" type="video/mp4">
+          </video>
+          <p class="media-note">Eight seconds of the walk, every frame as a laptop's integrated graphics drew it (tier T3). Scene: Amazon Lumberyard Bistro, ORCA, <a href="https://creativecommons.org/licenses/by/4.0/">CC BY 4.0</a>.</p>
+        </div>
       </div>
     </section>
 
