@@ -92,6 +92,7 @@ echo "baking on $name in $zone (run $run)"
 
 status=
 seen=
+silent=0
 for _ in $(seq 700); do
   sleep 15
   progress=$(gcloud storage cat "$run/progress.txt" 2>/dev/null || true)
@@ -104,7 +105,15 @@ for _ in $(seq 700); do
   # Expired credentials are not a machine gone: it is left to log in again.
   gcloud auth print-access-token >/dev/null 2>&1 ||
     { echo "gcloud's credentials expired: $name ($zone) left as it is; log in, fetch $run/out, delete it" >&2; exit 1; }
-  state=$(g compute instances describe "$name" --zone "$zone" --format 'value(status)' 2>/dev/null || echo GONE)
+  # One question without an answer is the network's doing (a download
+  # beside, a call that times out), not a machine gone: eight in a row are.
+  if state=$(g compute instances describe "$name" --zone "$zone" --format 'value(status)' 2>/dev/null); then
+    silent=0
+  else
+    silent=$((silent + 1))
+    state=UNKNOWN
+    [ "$silent" -ge 8 ] && state=GONE
+  fi
   case $state in
   TERMINATED | STOPPED | GONE)
     status=$(gcloud storage cat "$run/done" 2>/dev/null) && break
