@@ -348,17 +348,25 @@ impl Drawn {
     /// Twice as wide and high, each pixel four (D-141: a probe at half its
     /// size under its tiles, until they come).
     pub fn doubled(&self) -> Self {
-        let (w, h) = (self.width as usize, self.height as usize);
-        let mut radiance = Vec::with_capacity(4 * w * h);
-        let mut distance = Vec::with_capacity(4 * w * h);
-        for y in 0..h {
-            let row = y * w..(y + 1) * w;
-            for _ in 0..2 {
-                radiance.extend(self.radiance[row.clone()].iter().flat_map(|&v| [v, v]));
-                distance.extend(self.distance[row.clone()].iter().flat_map(|&v| [v, v]));
+        // A row doubled across, then copied to the row under it.
+        fn double<T: Copy + Default>(from: &[T], width: usize) -> Vec<T> {
+            let mut out = vec![T::default(); 4 * from.len()];
+            for (row, two) in from.chunks_exact(width).zip(out.chunks_exact_mut(4 * width)) {
+                let (first, second) = two.split_at_mut(2 * width);
+                for (pair, &v) in first.as_chunks_mut::<2>().0.iter_mut().zip(row) {
+                    *pair = [v, v];
+                }
+                second.copy_from_slice(first);
             }
+            out
         }
-        Self { width: self.width * 2, height: self.height * 2, radiance, distance }
+        let width = self.width as usize;
+        Self {
+            width: self.width * 2,
+            height: self.height * 2,
+            radiance: double(&self.radiance, width),
+            distance: double(&self.distance, width),
+        }
     }
 }
 

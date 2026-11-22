@@ -10,7 +10,7 @@
 //! centre looking out (its probe, a fisheye over [`PROBE_FOV`]), with how far each of
 //! its pixels lies. A tile is the same for every block it bounds, so the
 //! blocks along a street share most of theirs; the server sends a walker
-//! those of the blocks it can reach before long ([`needed`]).
+//! the light of the cubes it goes to ([`needed_light`]).
 //!
 //! Frame: the glTF's — x east, y up, z south.
 
@@ -229,53 +229,91 @@ pub fn ahead(eye: Vec3, velocity: Vec3, horizon: f32) -> Vec<IVec3> {
     cubes
 }
 
+/// The cubes a walker whose eyes are at `eye`, going at `velocity` m/s,
+/// goes through within `horizon` seconds, straight on: its own first, then
+/// in the order it enters them (a corner cut by less than a decimetre is
+/// not gone through).
+pub fn way(eye: Vec3, velocity: Vec3, horizon: f32) -> Vec<IVec3> {
+    let cube = |p: Vec3| (p / CUBE).floor().as_ivec3();
+    let mut cubes = vec![cube(eye)];
+    let flat = Vec3::new(velocity.x, 0.0, velocity.z);
+    let (towards, length) = (flat.normalize_or_zero(), flat.length() * horizon.max(0.0));
+    for i in 1..=(length / 0.1).ceil() as usize {
+        let entered = cube(eye + towards * (i as f32 * 0.1).min(length));
+        if !cubes.contains(&entered) {
+            cubes.push(entered);
+        }
+    }
+    cubes
+}
+
+/// The light a walker needs (D-139, D-142), each list the most pressing
+/// first: a client fetches what is on the walker's way before all else.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Needed {
+    /// Of the cubes it goes through ([`way`]).
+    pub way: Vec<String>,
+    /// Of the cubes beside its way, into which it could turn; and, standing,
+    /// the rest of its own cube's.
+    pub beside: Vec<String>,
+}
+
+impl Needed {
+    /// All of it, what is on the way first.
+    pub fn keys(&self) -> impl Iterator<Item = &String> {
+        self.way.iter().chain(&self.beside)
+    }
+}
+
 /// The light a walker whose eyes are at `eye`, going at `velocity` m/s,
 /// needs within `horizon` seconds (D-139), in the order a client should
-/// decode it: of the cubes on its way (`ahead`) and the four beside its own,
-/// into which it could turn, the centres' probes first (D-137: with its
-/// centre's alone a client draws a cube), at half their size where they are
-/// packed so (D-141: a quarter of the decoding, drawn at once); then the
-/// surface tiles of the cubes without probes (D-136); then the centres
-/// whole, which a client packed as tiles decodes where the walker looks
-/// (D-141); then, standing, its own cube's four other probes, at half their
-/// size first. Only what `there` says is there, each once. All five probes
-/// of every cube within reach, as before, came to nine probes a second
-/// walking down the whole street, fifteen of a laptop's cores to decode.
-pub fn needed_light(eye: Vec3, velocity: Vec3, horizon: f32, there: impl Fn(&str) -> bool) -> Vec<String> {
-    let mut seen = BTreeSet::new();
-    let mut keys = Vec::new();
-    let mut add = |key: String| {
-        if there(&key) && seen.insert(key.clone()) {
-            keys.push(key);
-        }
-    };
+/// fetch it (D-142). First that of the cubes it goes through ([`way`]): what
+/// each is drawn with — its centre's probe (D-137: with its centre's alone
+/// a client draws a cube), at half its size where it is packed so (D-141: a
+/// quarter of the decoding, drawn at once), or, without probes, its block's
+/// surface tiles (D-136) —, then their centres whole, which a client packed
+/// as tiles decodes where the walker looks (D-141). Then the same of the
+/// cubes beside its way: within [`BESIDE`] of it ([`ahead`]), and the four
+/// beside its own, into which it could turn; then, standing, its own cube's
+/// four other probes, at half their size first. Only what `there` says is
+/// there, each once. (All five probes of every cube within reach, as at
+/// first, came to nine probes a second walking down the whole street,
+/// fifteen of a laptop's cores to decode; and in one list, the tiles of the
+/// cubes without probes beside a runner's way were decoded before the light
+/// of the cubes it ran into.)
+pub fn needed_light(eye: Vec3, velocity: Vec3, horizon: f32, there: impl Fn(&str) -> bool) -> Needed {
     let own = (eye / CUBE).floor().as_ivec3();
-    let mut cubes = ahead(eye, velocity, horizon);
-    for beside in [IVec3::X, IVec3::NEG_X, IVec3::Z, IVec3::NEG_Z].map(|d| own + d) {
-        if !cubes.contains(&beside) {
-            cubes.push(beside);
+    let on_way = way(eye, velocity, horizon);
+    let mut beside: Vec<IVec3> = ahead(eye, velocity, horizon).into_iter().filter(|c| !on_way.contains(c)).collect();
+    for cube in [IVec3::X, IVec3::NEG_X, IVec3::Z, IVec3::NEG_Z].map(|d| own + d) {
+        if !on_way.contains(&cube) && !beside.contains(&cube) {
+            beside.push(cube);
         }
     }
-    let speed = Vec2::new(velocity.x, velocity.z).length();
     let centre = |cube: IVec3| probe_keys(cube).swap_remove(0);
-    let (baked, bare): (Vec<IVec3>, Vec<IVec3>) =
-        cubes.iter().partition(|&&cube| there(&centre(cube)) || there(&half_key(&centre(cube))));
-    for &cube in &baked {
-        let (full, half) = (centre(cube), half_key(&centre(cube)));
-        add(if there(&half) { half } else { full });
-    }
-    for &cube in &bare {
-        Block { cube }.tiles().into_iter().for_each(|t| add(t.key()));
-    }
-    for &cube in &baked {
-        add(centre(cube));
-    }
-    if speed < STANDING && baked.contains(&own) {
+    let baked = |cube: IVec3| there(&centre(cube)) || there(&half_key(&centre(cube)));
+    let mut seen = BTreeSet::new();
+    let mut fresh = |key: &str| there(key) && seen.insert(key.to_owned());
+    let mut of = |cubes: &[IVec3]| {
+        let mut keys = Vec::new();
+        for &cube in cubes {
+            if baked(cube) {
+                let (whole, half) = (centre(cube), half_key(&centre(cube)));
+                keys.extend(Some(if there(&half) { half } else { whole }).filter(|k| fresh(k)));
+            } else {
+                keys.extend(Block { cube }.tiles().into_iter().map(|t| t.key()).filter(|k| fresh(k)));
+            }
+        }
+        keys.extend(cubes.iter().filter(|&&cube| baked(cube)).map(|&cube| centre(cube)).filter(|k| fresh(k)));
+        keys
+    };
+    let (way, mut beside) = (of(&on_way), of(&beside));
+    if Vec2::new(velocity.x, velocity.z).length() < STANDING && baked(own) {
         let others: Vec<String> = probe_keys(own).into_iter().skip(1).collect();
-        others.iter().map(|k| half_key(k)).for_each(&mut add);
-        others.into_iter().for_each(&mut add);
+        let halves: Vec<String> = others.iter().map(|k| half_key(k)).collect();
+        beside.extend(halves.into_iter().chain(others).filter(|k| fresh(k)));
     }
-    keys
+    Needed { way, beside }
 }
 
 #[cfg(test)]
@@ -287,40 +325,66 @@ mod tests {
         let eye = Vec3::new(25.0, 1.9, -61.6);
         let own = IVec3::new(8, 0, -21);
         let baked = |k: &str| k.starts_with("c_");
-        // Standing in its cube: its five probes, the centres of the four
-        // beside it and of the one a metre away.
+        let all = |needed: &Needed| needed.keys().cloned().collect::<Vec<String>>();
+        // Standing in its cube: its centre's probe on its way; beside it,
+        // the centres of the four cubes beside its own, and its own cube's
+        // four other probes.
         let standing = needed_light(eye, Vec3::ZERO, 2.0, baked);
-        assert_eq!(standing[0], "c_8_0_-21_0");
-        assert!(probe_keys(own).iter().all(|k| standing.contains(k)));
-        assert_eq!(standing.len(), 9, "{standing:?}");
-        // Walking south: the centres of the cubes it meets, not its own others.
+        assert_eq!(standing.way, ["c_8_0_-21_0"]);
+        assert!(probe_keys(own).iter().all(|k| all(&standing).contains(k)));
+        assert_eq!(standing.beside.len(), 8, "{standing:?}");
+        // Walking south: the centres of the cubes it goes through on its
+        // way, not its own cube's others.
         let walking = needed_light(eye, Vec3::new(0.0, 0.0, 1.4), 2.0, baked);
-        assert_eq!(walking[0], "c_8_0_-21_0");
-        assert!(walking.contains(&"c_8_0_-20_0".to_owned()), "the cube ahead to the south");
-        assert!(!walking.contains(&"c_8_0_-21_1".to_owned()), "walking, its own cube's centre alone");
-        assert!(walking.iter().all(|k| k.ends_with("_0")));
+        assert_eq!(walking.way, ["c_8_0_-21_0", "c_8_0_-20_0"], "its own, then the cube ahead to the south");
+        assert!(!all(&walking).contains(&"c_8_0_-21_1".to_owned()), "walking, its own cube's centre alone");
+        assert!(walking.keys().all(|k| k.ends_with("_0")));
         // Running: farther ahead, no wider.
         let running = needed_light(eye, Vec3::new(0.0, 0.0, 4.0), 2.0, baked);
-        assert!(running.contains(&"c_8_0_-19_0".to_owned()) && running.contains(&"c_8_0_-18_0".to_owned()));
-        assert!(!running.contains(&"c_10_0_-20_0".to_owned()), "two cubes to the side");
-        // Where the halves are packed (D-141): the centres at half their size
-        // first, then whole, running or not.
+        assert_eq!(running.way, ["c_8_0_-21_0", "c_8_0_-20_0", "c_8_0_-19_0", "c_8_0_-18_0"]);
+        assert!(!all(&running).contains(&"c_10_0_-20_0".to_owned()), "two cubes to the side");
+        // Where the halves are packed (D-141): on the way as beside it, the
+        // centres at half their size first, then whole, running or not.
         let halved = |k: &str| k.starts_with("c_") || k.starts_with("h_");
         for velocity in [Vec3::new(0.0, 0.0, 4.0), Vec3::new(0.0, 0.0, 1.4)] {
             let light = needed_light(eye, velocity, 2.0, halved);
-            let whole = light.iter().position(|k| k.starts_with("c_")).expect("the centres whole");
-            assert!(light[..whole].iter().all(|k| k.starts_with("h_") && k.ends_with("_0")), "{light:?}");
-            assert!(light[whole..].iter().all(|k| k.starts_with("c_") && k.ends_with("_0")), "{light:?}");
-            assert_eq!(2 * whole, light.len(), "each centre at half its size, then whole");
+            for keys in [&light.way, &light.beside] {
+                let whole = keys.iter().position(|k| k.starts_with("c_")).expect("the centres whole");
+                assert!(keys[..whole].iter().all(|k| k.starts_with("h_") && k.ends_with("_0")), "{keys:?}");
+                assert!(keys[whole..].iter().all(|k| k.starts_with("c_") && k.ends_with("_0")), "{keys:?}");
+                assert_eq!(2 * whole, keys.len(), "each centre at half its size, then whole");
+            }
         }
-        // Standing: its own cube's others too, at half their size first.
-        let standing = needed_light(eye, Vec3::ZERO, 2.0, halved);
+        // Standing: its own cube's others too, at half their size first,
+        // after the centres of the cubes beside its own.
+        let standing = all(&needed_light(eye, Vec3::ZERO, 2.0, halved));
         let at = |key: &str| standing.iter().position(|k| k == key).expect(key);
-        assert!(at("c_8_0_-21_0") < at("h_8_0_-21_1") && at("h_8_0_-21_4") < at("c_8_0_-21_1"), "{standing:?}");
+        assert!(at("c_8_0_-21_0") < at("h_8_0_-20_0") && at("c_8_0_-20_0") < at("h_8_0_-21_1"), "{standing:?}");
+        assert!(at("h_8_0_-21_4") < at("c_8_0_-21_1"), "{standing:?}");
         // A cube without probes: its block's tiles.
         let only = |k: &str| k.starts_with("c_8_0_-21_") || !(k.starts_with("c_") || k.starts_with("h_"));
         let light = needed_light(Vec3::new(25.0, 1.9, -58.6), Vec3::ZERO, 2.0, only);
-        assert!(light.len() >= 30, "the block of a cube without probes: its tiles");
+        assert_eq!(light.way.len(), 30, "the block of a cube without probes: its tiles");
+    }
+
+    #[test]
+    fn what_lies_beside_a_walker_s_way_comes_after_what_lies_on_it() {
+        // Running south 0.8 m from the cubes to its west, which have no
+        // probes: their blocks' tiles are beside its way, the centres of the
+        // cubes it runs through on it.
+        let eye = Vec3::new(24.8, 1.9, -61.6);
+        let corridor: Vec<String> =
+            (-21..=-18).flat_map(|z| probe_keys(IVec3::new(8, 0, z))).flat_map(|key| [half_key(&key), key]).collect();
+        let street = |k: &str| corridor.iter().any(|c| c == k) || Tile::parse(k).is_some();
+        let running = needed_light(eye, Vec3::new(0.0, 0.0, 4.0), 2.0, street);
+        assert_eq!(way(eye, Vec3::new(0.0, 0.0, 4.0), 2.0).len(), 4, "8 m: its own cube and three more");
+        assert_eq!(running.way.len(), 8, "{:?}", running.way);
+        assert!(running.way.iter().all(|k| k.starts_with("h_8_0_") || k.starts_with("c_8_0_")), "{:?}", running.way);
+        assert!(running.beside.len() > 30 && running.beside.iter().all(|k| Tile::parse(k).is_some()));
+        // Going aslant, the cubes it goes through in the order it enters
+        // them: east first, then south.
+        let aslant = way(Vec3::new(26.5, 1.9, -61.0), Vec3::new(1.0, 0.0, 1.0), 2.0);
+        assert_eq!(aslant, [IVec3::new(8, 0, -21), IVec3::new(9, 0, -21), IVec3::new(9, 0, -20)]);
     }
 
     #[test]

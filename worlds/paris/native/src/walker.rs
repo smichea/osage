@@ -44,9 +44,18 @@ impl Me {
 
 pub struct WalkerPlugin;
 
+/// The walker's own systems, a frame's: what reads where it is and how it
+/// strides comes after them. (Before some of them, a film's count of its
+/// pictures saw the walker standing — the keys read, the film's stride not
+/// yet set — and left the picture out: films of 7 s walked 10, and told of
+/// two frames in three.)
+#[derive(SystemSet, Debug, Clone, PartialEq, Eq, Hash)]
+pub struct Walking;
+
 impl Plugin for WalkerPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(Startup, setup).add_systems(Update, (grab, look, keys, film, step, follow).chain());
+        app.add_systems(Startup, setup)
+            .add_systems(Update, (grab, look, keys, film, step, follow).chain().in_set(Walking));
     }
 }
 
@@ -127,21 +136,26 @@ fn keys(keys: Res<ButtonInput<KeyCode>>, mut me: ResMut<Me>) {
     me.stride = Stride { forward, right, heading, run };
 }
 
-/// Filming: straight ahead, once the street is there and the light of the
-/// first block has come.
+/// Filming: straight ahead, a second after the street is there and the
+/// light of the first block has come (what is loaded as the street appears
+/// held the film's first pictures up to 0.8 s, which is not the walk's).
 fn film(
     options: Res<Options>,
     placed: Option<Res<crate::street::Placed>>,
     store: Res<crate::light::Store>,
+    clock: Res<Time<Real>>,
+    mut ready_for: Local<f32>,
     mut me: ResMut<Me>,
 ) {
     if options.film.is_none() {
         return;
     }
     let ready = placed.is_some_and(|p| p.0) && store.drawn > 0;
+    *ready_for = if ready { *ready_for + clock.delta_secs() } else { 0.0 };
     me.heading = options.heading;
     let run = options.film.as_ref().is_some_and(|f| f.run);
-    me.stride = Stride { forward: if ready { 1.0 } else { 0.0 }, right: 0.0, heading: options.heading, run };
+    me.stride =
+        Stride { forward: if *ready_for >= 1.0 { 1.0 } else { 0.0 }, right: 0.0, heading: options.heading, run };
 }
 
 /// The walker's own steps, taken here at once.

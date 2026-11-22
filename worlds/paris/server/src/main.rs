@@ -68,9 +68,10 @@ fn main() -> anyhow::Result<()> {
         let id = query.split('&').find_map(|kv| kv.strip_prefix("walker="))?.parse::<u64>().ok()?;
         let walker = *seen.0.lock().ok()?.get(&id)?;
         // The probes inside the cubes on the walker's way (D-137, D-139), or
-        // their blocks' surface tiles where those are not baked (D-136).
-        let wanted = tiles::needed_light(walker.eyes, walker.velocity, horizon, |k| present.contains(k));
-        serde_json::to_string(&wanted).ok()
+        // their blocks' surface tiles where those are not baked (D-136):
+        // what is on its way, and what is beside it (D-142).
+        let needed = tiles::needed_light(walker.eyes, walker.velocity, horizon, |k| present.contains(k));
+        serde_json::to_string(&needed).ok()
     });
     http::serve(listener, tiles_folder, need)?;
     eprintln!("paris: light on port {port}, {horizon} s ahead");

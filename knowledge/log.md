@@ -1,5 +1,8 @@
 # Knowledge Update Log
 
+## 2026-11-22
+* **Update**: the light ahead made ready (D-142): [osage-paris-native](/modules/paris-native.md) makes the probes' texture arrays once, lends their layers and writes the light of the cubes the walker goes to before it gets there, its light threads fetching what presses most; [osage-world-paris](/modules/paris-world.md) tells what is on a walker's way from what is beside it; a film's measure is paced as a window's and counts every frame.
+
 ## 2026-11-19
 * **Update**: probes as tiles, decoded where the walker looks (D-141): [osage-hologram-stream](/modules/osage-hologram-stream.md) packs each probe inside a cube as tiles that decode alone; [osage-world-paris](/modules/paris-world.md) sends the halves first, then the probes whole; [osage-paris-native](/modules/paris-native.md) draws the half at once and writes the tiles over it from the middle of the view outwards.
 * **Update**: lighter probes (D-140): [osage-hologram-stream](/modules/osage-hologram-stream.md) packs at quality 22 and at half the size; [osage-world-paris](/modules/paris-world.md) sends a runner the halves; [osage-paris-native](/modules/paris-native.md) draws the best size it has.

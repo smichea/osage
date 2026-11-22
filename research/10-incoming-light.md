@@ -160,6 +160,34 @@ Two remedies tried and set aside. **The GPU's AV1 decoder** (VA-API on the Iris 
 
 Tiles that are key frames each alone need about six levels of quality more than a probe's single picture to come back as close (why, not yet looked into). The tiles bring the halves' 26.6 dB back to 27.9, mostly on the façades and the sky. Filmed against D-140 on the laptop, alternately, two rounds (load 3.6–11): walking 7 s, 155/156 and 123/211 frames, medians 20.5/23.6 and 16.8/17.1 ms, 25/30 and 30/31 over 50 ms; running 2.5 s, medians 20.5/25.5 and 22.4/21.4 ms, 11/9 and 11/8 over 50 ms (D-140/D-141). No smoother, within the load's noise; running, D-141 decoded four batches of four tiles a cube, the middle of the view sharp where D-140 showed the halves; 9.8 MB down the five cubes against 7.8. Standing before setting out, every tile of the cube is decoded (640 in about two seconds).
 
+## The light ahead made ready (D-142, 2026-11-22)
+
+Asked whether the light of the cubes ahead should not be loaded before the walker gets there, the films' logs were read frame by frame first.
+
+**What the logs of 2026-11-21 said.** In every film, D-140's as D-141's, the main thread's systems fell silent for 1 to 7 s right after the eyes entered a cube: the picture stopped. That is when the client made the cube's two texture arrays (4096 × 2048 × 5 layers: 160 MiB each, the Iris Xe's memory being the laptop's) and let go those of the cube left, with 0.5 GB of memory free. The films' statistics had not shown it, for three flaws of the measure:
+
+1. The system counting a film's frames was not ordered with the walker's: in the frames where it ran between the keys read (no stride) and the film's stride set, it saw the walker standing and left the frame out, about one in three. Films of 7 s walked 10, out of the five baked cubes.
+2. A frame's time was the walk's clock's, which stops at 250 ms a frame.
+3. Without a window nothing paces the frames. The processor sent them every 16 ms, the GPU drew a cube's five probes slower, and about once a second the driver held the processor 0.47 s (always in the render graph's run; gone with one probe a cube, or when each frame waits for the GPU). A frame now waits for the GPU to have drawn the one two before it, as a window's presentation would.
+
+**What was changed.** The arrays are made once, six layers lent to probes: the five of the cube the eyes are in, and the centres of the first two cubes on the walker's way, their light written before it gets there (the half doubled, then the tiles where it looks). A cube left keeps its layers until they are needed. And the light is fetched by what presses: `needed_light` tells what is on the walker's way from what is beside it, and the light threads, told again four times a second, take the first, then the tiles where the walker looks, then the second.
+
+**Measured, 2026-11-22**, 16 GB free, against the client before given the same mended measure, three films each, alternately (load 7–12):
+
+| | Before | After |
+|---|---|---|
+| Walking: a cube's light shown after the eyes entered it | 0.21–0.49 s | 0 ms (12 of 12) |
+| Running: the same | 0.22–0.93 s; 2 cubes of 4 never | 0 ms; 0.17–0.49 s for the cube whose corner the way cuts |
+| Walking: frames in 7 s, median, longest | 183–230, 20–27 ms, 209–332 ms | 216–251, 21–27 ms, 150–248 ms |
+| Walking: frames over 50 ms | 55–57 | 8–27 |
+| Running: longest frame | 283–486 ms | 63–184 ms |
+
+The cube whose corner the way cuts is entered 0.2 s after the one before: setting out from a cube whose five probes are drawn, every layer is lent, and its centre's light can only be written once the first cube is left. Online, through the server's two lists, the same: the three baked cubes of the walk shown at once. Standing, 28.0 dB against Cycles, as before (and with D-140's probes, their light whole written over the half).
+
+**What is not shown.** With 16 GB free the client before did not stop for seconds either: the arrays made for each cube are the cause by their timing in the logs of the 21st, not by a measure with and without under the same shortage of memory.
+
+**The GPU's part.** Paced, a frame standing among five probes takes 53 ms on the Iris Xe at 1280 × 720, and 36 ms drawn from the surface tiles: the 12–25 ms told so far were the processor's. The faces' march through five probes a pixel is the next thing to lighten.
+
 ## Next
 
 1. The whole street baked, at 1024–1536 px and more samples: about 2 000 tiles, a cloud GPU's work (hours on the laptop's processor for 384 px).

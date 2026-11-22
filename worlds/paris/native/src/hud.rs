@@ -5,21 +5,62 @@
 //! the street's credit — and the shot: one picture from a place once the
 //! light is there.
 
+use std::collections::VecDeque;
+
 use bevy::{
     prelude::*,
-    render::view::screenshot::{Screenshot, save_to_disk},
+    render::{
+        Render, RenderApp, RenderSystems,
+        render_resource::PollType,
+        renderer::{RenderDevice, RenderQueue},
+        view::screenshot::{Screenshot, save_to_disk},
+    },
 };
 use osage_world_paris::tiles::Block;
 
 use osage_render::resolution::Picture;
 
-use crate::{Options, light::Store, street::Placed, walker::Me};
+use crate::{
+    Options,
+    light::Store,
+    street::Placed,
+    walker::{Me, Walking},
+};
 
 pub struct HudPlugin;
 
 impl Plugin for HudPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(Startup, setup).add_systems(Update, (read, shoot, film));
+        app.add_systems(Startup, setup).add_systems(Update, (read, shoot, film).after(Walking));
+    }
+
+    fn finish(&self, app: &mut App) {
+        let options = app.world().resource::<Options>();
+        let windowless = options.shot.is_some() || options.film.is_some();
+        if let (true, Some(render)) = (windowless, app.get_sub_app_mut(RenderApp)) {
+            render.add_systems(Render, pace.after(RenderSystems::Render).before(RenderSystems::Cleanup));
+        }
+    }
+}
+
+/// A frame's wait for the GPU, once it is sent.
+type Wait = Box<dyn FnOnce(&RenderDevice) + Send + Sync>;
+
+/// Without a window (a shot, a film) nothing paces the frames, as showing
+/// them does: the processor sent them faster than the GPU drew them, until
+/// the driver held it half a second at a time, about once a second while a
+/// cube's five probes were drawn. As a window would, a frame waits for the
+/// GPU to have drawn the one two before it.
+fn pace(device: Res<RenderDevice>, queue: Res<RenderQueue>, mut sent: Local<VecDeque<Wait>>) {
+    // What is sent so far, this frame's with it.
+    let frame = queue.submit(None);
+    sent.push_back(Box::new(move |device: &RenderDevice| {
+        let _ = device.poll(PollType::Wait { submission_index: Some(frame), timeout: None });
+    }));
+    if sent.len() > 2
+        && let Some(wait) = sent.pop_front()
+    {
+        wait(&device);
     }
 }
 
@@ -129,7 +170,11 @@ fn shoot(
 }
 
 /// Filming: every third picture saved while the walker walks; done after
-/// the film's seconds of walking.
+/// the film's seconds of walking. Then how smooth the walk was is told: the
+/// time from each frame to the next as a clock has it (the walk's own time
+/// stops at a quarter of a second a frame: a picture held for seconds was
+/// told as one of 250 ms), and how long after the eyes entered each cube
+/// its light showed.
 #[allow(clippy::too_many_arguments)]
 fn film(
     mut commands: Commands,
@@ -138,32 +183,46 @@ fn film(
     me: Res<Me>,
     store: Res<Store>,
     time: Res<Time>,
+    mut last: Local<Option<std::time::Instant>>,
     mut walked: Local<f32>,
     mut frame: Local<u32>,
     mut times: Local<Vec<f32>>,
+    mut before: Local<Option<(usize, usize)>>,
     mut exit: MessageWriter<AppExit>,
 ) {
     let (Some(film), Some(picture)) = (&options.film, picture) else { return };
     if me.stride.forward == 0.0 {
         return;
     }
+    // The cubes entered, and those shown, before the walk.
+    let (entered, shown) = *before.get_or_insert((store.entered, store.shown_after.len()));
     *walked += time.delta_secs();
     *frame += 1;
-    times.push(1000.0 * time.delta_secs());
-    if time.delta_secs() > 0.1 {
-        debug!(ms = 1000.0 * time.delta_secs(), "paris: a long frame");
+    let now = std::time::Instant::now();
+    if let Some(before) = last.replace(now) {
+        let ms = 1000.0 * (now - before).as_secs_f32();
+        times.push(ms);
+        if ms > 100.0 {
+            debug!(ms, "paris: a long frame");
+        }
     }
-    if *walked > film.seconds {
-        // How smooth the walk was: the frames' times in order.
+    if *walked > film.seconds && !times.is_empty() {
+        let wall: f32 = times.iter().sum();
         times.sort_by(f32::total_cmp);
         let at = |q: f32| times[((times.len() - 1) as f32 * q) as usize];
+        let shown: Vec<u32> = store.shown_after.iter().skip(shown).map(|ms| ms.round() as u32).collect();
         info!(
             frames = *frame,
-            frame_ms = 1000.0 * *walked / *frame as f32,
+            frame_ms = wall / times.len() as f32,
             median_ms = at(0.5),
             p95_ms = at(0.95),
             max_ms = at(1.0),
             over_50_ms = times.iter().filter(|&&t| t > 50.0).count(),
+            over_250_ms = times.iter().filter(|&&t| t > 250.0).count(),
+            wall_s = wall / 1000.0,
+            cubes_entered = store.entered - entered,
+            cubes_shown = shown.len(),
+            shown_after_ms = ?shown,
             tiles = store.received,
             megabytes = store.bytes as f64 / 1e6,
             "paris: filmed"
