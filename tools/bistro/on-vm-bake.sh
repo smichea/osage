@@ -27,6 +27,8 @@ packed=$(metadata osage-packed || echo "")
 # Cubes (X,Y,Z;X,Y,Z…): their probes (cube-probes.py) baked instead of the
 # tiles, brought back raw, nothing else.
 cube=$(metadata osage-cube || echo "")
+# How many of each cube's probes (none: all five; 1: its centre's alone).
+probes=$(metadata osage-probes || echo "")
 # Seconds of a walk filmed at T4 from the scene's camera down the street,
 # through the cubes whose probes are baked (none: no film).
 film=$(metadata osage-film || echo "")
@@ -87,7 +89,7 @@ else
   if [ -n "$cube" ]; then
     for one in ${cube//;/ }; do
       say "rendering on $device; baking the probes of cube $one, $size px wide, $samples samples"
-      OSAGE_DEVICE=$device "$blender" -b scene/bistro/exterior.blend --python-exit-code 1 \
+      OSAGE_DEVICE=$device OSAGE_PROBES=${probes:-5} "$blender" -b scene/bistro/exterior.blend --python-exit-code 1 \
         --python tools/cube-probes.py -- "$one" raw "$size" "$samples" >>out/bake.log 2>&1 ||
         finish "failed: the probes of $one (see out/bake.log)"
     done

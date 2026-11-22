@@ -16,7 +16,8 @@ sphere, equirectangular, WIDTH x WIDTH/2 pixels (4096 unless given), SAMPLES
 samples a pixel (256 unless given): column 0 looks south and the middle one
 north (-z), east to the right of it; row 0 straight up. In OUT/c_X_Y_Z_K/:
 `radiance.f32`, `distance.f32` (as `tiles.py` writes them) and `meta.json`.
-OSAGE_DEVICE=OPTIX (or CUDA) renders on the GPU. Checks its own projection
+OSAGE_DEVICE=OPTIX (or CUDA) renders on the GPU; OSAGE_PROBES=N bakes the
+first N probes only (1: the cube's centre alone). Checks its own projection
 against where each pixel's point lies, and says by how much it is off.
 """
 
@@ -196,7 +197,7 @@ def main():
     inside_hidden(lo, hi)
     depsgraph = bpy.context.evaluated_depsgraph_get()
     probes = []
-    for k, (dx, dz) in enumerate(OFFSETS):
+    for k, (dx, dz) in enumerate(OFFSETS[: int(os.environ.get("OSAGE_PROBES", len(OFFSETS)))]):
         x, z = (cube[0] + 0.5) * CUBE + dx, (cube[2] + 0.5) * CUBE + dz
         top = blender((x, (cube[1] + 1) * CUBE - 0.01, z))
         hit, ground, *_ = scene.ray_cast(depsgraph, top, Vector((0, 0, -1)))

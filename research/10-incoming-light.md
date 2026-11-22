@@ -188,6 +188,20 @@ The cube whose corner the way cuts is entered 0.2 s after the one before: settin
 
 **The GPU's part.** Paced, a frame standing among five probes takes 53 ms on the Iris Xe at 1280 × 720, and 36 ms drawn from the surface tiles: the 12–25 ms told so far were the processor's. The faces' march through five probes a pixel is the next thing to lighten.
 
+## One probe a cube, nine a block (a trial, 2026-11-22)
+
+The maintainer's question: instead of five probes inside the walker's cube, the centre probe of each of the block's nine cubes, each baked with its own block transparent — one probe a cube, shared by the nine blocks it is in: a fifth to bake, keep and send. The centres of the six cubes missing round the scene camera's baked on the L4 (`OSAGE_BAKE_PROBES=1`, 2 min a probe); `paris --block-probes` draws the block from the nine. A neighbour's probe sees through its own block, so through what stands just outside this one on its side: of what the probes met along the eye's ray, the nearest is what the eye sees, and only the probes that met it tell.
+
+| From the scene camera, against Cycles | One centre | Nine centres | The cube's five |
+|---|---|---|---|
+| Picture | 26.9 dB | 27.6 dB | 28.0 dB |
+| Left façade, near the block | 22.7 dB | 26.1 dB | 28.8 dB |
+| Right façade | 28.0 dB | 27.6 dB | 28.3 dB |
+| Street beyond | 29.9 dB | 30.8 dB | 30.8 dB |
+| A frame standing, Iris Xe | 23 ms | 95 ms | 57 ms |
+
+The eight neighbours bring much (3.4 dB on the near façade over the centre alone), nothing is seen through or twice; what is left is blur near the block: the probe nearest the eye stands 0.7 m off and the next 2.3 m, where the cube's five all stand within 1.5 m. Keeping only the probes whose look is most like the eye's changed nothing. The march through nine probes a pixel costs 95 ms a frame: it should keep three or four. How much of the picture no probe saw was not measured.
+
 ## Next
 
 1. The whole street baked, at 1024–1536 px and more samples: about 2 000 tiles, a cloud GPU's work (hours on the laptop's processor for 384 px).

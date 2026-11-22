@@ -80,6 +80,12 @@ const WALKING_CONE: f32 = 70.0 * PI / 180.0;
 /// The layers of the texture arrays the probes' light is written into
 /// (D-142): a cube's probes, and the centre of the cube the walker goes to.
 const LAYERS: usize = tiles::PROBES + 1;
+/// A trial (`--block-probes`): the block drawn from the centre probes of
+/// its nine cubes, each baked with its own block transparent, one probe a
+/// cube shared by the nine blocks it is in; and the layers it needs: nine,
+/// and the three of the cubes the walker goes to.
+const BLOCK_PROBES: usize = 9;
+const BLOCK_LAYERS: usize = BLOCK_PROBES + 3;
 /// How many cubes on the walker's way have their centres' light made ready,
 /// as layers are free (walking, its own cube needs one): a way that cuts a
 /// cube's corner leaves it within a few tenths of a second, less than its
@@ -128,7 +134,7 @@ struct Uploads {
     pending: Vec<Layer>,
     /// Each array's layers written whole (a bit each): those the faces may
     /// read.
-    written: HashMap<AssetId<Image>, u8>,
+    written: HashMap<AssetId<Image>, u16>,
 }
 
 /// A probe's light, or its distances, for a layer of an array, and how many
@@ -246,7 +252,7 @@ pub struct IncomingLight {
     /// A trial (`--cube-probes`): the probes inside the walker's cube, where
     /// each stands and its layer (-1: none), instead of the block's tiles.
     #[uniform(7)]
-    pub probes: [Vec4; 5],
+    pub probes: [Vec4; BLOCK_PROBES],
     /// Their pictures' width and height, 1 when they are used, how many.
     #[uniform(8)]
     pub shape: Vec4,
@@ -301,7 +307,7 @@ pub struct Store {
     /// The texture arrays the probes' light is written into (D-142), and
     /// what the faces show of them: each probe drawn and its layer, a bit.
     pool: Option<Pool>,
-    shown: u64,
+    shown: u128,
     /// The probes packed as tiles (D-141), by key: their files, and the
     /// tiles decoded and not yet sent to a layer.
     parts: HashMap<String, Parts>,
@@ -342,7 +348,7 @@ struct Pool {
     size: (u32, u32),
     colours: Handle<Image>,
     distances: Handle<Image>,
-    layers: [Option<Lent>; LAYERS],
+    layers: Vec<Option<Lent>>,
 }
 
 impl Pool {
@@ -380,7 +386,7 @@ enum Lend {
 /// first, the cube drawn, the cube made ready), the farthest from the eyes'
 /// and, of that cube, the last of its probes. None while every layer is
 /// lent to the cubes kept.
-fn lend(layers: &mut [Option<Lent>; LAYERS], cube: IVec3, k: usize, kept: &[IVec3]) -> Option<Lend> {
+fn lend(layers: &mut [Option<Lent>], cube: IVec3, k: usize, kept: &[IVec3]) -> Option<Lend> {
     if let Some(layer) = layers.iter().position(|l| l.as_ref().is_some_and(|l| l.cube == cube && l.k == k)) {
         return Some(Lend::Had(layer));
     }
@@ -801,6 +807,19 @@ fn ask(
                     && (probes || !(k.starts_with("c_") || k.starts_with("h_")))
             });
             store.wanted = needed;
+            if options.block_probes {
+                // The trial: the centres of the block's nine cubes, halves first.
+                let present = |k: &String| store.present.as_ref().is_some_and(|p| p.contains(k));
+                let centres: Vec<String> = block_cubes(Block::of(me.eyes()).cube)
+                    .iter()
+                    .map(|&c| tiles::probe_keys(c).swap_remove(0))
+                    .collect();
+                let halves: Vec<String> = centres.iter().map(|k| tiles::half_key(k)).collect();
+                let mut first: Vec<String> = halves.into_iter().chain(centres).collect();
+                first.retain(|k| present(k) && !store.wanted.way.contains(k));
+                first.append(&mut store.wanted.way);
+                store.wanted.way = first;
+            }
             post(&fetcher.queue, &store, &source);
         }
         _ => {}
@@ -1030,7 +1049,7 @@ fn faces(
             colours: colours.clone(),
             distances: distances.clone(),
             scale: Vec4::new(NITS, 0.0, 0.0, 0.0),
-            probes: [Vec4::new(0.0, 0.0, 0.0, -1.0); 5],
+            probes: [Vec4::new(0.0, 0.0, 0.0, -1.0); BLOCK_PROBES],
             shape: Vec4::new(1.0, 1.0, 0.0, 0.0),
         });
         let entity = commands
@@ -1161,7 +1180,8 @@ fn arrays(
     } else {
         (Quat::from_rotation_y(me.heading) * Vec3::NEG_Z * WALK, READY_FACING)
     };
-    let mut towards = if options.cube_probes > 0 { tiles::way(me.eyes(), bearing, HORIZON) } else { Vec::new() };
+    let ready = options.cube_probes > 0 && !options.block_probes;
+    let mut towards = if ready { tiles::way(me.eyes(), bearing, HORIZON) } else { Vec::new() };
     towards.retain(|cube| *cube != block.cube);
     towards.truncate(READY);
     if store.towards.as_ref().is_none_or(|(were, _)| *were != towards) {
@@ -1184,8 +1204,19 @@ fn arrays(
     // The cube's probes (D-137); while they are on their way, the probes
     // drawn already, of the cube just left, which stand in this block too;
     // where the cube has none, the block's surface tiles (D-136).
-    let decoded =
-        if options.cube_probes > 0 { cube_probes(store, options.cube_probes, block.cube) } else { Vec::new() };
+    let decoded: Vec<(IVec3, Probe)> = if options.block_probes {
+        // The trial: the centres of the block's nine cubes, its own first;
+        // none until its own has come.
+        let centres: Vec<(IVec3, Probe)> = block_cubes(block.cube)
+            .into_iter()
+            .filter_map(|cube| Some((cube, cube_probes(store, 1, cube).into_iter().next()?)))
+            .collect();
+        if centres.first().is_some_and(|(cube, _)| *cube == block.cube) { centres } else { Vec::new() }
+    } else if options.cube_probes > 0 {
+        cube_probes(store, options.cube_probes, block.cube).into_iter().map(|probe| (block.cube, probe)).collect()
+    } else {
+        Vec::new()
+    };
     // The centres of the cubes the walker goes to, once their light has come.
     let ahead: Vec<(IVec3, Probe)> =
         store.next.iter().filter_map(|&cube| Some((cube, cube_probes(store, 1, cube).into_iter().next()?))).collect();
@@ -1195,18 +1226,20 @@ fn arrays(
         let scale = if *half { 2 } else { 1 };
         (drawn.width * scale, drawn.height * scale)
     };
-    let size = match (&store.pool, decoded.first().map(whole), ahead.first().map(|(_, probe)| whole(probe))) {
+    let first = decoded.first().map(|(_, probe)| whole(probe));
+    let size = match (&store.pool, first, ahead.first().map(|(_, probe)| whole(probe))) {
         (Some(pool), Some(size), _) if pool.size != size => Some(size),
         (None, Some(size), _) | (None, None, Some(size)) => Some(size),
         _ => None,
     };
     if let Some(size) = size {
-        info!(width = size.0, height = size.1, layers = LAYERS, "paris: the probes' layers made");
+        let layers = if options.block_probes { BLOCK_LAYERS } else { LAYERS };
+        info!(width = size.0, height = size.1, layers, "paris: the probes' layers made");
         store.pool = Some(Pool {
             size,
-            colours: images.add(layered(size, LAYERS as u32, TextureFormat::Rgb10a2Unorm)),
-            distances: images.add(layered(size, LAYERS as u32, TextureFormat::R32Float)),
-            layers: Default::default(),
+            colours: images.add(layered(size, layers as u32, TextureFormat::Rgb10a2Unorm)),
+            distances: images.add(layered(size, layers as u32, TextureFormat::R32Float)),
+            layers: vec![None; layers],
         });
     }
     let drawn_from = store.probes_of.filter(|_| store.cubed);
@@ -1222,8 +1255,12 @@ fn arrays(
         // neither this cube nor the one drawn needs.
         let mut kept = vec![block.cube];
         kept.extend(drawn_from);
-        for probe in &decoded {
-            fill(pool, &mut uploads, &mut store.parts, &fetcher.doubled.0, block.cube, probe, &kept);
+        if options.block_probes {
+            kept.extend(block_cubes(block.cube));
+            kept.extend(drawn_from.into_iter().flat_map(block_cubes));
+        }
+        for (cube, probe) in &decoded {
+            fill(pool, &mut uploads, &mut store.parts, &fetcher.doubled.0, *cube, probe, &kept);
         }
         for (cube, probe) in &ahead {
             kept.push(*cube);
@@ -1248,22 +1285,21 @@ fn arrays(
                 lent.tiled |= 1 << t;
             }
         }
-        let keys = tiles::probe_keys(block.cube);
-        store.halved = decoded.iter().any(|(k, _, _, half)| {
-            let lent = pool.layer_of(block.cube, *k).and_then(|layer| pool.layers[layer].as_ref());
+        store.halved = decoded.iter().any(|(cube, (k, _, _, half))| {
+            let lent = pool.layer_of(*cube, *k).and_then(|layer| pool.layers[layer].as_ref());
             let tiled = lent.map_or(0, |lent| lent.tiled.count_ones());
-            *half && store.parts.get(&keys[*k]).is_none_or(|p| tiled < p.grid.0 * p.grid.1)
+            *half && store.parts.get(&tiles::probe_keys(*cube)[*k]).is_none_or(|p| tiled < p.grid.0 * p.grid.1)
         });
     }
     // The probes the faces can show, each with its layer: this cube's,
     // written whole, its centre's first; none until its centre's is.
     let mut probes: Vec<(usize, Vec3, Arc<light::Drawn>)> = Vec::new();
     if let Some(pool) = &store.pool {
-        for (k, centre, drawn, _) in &decoded {
+        for (cube, (k, centre, drawn, _)) in &decoded {
             let written = |layer: &usize| pool.layers[*layer].as_ref().is_some_and(|lent| lent.written);
-            match pool.layer_of(block.cube, *k).filter(written) {
+            match pool.layer_of(*cube, *k).filter(written) {
                 Some(layer) => probes.push((layer, *centre, drawn.clone())),
-                None if *k == 0 => break,
+                None if probes.is_empty() => break,
                 None => {}
             }
         }
@@ -1281,7 +1317,7 @@ fn arrays(
     if !probes.is_empty() {
         // Drawn with the probes written, the centre's first.
         let same = store.probes_of == Some(block.cube) && store.cubed;
-        let shown = probes.iter().enumerate().fold(0u64, |bits, (slot, (layer, ..))| bits | 1 << (slot * 8 + layer));
+        let shown = probes.iter().enumerate().fold(0u128, |bits, (slot, (layer, ..))| bits | 1 << (slot * 12 + layer));
         if store.block == Some(block) && same && shown == store.shown {
             return;
         }
@@ -1312,8 +1348,8 @@ fn arrays(
         store.shown = shown;
         debug!(cube = ?block.cube, probes = probes.len(), ms = started.elapsed().as_micros() as f32 / 1000.0, "paris: the block's arrays told");
         // The probes that have come, the centre's first, each with its layer.
-        let mut at = [Vec4::new(0.0, 0.0, 0.0, -1.0); 5];
-        for (slot, (layer, centre, _)) in probes.iter().enumerate().take(5) {
+        let mut at = [Vec4::new(0.0, 0.0, 0.0, -1.0); BLOCK_PROBES];
+        for (slot, (layer, centre, _)) in probes.iter().enumerate().take(BLOCK_PROBES) {
             at[slot] = centre.extend(*layer as f32);
         }
         // Traced (T4), the block is lit by the dome (`lit`), shining what the
@@ -1328,7 +1364,10 @@ fn arrays(
                 material.low = lo.extend(index as f32);
                 material.high = hi.extend(pool.size.0 as f32);
                 material.probes = at;
-                material.shape = Vec4::new(pool.size.0 as f32, pool.size.1 as f32, 1.0, probes.len().min(5) as f32);
+                // 2: the probes are of several cubes, the nearest thing any saw taken.
+                let kind = if options.block_probes { 2.0 } else { 1.0 };
+                let count = probes.len().min(BLOCK_PROBES) as f32;
+                material.shape = Vec4::new(pool.size.0 as f32, pool.size.1 as f32, kind, count);
                 material.colours = pool.colours.clone();
                 material.distances = pool.distances.clone();
             }
@@ -1395,7 +1434,7 @@ fn arrays(
             material.high = hi.extend(side as f32);
             // The block's tiles, not probes.
             material.shape = Vec4::new(side as f32, side as f32, 0.0, 0.0);
-            material.probes = [Vec4::new(0.0, 0.0, 0.0, -1.0); 5];
+            material.probes = [Vec4::new(0.0, 0.0, 0.0, -1.0); BLOCK_PROBES];
             material.layers = [
                 IVec4::new(layers[0], layers[1], layers[2], layers[3]),
                 IVec4::new(layers[4], layers[5], layers[6], layers[7]),
@@ -1447,6 +1486,15 @@ fn place_face(
 /// stands, the light its layer starts with, whole or at half its size
 /// (D-140; D-141: doubled, its tiles written over it), its centre's first;
 /// none until its centre's has.
+/// The nine cubes of a cube's block, its own first.
+fn block_cubes(cube: IVec3) -> Vec<IVec3> {
+    let mut cubes = vec![cube];
+    for (x, z) in (-1..=1).flat_map(|x| (-1..=1).map(move |z| (x, z))).filter(|&c| c != (0, 0)) {
+        cubes.push(cube + IVec3::new(x, 0, z));
+    }
+    cubes
+}
+
 fn cube_probes(store: &Store, count: usize, cube: IVec3) -> Vec<Probe> {
     let came = |key: &str| Some((*store.centres.get(key)?, store.tiles.get(key)?.clone()));
     let probes: Vec<Probe> = tiles::probe_keys(cube)
@@ -1540,7 +1588,11 @@ fn ask_parts(
     } else {
         WALKING_CONE
     };
-    let mut keys: Vec<String> = tiles::probe_keys(cube).into_iter().take(options.cube_probes).collect();
+    let mut keys: Vec<String> = if options.block_probes {
+        block_cubes(cube).into_iter().map(|c| tiles::probe_keys(c).swap_remove(0)).collect()
+    } else {
+        tiles::probe_keys(cube).into_iter().take(options.cube_probes).collect()
+    };
     let own = keys.len();
     if speed >= tiles::STANDING {
         keys.extend(store.next.iter().flat_map(|&next| tiles::probe_keys(next).into_iter().take(1)));
@@ -1781,7 +1833,7 @@ mod tests {
     fn a_probe_s_light_goes_to_its_layer_whole_or_doubled_first() {
         let images = Assets::<Image>::default();
         let (colours, distances) = (images.reserve_handle(), images.reserve_handle());
-        let mut pool = Pool { size: (4, 2), colours, distances, layers: Default::default() };
+        let mut pool = Pool { size: (4, 2), colours, distances, layers: vec![None; LAYERS] };
         let (mut uploads, mut parts) = (Uploads::default(), HashMap::new());
         let (done, doubled) = crossbeam_channel::unbounded();
         let (cube, next) = (IVec3::new(8, 0, -21), IVec3::new(8, 0, -20));

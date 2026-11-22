@@ -35,7 +35,7 @@ import bevy_pbr::render::{
 @group(constants::MATERIAL_BIND_GROUP) @binding(6) var<uniform> scale: vec4<f32>;
 // A trial: probes inside the walker's cube instead of the block's tiles;
 // xyz where each stands, w its layer (-1: none).
-@group(constants::MATERIAL_BIND_GROUP) @binding(7) var<uniform> probes: array<vec4<f32>, 5>;
+@group(constants::MATERIAL_BIND_GROUP) @binding(7) var<uniform> probes: array<vec4<f32>, 9>;
 // Their pictures' width and height; z 1 when they are used; w how many.
 @group(constants::MATERIAL_BIND_GROUP) @binding(8) var<uniform> shape: vec4<f32>;
 
@@ -202,6 +202,10 @@ fn beside(layer: i32, uv: vec2<f32>, front: f32) -> vec3<f32> {
     return radiance(textureSampleLevel(colours, colours_sampler, best, layer, 0.0).rgb);
 }
 
+// How far along the ray the last march met what it told of, m (the sky:
+// very far).
+var<private> met: f32;
+
 // What one probe tells of the ray: its radiance, and how much to trust it.
 fn march(probe: vec3<f32>, normal: vec3<f32>, up: vec3<f32>, layer: i32, start: vec3<f32>, ray: vec3<f32>) -> vec4<f32> {
     let right = cross(normal, up);
@@ -238,6 +242,7 @@ fn march(probe: vec3<f32>, normal: vec3<f32>, up: vec3<f32>, layer: i32, start: 
             let slack = 0.02 + 4.0 * texel_angle * l.seen + (far - near);
             if (gap <= slack) {
                 let angle = acos(clamp(dot(normalize(point - probe), ray), -1.0, 1.0));
+                met = far;
                 return vec4<f32>(c, exp(-(angle * angle) / (LIKENESS * LIKENESS)) + 1e-3);
             }
             let guess = 1e-4 * exp(-gap);
@@ -248,6 +253,7 @@ fn march(probe: vec3<f32>, normal: vec3<f32>, up: vec3<f32>, layer: i32, start: 
         was_behind = now_behind;
         previous = t;
     }
+    met = 1e6;
     if (hidden.a > 0.0) {
         return hidden;
     }
@@ -295,6 +301,9 @@ fn fragment(in: VertexOutput) -> @location(0) vec4<f32> {
     if (cubed()) {
         var seen = vec3<f32>(0.0);
         var sure = 0.0;
+        var all_told: array<vec4<f32>, 9>;
+        var all_met: array<f32, 9>;
+        var nearest = 1e6;
         let count = i32(shape.w);
         for (var k = 0; k < count; k = k + 1) {
             let p = probes[k];
@@ -304,6 +313,35 @@ fn fragment(in: VertexOutput) -> @location(0) vec4<f32> {
             let told = march(p.xyz, normal, up, i32(p.w), start, ray);
             seen = seen + told.rgb * told.a;
             sure = sure + told.a;
+            all_told[k] = told;
+            all_met[k] = met;
+            // A thing met, not a guess behind what hid it, nor the sky.
+            if (told.a >= 5e-4 && met < nearest) {
+                nearest = met;
+            }
+        }
+        // Probes of several cubes (a trial): each sees through its own
+        // block, so some see through what stands just outside this one.
+        // The nearest thing any of them met is what the eye sees: those
+        // that met it tell, the others saw past it.
+        if (shape.z > 1.5 && nearest < 1e5) {
+            seen = vec3<f32>(0.0);
+            sure = 0.0;
+            let within = nearest * 1.03 + 0.1;
+            // Of those, the ones whose look is most like the eye's: the
+            // others, standing metres off, saw it slantwise and blur it.
+            var best = 0.0;
+            for (var k = 0; k < count; k = k + 1) {
+                if (probes[k].w >= 0.0 && all_met[k] <= within) {
+                    best = max(best, all_told[k].a);
+                }
+            }
+            for (var k = 0; k < count; k = k + 1) {
+                if (probes[k].w >= 0.0 && all_told[k].a >= max(5e-4, 0.6 * best) && all_met[k] <= within) {
+                    seen = seen + all_told[k].rgb * all_told[k].a;
+                    sure = sure + all_told[k].a;
+                }
+            }
         }
         var light = vec3<f32>(0.0);
         if (sure > 0.0) {
