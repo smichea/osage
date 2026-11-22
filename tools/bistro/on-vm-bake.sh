@@ -29,6 +29,9 @@ packed=$(metadata osage-packed || echo "")
 cube=$(metadata osage-cube || echo "")
 # How many of each cube's probes (none: all five; 1: its centre's alone).
 probes=$(metadata osage-probes || echo "")
+# The cubes' probes packed here too (any value: yes), as light-pack --tiles
+# does: they come back in out/tiles, a thousandth of the raw ones' weight.
+pack=$(metadata osage-pack || echo "")
 # Seconds of a walk filmed at T4 from the scene's camera down the street,
 # through the cubes whose probes are baked (none: no film).
 film=$(metadata osage-film || echo "")
@@ -94,6 +97,12 @@ else
         finish "failed: the probes of $one (see out/bake.log)"
     done
     tar -cf raw.tar raw && gcloud storage cp raw.tar "$run/raw.tar" >/dev/null 2>&1 || finish "failed: the raw probes did not go up"
+    if [ -n "$pack" ]; then
+      wait "$builder" || finish "failed: the build (see out/build.log)"
+      say "built; packing"
+      ./src/target/release/light-pack --tiles raw out/tiles >out/pack.log 2>&1 ||
+        finish "failed: packing (see out/pack.log)"
+    fi
     finish ok
   fi
   say "rendering on $device; baking $(grep -c '"key"' tiles.json) tiles at $size px, $samples samples"

@@ -17,7 +17,8 @@
 # street copied from an earlier run instead; OSAGE_BAKE_PACKED=DIR: those
 # tiles, packed already, and no bake, only the shots; OSAGE_BAKE_CUBE=X,Y,Z:
 # that cube's probes baked instead, `cube-probes.py`, left raw in the
-# bucket as RUN/raw.tar, OSAGE_BAKE_PROBES=N of them, 1 its centre's alone; OSAGE_BAKE_FILM=SECONDS: a walk down the street
+# bucket as RUN/raw.tar, OSAGE_BAKE_PROBES=N of them, 1 its centre's alone,
+# and with OSAGE_BAKE_PACK=1 packed there too, brought back as OUT/tiles; OSAGE_BAKE_FILM=SECONDS: a walk down the street
 # filmed at T4 besides, `film-T4.mp4`; OSAGE_BAKE_VARIANTS=1: T4 drawn plain
 # with Solari's settings one by one); the packed tiles, the shots and the
 # logs come back to OUT.
@@ -79,7 +80,7 @@ for candidate in asia-southeast1-b asia-southeast1-a asia-southeast1-c; do
     --image-family osage-bench --image-project "$project" --boot-disk-size 100GB --boot-disk-type pd-balanced \
     --subnet bench --service-account "bench-vm@$project.iam.gserviceaccount.com" \
     --scopes https://www.googleapis.com/auth/devstorage.read_write \
-    --metadata "^@^osage-run=$run@osage-size=$size@osage-samples=$samples@osage-packed=$packed@osage-cube=${OSAGE_BAKE_CUBE:-}@osage-probes=${OSAGE_BAKE_PROBES:-}@osage-film=${OSAGE_BAKE_FILM:-}@osage-variants=${OSAGE_BAKE_VARIANTS:-}" \
+    --metadata "^@^osage-run=$run@osage-size=$size@osage-samples=$samples@osage-packed=$packed@osage-cube=${OSAGE_BAKE_CUBE:-}@osage-probes=${OSAGE_BAKE_PROBES:-}@osage-pack=${OSAGE_BAKE_PACK:-}@osage-film=${OSAGE_BAKE_FILM:-}@osage-variants=${OSAGE_BAKE_VARIANTS:-}" \
     --metadata-from-file startup-script="$here/on-vm-bake.sh" --labels osage=bake; then
     zone=$candidate
     break
