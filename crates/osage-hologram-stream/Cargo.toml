@@ -27,13 +27,14 @@ path = "src/bin/light-pack.rs"
 anyhow.workspace = true
 libc = "0.2.191"
 png = "0.18.1"
-# The AV1 decoder: dav1d's Rust port; its assembly (feature `asm`) needs nasm
-# to build on x86-64.
+# The AV1 decoder: dav1d's Rust port.
 rav1d = { version = "1.1.0", default-features = false, features = ["bitdepth_8", "bitdepth_16"] }
 serde.workspace = true
 serde_json.workspace = true
 
-[features]
-default = ["asm"]
-# rav1d's hand-written SIMD, several times faster; nasm builds it on x86-64.
-asm = ["rav1d/asm"]
+# rav1d's hand-written SIMD, several times faster, on x86-64 only, where nasm
+# builds it. On arm64 the crate as published does not build with it (rav1d
+# 1.1.0 leaves out src/arm/asm-offsets.h, which its arm64 assembly includes):
+# a Mac decodes with the Rust code alone.
+[target.'cfg(target_arch = "x86_64")'.dependencies]
+rav1d = { version = "1.1.0", default-features = false, features = ["asm"] }

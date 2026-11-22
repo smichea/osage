@@ -1277,6 +1277,7 @@ Date: 2026-11-22 · the maintainer asked for a release of the Paris walk that ru
 - **Licence:** the street and all that is made from it (the export, the baked light) are CC BY 4.0, not CC0 as the kart's content: the street's zip carries `orca/bistro/ATTRIBUTION.txt` (author, source, licence, what was changed) and each README says the same.
 - **Not in it:** the world's server and the server of light (the launcher walks alone); the traced block of T4 (the programs are built without `raytracing`).
 - **Unknown at this decision:** `paris` has run on Linux only. Whether it builds and draws on Windows and on a Mac is learnt from the first release.
+- **Learnt at the first build:** Windows built at once. The Mac did not: rav1d 1.1.0 as published leaves out a header its arm64 assembly includes. The assembly is now asked for on x86-64 only; a Mac decodes the light with rav1d's Rust code alone, slower. The kart's Mac build would have failed the same way since it took the streamed holograms.
 
 
 ## D-144 — An independent city experience with portable test inputs
