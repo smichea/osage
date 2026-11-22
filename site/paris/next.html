@@ -1,0 +1,215 @@
+<!doctype html>
+<!-- SPDX-FileCopyrightText: The osage contributors -->
+<!-- SPDX-License-Identifier: CC-BY-SA-4.0 -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Bistro in cubes: what came next</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Limelight&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+:root {
+  --bg: #edf0f4; --surface: #ffffff; --fg: #19212d; --muted: #586374; --line: #d2d8e1;
+  --lamp: #a8670f; --block: #2d8456; --sent: #2f62a8; --warn: #b23a3a;
+  --display: "Limelight", "Didot", "Bodoni 72", Georgia, serif;
+  --body: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #10141b; --surface: #171d26; --fg: #e3e7ee; --muted: #98a3b4; --line: #2a3341;
+    --lamp: #e2a447; --block: #47b17b; --sent: #6b9be4; --warn: #e5867b; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #10141b; --surface: #171d26; --fg: #e3e7ee; --muted: #98a3b4; --line: #2a3341;
+  --lamp: #e2a447; --block: #47b17b; --sent: #6b9be4; --warn: #e5867b; color-scheme: dark;
+}
+body { margin: 0; background: var(--bg); color: var(--fg); font: 16px/1.6 var(--body); }
+.page {
+  max-width: 54rem; margin: 0 auto; display: grid; gap: 3rem;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 2.5rem 4rem;
+}
+header { display: grid; gap: 0.75rem; }
+.eyebrow { font: 500 0.75rem/1 var(--mono); letter-spacing: 0.14em; text-transform: uppercase; color: var(--lamp); }
+.eyebrow a { color: inherit; }
+h1 { font: 400 clamp(2.4rem, 7vw, 3.8rem)/1 var(--display); margin: 0; text-wrap: balance; }
+h2 { font: 600 1.4rem/1.25 var(--body); margin: 0; text-wrap: balance; }
+section { display: grid; gap: 1rem; }
+p { margin: 0; max-width: 65ch; }
+.lead { font-size: 1.12rem; color: var(--muted); }
+figure { margin: 0; display: grid; gap: 0.5rem; min-width: 0; }
+figcaption { font: 0.85rem/1.45 var(--body); color: var(--muted); max-width: 65ch; }
+.svg-wrap { overflow-x: auto; min-width: 0; background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 0.8rem; }
+.drawing { display: block; width: 100%; min-width: 30rem; height: auto; }
+.drawing text { fill: var(--fg); font: 500 13px var(--body); }
+.drawing text.quiet { fill: var(--muted); font-weight: 400; }
+.drawing text.small { font-size: 12px; }
+.drawing .axis, .drawing .tick { stroke: var(--muted); stroke-width: 1.5; }
+.drawing .grid { stroke: var(--line); stroke-width: 1; }
+.drawing .raw { fill: none; stroke: var(--warn); stroke-width: 2.5; stroke-dasharray: 7 5; }
+.drawing .agx { fill: none; stroke: var(--sent); stroke-width: 3; }
+.drawing .pt { fill: var(--sent); stroke: var(--surface); stroke-width: 2; }
+.drawing .scaled { fill: none; stroke: var(--lamp); stroke-width: 2.5; stroke-dasharray: 2 4; stroke-linecap: round; }
+.drawing .pt-scaled { fill: var(--lamp); stroke: var(--surface); stroke-width: 2; }
+.drawing .pt-raw { fill: var(--warn); stroke: var(--surface); stroke-width: 2; }
+.drawing .box { fill: var(--surface); stroke: var(--line); stroke-width: 1.5; }
+.drawing .cube { fill: none; stroke: var(--muted); stroke-width: 1.5; }
+.drawing .cube-line { stroke: var(--line); stroke-width: 1; }
+.drawing .arrow { stroke: var(--fg); stroke-width: 2; fill: none; marker-end: url(#head); }
+.drawing .head { fill: var(--fg); }
+.numbers { display: grid; grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr)); gap: 1rem; margin: 0; }
+.note { background: var(--surface); border: 1px solid var(--line); border-left: 4px solid var(--lamp); border-radius: 6px; padding: 0.9rem 1.1rem; display: grid; gap: 0.3rem; max-width: 65ch; }
+.note strong { font-weight: 600; }
+.numbers div { background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 0.8rem 1rem; }
+.numbers dt { font-size: 0.85rem; color: var(--muted); }
+.numbers dd { margin: 0.2rem 0 0; font: 600 1.6rem/1.2 var(--body); }
+code { font: 0.88em var(--mono); }
+a { color: var(--sent); }
+.table-wrap { overflow-x: auto; min-width: 0; }
+table { border-collapse: collapse; width: 100%; font-size: 0.95rem; background: var(--surface); border: 1px solid var(--line); border-radius: 6px; }
+th, td { text-align: left; padding: 0.5rem 0.75rem; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { font-weight: 600; } td.n { font-variant-numeric: tabular-nums; white-space: nowrap; }
+ul { margin: 0; padding-left: 1.2rem; max-width: 65ch; display: grid; gap: 0.4rem; }
+.drawing .cellb { fill: var(--surface); stroke: var(--line); }
+.drawing .own { fill: var(--block); fill-opacity: 0.45; stroke: var(--block); }
+.drawing .next { fill: var(--sent); fill-opacity: 0.4; stroke: var(--sent); }
+.drawing .kept { fill: var(--muted); fill-opacity: 0.2; stroke: var(--muted); }
+.drawing .region { fill: var(--block); fill-opacity: 0.12; stroke: var(--block); stroke-width: 2; }
+.drawing .region.b { fill: var(--sent); stroke: var(--sent); }
+.drawing .edge { stroke: var(--lamp); stroke-width: 4; }
+.drawing .flow { stroke: var(--lamp); stroke-width: 2; fill: none; marker-end: url(#head); }
+.drawing .probe { fill: var(--lamp); stroke: var(--surface); stroke-width: 1.5; }
+</style>
+</head>
+<body>
+<main class="page">
+  <header>
+    <span class="eyebrow"><a href="index.html">← Bistro in cubes</a></span>
+    <h1>What came next</h1>
+    <p class="lead">What changed on 22 November 2026: the light of the next cube ready before you enter it, a trial with one probe per cube, and the direction for a world held by several servers.</p>
+  </header>
+
+  <section>
+    <h2>1. The next cube is ready before you enter it</h2>
+    <p>Reading the logs of the recordings frame by frame, we saw that the image froze for 1 to 7 seconds at each entry into a cube, on 21 November, on a laptop short of memory. At that moment, the client was creating two large textures for the new cube (320 MiB) and freeing those of the old one.</p>
+    <p>Now the textures are created only once: 6 layers, lent to the probes. Five go to the cube where the eyes are, the others to the centre of the next two cubes on the way, whose light is written in advance. A cube you have left keeps its layer: if you turn back, its light is there straight away.</p>
+    <figure>
+      <div class="svg-wrap">
+        <svg class="drawing" viewBox="0 0 600 150" role="img" aria-label="Six layers: one for the cube you are in, two for the next two cubes on the way, three kept for the cubes you have left">
+          <rect class="own" x="20" y="40" width="80" height="60" rx="4"></rect>
+          <rect class="next" x="110" y="40" width="80" height="60" rx="4"></rect>
+          <rect class="next" x="200" y="40" width="80" height="60" rx="4"></rect>
+          <rect class="kept" x="290" y="40" width="80" height="60" rx="4"></rect>
+          <rect class="kept" x="380" y="40" width="80" height="60" rx="4"></rect>
+          <rect class="kept" x="470" y="40" width="80" height="60" rx="4"></rect>
+          <text x="60" y="75" text-anchor="middle" class="small">your cube</text>
+          <text x="150" y="75" text-anchor="middle" class="small">next</text>
+          <text x="240" y="75" text-anchor="middle" class="small">after next</text>
+          <text x="420" y="75" text-anchor="middle" class="small">cubes left behind</text>
+          <text x="20" y="28" class="quiet small">While walking: the 6 layers of the pool</text>
+          <text x="20" y="128" class="quiet small">Standing still, your cube takes 5 layers (its 5 probes) and one is left for the cube you are looking at.</text>
+        </svg>
+      </div>
+    </figure>
+    <p>The decoding work follows the walker too: first what is on the way, then the tiles being looked at, then what is beside. What is no longer useful is never decoded.</p>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Measure (3 recordings of each, alternating)</th><th>Before</th><th>After</th></tr></thead>
+        <tbody>
+          <tr><td>Walking: delay before a cube is displayed after entering it</td><td class="n">0.21 to 0.49 s</td><td class="n">0 s (12 out of 12)</td></tr>
+          <tr><td>Running: same delay</td><td>0.22 to 0.93 s; 2 cubes out of 4 never displayed</td><td>0 s, except the cube whose corner is cut (0.17 to 0.49 s)</td></tr>
+          <tr><td>Walking: frames longer than 50 ms in 7 s</td><td class="n">55 to 57</td><td class="n">8 to 27</td></tr>
+          <tr><td>Running: longest frame</td><td class="n">283 to 486 ms</td><td class="n">63 to 184 ms</td></tr>
+          <tr><td>Difference from Cycles, standing still</td><td class="n">28.0 dB</td><td class="n">28.0 dB</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p><strong>What is not proven.</strong> On the day of these measurements, the laptop had 16 GB of free memory, and the freezes of several seconds did not happen again, even with the old code. Their cause is given by their position in the logs of the 21st, not by a measurement with and without.</p>
+  </section>
+
+  <section>
+    <h2>2. The measuring tool was wrong</h2>
+    <p>The recordings are used to measure smoothness. They had three flaws, now fixed:</p>
+    <ul>
+      <li>About one frame in three was not counted. The 7-second recordings lasted 10 seconds and walked out of the baked cubes.</li>
+      <li>The duration of a frame was capped at 250 ms: a 4-second freeze counted as 250 ms.</li>
+      <li>Without a window, nothing paced the frames. The program sent them faster than the graphics card could draw them, then blocked for half a second. A recording is now paced like a window.</li>
+    </ul>
+    <p>The consequence: the real frame time when standing still, with the 5 probes, is about 53 ms on the laptop's Iris Xe (19 frames per second), and not 12 to 25 ms as stated until then. While walking, with one probe per cube, it is 20 to 30 ms.</p>
+  </section>
+
+  <section>
+    <h2>3. A trial: a single probe per cube</h2>
+    <p>The idea: instead of 5 probes in the walker's cube, take the centre probe of each of the 9 cubes of the block. Each probe is baked once, with its own block made transparent, and serves the 9 blocks that contain its cube: five times less to bake, store and send.</p>
+    <figure>
+      <div class="svg-wrap">
+        <svg class="drawing" viewBox="0 0 600 250" role="img" aria-label="On the left, five probes grouped in the centre cube; on the right, one probe at the centre of each of the nine cubes of the block">
+          <g>
+            <rect class="cellb" x="40" y="40" width="60" height="60"></rect><rect class="cellb" x="100" y="40" width="60" height="60"></rect><rect class="cellb" x="160" y="40" width="60" height="60"></rect><rect class="cellb" x="40" y="100" width="60" height="60"></rect><rect class="cellb" x="100" y="100" width="60" height="60"></rect><rect class="cellb" x="160" y="100" width="60" height="60"></rect><rect class="cellb" x="40" y="160" width="60" height="60"></rect><rect class="cellb" x="100" y="160" width="60" height="60"></rect><rect class="cellb" x="160" y="160" width="60" height="60"></rect>
+            <rect class="own" x="100" y="100" width="60" height="60"></rect>
+            <circle class="probe" cx="130" cy="130" r="5"></circle><circle class="probe" cx="115" cy="115" r="5"></circle><circle class="probe" cx="145" cy="115" r="5"></circle><circle class="probe" cx="115" cy="145" r="5"></circle><circle class="probe" cx="145" cy="145" r="5"></circle>
+            <text x="130" y="28" text-anchor="middle" class="small">Today: 5 probes in your cube</text>
+          </g>
+          <g>
+            <rect class="cellb" x="360" y="40" width="60" height="60"></rect><rect class="cellb" x="420" y="40" width="60" height="60"></rect><rect class="cellb" x="480" y="40" width="60" height="60"></rect><rect class="cellb" x="360" y="100" width="60" height="60"></rect><rect class="cellb" x="420" y="100" width="60" height="60"></rect><rect class="cellb" x="480" y="100" width="60" height="60"></rect><rect class="cellb" x="360" y="160" width="60" height="60"></rect><rect class="cellb" x="420" y="160" width="60" height="60"></rect><rect class="cellb" x="480" y="160" width="60" height="60"></rect>
+            <rect class="own" x="420" y="100" width="60" height="60"></rect>
+            <circle class="probe" cx="390" cy="70" r="5"></circle><circle class="probe" cx="450" cy="70" r="5"></circle><circle class="probe" cx="510" cy="70" r="5"></circle><circle class="probe" cx="390" cy="130" r="5"></circle><circle class="probe" cx="450" cy="130" r="5"></circle><circle class="probe" cx="510" cy="130" r="5"></circle><circle class="probe" cx="390" cy="190" r="5"></circle><circle class="probe" cx="450" cy="190" r="5"></circle><circle class="probe" cx="510" cy="190" r="5"></circle>
+            <text x="450" y="28" text-anchor="middle" class="small">The trial: the centre of each of the 9 cubes</text>
+          </g>
+          <text x="300" y="240" text-anchor="middle" class="quiet small">Top view of the block of 9 cubes. In green, the cube where your eyes are.</text>
+        </svg>
+      </div>
+    </figure>
+    <p>A neighbouring probe sees through its own block, and therefore through what lies just beyond yours. The rule added: for each pixel, the nearest surface along the line of sight wins.</p>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Against Cycles, from the reference camera</th><th>1 centre alone</th><th>9 centres of the block</th><th>5 probes of the cube</th></tr></thead>
+        <tbody>
+          <tr><td>Whole image</td><td class="n">26.9 dB</td><td class="n">27.6 dB</td><td class="n">28.0 dB</td></tr>
+          <tr><td>Left facade, close to the block</td><td class="n">22.7 dB</td><td class="n">26.1 dB</td><td class="n">28.8 dB</td></tr>
+          <tr><td>Street in the distance</td><td class="n">29.9 dB</td><td class="n">30.8 dB</td><td class="n">30.8 dB</td></tr>
+          <tr><td>Time per frame, standing still</td><td class="n">23 ms</td><td class="n">95 ms</td><td class="n">57 ms</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p>The 8 neighbours add a lot, and nothing is seen twice or seen through. Some blur remains on what is very close to the block: the probe nearest the eye is 0.7 m away, the next one 2.3 m, whereas the cube's 5 probes are all within 1.5 m. Drawing is also slower, because the computation goes through 9 probes per pixel: only 3 or 4 will have to be kept. The centres of all the cubes of the street are being baked, to try this mode everywhere.</p>
+  </section>
+
+  <section>
+    <h2>4. The direction: regions, and light that passes from one to the next</h2>
+    <p>A probe is baked by looking at the whole scene. In a world held by several servers, none of them knows the whole scene. The idea chosen combines two tools:</p>
+    <ul>
+      <li><strong>Near the player, probes</strong>, as today: the player's 9 m block in 3D, and the probes of the cubes around.</li>
+      <li><strong>Between regions, a light field on the edges</strong>: for each point of the edge and each direction, the light that goes out. This is the contract between servers: each one computes the light leaving its region with its own geometry and the light it received from its neighbours in the previous round.</li>
+      <li><strong>Fixed regions, about 81 m across, that overlap</strong> by the width of a cube or more. In that band, the physics is shared between the two servers, to pass from one to the other without a jolt.</li>
+    </ul>
+    <figure>
+      <div class="svg-wrap">
+        <svg class="drawing" viewBox="0 0 600 220" role="img" aria-label="Two neighbouring regions that overlap over a band; light leaves the edge of one and enters the other">
+          <defs><marker id="head" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path class="head" d="M0 0 L10 5 L0 10 Z"></path></marker></defs>
+          <rect class="region" x="30" y="40" width="290" height="130" rx="4"></rect>
+          <rect class="region b" x="280" y="40" width="290" height="130" rx="4"></rect>
+          <line class="edge" x1="320" y1="40" x2="320" y2="170"></line>
+          <line class="edge" x1="280" y1="40" x2="280" y2="170"></line>
+          <path class="flow" d="M200 90 L 316 90"></path>
+          <path class="flow" d="M400 125 L 284 125"></path>
+          <text x="150" y="110" text-anchor="middle">region A</text>
+          <text x="450" y="110" text-anchor="middle">region B</text>
+          <text x="300" y="30" text-anchor="middle" class="small">overlap</text>
+          <text x="300" y="195" text-anchor="middle" class="quiet small">In orange, the edges: each server publishes there the light leaving its region.</text>
+          <text x="300" y="212" text-anchor="middle" class="quiet small">Arrows: the light computed in round t−1 by one is used by the other in round t.</text>
+        </svg>
+      </div>
+    </figure>
+    <p>An amusing consequence: light advances one region per round of computation. Its speed therefore depends on the power of the servers and on their link. What is far away is seen a little late, like the stars.</p>
+    <p><strong>What remains to be solved.</strong> A light field without distance would need too much data to stay sharp far away: so the edge probes will keep the distance of what they see. And Cycles cannot take a light field as a light source: that read will have to be written for it, or done in our engine. Nothing in this part is built or measured.</p>
+  </section>
+</main>
+</body>
+</html>
