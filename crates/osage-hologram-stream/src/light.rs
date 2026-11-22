@@ -242,8 +242,9 @@ pub fn encode(lights: &[Light], quality: Quality) -> anyhow::Result<Encoded> {
     if quality.intra && lights.len() > 1 {
         // The last tile decodes alone, or the encoder leant on the frames before.
         for (name, file) in [("colours", &colour), ("distances", &depth), ("masks", &mask)] {
-            crate::decode::planes_of(file, &[lights.len() - 1])
-                .with_context(|| format!("the {name}' frames are not all key frames: this ffmpeg's encoder ignores the setting"))?;
+            crate::decode::planes_of(file, &[lights.len() - 1]).with_context(|| {
+                format!("the {name}' frames are not all key frames: this ffmpeg's encoder ignores the setting")
+            })?;
         }
     }
     Ok(Encoded { radiance: colour, distance: depth, sky: mask })

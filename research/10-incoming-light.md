@@ -262,6 +262,10 @@ Two faults showed once the bake left the corridor, and the walk with it.
 
 **Which probe lights a wall.** The ring's left façade loses 2 dB with nine centres against the cube's five. Taking for each point the one centre that saw it from nearest the eye's direction (`OSAGE_RING_PICK=best`) gives 27.2 dB there against 26.3 blended, and 27.8 against 28.3 on the right one: 27.8 dB over the picture against 27.7. The cube's centre alone with the ring gives 27.3 on the left façade (26.9 over the picture, 20 ms a frame). So blending centres 3 m apart costs about 1 dB on that wall, and the rest of the gap to five probes (28.6) is what four more probes within a metre of the eye add; why they add it is not shown (they may average the bake's noise). Left as a trial, the blend unchanged.
 
+### One black frame on entering a cube (2026-11-22)
+
+Walking, the maintainer saw black flash at some cube changes. Films keep one picture in three and the black lasts one frame: with every frame kept (`OSAGE_FILM_EVERY=1`), 2 or 3 frames of each film were more than 10 % black, with the ring or without it, at T2 as at T3. The cause: on entering a cube the client makes the block's environment light anew and gave it to the camera in the frame its two images were made, before the GPU had them; the block's meshes were drawn without any light for that frame. It now keeps the new light two frames before giving it, the one before staying meanwhile: no black frame left in three films (105, 120 and 153 frames). Why the ring went black in that frame as well is not explained.
+
 ## Next
 
 1. The whole street baked, at 1024–1536 px and more samples: about 2 000 tiles, a cloud GPU's work (hours on the laptop's processor for 384 px).
