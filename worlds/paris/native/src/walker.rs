@@ -114,23 +114,35 @@ fn grab(
     }
 }
 
-fn look(motion: Res<AccumulatedMouseMotion>, cursors: Query<&CursorOptions, With<PrimaryWindow>>, mut me: ResMut<Me>) {
-    let grabbed = cursors.single().is_ok_and(|c| c.grab_mode != CursorGrabMode::None);
-    if !grabbed {
-        return;
+/// How fast the keys turn the eyes, radians a second.
+const TURN: f32 = 1.6;
+
+/// The eyes turned: by the mouse once it is taken, and by W A S D (physical
+/// keys, so Z Q S D on a French keyboard are where they are).
+fn look(
+    time: Res<Time>,
+    keys: Res<ButtonInput<KeyCode>>,
+    motion: Res<AccumulatedMouseMotion>,
+    cursors: Query<&CursorOptions, With<PrimaryWindow>>,
+    mut me: ResMut<Me>,
+) {
+    let held = |key: KeyCode| f32::from(keys.pressed(key));
+    let by_keys = Vec2::new(held(KeyCode::KeyD) - held(KeyCode::KeyA), held(KeyCode::KeyS) - held(KeyCode::KeyW));
+    let mut turn = by_keys * TURN * time.delta_secs();
+    if cursors.single().is_ok_and(|c| c.grab_mode != CursorGrabMode::None) {
+        turn += motion.delta * 0.0025;
     }
-    let turn = motion.delta * 0.0025;
-    me.heading -= turn.x;
-    me.pitch = (me.pitch - turn.y).clamp(-1.4, 1.4);
+    if turn != Vec2::ZERO {
+        me.heading -= turn.x;
+        me.pitch = (me.pitch - turn.y).clamp(-1.4, 1.4);
+    }
 }
 
-/// The stride the keys ask for: physical keys, so Z Q S D on a French
-/// keyboard are where W A S D are.
+/// The stride the arrows ask for.
 fn keys(keys: Res<ButtonInput<KeyCode>>, mut me: ResMut<Me>) {
-    let held = |a: KeyCode, b: KeyCode| keys.pressed(a) || keys.pressed(b);
-    let forward = f32::from(held(KeyCode::KeyW, KeyCode::ArrowUp)) - f32::from(held(KeyCode::KeyS, KeyCode::ArrowDown));
-    let right =
-        f32::from(held(KeyCode::KeyD, KeyCode::ArrowRight)) - f32::from(held(KeyCode::KeyA, KeyCode::ArrowLeft));
+    let held = |key: KeyCode| f32::from(keys.pressed(key));
+    let forward = held(KeyCode::ArrowUp) - held(KeyCode::ArrowDown);
+    let right = held(KeyCode::ArrowRight) - held(KeyCode::ArrowLeft);
     let run = keys.pressed(KeyCode::ShiftLeft) || keys.pressed(KeyCode::ShiftRight);
     let heading = me.heading;
     me.stride = Stride { forward, right, heading, run };

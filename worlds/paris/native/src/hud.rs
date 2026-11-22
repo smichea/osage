@@ -81,7 +81,7 @@ fn setup(mut commands: Commands, options: Res<Options>) {
     ));
     commands.spawn((
         Text::new(
-            "Walk: W A S D (Z Q S D) or the arrows, Shift to run; click to look with the mouse, Escape to let it go.\n\
+            "Walk: the arrows, Shift to run; look: W A S D (Z Q S D), or click to look with the mouse, Escape to let it go.\n\
              Bistro: Amazon Lumberyard, Open Research Content Archive (ORCA), NVIDIA, 2017, CC BY 4.0. \
              Sky: San Giuseppe Bridge, Poly Haven, CC0.",
         ),

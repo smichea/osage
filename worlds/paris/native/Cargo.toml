@@ -21,6 +21,7 @@ osage-hologram-stream.workspace = true
 osage-render.workspace = true
 osage-content.workspace = true
 osage-humans.workspace = true
+osage-props.workspace = true
 osage-sdk.workspace = true
 anyhow.workspace = true
 bevy = { workspace = true, features = ["3d", "ui", "hdr"] }

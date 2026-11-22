@@ -227,6 +227,17 @@ Edges come out where the model has them (a bollard against a wall, a kerb); the 
 
 To the eye the walls, the wood and the stone come out with their grain, where the probes blurred them; the measure moves little (what is left: the surfaces' relief, which Cycles shades and a base colour does not carry).
 
+**Third step: the ring's meshes simplified.** With what the engine has (`osage-props`' vertex clustering: the vertices of a cell merged at their mean), `--ring-cell METRES`. The street has 2.83 million triangles.
+
+| Cells | Triangles drawn | With the probes' colour | With the meshes' own colour |
+|---|---|---|---|
+| none | 2 829 226 | 28.0 dB | 28.0 dB |
+| 0.1 m | 857 546 | 27.7 dB | 26.2 dB |
+| 0.25 m | 544 405 | 26.8 dB | 25.5 dB |
+| 0.5 m | 321 546 | 25.4 dB | 24.5 dB |
+
+Clustering is the wrong tool here: it moves the façades' edges (a window's frame, a sill) by a cell, and it averages texture coordinates across seams, so that the meshes' own textures land wrong. A frame's time barely moves (39 to 32 ms): the triangles are not what costs, so simplifying would save what is sent, not what is drawn. What it asks for is a simplification that keeps edges and seams, done once when the street is made.
+
 ## Next
 
 1. The whole street baked, at 1024–1536 px and more samples: about 2 000 tiles, a cloud GPU's work (hours on the laptop's processor for 384 px).

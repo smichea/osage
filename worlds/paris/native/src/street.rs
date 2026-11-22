@@ -82,7 +82,7 @@ fn place(
     nodes: Res<Assets<GltfNode>>,
     gltf_meshes: Res<Assets<GltfMesh>>,
     gltf_materials: Res<Assets<GltfMaterial>>,
-    meshes: Res<Assets<Mesh>>,
+    mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
     options: Res<crate::Options>,
     mut ring: ResMut<crate::light::Ring>,
@@ -113,6 +113,8 @@ fn place(
         }
     }
     let mut converted: HashMap<AssetId<GltfMaterial>, Handle<StandardMaterial>> = HashMap::new();
+    // The ring's triangles: the model's, and those drawn.
+    let mut simplified = (0usize, 0usize);
     let mut stack: Vec<(usize, Transform)> =
         (0..gltf.nodes.len()).filter(|&i| !children[i]).map(|i| (i, Transform::IDENTITY)).collect();
     let mut count = 0;
@@ -175,8 +177,29 @@ fn place(
                         handle
                     })
                     .clone();
+                // Simplified (`--ring-cell`): its vertices merged in cells,
+                // what is too small for a cell left as it is.
+                let triangles = |mesh: &Mesh| mesh.indices().map_or(0, |i| i.len() / 3);
+                let scale = place.scale.abs().max_element().max(1e-6);
+                let coarse =
+                    (options.ring_cell > 0.0).then(|| meshes.get(&primitive.mesh)).flatten().and_then(|whole| {
+                        Some((triangles(whole), osage_props::lod::simplify(whole, options.ring_cell / scale)?))
+                    });
+                let shape = match coarse {
+                    Some((before, coarse)) => {
+                        simplified.0 += before;
+                        simplified.1 += triangles(&coarse);
+                        meshes.add(coarse)
+                    }
+                    None => {
+                        let whole = meshes.get(&primitive.mesh).map_or(0, triangles);
+                        simplified.0 += whole;
+                        simplified.1 += whole;
+                        primitive.mesh.clone()
+                    }
+                };
                 commands.spawn((
-                    Mesh3d(primitive.mesh.clone()),
+                    Mesh3d(shape),
                     MeshMaterial3d(lit),
                     place,
                     Visibility::Hidden,
@@ -188,6 +211,9 @@ fn place(
         }
     }
     info!(meshes = count, "paris: the street is placed");
+    if options.ring {
+        info!(triangles = simplified.0, drawn = simplified.1, cell = options.ring_cell, "paris: the ring's meshes");
+    }
     model.placed = true;
     placed.0 = true;
 }
