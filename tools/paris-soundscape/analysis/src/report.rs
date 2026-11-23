@@ -138,7 +138,8 @@ pub fn measure(audio: &Audio) -> Report {
         frames,
         seconds: frames as f64 / f64::from(rate),
         true_peak_db: of_left.true_peak_db.max(of_right.true_peak_db),
-        loudness_lkfs: loudness(&[left, right], rate),
+        // Of the channels the file holds: a mono file's one channel counts once.
+        loudness_lkfs: loudness(&[left, right][..audio.channels.len().clamp(1, 2)], rate),
         correlation: level::correlation(left, right),
         left: of_left,
         right: of_right,
@@ -289,6 +290,18 @@ mod tests {
         let left = white(70, 48_000, 3.0, 0.5);
         let right = late(&left, 24, 0.5);
         Audio { rate: 48_000, channels: vec![left, right] }
+    }
+
+    #[test]
+    fn a_mono_file_s_one_channel_counts_once() {
+        // A 997 Hz sine at −20 dBFS: −23.0 LKFS in one channel, −20.0 in both of a stereo file.
+        let tone = sine(48_000, 997.0, 0.1, 5.0);
+        let mono = measure(&Audio { rate: 48_000, channels: vec![tone.clone()] });
+        let stereo = measure(&Audio { rate: 48_000, channels: vec![tone.clone(), tone] });
+        let (one, two) = (mono.loudness_lkfs.unwrap(), stereo.loudness_lkfs.unwrap());
+        assert!((one + 23.01).abs() < 0.02 && (two + 20.0).abs() < 0.02, "{one} and {two} LKFS");
+        assert!((two - one - 3.01).abs() < 0.005, "{} LU apart", two - one);
+        assert_eq!((mono.channels, stereo.channels), (1, 2));
     }
 
     /// Whether `text` is well-formed JSON: a small reader that knows the

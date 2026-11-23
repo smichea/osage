@@ -333,8 +333,65 @@ impl Scene {
 
         // The nodes, as glTF lists them; a parent is whoever lists a child.
         let listed = root.need("nodes")?.list()?;
-        let mut nodes = Vec::with_capacity(listed.len());
-        for at in &listed {
+        let mut parents: Vec<Option<usize>> = vec![None; listed.len()];
+        let mut children: Vec<Vec<usize>> = vec![Vec::new(); listed.len()];
+        for (i, at) in listed.iter().enumerate() {
+            let Some(under) = at.get("children") else { continue };
+            for child in under.list()? {
+                let c = child.number()? as usize;
+                if c >= listed.len() || c == i {
+                    return child.fail("no such node");
+                }
+                if parents[c].is_some() {
+                    return child.fail("a node with two parents: the nodes form a forest");
+                }
+                parents[c] = Some(i);
+                children[i].push(c);
+            }
+        }
+        // No node is its own ancestor.
+        for start in 0..listed.len() {
+            let (mut at, mut steps) = (parents[start], 0);
+            while let Some(i) = at {
+                steps += 1;
+                if steps > listed.len() {
+                    return listed[start].fail("a node under itself");
+                }
+                at = parents[i];
+            }
+        }
+
+        // The scene heard, and what is under its roots: a file may hold other
+        // scenes, and nothing of theirs is in this one — not a node, not a
+        // sound.
+        let scenes = root.need("scenes")?.list()?;
+        let chosen = root.number_or("scene", 0.0)? as usize;
+        let Some(scene) = scenes.get(chosen) else { return root.fail("no such scene") };
+        let mut within = vec![false; listed.len()];
+        let mut ahead = Vec::new();
+        for at in scene.need("nodes")?.list()? {
+            let top = at.number()? as usize;
+            if top >= listed.len() {
+                return at.fail("no such node");
+            }
+            if parents[top].is_some() {
+                return at.fail("a scene lists roots: this node has a parent");
+            }
+            ahead.push(top);
+        }
+        while let Some(node) = ahead.pop() {
+            within[node] = true;
+            ahead.extend(&children[node]);
+        }
+        // The scene's nodes in the order of the file, and each one's number among them.
+        let kept: Vec<usize> = (0..listed.len()).filter(|&i| within[i]).collect();
+        let mut number = vec![usize::MAX; listed.len()];
+        for (i, &from) in kept.iter().enumerate() {
+            number[from] = i;
+        }
+        let mut nodes = Vec::with_capacity(kept.len());
+        for &from in &kept {
+            let at = &listed[from];
             let id = at.need("extras")?.need("osage")?.need("id")?.text()?.to_owned();
             let translation = at.get("translation").map_or(Ok(Vec3::ZERO), |t| t.point())?;
             let rotation = match at.get("rotation") {
@@ -348,44 +405,19 @@ impl Scene {
             }
             nodes.push(Node {
                 id,
-                parent: None,
-                children: Vec::new(),
+                parent: parents[from].map(|parent| number[parent]),
+                children: children[from].iter().map(|&child| number[child]).collect(),
                 rest: Placement { translation, rotation },
                 motion: None,
                 turning: None,
                 proxy_beyond: None,
             });
         }
-        for (i, at) in listed.iter().enumerate() {
-            let Some(children) = at.get("children") else { continue };
-            for child in children.list()? {
-                let c = child.number()? as usize;
-                if c >= nodes.len() || c == i {
-                    return child.fail("no such node");
-                }
-                if nodes[c].parent.is_some() {
-                    return child.fail("a node with two parents: the nodes form a forest");
-                }
-                nodes[c].parent = Some(i);
-                nodes[i].children.push(c);
-            }
-        }
-        // No node is its own ancestor.
-        for start in 0..nodes.len() {
-            let (mut at, mut steps) = (nodes[start].parent, 0);
-            while let Some(i) = at {
-                steps += 1;
-                if steps > nodes.len() {
-                    return listed[start].fail("a node under itself");
-                }
-                at = nodes[i].parent;
-            }
-        }
         let mut tree = Tree { nodes };
         // The object format's rule: a node's identifier is its own in the whole object.
         for (i, node) in tree.nodes.iter().enumerate() {
             if node.id.trim().is_empty() || tree.nodes[..i].iter().any(|other| other.id == node.id) {
-                return listed[i].fail(format!("a second or an empty node identifier \"{}\"", node.id));
+                return listed[kept[i]].fail(format!("a second or an empty node identifier \"{}\"", node.id));
             }
         }
 
@@ -409,7 +441,8 @@ impl Scene {
         let (mut surfaces, mut emitters, mut touches) = (Vec::new(), Vec::new(), Vec::new());
         // Read once the tree is whole, since they name nodes by their path.
         let mut loads: Vec<(usize, At)> = Vec::new();
-        for (node, at) in listed.iter().enumerate() {
+        for (node, &from) in kept.iter().enumerate() {
+            let at = &listed[from];
             let Some(extra) = at.need("extras")?.get("osageSound") else { continue };
             if let Some(motion) = extra.get("motion") {
                 let along = motion.need("alongM")?.point()?;
@@ -563,9 +596,6 @@ impl Scene {
             }
         }
 
-        let scenes = root.need("scenes")?.list()?;
-        let chosen = root.number_or("scene", 0.0)? as usize;
-        let Some(scene) = scenes.get(chosen) else { return root.fail("no such scene") };
         let about = scene.need("extras")?.need("osageSound")?;
         let hears = about.need("listener")?;
         let reverb = about.need("reverb")?;
@@ -695,6 +725,37 @@ mod tests {
         assert_eq!(scene.contacts["ground"].params.get("tone", 0.0), 120.0);
         assert_eq!(scene.touches.len(), 1);
         assert_eq!(scene.air, Air { celsius: 20.0, humidity: 50.0 });
+    }
+
+    #[test]
+    fn another_scene_of_the_file_is_not_in_this_one() {
+        // A second scene whose root sounds, mirrors and steps, listed before the first one's nodes: every
+        // number of the file moves by one, and nothing of the scene read does.
+        let other = r#"{"extras": {"osage": {"id": "elsewhere"}, "osageSound": {
+          "motion": {"alongM": [1, 0, 0], "atS": 0, "speedKmh": 3.6},
+          "surfaces": [{"id": "wall", "quadM": [[-9, 0, 1], [-9, 9, 1], [9, 9, 1], [9, 0, 1]], "acoustic": "hard"}],
+          "emitters": [{"id": "tone", "voice": "tone", "params": {"hz": 440}}],
+          "touches": [{"kind": "steps", "material": "sole", "strideM": 0.7, "feetM": [[0, 0, 0]]}]}}},
+        "#;
+        let both = SMALL
+            .replace(r#""scenes": [{"nodes": [0], "#, r#""scenes": [{"nodes": [1], "#)
+            .replace(r#""humidityPercent": 50}}}}],"#, r#""humidityPercent": 50}}}}, {"nodes": [0]}],"#)
+            .replace(r#""children": [1, 3]"#, r#""children": [2, 4]"#)
+            .replace(r#""children": [2]"#, r#""children": [3]"#)
+            .replace("\"nodes\": [\n", &format!("\"nodes\": [\n{other}"));
+        assert!(both.contains("elsewhere") && both.contains(r#"{"nodes": [0]}"#) && both.contains("[2, 4]"));
+        let (alone, among) = (Scene::from_json(SMALL).unwrap(), Scene::from_json(&both).unwrap());
+        assert_eq!(among, alone);
+        assert_eq!(
+            (among.tree.nodes.len(), among.emitters.len(), among.surfaces.len(), among.touches.len()),
+            (4, 2, 1, 1)
+        );
+        // Asked for, the other scene is read, and says what it lacks.
+        let second = both.replace(r#""scene": 0"#, r#""scene": 1"#);
+        assert!(Scene::from_json(&second).unwrap_err().contains("$.scenes[1]"));
+        // A scene lists roots.
+        let under = SMALL.replace(r#""scenes": [{"nodes": [0], "#, r#""scenes": [{"nodes": [1], "#);
+        assert!(Scene::from_json(&under).unwrap_err().contains("has a parent"));
     }
 
     #[test]

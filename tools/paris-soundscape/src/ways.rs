@@ -4,7 +4,9 @@
 //! The ways sound takes from an emitter to a head, found from the faces of
 //! the objects between and around them:
 //!
-//! - **straight**, when nothing hides the emitter;
+//! - **straight**, when nothing hides the emitter — or through what hides
+//!   it, with what its material lets through, when that arrives louder than
+//!   round its edge;
 //! - **round an edge**, when a face hides it: over the edge that lengthens
 //!   the way least, quieter and duller by how much longer the way is, counted
 //!   in wavelengths (the Fresnel number) — and already a little quieter when
@@ -13,6 +15,11 @@
 //! - **mirrored** by each face that reflects, from the emitter's image
 //!   behind it, less what the face's material takes in each band; what the
 //!   material scatters goes to the reverberation instead.
+//!
+//! What stands on a leg of a way round an edge or of a mirrored way takes
+//! what its material does not let through, band by band: all of it for a
+//! wall, nothing for a pane that lets everything through. Any number of
+//! faces may hide, listed in any order.
 //!
 //! and what the air takes on the way (ISO 9613-1).
 //!
@@ -154,39 +161,52 @@ fn apex(a: Vec3, b: Vec3, source: Vec3, head: Vec3) -> Vec3 {
     a + along * z.clamp(0.0, length)
 }
 
-/// Whether a face that hides stands strictly between `a` and `b`.
-fn hidden(a: Vec3, b: Vec3, faces: &[Face], but: Option<usize>) -> bool {
-    faces.iter().enumerate().any(|(i, face)| face.occludes && Some(i) != but && face.crossed(a, b).is_some())
+/// What is left of the pressure, in each of [`BANDS`], of a sound that goes
+/// straight from `a` to `b`: 1 with nothing between, and what each face
+/// that hides lets through for those it crosses.
+fn through(a: Vec3, b: Vec3, faces: &[Face], but: Option<usize>) -> [f64; 4] {
+    let mut left = [1.0; 4];
+    for (i, face) in faces.iter().enumerate() {
+        if face.occludes && Some(i) != but && face.crossed(a, b).is_some() {
+            let passed = face.material.passed();
+            for (band, share) in left.iter_mut().enumerate() {
+                *share *= passed[band.min(2)];
+            }
+        }
+    }
+    left
 }
 
-/// The ways from `source` to `head` among `faces`. `mirrors`: whether the
-/// faces send this emitter back; `careful`: whether a mirrored way is checked
-/// for what hides it.
+/// Under this share of its pressure, 60 dB down, a way is taken for hidden.
+const HIDDEN: f64 = 1e-3;
+
+fn heard(bands: &[f64; 4]) -> bool {
+    bands.iter().any(|share| *share > HIDDEN)
+}
+
+/// The ways from `source` to `head` among `faces`, the emitter standing
+/// still. `mirrors`: whether the faces send this emitter back; `careful`:
+/// whether a mirrored way is checked for what stands on it. (The engine asks
+/// for each way by itself, [`direct`] and [`mirrored`]: an emitter that
+/// moves was not in the same place when the sound of each left it.)
 pub fn ways(source: Vec3, head: Vec3, faces: &[Face], mirrors: bool, careful: bool) -> Ways {
-    let mut out = Ways::default();
-    ways_into(&mut out, source, head, faces, mirrors, careful);
+    let mut out = Ways { direct: direct(source, head, faces), mirrored: vec![None; faces.len()], scattered: 0.0 };
+    if mirrors {
+        for i in 0..faces.len() {
+            let (way, scattered) = mirrored(i, source, head, faces, careful);
+            out.mirrored[i] = way;
+            out.scattered += scattered;
+        }
+    }
     out
 }
 
-/// [`ways`], into a `Ways` kept from one call to the next: what is asked
-/// for every emitter hundreds of times a second makes no list each time.
-pub fn ways_into(out: &mut Ways, source: Vec3, head: Vec3, faces: &[Face], mirrors: bool, careful: bool) {
+/// The way that is not mirrored: straight, through what lets sound through,
+/// or round the edge that lengthens it least.
+pub fn direct(source: Vec3, head: Vec3, faces: &[Face]) -> Option<Way> {
     let straight = source.distance(head);
-    out.direct = None;
-    out.mirrored.clear();
-    out.mirrored.resize(faces.len(), None);
-    out.scattered = 0.0;
-
-    // Straight, or round the edge that lengthens the way least. The faces
-    // that hide: one bit each (a scene's first 64 faces can hide).
-    let mut hiding = 0u64;
-    for (i, face) in faces.iter().enumerate().take(64) {
-        if face.occludes && face.crossed(source, head).is_some() {
-            hiding |= 1 << i;
-        }
-    }
-    let hiding = (0..faces.len().min(64)).filter(move |i| hiding >> i & 1 == 1);
-    if hiding.clone().next().is_none() {
+    let hides = |face: &Face| face.occludes && face.crossed(source, head).is_some();
+    if !faces.iter().any(hides) {
         // Grazing an edge already costs something.
         let mut nearest = f64::INFINITY;
         for face in faces.iter().filter(|face| face.occludes) {
@@ -196,86 +216,90 @@ pub fn ways_into(out: &mut Ways, source: Vec3, head: Vec3, faces: &[Face], mirro
             }
         }
         let bands = BANDS.map(|f| 10f64.powf(-edge_loss(-nearest, f) / 20.0));
-        out.direct = Some(Way { length: straight, from: source, bands });
-    } else {
-        // What the faces let through.
-        let mut through = [1.0; 4];
-        for i in hiding.clone() {
-            let passed = faces[i].material.passed();
-            for (b, t) in through.iter_mut().enumerate() {
-                *t *= passed[b.min(2)];
-            }
-        }
-        let mut best: Option<(f64, Vec3)> = None;
-        for i in hiding {
-            for side in 0..4 {
-                let p = apex(faces[i].corners[side], faces[i].corners[(side + 1) % 4], source, head);
-                let length = source.distance(p) + p.distance(head);
-                if best.is_some_and(|(shortest, _)| shortest <= length) {
-                    continue;
-                }
-                // Each leg stops a hair short of the edge, so that the faces
-                // that meet there do not count as hiding it.
-                let (near_source, near_head) =
-                    (p + (source - p).unit_or(Vec3::Y) * 1e-4, p + (head - p).unit_or(Vec3::Y) * 1e-4);
-                if !hidden(source, near_source, faces, None) && !hidden(near_head, head, faces, None) {
-                    best = Some((length, p));
-                }
-            }
-        }
-        // Through the faces or round an edge: whichever arrives louder. The
-        // two are not one way — they differ in length and in where they come
-        // from — and a deck lets almost nothing through.
-        let passing = Way { length: straight, from: source, bands: through };
-        out.direct = match best {
-            Some((length, p)) => {
-                let bands = BANDS.map(|f| 10f64.powf(-edge_loss(length - straight, f) / 20.0));
-                let round = Way { length, from: p, bands };
-                Some(if through[1] / straight.max(1e-9) > bands[1] / length.max(1e-9) { passing } else { round })
-            }
-            None if through.iter().any(|t| *t > 1e-3) => Some(passing),
-            None => None,
-        };
+        return Some(Way { length: straight, from: source, bands });
     }
+    // Round an edge of a face that hides it: the one that lengthens the way
+    // least, of those whose two legs are heard.
+    let mut round: Option<Way> = None;
+    for face in faces.iter().filter(|face| hides(face)) {
+        for side in 0..4 {
+            let p = apex(face.corners[side], face.corners[(side + 1) % 4], source, head);
+            let length = source.distance(p) + p.distance(head);
+            if round.is_some_and(|best| best.length <= length) {
+                continue;
+            }
+            // Each leg stops a hair short of the edge, so that the faces
+            // that meet there do not count as standing on it.
+            let (near_source, near_head) =
+                (p + (source - p).unit_or(Vec3::Y) * 1e-4, p + (head - p).unit_or(Vec3::Y) * 1e-4);
+            let (first, second) = (through(source, near_source, faces, None), through(near_head, head, faces, None));
+            let bands: [f64; 4] = std::array::from_fn(|b| {
+                10f64.powf(-edge_loss(length - straight, BANDS[b]) / 20.0) * first[b] * second[b]
+            });
+            if heard(&bands) {
+                round = Some(Way { length, from: p, bands });
+            }
+        }
+    }
+    // Through the faces or round an edge: whichever arrives louder. The two
+    // are not one way — they differ in length and in where they come from —
+    // and a deck lets almost nothing through.
+    let passing = Way { length: straight, from: source, bands: through(source, head, faces, None) };
+    match round {
+        Some(round) if passing.bands[1] / straight.max(1e-9) > round.bands[1] / round.length.max(1e-9) => Some(passing),
+        Some(round) => Some(round),
+        None if heard(&passing.bands) => Some(passing),
+        None => None,
+    }
+}
 
-    if !mirrors {
-        return;
+/// The way mirrored by the face `i`, from the emitter's image behind it, and
+/// the energy that face scatters towards the head, of what the emitter sends
+/// at one metre. With `careful`, what stands on either leg takes its share,
+/// or all of it.
+pub fn mirrored(i: usize, source: Vec3, head: Vec3, faces: &[Face], careful: bool) -> (Option<Way>, f64) {
+    let face = &faces[i];
+    if !face.reflects {
+        return (None, 0.0);
     }
-    for (i, face) in faces.iter().enumerate().filter(|(_, face)| face.reflects) {
-        let (hs, hh) = (face.height(source), face.height(head));
-        // Both on the same side, and off the face.
-        if hs * hh <= 0.0 || hs.abs() < 1e-3 || hh.abs() < 1e-3 {
-            continue;
-        }
-        let image = source - face.normal * (2.0 * hs);
-        let p = image + (head - image) * (hs.abs() / (hs.abs() + hh.abs()));
-        // What the face scatters reaches the head from all of it: from its
-        // point nearest the mirror point, as far as that way is.
-        let q = face.nearest(p);
-        // Only if that point sees both: a deck that hides the emitter from
-        // the head hides it from the road under the head as well.
-        if !hidden(source, q, faces, Some(i)) && !hidden(q, head, faces, Some(i)) {
-            let scattered = face.material.scattered();
-            let by = source.distance(q) + q.distance(head);
-            out.scattered += (scattered[0] + scattered[1] + scattered[2]) / 3.0 / (by * by).max(1e-6);
-        }
+    let (hs, hh) = (face.height(source), face.height(head));
+    // Both on the same side, and off the face.
+    if hs * hh <= 0.0 || hs.abs() < 1e-3 || hh.abs() < 1e-3 {
+        return (None, 0.0);
+    }
+    let image = source - face.normal * (2.0 * hs);
+    let p = image + (head - image) * (hs.abs() / (hs.abs() + hh.abs()));
+    // What the face scatters reaches the head from all of it: from its point
+    // nearest the mirror point, as far as that way is — if that point sees
+    // both: a deck that hides the emitter from the head hides it from the
+    // road under the head as well.
+    let q = face.nearest(p);
+    let (to, fro) = (through(source, q, faces, Some(i)), through(q, head, faces, Some(i)));
+    let scattered = face.material.scattered();
+    let by = source.distance(q) + q.distance(head);
+    let seen = (to[1] * fro[1]).powi(2);
+    let scattered = (scattered[0] + scattered[1] + scattered[2]) / 3.0 / (by * by).max(1e-6) * seen;
 
-        let rim = (face.inside(p) / RIM).clamp(0.0, 1.0);
-        if rim <= 0.0 {
-            continue;
-        }
-        if careful && (hidden(source, p, faces, Some(i)) || hidden(p, head, faces, Some(i))) {
-            continue;
-        }
-        // Smooth at both ends of the rim.
-        let fade = rim * rim * (3.0 - 2.0 * rim);
-        let mirrored = face.material.mirrored();
-        out.mirrored[i] = Some(Way {
-            length: image.distance(head),
-            from: p,
-            bands: std::array::from_fn(|b| mirrored[b.min(2)] * fade),
-        });
+    let rim = (face.inside(p) / RIM).clamp(0.0, 1.0);
+    if rim <= 0.0 {
+        return (None, scattered);
     }
+    // Smooth at both ends of the rim.
+    let fade = rim * rim * (3.0 - 2.0 * rim);
+    let share = face.material.mirrored();
+    let mut bands: [f64; 4] = std::array::from_fn(|b| share[b.min(2)] * fade);
+    if careful {
+        let (to, fro) = (through(source, p, faces, Some(i)), through(p, head, faces, Some(i)));
+        for (b, band) in bands.iter_mut().enumerate() {
+            *band *= to[b] * fro[b];
+        }
+        // A way whose legs something stops is not one; a face that mirrors
+        // nothing in itself is still a way, a silent one.
+        if !heard(&std::array::from_fn(|b| to[b] * fro[b])) {
+            return (None, scattered);
+        }
+    }
+    (Some(Way { length: image.distance(head), from: p, bands }), scattered)
 }
 
 /// What the air takes from a pure tone, dB a metre, at `celsius` degrees
@@ -436,6 +460,63 @@ mod tests {
         let (source, head) = (vec3(0.0, 1.0, 0.0), vec3(4.0, 2.0, 0.0));
         assert!(ways(source, head, &faces, true, true).mirrored[0].is_none());
         assert!(ways(source, head, &faces, true, false).mirrored[0].is_some());
+    }
+
+    #[test]
+    fn the_order_and_the_number_of_faces_change_nothing() {
+        // A wall between an emitter and a head, among 64 faces that hide nothing: wherever it is listed.
+        let wall = Face::new(
+            [vec3(0.0, -5.0, -5.0), vec3(0.0, 5.0, -5.0), vec3(0.0, 5.0, 5.0), vec3(0.0, -5.0, 5.0)],
+            HARD,
+            false,
+            true,
+        );
+        let idle = |k: usize| {
+            let y = 20.0 + k as f64;
+            Face::new(
+                [vec3(-1.0, y, -1.0), vec3(-1.0, y, 1.0), vec3(1.0, y, 1.0), vec3(1.0, y, -1.0)],
+                HARD,
+                false,
+                false,
+            )
+        };
+        let (source, head) = (vec3(-1.0, 0.0, 0.0), vec3(1.0, 0.0, 0.0));
+        let mut first: Vec<Face> = vec![wall.clone()];
+        first.extend((0..64).map(idle));
+        let mut last: Vec<Face> = (0..64).map(idle).collect();
+        last.push(wall);
+        let (a, b) = (direct(source, head, &first).unwrap(), direct(source, head, &last).unwrap());
+        // Round the wall's edge, 5 m away: twice the root of 26.
+        assert!((a.length - 2.0 * 26f64.sqrt()).abs() < 1e-9, "{}", a.length);
+        assert_eq!((a.length, a.bands), (b.length, b.bands));
+        assert!(a.bands[1] < 0.15);
+    }
+
+    #[test]
+    fn a_pane_on_a_mirrored_way_takes_what_it_does_not_let_through() {
+        // An emitter and a head 1 m above a floor, 2 m apart; a pane stands on the way down to the floor.
+        let floor = slab(0.0, [-20.0, 20.0], [-20.0, 20.0], HARD);
+        let pane = |transmission: f64| {
+            let glass = Material { absorption: [0.0; 3], transmission: [transmission; 3], scattering: 0.0 };
+            Face::new(
+                [vec3(-0.5, 0.2, -2.0), vec3(-0.5, 0.2, 2.0), vec3(-0.5, 0.8, 2.0), vec3(-0.5, 0.8, -2.0)],
+                glass,
+                false,
+                true,
+            )
+        };
+        let (source, head) = (vec3(-1.0, 1.0, 0.0), vec3(1.0, 1.0, 0.0));
+        let echo = |transmission: f64| mirrored(0, source, head, &[floor.clone(), pane(transmission)], true).0;
+        // All of it through: the floor's echo as if nothing stood there.
+        let clear = echo(1.0).unwrap();
+        assert!((clear.length - 8f64.sqrt()).abs() < 1e-12);
+        assert_eq!(clear.bands, [1.0; 4]);
+        // A quarter of the energy through: half of the pressure.
+        let half = echo(0.25).unwrap();
+        assert!(half.bands.iter().all(|band| (band - 0.5).abs() < 1e-12), "{:?}", half.bands);
+        // Nothing through: no echo. Unchecked, the pane is not looked at.
+        assert!(echo(0.0).is_none());
+        assert!(mirrored(0, source, head, &[floor, pane(0.0)], false).0.is_some());
     }
 
     #[test]

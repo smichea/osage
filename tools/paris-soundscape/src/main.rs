@@ -13,7 +13,7 @@ use std::{path::PathBuf, process::ExitCode, time::Instant};
 use osage_paris_soundscape::{
     ears::Listening,
     engine::{Options, Quality, RATE},
-    render::{Rendered, level, master, render},
+    render::{fade, level, master, render},
     scene::{Reach, Scene},
     space::Vec3,
 };
@@ -31,6 +31,7 @@ paris-soundscape: a scene's sound placed in its object tree and carried to two e
              --turn DEGREES      the listener's head turned to its left by so much
              --solo TEXT         only emitters whose name holds TEXT (may be given again)
              --mute TEXT         not the emitters whose name holds TEXT
+                                 (a contact bears the names of the surface struck and of the node that struck it)
              --gain-db DB        this gain instead of the one that brings the file to the scene's loudness
              --metro-at S        the instant the train's middle is level with the listener
              --metro-speed KMH   its speed over the bridge
@@ -38,8 +39,9 @@ paris-soundscape: a scene's sound placed in its object tree and carried to two e
   tree     the scene's nodes, emitters and surfaces
              --at S              where everything is at that instant, from the listener
   verify   the scene rendered several times and checked: the same seed gives the same bytes, nothing
-           clips, turning the listener half round moves a side source to the other side, the river
-           stays on its side, the train comes, passes and goes (takes --quality, --listening, --seconds)
+           clips, the file is as loud as the scene asks, turning the listener half round moves a side
+           source to the other side, the river stays on its side, the train comes, passes and goes
+           (takes --quality, --listening, --seconds); a check whose sound is missing has failed
   bench    what the engine costs on this machine: processor time for a second of sound at each quality,
            on the bridge and on a ring of 1 to 256 noises (the scene of bench/), and the memory it keeps
              --json FILE         a receipt
@@ -74,7 +76,7 @@ impl Args {
 /// A file's peaks between samples stay this far under full scale, dB: what
 /// EBU R 128 asks, so that it can be played and encoded without clipping.
 const CEILING_DB: f64 = -1.0;
-/// A file starts and ends in silence: seconds of fade at each end.
+/// A file starts and ends in silence: seconds of fade at each end, less in a file too short for them.
 const FADE_IN: f64 = 0.4;
 const FADE_OUT: f64 = 1.5;
 
@@ -152,16 +154,17 @@ fn run_render(args: &Args) -> Result<(), String> {
     let seconds = args.number("--seconds")?.unwrap_or(scene.seconds);
     let out = PathBuf::from(args.value("--out").unwrap_or("bir-hakeim.wav"));
     let started = Instant::now();
-    let rendered = render(&scene, &options, seconds);
+    let mut rendered = render(&scene, &options, seconds);
     let took = started.elapsed().as_secs_f64();
-    // One gain for the whole file: the scene's loudness, or as near as its peaks allow.
+    fade(&mut rendered, FADE_IN, FADE_OUT);
+    // One gain for the whole file as it will be heard: the scene's loudness, or as near as its peaks allow.
     let (mut gain, mut loudness) = level(&rendered, scene.loudness, CEILING_DB);
     if let Some(decibels) = args.number("--gain-db")? {
         // A gain of one's own choosing: to compare one emitter with another, each rendered alone.
         loudness += decibels - 20.0 * gain.log10();
         gain = 10f64.powf(decibels / 20.0);
     }
-    let mastered = master(&rendered, gain, scene.seed, FADE_IN, FADE_OUT);
+    let mastered = master(&rendered, gain, scene.seed);
     let bytes = wav::pcm16(RATE, 2, &mastered.samples);
     if let Some(folder) = out.parent().filter(|p| !p.as_os_str().is_empty()) {
         std::fs::create_dir_all(folder).map_err(|e| format!("{}: {e}", folder.display()))?;
@@ -273,12 +276,14 @@ fn run_tree(args: &Args) -> Result<(), String> {
     Ok(())
 }
 
-/// The bytes of the file a render makes, how loud it is and how many samples had to be held.
-fn file(scene: &Scene, options: &Options, seconds: f64) -> (Vec<u8>, Rendered, usize) {
-    let rendered = render(scene, options, seconds);
-    let (gain, _) = level(&rendered, scene.loudness, CEILING_DB);
-    let mastered = master(&rendered, gain, scene.seed, FADE_IN, FADE_OUT);
-    (wav::pcm16(RATE, 2, &mastered.samples), rendered, mastered.held)
+/// The bytes of the file a render makes, the loudness it was brought to (the scene's, or less if its peaks
+/// would pass the ceiling) and how many samples had to be held.
+fn file(scene: &Scene, options: &Options, seconds: f64) -> (Vec<u8>, f64, usize) {
+    let mut rendered = render(scene, options, seconds);
+    fade(&mut rendered, FADE_IN, FADE_OUT);
+    let (gain, reached) = level(&rendered, scene.loudness, CEILING_DB);
+    let mastered = master(&rendered, gain, scene.seed);
+    (wav::pcm16(RATE, 2, &mastered.samples), reached, mastered.held)
 }
 
 fn run_verify(args: &Args) -> Result<(), String> {
@@ -300,7 +305,7 @@ fn run_verify(args: &Args) -> Result<(), String> {
     );
 
     // The same seed, the same file; another seed, another.
-    let (first, _, held) = file(&scene, &options, seconds);
+    let (first, reached, held) = file(&scene, &options, seconds);
     let (second, ..) = file(&scene, &options, seconds);
     let (other, ..) = file(&Scene { seed: scene.seed + 1, ..scene.clone() }, &options, seconds);
     check("the same seed gives the same bytes", first == second, format!("sha256 {} twice", &sha256(&first)[..16]));
@@ -322,11 +327,32 @@ fn run_verify(args: &Args) -> Result<(), String> {
             report.true_peak_db
         ),
     );
-    check(
-        "it is as loud as the scene asks, or as its peaks allow",
-        report.loudness_lkfs.is_some_and(|l| l <= scene.loudness + 0.3),
-        format!("{:.1} LUFS for {:.1} asked", report.loudness_lkfs.unwrap_or(f64::NEG_INFINITY), scene.loudness),
-    );
+    // As loud as the scene asks: the file as it is written, its ends faded. Quieter only where its peaks
+    // would otherwise pass the ceiling — and then they are at the ceiling.
+    let held_back = reached < scene.loudness - 0.05;
+    match report.loudness_lkfs {
+        Some(read) => check(
+            "it is as loud as the scene asks, or as its peaks allow",
+            (read - reached).abs() <= 0.3 && (!held_back || report.true_peak_db >= CEILING_DB - 0.3),
+            format!(
+                "{read:.1} LUFS for {:.1} asked{}",
+                scene.loudness,
+                if held_back {
+                    format!(
+                        ", held to {reached:.1} by its peaks ({:.2} dBTP for a ceiling of {CEILING_DB})",
+                        report.true_peak_db
+                    )
+                } else {
+                    String::new()
+                }
+            ),
+        ),
+        None => check(
+            "it is as loud as the scene asks, or as its peaks allow",
+            false,
+            "no loudness to read: the file is silent, or shorter than the 0.4 s a loudness is read over".to_owned(),
+        ),
+    }
 
     // A sound on one side: the river. Heard alone, ahead and with the head turned half round.
     let wide = Band::new(500.0, 8_000.0);
@@ -335,7 +361,14 @@ fn run_verify(args: &Args) -> Result<(), String> {
     };
     let river = alone("river", options.turn);
     let turned = alone("river", options.turn + std::f64::consts::PI);
-    if river.peak() > 0.0 {
+    if river.peak() <= 0.0 {
+        // What was to be checked is not there: that is not a check passed.
+        check(
+            "the river is heard, on one side",
+            false,
+            "no sound from any emitter named \"river\": its three checks could not be made".to_owned(),
+        );
+    } else {
         let (ahead, behind) = (
             cue(&river.left, &river.right, RATE, &wide, 0.0, seconds),
             cue(&turned.left, &turned.right, RATE, &wide, 0.0, seconds),
@@ -351,13 +384,16 @@ fn run_verify(args: &Args) -> Result<(), String> {
             river.left == turned.right && river.right == turned.left,
             "the two renders are each other's mirror, sample for sample".to_owned(),
         );
-        let worst = (0..(seconds / 5.0) as usize)
-            .map(|k| cue(&river.left, &river.right, RATE, &wide, k as f64 * 5.0, k as f64 * 5.0 + 5.0).ild_db)
+        // Five seconds at a time — the whole of a render shorter than that.
+        let spans = ((seconds / 5.0) as usize).max(1);
+        let span = (seconds / spans as f64).min(5.0);
+        let worst = (0..spans)
+            .map(|k| cue(&river.left, &river.right, RATE, &wide, k as f64 * 5.0, k as f64 * 5.0 + span).ild_db)
             .fold(f64::NEG_INFINITY, f64::max);
         check(
             "the river stays on the left",
             worst < -1.0,
-            format!("right minus left never above {worst:+.1} dB over 5 s"),
+            format!("right minus left never above {worst:+.1} dB over {span} s"),
         );
     }
 
@@ -366,24 +402,43 @@ fn run_verify(args: &Args) -> Result<(), String> {
         let abeam = scene.tree.nodes[train].motion.as_ref().map_or(0.0, |motion| motion.at);
         let heard = alone("upper-deck", options.turn);
         let both: Vec<f32> = heard.left.iter().zip(&heard.right).map(|(l, r)| (l + r) / 2.0).collect();
-        if let Some(passage) = envelope(&both, RATE, 0.5).smoothed(2.0).passage() {
-            check(
+        match envelope(&both, RATE, 0.5).smoothed(2.0).passage().filter(|_| heard.peak() > 0.0) {
+            Some(passage) => check(
                 "the train comes, passes and goes",
                 (passage.time - abeam).abs() < 5.0 && passage.rise_db > 10.0 && passage.fall_db > 8.0,
                 format!(
                     "loudest at {:.1} s (level with the listener at {abeam:.1} s), {:.0} dB above its start, {:.0} dB above its end",
                     passage.time, passage.rise_db, passage.fall_db
                 ),
-            );
+            ),
+            None => check(
+                "the train comes, passes and goes",
+                false,
+                "no sound from any emitter under \"upper-deck\"".to_owned(),
+            ),
         }
-        if abeam > 3.0 && abeam + 3.0 < seconds {
+        if abeam > 3.0 && abeam + 3.0 < seconds && heard.peak() > 0.0 {
             let side = cue(&heard.left, &heard.right, RATE, &wide, abeam - 3.0, abeam + 3.0);
             check(
                 "it passes on the right",
                 side.ild_db > 1.0,
                 format!("right minus left {:+.1} dB as it passes", side.ild_db),
             );
+        } else {
+            check(
+                "it passes on the right",
+                false,
+                format!(
+                    "not heard for 3 s each side of {abeam:.1} s, when it is level with the listener, in the {seconds} s rendered"
+                ),
+            );
         }
+    } else {
+        check(
+            "the train comes, passes and goes",
+            false,
+            format!("the scene has no node {}: its two checks could not be made", TRAIN.join(" / ")),
+        );
     }
     if failed > 0 {
         return Err(format!("{failed} checks failed"));

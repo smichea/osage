@@ -113,7 +113,10 @@ fn frame_for(band: &Band, rate: u32, shortest: usize) -> usize {
 }
 
 /// The mean spectrum of a signal: its mean square at each bin of frames of
-/// `size` samples, averaged over whole frames half a frame apart. A signal
+/// `size` samples, over all of it. The frames are a quarter of a frame apart
+/// and reach past both ends, each counting for as much of its window as lay
+/// on the signal: every sample then weighs the same, the last as the one in
+/// the middle, and the bins together hold the signal's mean square. A signal
 /// shorter than a frame is seen through the longest frame it fills.
 fn mean_spectrum(signal: &[f32], size: usize) -> (Vec<f64>, usize) {
     let mut size = size;
@@ -123,18 +126,18 @@ fn mean_spectrum(signal: &[f32], size: usize) -> (Vec<f64>, usize) {
     let mut stft = Stft::new(size, size / 2);
     let mut mean = vec![0.0; stft.bins()];
     let mut power = Vec::new();
-    let mut frames = 0.0;
-    // The only frame of a signal shorter than two samples reaches outside it.
-    let starts: Vec<isize> = stft.whole_frames(signal.len()).collect();
-    for start in if starts.is_empty() { vec![0] } else { starts } {
-        stft.power(signal, start, &mut power);
+    let mut weighed = 0.0;
+    for start in stft.covering(signal.len()) {
+        let weight = stft.power(signal, start, &mut power);
         for (sum, value) in mean.iter_mut().zip(&power) {
-            *sum += value;
+            *sum += value * weight.squares;
         }
-        frames += 1.0;
+        weighed += weight.squares;
     }
-    for value in &mut mean {
-        *value /= frames;
+    if weighed > 0.0 {
+        for value in &mut mean {
+            *value /= weighed;
+        }
     }
     (mean, size)
 }
@@ -238,6 +241,36 @@ mod tests {
     };
 
     #[test]
+    fn a_burst_at_the_end_of_a_file_is_in_its_spectrum() {
+        // The same 100 ms of noise in a second of silence: from 0.4 s, and as the file's last samples.
+        let burst = white(5, 48_000, 0.1, 0.5);
+        let placed = |from: usize| {
+            let mut signal = vec![0.0f32; 48_000];
+            signal[from..from + burst.len()].copy_from_slice(&burst);
+            signal
+        };
+        let (middle, end) = (placed(19_200), placed(48_000 - burst.len()));
+        // Every sample counts the same wherever it is: the bins hold the file's mean square, to the rounding.
+        for signal in [&middle, &end] {
+            for size in [256, 8_192, 16_384] {
+                let (mean, _) = mean_spectrum(signal, size);
+                let (held, all) = (mean.iter().sum::<f64>(), mean_square(signal));
+                assert!((held / all - 1.0).abs() < 1e-9, "{size}: {held} for {all}");
+            }
+        }
+        // And band by band the burst reads the same in both places, from the octave of 250 Hz up; below, a
+        // tenth of a second is too short to tell.
+        let (a, b) = (band_levels(&middle, 48_000, &octaves()), band_levels(&end, 48_000, &octaves()));
+        for ((band, a), b) in octaves().iter().zip(&a).zip(&b).skip(3) {
+            assert!(
+                (a - b).abs() < 1.0 && *b > -60.0,
+                "{:.0} Hz: {a:.2} dB in the middle, {b:.2} dB at the end",
+                band.centre()
+            );
+        }
+    }
+
+    #[test]
     fn octaves_and_thirds_are_named_by_their_centres_and_touch() {
         let (octaves, thirds) = (octaves(), third_octaves());
         assert_eq!((octaves.len(), thirds.len()), (10, 30));
@@ -261,17 +294,38 @@ mod tests {
     #[test]
     fn a_sine_reads_its_level_in_its_own_band_and_60_db_less_elsewhere() {
         for rate in [44_100, 48_000] {
-            let levels = band_levels(&sine(rate, 1_000.0, 0.1, 3.0), rate, &octaves());
+            // A sine that swells in and dies out over 50 ms: a file that starts and ends in silence.
+            let cut = sine(rate, 1_000.0, 0.1, 3.0);
+            let ends = (f64::from(rate) * 0.05) as usize;
+            let mut whole = cut.clone();
+            for n in 0..ends {
+                let ease = (0.5 - 0.5 * (std::f64::consts::PI * n as f64 / ends as f64).cos()) as f32;
+                whole[n] *= ease;
+                let last = whole.len() - 1 - n;
+                whole[last] *= ease;
+            }
+            let levels = band_levels(&whole, rate, &octaves());
+            for (n, level) in levels.iter().enumerate() {
+                if n == 5 {
+                    assert!((level - db(mean_square(&whole))).abs() < 0.02, "{level} dB at {rate} Hz");
+                } else {
+                    assert!(*level < -83.0, "{} Hz reads {level} dB", OCTAVE_NAMES[n]);
+                }
+            }
+            // Cut short at both ends, the file holds the two cuts as well, and every sample of it counts:
+            // what a bank of octave filters would read of it, 40 dB under the sine at least.
+            let levels = band_levels(&cut, rate, &octaves());
             for (n, level) in levels.iter().enumerate() {
                 if n == 5 {
                     // A sine of peak 0.1: mean square 0.005, −23.01 dB.
                     assert!((level + 23.01).abs() < 0.02, "{level} dB at {rate} Hz");
                 } else {
-                    assert!(*level < -83.0, "{} Hz reads {level} dB", OCTAVE_NAMES[n]);
+                    assert!(*level < -63.0, "{} Hz reads {level} dB", OCTAVE_NAMES[n]);
                 }
             }
             let thirds = band_levels(&sine(rate, 63.0, 0.1, 3.0), rate, &third_octaves());
-            assert!((thirds[4] + 23.01).abs() < 0.02, "{}", thirds[4]);
+            // A third of an octave is 15 Hz wide here: a little of the two cuts falls outside it.
+            assert!((thirds[4] + 23.01).abs() < 0.04, "{}", thirds[4]);
         }
     }
 

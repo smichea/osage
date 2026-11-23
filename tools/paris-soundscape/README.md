@@ -37,7 +37,9 @@ bridge  at [0.00, 0.00, 0.00]
             ♪ tyres — metro-bogie at [0.00, 0.30, 0.00] +4.0 dB  → 13.0 m, +117° to the right, +32° up
 ```
 
-(An excerpt.) That emitter is named `bridge / upper-deck / track-to-passy / train / car-3 / bogie-5 : tyres`: the path of its node, then its own name. `--solo` and `--mute` take any part of such a name.
+(An excerpt.) That emitter is named `bridge / upper-deck / track-to-passy / train / car-3 / bogie-5 : tyres`: the path of its node, then its own name. `--solo` and `--mute` take any part of such a name. A contact bears the names of the two that met — the surface struck, named as an emitter is, and the node that struck it: `bridge / road-deck : joint-plate : contact with bridge / road-deck / pavement-upstream / walker`. So `--solo walker` renders the steps, and `--mute road-deck` silences them with the road.
+
+A file may hold several glTF scenes. Only the one its `scene` names is read: its roots and what is under them.
 
 Move or turn a node and everything under it follows. `scenes/make_bir_hakeim.py` is how the file was made.
 
@@ -68,18 +70,18 @@ cargo run --release --manifest-path tools/paris-soundscape/Cargo.toml -- verify
 cargo test --manifest-path tools/paris-soundscape/Cargo.toml --workspace
 ```
 
-`verify` renders the scene several times and checks that the same seed gives the same bytes, that nothing clips (no sample held, true peak under −1 dBTP), that turning the listener half round moves the river to the other ear (sample for sample), that the river stays on its side, and that the train comes, passes and goes. `measure FILE.wav` prints the same figures for any stereo file, whatever made it.
+`verify` renders the scene several times and checks that the same seed gives the same bytes, that nothing clips (no sample held, true peak under −1 dBTP), that the file as written is as loud as the scene asks (within 0.3 LU, or held under it by its peaks, which are then at the ceiling), that turning the listener half round moves the river to the other ear (sample for sample), that the river stays on its side, and that the train comes, passes and goes. These are the brief's checks: on a scene without a river or a train, or a render too short to hold the train's passage, the check that cannot be made has failed, and says why. `measure FILE.wav` prints the same figures for any mono or stereo file, whatever made it.
 
 ## More
 
 - [DESIGN.md](DESIGN.md): how it works, what an object carries for sound (what it emits, what it reflects, how it sounds when touched), what each quality costs, and what a second batch should do.
 - [bench/README.md](bench/README.md): the same machine's cost for OpenAL Soft and for Chromium's Web Audio.
 
-The examples made on 2026-11-23 (x86-64 Linux, rustc 1.99, seed 6):
+The examples made on 2026-11-24 (x86-64 Linux, rustc 1.99, seed 6):
 
 ```
-bir-hakeim-headphones.wav  sha256 8e4a95781e69ea47850f97cdff4c1541951be53f195ab3b39532927503da7738
-bir-hakeim-speakers.wav    sha256 83f6ebbab2fa2a883e7d50af28c064bab3e342b7e90132cd1571eba21031e888
+bir-hakeim-headphones.wav  sha256 76b77c235e6cb6512f89e6c1baa74be2267ca45b29073108fb0f7816cfb6957d
+bir-hakeim-speakers.wav    sha256 d889771295ab793e90a59958c46bec09482df885e77f422364e658bce7e07acf
 ```
 
 The digests hold for one machine and compiler: the voices use the platform's own sine and exponential.

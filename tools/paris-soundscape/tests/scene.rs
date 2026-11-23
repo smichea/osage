@@ -9,7 +9,7 @@
 use osage_paris_soundscape::{
     ears::Listening,
     engine::{Options, Quality, RATE},
-    render::{level, master, render},
+    render::{fade, level, master, render},
     scene::{Reach, Scene},
 };
 use osage_sound_analysis::{Band, cue, envelope, measure, sha256, wav};
@@ -20,9 +20,10 @@ fn options(quality: Quality, solo: &[&str]) -> Options {
 
 /// The file a render of `seconds` makes, as the command writes it.
 fn file(scene: &Scene, options: &Options, seconds: f64) -> (Vec<u8>, usize) {
-    let rendered = render(scene, options, seconds);
+    let mut rendered = render(scene, options, seconds);
+    fade(&mut rendered, 0.4, 1.5);
     let (gain, _) = level(&rendered, scene.loudness, -1.0);
-    let mastered = master(&rendered, gain, scene.seed, 0.4, 1.5);
+    let mastered = master(&rendered, gain, scene.seed);
     (wav::pcm16(RATE, 2, &mastered.samples), mastered.held)
 }
 

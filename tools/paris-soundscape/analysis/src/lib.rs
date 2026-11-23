@@ -27,6 +27,14 @@
 //! - **Levels** are decibels relative to full scale, of mean squares: a sine
 //!   of full scale reads −3.01 dB. Silence reads [`level::SILENCE_DB`]
 //!   (−180), never minus infinity.
+//! - **Every sample of a file counts alike** in a level over the whole of
+//!   it, the last as the first: a burst at the very end is in the spectrum
+//!   as one in the middle is. So are the two cuts of a file that starts or
+//!   ends in the middle of a sound — a click each, 40 dB or more under the
+//!   sound, spread over the bands — as a bank of filters would read them.
+//! - **A loudness counts the channels a file has**: one for a mono file,
+//!   which reads 3.01 LU under the same signal in both channels of a stereo
+//!   one.
 //! - **Differences between the channels are right minus left.** A level
 //!   difference is positive when the RIGHT channel is louder; a time
 //!   difference is positive when the sound reaches the RIGHT ear first (the

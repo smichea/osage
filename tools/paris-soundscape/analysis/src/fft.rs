@@ -185,8 +185,9 @@ pub struct Weight {
 /// around sample `i·hop + hop/2`, whatever the frame's size, so that measures
 /// made with frames of different sizes speak of the same instants; the first
 /// and last frames reach outside the signal, and see its edge as a sound
-/// switched on or off. *Whole frames* lie inside the signal, half a frame
-/// apart, for an average over a file.
+/// switched on or off. *Covering frames* are a quarter of a frame apart and
+/// start before the signal and end after it, so that every sample of a file
+/// counts alike in an average over it.
 #[derive(Clone, Debug)]
 pub struct Stft {
     /// Half the frame's size: a frame of real samples is transformed as half
@@ -251,12 +252,16 @@ impl Stft {
         self.centre(step) as isize - (self.size() / 2) as isize
     }
 
-    /// Where the whole frames of a signal of `samples` samples start, half a
-    /// frame apart.
-    pub fn whole_frames(&self, samples: usize) -> impl Iterator<Item = isize> + use<> {
-        let (size, half) = (self.size(), (self.size() / 2).max(1));
-        let count = if samples >= size { (samples - size) / half + 1 } else { 0 };
-        (0..count).map(move |frame| (frame * half) as isize)
+    /// Where the frames start that together weigh every sample of a signal of
+    /// `samples` samples alike: a quarter of a frame apart, where the squares
+    /// of Hann windows sum to the same everywhere, from the frame that holds
+    /// only the signal's first samples to the one that holds only its last.
+    pub fn covering(&self, samples: usize) -> impl Iterator<Item = isize> + use<> {
+        let size = self.size();
+        let quarter = (size / 4).max(1);
+        let first = quarter as isize - size as isize;
+        let count = if samples == 0 { 0 } else { (samples + size - quarter).div_ceil(quarter) };
+        (0..count).map(move |frame| first + (frame * quarter) as isize)
     }
 
     /// The spectrum of the frame that starts at sample `start` — which may
@@ -301,14 +306,15 @@ impl Stft {
 
     /// The same frame as mean squares: `out[k]` is the part of the frame's
     /// mean square (under the window) that lies at frequency `k·rate/size`,
-    /// so that the bins together hold the frame's whole mean square.
-    pub fn power(&mut self, signal: &[f32], start: isize, out: &mut Vec<f64>) {
+    /// so that the bins together hold the frame's whole mean square. Returns
+    /// how much of the window lay on the signal.
+    pub fn power(&mut self, signal: &[f32], start: isize, out: &mut Vec<f64>) -> Weight {
         let size = self.size();
         let (spectrum, weight) = self.spectrum(signal, start);
         out.clear();
         if weight.squares <= 0.0 {
             out.resize(spectrum.len(), 0.0);
-            return;
+            return weight;
         }
         // Parseval: the squares of all `size` bins sum to `size` times the
         // squares of the samples. Bins between 0 and half the rate stand for
@@ -318,6 +324,7 @@ impl Stft {
             let both = if k == 0 || 2 * k == size { 1.0 } else { 2.0 };
             both * value.power() * scale
         }));
+        weight
     }
 }
 
@@ -475,7 +482,29 @@ mod tests {
             assert_eq!(short.centre(step), long.centre(step));
             assert_eq!(short.start(step) + 128, long.start(step) + 2_048);
         }
-        assert_eq!(short.whole_frames(1_050).collect::<Vec<_>>(), vec![0, 128, 256, 384, 512, 640, 768]);
-        assert_eq!(long.whole_frames(1_050).count(), 0);
+    }
+
+    #[test]
+    fn covering_frames_weigh_every_sample_alike() {
+        for (size, samples) in [(256usize, 1_050usize), (4_096, 1_050), (4, 9), (2, 5), (64, 1)] {
+            let stft = Stft::new(size, size / 2);
+            let window = hann(size);
+            let mut weighed = vec![0.0f64; samples];
+            let starts: Vec<isize> = stft.covering(samples).collect();
+            for &start in &starts {
+                for (n, w) in window.iter().enumerate() {
+                    let at = start + n as isize;
+                    if (0..samples as isize).contains(&at) {
+                        weighed[at as usize] += w * w;
+                    }
+                }
+            }
+            // The squares of Hann windows a quarter apart sum to 1.5 (to 1 for a frame of two samples).
+            let all = if size == 2 { 1.0 } else { 1.5 };
+            assert!(weighed.iter().all(|sum| (sum - all).abs() < 1e-12), "{size} over {samples}: {weighed:?}");
+            // None lies wholly outside the signal.
+            assert!(starts.iter().all(|&start| start + size as isize > 0 && start < samples as isize));
+        }
+        assert_eq!(Stft::new(256, 128).covering(0).count(), 0);
     }
 }

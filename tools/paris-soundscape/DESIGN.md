@@ -17,11 +17,13 @@ A scene is an object tree, as the object format has it ([design/08](../../design
 
 Every 128 samples (2.7 ms) the engine asks the tree where everything is and finds, for each emitter, the ways its sound takes to the listener's head:
 
-- **straight**, when nothing hides it;
+- **straight**, when nothing hides it — or through what hides it, with what its material lets through in each band, when that arrives louder than round its edge;
 - **round an edge**, when a face hides it: over the edge that lengthens the way least, quieter and duller by how much longer that is, counted in wavelengths. A way that only grazes an edge already loses a little, so nothing switches as a source goes behind a deck. Maekawa, "Noise reduction by screens" (Applied Acoustics 1, 1968), in the piecewise form that continues into the lit side ([as tabulated here](https://strutt.arup.com/help/Environmental_Noise/EnviroBarrierAtten.htm));
 - **mirrored** by each face that reflects, from the emitter's image behind it, less what the material takes in each band. [Allen and Berkley, 1979](https://doi.org/10.1121/1.382599). What the material scatters feeds a small reverberation instead.
 
-Each emitter's voice writes into a line of its own. A way is that line read some time back: the time sound takes over the way's length. So a distant source is heard late, and one that comes nearer is read faster and sounds higher. There is no Doppler rule; a mirrored way reads the same line further back and has a shift of its own. What is read goes through four bands (what distance, an edge or a material leave of each), a low-pass for the air (ISO 9613-1:1993, [as reproduced here](https://sengpielaudio.com/AirdampingFormula.htm)), and then the ears.
+What stands on a leg of a way round an edge or of a mirrored way takes from it what its material does not let through, band by band: a pane that lets everything through takes nothing, a wall that lets nothing through ends the way. Any number of faces may hide, in any order. A way longer than its emitter is heard from (`maxDistanceM`) is not rendered: the reach is a length of way, an echo's as well as the straight one's, and no sound is ever read sooner than its way takes.
+
+Each emitter's voice writes into a line of its own. A way is that line read some time back: the time sound takes over the way's length. So a distant source is heard late, and one that comes nearer is read faster and sounds higher. There is no Doppler rule; a mirrored way reads the same line further back and has a shift of its own, found from where the emitter was when the sound now arriving by that way left it — earlier than for the straight way, and so elsewhere. What is read goes through four bands (what distance, an edge or a material leave of each), a low-pass for the air (ISO 9613-1:1993, [as reproduced here](https://sengpielaudio.com/AirdampingFormula.htm)), and then the ears.
 
 For headphones the ears are a model, not a measurement: the far ear hears up to 0.66 ms later and through the head's shadow, and five short echoes stand for the outer ear and say a little about height. [Brown and Duda, 1998](https://escholarship.org/content/qt0cr9d23p/qt0cr9d23p_noSplash_c6f0ae8be6c4003ba4f479c6ef3d369b.pdf). For loudspeakers, where the listener's own head does this, the level alone is shared between the two channels, as `osage-kart-native` places its karts.
 
@@ -92,14 +94,14 @@ What is too quiet to matter is not made: the ways are ranked by how loud they ar
 
 Measured on 2026-11-23 on an Intel Core i5-1335U whose power setting held it at 1.3 GHz, on one performance core, while the machine was busy with other work: medians of three runs, in processor time. `paris-soundscape bench` prints them again; [bench/](bench/README.md) holds the baselines.
 
-**The bridge**: 45 seconds, 41 emitters and their contacts. Milliseconds of one processor for a second of sound; under 1 000 it keeps up with the clock.
+**The bridge**: 45 seconds, 41 emitters and their contacts. Milliseconds of one processor for a second of sound; under 1 000 it keeps up with the clock. (This table was measured again on 2026-11-24, in the same state of the machine, after a review's corrections to the search for ways and to the reverberation: five more ways are followed at the two highest qualities, those that pass through a deck. The tables of one source below are of the day before; what they measure did not change.)
 
 | Quality | Ways at once | Voices at once | Speakers: native | Speakers: WebAssembly | Headphones: native | Headphones: WebAssembly |
 |---|---:|---:|---:|---:|---:|---:|
-| low | 16 | 18 | 38 | 72 | 53 | 102 |
-| medium | 48 | 31 | 100 | 125 | 135 | 180 |
-| high | 58 | 38 | 142 | 168 | 271 | 297 |
-| reference | 58 | 38 | 195 | 227 | 358 | 406 |
+| low | 16 | 18 | 40 | 46 | 55 | 62 |
+| medium | 48 | 31 | 94 | 124 | 139 | 184 |
+| high | 63 | 38 | 126 | 171 | 227 | 288 |
+| reference | 63 | 38 | 180 | 230 | 355 | 408 |
 
 WebAssembly is the same program built for `wasm32-wasip1` and run in V8 (Node 26), the engine of Chromium: what a browser client would pay. Voices, the search for ways and the ears are all in these figures.
 
@@ -153,11 +155,11 @@ What this buys is the same as for light: the cost of the far world no longer gro
 
 **Open-source engines, on this machine.** `bench/` plays the same ring of noises in OpenAL Soft 1.25 through its loopback device and in Chromium's Web Audio through an offline context; the tables above set the prototype beside them. They do not do the same work, and [bench/README.md](bench/README.md) says exactly what each does. OpenAL Soft and Web Audio convolve with measured responses of a head, which give height and front-back cues that a sphere cannot. The prototype carries each sound over its way, with its delay, its Doppler shift, its air and its reflections, which neither does. So the fair reading is by function: a panned source, a source heard by two ears, a source with its reflections.
 
-**The external reference** of the city programme ([design/07](../../design/07-city-scale-quality.md)) was not opened by the author of this code. Its behaviour was asked for as measurements and answered by the evaluation track; the questions, the answers and two 45-second captures are in the evaluator's private notes, with a side-by-side reading of them. `measure` reads those captures as it reads this prototype's renders.
+**The external reference** of the city programme ([design/07](../../design/07-city-scale-quality.md)) was not opened by the author of this code. Its behaviour was asked for as measurements and answered by the evaluation track; the questions, the answers and two 45-second captures are in the evaluator's private notes, with a side-by-side reading of them. `measure` reads those captures as it reads this prototype's renders: every sample of a file counts alike, its last tenth of a second as any other, and a mono capture's one channel counts once.
 
 ## Where it stands, and what is not there
 
-Checked by `verify` and by the tests: the same seed gives the same bytes; nothing clips; turning the listener half round moves a side source to the other ear, sample for sample; distance, Doppler shift, the floor's reflection and its delay, a contact's place and time agree with the physics they stand for within the tolerances the tests state. A check kept apart (`object-check/`, which needs the engine's `osage-objects`) loads the scene of the bridge in the engine's own reader of the object format and finds the same node paths.
+Checked by `verify` and by the tests: the same seed gives the same bytes; nothing clips; the file is as loud as asked once its ends are faded; turning the listener half round moves a side source to the other ear, sample for sample; distance, Doppler shift (an echo's too), the floor's reflection and its delay, what a pane lets through, an echo's time of arrival, the reverberation's decay in each band, a contact's place and time agree with the physics they stand for within the tolerances the tests state; another glTF scene in the same file changes nothing; a wall hides wherever it is listed among the faces. A check kept apart (`object-check/`, which needs the engine's `osage-objects`) loads the scene of the bridge in the engine's own reader of the object format and finds the same node paths.
 
 What instruments say of the example (each group of sources rendered alone and set against all the rest, three seconds at a time):
 
@@ -173,7 +175,7 @@ Not there, or weak:
 - **Behind** sounds like its mirror in front, for the same reason.
 - **One reflection** off each face, and one edge. No reflection of a reflection, no way round two edges (a source under the middle of a deck is silent rather than faint).
 - **The air** above 5 kHz on long ways is understated (two poles follow it to there).
-- **The reverberation's length** is given by the scene, not found from its geometry.
+- **The reverberation's length** is given by the scene, not found from its geometry: three decays, at 250 Hz, 1 kHz and 4 kHz, each met within a tenth when neighbours are no more than about twice apart. The bands are parted gently (6 dB an octave), so decays further apart than that are not met; whatever is asked, nothing rings more than twice as long as the longest.
 - **Materials** are made-up test values in the range textbooks give.
 - **The metro's spectrum** is a proxy: no public measurement of a rubber-tyred train on a steel viaduct was found.
 - **One thread.** Emitters are independent and could be shared between cores; the figures above are for one.

@@ -31,7 +31,7 @@ use crate::{
     ears::{HEAD_RADIUS, Heard, Listening, PINNA, hear_for},
     scene::{Head, Load, Material, Reach, Scene, Touching},
     space::{Placement, Vec3},
-    ways::{Face, SOUND, Ways, air_loss, ways_into},
+    ways::{Face, SOUND, Way, Ways, air_loss, direct, mirrored},
 };
 
 pub use osage_paris_voices::RATE;
@@ -175,6 +175,14 @@ pub struct Options {
     pub start: f64,
 }
 
+impl Options {
+    /// Whether what bears `name` is heard: soloed if anything is, and not muted.
+    pub fn hears(&self, name: &str) -> bool {
+        (self.solo.is_empty() || self.solo.iter().any(|text| name.contains(text.as_str())))
+            && !self.mute.iter().any(|text| name.contains(text.as_str()))
+    }
+}
+
 impl Default for Options {
     fn default() -> Self {
         Self {
@@ -277,7 +285,8 @@ impl Default for Line {
 
 /// An emitter being heard: a scene's own, or a contact's voice.
 struct Source {
-    /// Its node's path and its own identifier: what solo and mute are told by.
+    /// What solo and mute are told by: its node's path and its own
+    /// identifier — for a contact, what was struck and what struck it.
     #[allow(dead_code)]
     name: String,
     node: usize,
@@ -299,8 +308,11 @@ struct Source {
     left: u32,
     /// The ways rendered this block: the targets the budget keeps.
     aims: Vec<Option<Aim>>,
-    /// How long its sound took to arrive last block, s.
-    lag: f64,
+    /// How long its sound took to arrive when its ways were last found, s,
+    /// by each of them: a way mirrored by a face is longer than the straight
+    /// one, and what arrives by it left the emitter earlier, from where the
+    /// emitter then was.
+    lags: Vec<f64>,
     /// Where it was at the end of the last block, if it was anywhere.
     was: Option<Vec3>,
     /// The node whose emitters stand for its branch from afar, from how far,
@@ -324,35 +336,90 @@ struct Source {
 }
 
 /// The space's own answer: eight lines feeding one another (a feedback
-/// delay network, after J.-M. Jot), each losing what the decay asks.
+/// delay network, after J.-M. Jot), each losing at every turn what the decay
+/// asks of each of its three bands.
 struct Tail {
     lines: [Vec<f32>; 8],
     at: [usize; 8],
+    /// What each line holds under the first of [`Tail::SPLITS`], and under
+    /// the second.
     low: [f32; 8],
-    gain: [f32; 8],
-    damp: [f32; 8],
+    mid: [f32; 8],
+    /// The pass of the two low-passes that part a line's bands.
+    pass: [f32; 2],
+    /// What each line keeps of each band after one turn.
+    keep: [[f32; 3]; 8],
 }
 
 impl Tail {
     /// Primes, 13 to 47 ms: no two lines repeat together.
     const LENGTHS: [usize; 8] = [631, 809, 997, 1_259, 1_483, 1_741, 1_999, 2_251];
+    /// Where a line's three bands part, Hz: between the frequencies a decay
+    /// is given at, 250 Hz, 1 kHz and 4 kHz.
+    const SPLITS: [f64; 2] = [500.0, 2_000.0];
+    const CENTRES: [f64; 3] = [250.0, 1_000.0, 4_000.0];
 
+    fn pass() -> [f64; 2] {
+        Self::SPLITS.map(|hz| 1.0 - (-std::f64::consts::TAU * hz * DT).exp())
+    }
+
+    /// What a line that keeps `keep` of its three bands keeps of a tone of
+    /// `hz`: low·L₁ + mid·(L₂ − L₁) + high·(1 − L₂), with L₁ and L₂ the two
+    /// low-passes.
+    fn kept(keep: [f64; 3], hz: f64) -> f64 {
+        let turn = std::f64::consts::TAU * hz * DT;
+        // A low-pass a / (1 − (1 − a)·e^(−iω)), as (real, imaginary).
+        let [first, second] = Self::pass().map(|a| {
+            let (re, im) = (1.0 - (1.0 - a) * turn.cos(), (1.0 - a) * turn.sin());
+            let over = re * re + im * im;
+            (a * re / over, -a * im / over)
+        });
+        let re = keep[0] * first.0 + keep[1] * (second.0 - first.0) + keep[2] * (1.0 - second.0);
+        let im = keep[0] * first.1 + keep[1] * (second.1 - first.1) - keep[2] * second.1;
+        re.hypot(im)
+    }
+
+    /// The shares of its three bands a line must keep for it to keep `asked`
+    /// at 250 Hz, 1 kHz and 4 kHz. The low-passes that part the bands are
+    /// gentle, 6 dB an octave, and each centre holds some of its neighbours:
+    /// the shares are sought, each brought in turn to what its own centre
+    /// asks. Decays too far apart for such gentle parting are not met: a
+    /// line then keeps, at the frequency it keeps most of, what a decay
+    /// twice as long as the longest asked would — whatever the three, the
+    /// tail dies, and nowhere more than twice as slowly as asked.
+    fn shares(asked: [f64; 3]) -> [f64; 3] {
+        let mut keep = asked;
+        for _ in 0..48 {
+            for band in 0..3 {
+                let now = Self::kept(keep, Self::CENTRES[band]).max(1e-12);
+                keep[band] = (keep[band] * asked[band] / now).clamp(1e-9, 1.0);
+            }
+        }
+        // What it keeps most of: at no frequency, at a tenth of an octave
+        // from 20 Hz up, or at half the rate.
+        let tones = (0..=100).map(|tenth| 20.0 * 2f64.powf(f64::from(tenth) / 10.0)).chain([0.0, RATE as f64 / 2.0]);
+        let peak = tones.map(|hz| Self::kept(keep, hz)).fold(0.0f64, f64::max);
+        let allowed = asked.iter().fold(0.0f64, |most, share| most.max(*share)).sqrt();
+        if peak > allowed {
+            keep = keep.map(|share| share * allowed / peak);
+        }
+        keep
+    }
+
+    /// A tail that dies by 60 dB in `seconds` at 250 Hz, 1 kHz and 4 kHz.
     fn new(seconds: [f64; 3]) -> Tail {
         let mut tail = Tail {
             lines: Self::LENGTHS.map(|length| vec![0.0; length]),
             at: [0; 8],
             low: [0.0; 8],
-            gain: [0.0; 8],
-            damp: [0.0; 8],
+            mid: [0.0; 8],
+            pass: Self::pass().map(|pass| pass as f32),
+            keep: [[0.0; 3]; 8],
         };
         for (i, length) in Self::LENGTHS.into_iter().enumerate() {
-            // What a line keeps after one turn, for the low band and the high.
-            let keep = |t60: f64| 10f64.powf(-3.0 * length as f64 / (t60 * RATE as f64));
-            let (low, high) = (keep(seconds[0]), keep(seconds[2]).min(keep(seconds[0])));
-            // A one-pole that passes the lows whole and keeps high/low of the top.
-            let ratio = high / low;
-            tail.gain[i] = low as f32;
-            tail.damp[i] = ((1.0 - ratio) / (1.0 + ratio)) as f32;
+            // What a line keeps after one turn of a sound that dies in `t60`.
+            let asked = seconds.map(|t60| 10f64.powf(-3.0 * length as f64 / (t60 * RATE as f64)));
+            tail.keep[i] = Self::shares(asked).map(|share| share as f32);
         }
         tail
     }
@@ -367,8 +434,10 @@ impl Tail {
                 let read = self.lines[i][self.at[i]];
                 l += read * LEFT[i];
                 r += read * RIGHT[i];
-                self.low[i] += (read - self.low[i]) * (1.0 - self.damp[i]);
-                out[i] = self.low[i] * self.gain[i];
+                self.low[i] += (read - self.low[i]) * self.pass[0];
+                self.mid[i] += (read - self.mid[i]) * self.pass[1];
+                let keep = self.keep[i];
+                out[i] = keep[0] * self.low[i] + keep[1] * (self.mid[i] - self.low[i]) + keep[2] * (read - self.mid[i]);
                 sum += out[i];
             }
             // Each line feeds all the others and takes back a little of
@@ -380,9 +449,9 @@ impl Tail {
             left[n] += l * 0.35;
             right[n] += r * 0.35;
         }
-        for low in &mut self.low {
-            if low.abs() < TINY {
-                *low = 0.0;
+        for state in self.low.iter_mut().chain(&mut self.mid) {
+            if state.abs() < TINY {
+                *state = 0.0;
             }
         }
     }
@@ -430,8 +499,11 @@ pub struct Engine {
     /// The nodes, parents first, and where each is in the world this block.
     order: Vec<usize>,
     placed: Vec<Placement>,
-    /// Kept from one block to the next, so that none makes a list.
+    /// Kept from one block to the next, so that none makes a list: where
+    /// each source was when the sound now arriving straight left it; where
+    /// it is and how fast it goes.
     places: Vec<Vec3>,
+    moves: Vec<(Vec3, Vec3)>,
     found: Ways,
     ranked: Vec<(f32, usize, usize)>,
     /// What the air takes at 4 kHz, dB a metre.
@@ -501,10 +573,6 @@ impl Engine {
         let facing: Vec<usize> = (0..scene.surfaces.len()).filter(|&i| scene.surfaces[i].acoustic.is_some()).collect();
         let lines = 1 + facing.len();
         let air = air_loss(4_000.0, scene.air.celsius, scene.air.humidity);
-        let heard = |name: &str| {
-            (options.solo.is_empty() || options.solo.iter().any(|text| name.contains(text.as_str())))
-                && !options.mute.iter().any(|text| name.contains(text.as_str()))
-        };
         let mut sources = Vec::new();
         for (i, emitter) in scene.emitters.iter().enumerate() {
             let name = scene.emitter_name(i);
@@ -513,7 +581,7 @@ impl Engine {
             sources.push(Source {
                 voice: osage_paris_voices::make(&emitter.voice, seed_for(scene.seed, &name), &emitter.params)
                     .expect("a scene names voices that exist"),
-                heard: heard(&name),
+                heard: options.hears(&name),
                 name,
                 node: emitter.node,
                 offset: emitter.offset,
@@ -527,7 +595,7 @@ impl Engine {
                 targets: vec![None; lines],
                 left: 1,
                 aims: vec![None; lines],
-                lag: 0.0,
+                lags: vec![0.0; lines],
                 asleep: false,
                 waking: 0,
                 was: None,
@@ -544,12 +612,12 @@ impl Engine {
                 detail: 1.0,
             });
         }
-        for slot in 0..options.quality.contacts {
-            let name = format!("contact : {slot}");
+        for _ in 0..options.quality.contacts {
             sources.push(Source {
                 voice: osage_paris_voices::make("impact", 1, &Default::default()).expect("the impact voice exists"),
-                heard: heard(&name),
-                name,
+                // Named, and heard or not, when it is struck: by what was struck and what struck it.
+                heard: false,
+                name: String::new(),
                 node: 0,
                 offset: Vec3::ZERO,
                 gain: 0.0,
@@ -562,7 +630,7 @@ impl Engine {
                 targets: vec![None; lines],
                 left: 1,
                 aims: vec![None; lines],
-                lag: 0.0,
+                lags: vec![0.0; lines],
                 asleep: false,
                 waking: 0,
                 was: None,
@@ -614,6 +682,7 @@ impl Engine {
             order: scene.tree.order(),
             placed: Vec::new(),
             places: Vec::new(),
+            moves: Vec::new(),
             found: Ways::default(),
             ranked: Vec::new(),
             air,
@@ -687,11 +756,13 @@ impl Engine {
         found.map(|(i, _)| i)
     }
 
-    /// A contact on `surface` at `point` by something made of `material`:
-    /// voices from the pool, placed there on the surface's node — one for
-    /// what was touched and, if what touched it sounds too (a clog, a
-    /// hammer's head), one for that.
-    fn strike(&mut self, surface: usize, point: Vec3, material: &str, strength: f64, at: usize) {
+    /// A contact on `surface` at `point` by the node `by`, made of
+    /// `material`: voices from the pool, placed there on the surface's node
+    /// — one for what was touched and, if what touched it sounds too (a
+    /// clog, a hammer's head), one for that. Both bear the names of the two
+    /// that met, the surface as an emitter is named and the node by its
+    /// path: solo and mute take either.
+    fn strike(&mut self, surface: usize, point: Vec3, by: usize, material: &str, strength: f64, at: usize) {
         let Some(key) = self.scene.surfaces[surface].collision.clone() else { return };
         let (Some(struck), Some(striker)) = (self.scene.contacts.get(&key), self.scene.contacts.get(material)) else {
             return;
@@ -704,6 +775,13 @@ impl Engine {
             sounding.push((striker.voice.clone(), striker.params.clone()));
         }
         let node = self.scene.surfaces[surface].node;
+        let name = format!(
+            "{} : {} : contact with {}",
+            self.scene.tree.path_text(node),
+            self.scene.surfaces[surface].id,
+            self.scene.tree.path_text(by)
+        );
+        let heard = self.options.hears(&name);
         let offset = self.placed[node].local(point + Vec3::Y * 0.03);
         let first = self.scene.emitters.len();
         let pool = self.sources.len() - first;
@@ -718,6 +796,8 @@ impl Engine {
             let seed = seed_for(self.scene.seed, &format!("contact {}", self.contacts));
             let source = &mut self.sources[slot];
             source.voice = osage_paris_voices::make(&voice, seed, &params).expect("a contact's voice exists");
+            source.name.clone_from(&name);
+            source.heard = heard;
             source.node = node;
             source.offset = offset;
             source.gain = gain;
@@ -726,7 +806,7 @@ impl Engine {
             source.asleep = false;
             source.waking = 0;
             source.hit = Some(Hit { at: at.min(BLOCK - 1), strength: strength.clamp(0.0, 1.0) as f32 });
-            source.lag = 0.0;
+            source.lags.fill(0.0);
             source.was = None;
             source.ring.fill(0.0);
             for line in &mut source.lines {
@@ -788,8 +868,8 @@ impl Engine {
             }
         }
         for (surface, point, k, strength, at) in blows {
-            let material = self.scene.touches[k].material.clone();
-            self.strike(surface, point, &material, strength, at);
+            let (by, material) = (self.scene.touches[k].node, self.scene.touches[k].material.clone());
+            self.strike(surface, point, by, &material, strength, at);
         }
     }
 
@@ -821,16 +901,18 @@ impl Engine {
         self.touch(t1, seconds);
         self.tally.touching += clock.elapsed().as_secs_f64();
 
-        // Where each source was when the sound now arriving left it: where
-        // it is, less what it has moved since.
+        // Where each source was when the sound now arriving straight left
+        // it: where it is, less what it has moved since.
         let clock = std::time::Instant::now();
-        let mut places = std::mem::take(&mut self.places);
+        let (mut places, mut moves) = (std::mem::take(&mut self.places), std::mem::take(&mut self.moves));
         places.clear();
+        moves.clear();
         for source in &mut self.sources {
             let now = self.placed[source.node].point(source.offset);
             let moved = source.was.map_or(Vec3::ZERO, |was| (now - was) / seconds);
             source.was = Some(now);
-            places.push(now - moved * source.lag);
+            places.push(now - moved * source.lags[0]);
+            moves.push((now, moved));
         }
         let mut ranked = std::mem::take(&mut self.ranked);
         let mut found = std::mem::take(&mut self.found);
@@ -838,7 +920,7 @@ impl Engine {
         for i in 0..self.sources.len() {
             let place = places[i];
             let straight = place.distance(head.at);
-            let (speed, accel) = self.scene.tree.going(self.sources[i].node, t1 - self.sources[i].lag);
+            let (speed, accel) = self.scene.tree.going(self.sources[i].node, t1 - self.sources[i].lags[0]);
             let mut load = 0.5f32;
             let mut near_speed = None;
             match self.sources[i].emitter.map(|e| &self.scene.emitters[e].load) {
@@ -892,20 +974,42 @@ impl Engine {
                 continue;
             }
             let mirrors = source.mirrors && (quality.mirrors || quality.folded);
-            ways_into(&mut found, place, head.at, &faces, mirrors, quality.careful);
+            // A way longer than the emitter is heard from is not one: its
+            // sound is no longer in the line, and is never read sooner than
+            // it took to come.
+            let reach = source.max_distance;
+            found.direct = direct(place, head.at, &faces);
+            found.mirrored.clear();
+            found.mirrored.resize(faces.len(), None);
+            found.scattered = 0.0;
+            if mirrors {
+                let (now, moved) = moves[i];
+                for k in 0..faces.len() {
+                    // What a face sends back left the emitter earlier than
+                    // what comes straight: from where the emitter was then,
+                    // by the way found last.
+                    let from = now - moved * source.lags[1 + k];
+                    let (way, scattered) = mirrored(k, from, head.at, &faces, quality.careful);
+                    source.lags[1 + k] = way.map_or(source.lags[0], |way| way.length / SOUND);
+                    found.mirrored[k] = way.filter(|way| way.length <= reach);
+                    found.scattered += scattered;
+                }
+            }
             let send =
                 if quality.reverb { (level * found.scattered.sqrt() * self.scene.reverb.gain) as f32 } else { 0.0 };
-            // A way is never read further back than the line is long.
-            let longest = (source.ring.len() - 2 * BLOCK) as f64;
-            let aim = |way: &crate::ways::Way, send: f32| {
+            let aim = |way: &Way, send: f32| {
                 let length = way.length.max(NEAREST);
                 let gains: [f32; 4] = std::array::from_fn(|b| (level * way.bands[b] / length) as f32);
-                let delay = (length / SOUND * RATE as f64).min(longest);
+                // The line holds what the emitter made for as long as sound
+                // takes from as far as it is heard, and more.
+                let delay = length / SOUND * RATE as f64;
+                debug_assert!(delay <= (source.ring.len() - 2 * BLOCK) as f64);
                 let heard = hear_for(way.from, &head, self.options.listening, quality.outer_ear);
                 Aim::new(delay, gains, air_pass(self.air * length), send, &heard)
             };
-            if let Some(way) = &found.direct {
-                let mut way = *way;
+            source.lags[0] = found.direct.map_or(straight, |way| way.length) / SOUND;
+            if let Some(way) = found.direct.filter(|way| way.length <= reach) {
+                let mut way = way;
                 if !quality.mirrors {
                     // What the faces send back is not followed as ways of its
                     // own, but its level is kept: with the straight way's in
@@ -920,9 +1024,6 @@ impl Engine {
                     }
                 }
                 source.targets[0] = Some(aim(&way, send));
-                source.lag = way.length / SOUND;
-            } else {
-                source.lag = straight / SOUND;
             }
             if quality.mirrors {
                 for (k, way) in found.mirrored.iter().enumerate() {
@@ -949,7 +1050,7 @@ impl Engine {
                 self.sources[i].aims[k] = None;
             }
         }
-        (self.places, self.ranked, self.found) = (places, ranked, found);
+        (self.places, self.moves, self.ranked, self.found) = (places, moves, ranked, found);
         self.tally.finding += clock.elapsed().as_secs_f64();
 
         // Every voice that is heard makes its block, into its own line.
@@ -1349,4 +1450,94 @@ pub fn way_cost(quality: Quality, listening: Listening, seconds: f64) -> f64 {
     }
     std::hint::black_box((&left, &right, &send));
     (crate::bench::cpu_seconds() - started) * 1e9 / (blocks * BLOCK as u64) as f64
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use osage_paris_voices::dsp::Biquad;
+
+    /// How long the tail takes to fall by 60 dB round `hz`, s: what it answers to one sample, through a
+    /// band a third of an octave wide; the energy left after each instant (Schroeder's curve), from 5 dB
+    /// down to 25 dB down, three times over.
+    fn decay(seconds: [f64; 3], hz: f32) -> f64 {
+        let mut tail = Tail::new(seconds);
+        let frames = 3 * RATE as usize;
+        let mut input = vec![0.0f32; frames];
+        input[0] = 1.0;
+        let (mut left, mut right) = (vec![0.0f32; frames], vec![0.0f32; frames]);
+        tail.run(&input, &mut left, &mut right);
+        let (mut band, mut again) = (Biquad::default(), Biquad::default());
+        band.band_pass(hz, 4.3);
+        again.band_pass(hz, 4.3);
+        let mut left_after: Vec<f64> = left.iter().map(|s| f64::from(again.pass(band.pass(*s))).powi(2)).collect();
+        for n in (0..frames - 1).rev() {
+            left_after[n] += left_after[n + 1];
+        }
+        let down = |decibels: f64| {
+            let level = left_after[0] * 10f64.powf(-decibels / 10.0);
+            left_after.iter().position(|energy| *energy < level).expect("it dies") as f64 / RATE as f64
+        };
+        3.0 * (down(25.0) - down(5.0))
+    }
+
+    #[test]
+    fn the_tail_dies_in_each_band_as_fast_as_it_is_asked() {
+        for seconds in [[0.7, 0.55, 0.35], [1.2, 0.8, 0.4], [0.5, 0.5, 0.5], [0.4, 0.8, 0.4], [0.9, 0.45, 0.9]] {
+            for (band, hz) in Tail::CENTRES.into_iter().enumerate() {
+                let found = decay(seconds, hz as f32);
+                assert!((found / seconds[band] - 1.0).abs() < 0.12, "{seconds:?} at {hz} Hz: {found:.3} s");
+            }
+        }
+        // The middle one alone: twice as long, heard twice as long there.
+        let (short, long) = (decay([0.6, 0.4, 0.3], 1_000.0), decay([0.6, 0.8, 0.3], 1_000.0));
+        assert!((long / short - 2.0).abs() < 0.2, "{short:.3} s then {long:.3} s");
+    }
+
+    #[test]
+    fn a_line_keeps_less_than_everything_at_every_frequency() {
+        // Whatever the three decays, and however far apart: what a line keeps of a tone is never more than
+        // a decay twice as long as the longest asked would keep, so the tail dies.
+        let mut noise = Noise::new(11);
+        let mut asked: Vec<[f64; 3]> = vec![
+            [0.999, 1e-3, 0.999],
+            [1e-3, 0.999, 1e-3],
+            [0.999, 0.999, 1e-3],
+            [1e-3, 0.999, 0.999],
+            [0.97, 0.5, 0.97],
+            [0.999, 0.999, 0.999],
+        ];
+        asked.extend((0..200).map(|_| std::array::from_fn(|_| f64::from(noise.unit()).clamp(1e-3, 0.999))));
+        for asked in asked {
+            let keep = Tail::shares(asked);
+            let most = asked.iter().fold(0.0f64, |most, share| most.max(*share)).sqrt();
+            assert!(most < 1.0);
+            for step in 0..=2_400 {
+                let kept = Tail::kept(keep, f64::from(step) * 10.0);
+                assert!(kept <= most * 1.000_1, "{asked:?} keeps {kept} at {} Hz", step * 10);
+            }
+        }
+        // Decays as a space has them are met at the three centres, on the longest line and the shortest.
+        for seconds in [[0.7, 0.55, 0.35], [1.2, 0.8, 0.4], [0.4, 0.8, 0.4], [2.0, 1.0, 2.0]] {
+            for length in [631.0, 2_251.0] {
+                let asked = seconds.map(|t60| 10f64.powf(-3.0 * length / (t60 * RATE as f64)));
+                let keep = Tail::shares(asked);
+                for (band, hz) in Tail::CENTRES.into_iter().enumerate() {
+                    let kept = Tail::kept(keep, hz);
+                    assert!(
+                        (kept / asked[band] - 1.0).abs() < 1e-6,
+                        "{seconds:?} at {hz} Hz: {kept} for {}",
+                        asked[band]
+                    );
+                }
+                // And at no frequency does the line ring more than twice as long as the longest asked — a
+                // tenth longer, for decays that shorten as the pitch rises, as a street's do.
+                let peak = (0..=2_400).map(|step| Tail::kept(keep, f64::from(step) * 10.0)).fold(0.0f64, f64::max);
+                let longest = -3.0 * length / (peak.log10() * RATE as f64);
+                let asked = seconds.iter().fold(0.0f64, |most, t60| most.max(*t60));
+                let falling = seconds[0] >= seconds[1] && seconds[1] >= seconds[2];
+                assert!(longest < asked * if falling { 1.1 } else { 2.001 }, "{seconds:?}: {longest:.3} s somewhere");
+            }
+        }
+    }
 }
