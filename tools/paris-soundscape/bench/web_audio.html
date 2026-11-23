@@ -1,0 +1,241 @@
+<!-- SPDX-FileCopyrightText: The osage contributors -->
+<!-- SPDX-License-Identifier: LicenseRef-osage-AGPL-3.0-or-later-with-exceptions -->
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<title>Web Audio baseline: N moving sources through PannerNode</title>
+<body>
+<p>This page is driven by <code>web_audio.py</code>. It renders with an
+OfflineAudioContext, times the render and writes its results to the console
+and below.</p>
+<pre id="results"></pre>
+<script>
+'use strict';
+
+// The scene is the one of openal_soft.py, so that the two can be set side by
+// side: N sources evenly spread on a circle, turning; a listener off the
+// centre, so that distance and closing speed change all the time.
+const query = new URLSearchParams(location.search);
+const number = (name, fallback) => (query.has(name) ? Number(query.get(name)) : fallback);
+const RATE = 48000;
+const N = number('n', 8);
+const MODEL = query.get('model') || 'HRTF';
+const SECONDS = number('seconds', 10);
+const RUNS = number('runs', 5);
+// A case that renders slower than real time would take an hour at five runs:
+// past this budget of measured time, three runs are enough.
+const MIN_RUNS = number('min_runs', 3);
+const BUDGET_MS = 1000 * number('budget', 60);
+const BLOCK = number('block', 1024);
+// How the sources are moved. Web Audio offers several ways and they do not
+// cost the same:
+//   steps  the page sets `positionX.value` every BLOCK frames, as a game
+//          loop does once per picture; offline, that takes a suspend and a
+//          resume of the context at each block;
+//   legacy the same, through `setPosition(x, y, z)`, the older call that
+//          the specification keeps but advises against;
+//   ramps  the positions are scheduled as straight lines between block
+//          boundaries (`setValueCurveAtTime`), which the browser follows
+//          sample by sample: what a library does when it calls
+//          `linearRampToValueAtTime` to avoid steps;
+//   krate  the same lines, with `automationRate = 'k-rate'`: the browser
+//          reads them once per 128 frames;
+//   none   the sources stay where they are.
+const MOTION = query.get('motion') || 'steps';
+// Web Audio has no Doppler: a page that wants it computes the shift itself
+// and sets the playback rate. With `doppler=1` this page does so.
+const DOPPLER = number('doppler', 0) !== 0 && MOTION !== 'none';
+const RADIUS = number('radius', 10);
+const SPEED = number('speed', 10);
+const OFFSET = number('offset', 6);
+const SOUND = 343.3;
+const DISTINCT = 256;
+// Between two measurements the page stays idle this long, so that the
+// program outside can read the CPU time of the browser's processes at rest.
+const PAUSE_MS = 300;
+
+// One line per event, in base 64: the browser's log quotes and escapes.
+function say(what) {
+  console.log('PARIS-BENCH ' + btoa(JSON.stringify(what)));
+  document.getElementById('results').textContent += JSON.stringify(what) + '\n';
+}
+
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+// A second of seeded noise: the xorshift of the kart's sound.
+function noise(seed) {
+  const buffer = new AudioBuffer({ length: RATE, sampleRate: RATE, numberOfChannels: 1 });
+  const data = buffer.getChannelData(0);
+  let x = seed >>> 0 || 1;
+  for (let i = 0; i < data.length; i++) {
+    x ^= x << 13; x >>>= 0;
+    x ^= x >>> 17;
+    x ^= x << 5; x >>>= 0;
+    data[i] = (x >>> 8) / 8388608 - 1;
+  }
+  return buffer;
+}
+
+// Where a source is, and how its pitch shifts, at every block boundary.
+function path(index, points) {
+  const x = new Float32Array(points);
+  const z = new Float32Array(points);
+  const rate = new Float32Array(points);
+  for (let k = 0; k < points; k++) {
+    const seconds = (k * BLOCK) / RATE;
+    const angle = (2 * Math.PI * index) / N + (MOTION === 'none' ? 0 : (seconds * SPEED) / RADIUS);
+    const cos = Math.cos(angle);
+    const sin = Math.sin(angle);
+    x[k] = RADIUS * cos;
+    z[k] = RADIUS * sin;
+    const dx = x[k] - OFFSET;
+    const distance = Math.hypot(dx, z[k]);
+    const receding = MOTION === 'none' ? 0 : (dx * -SPEED * sin + z[k] * SPEED * cos) / distance;
+    rate[k] = SOUND / (SOUND + receding);
+  }
+  return { x, z, rate };
+}
+
+async function render(buffers, paths, frames, span) {
+  const context = new OfflineAudioContext({ numberOfChannels: 2, length: frames, sampleRate: RATE });
+  const built = performance.now();
+  const listener = context.listener;
+  if (listener.positionX) {
+    listener.positionX.value = OFFSET;
+  } else {
+    listener.setPosition(OFFSET, 0, 0);
+  }
+  // The sum of N equal noises grows as the square root of N.
+  const sum = new GainNode(context, { gain: 1 / Math.sqrt(N) });
+  sum.connect(context.destination);
+  const sources = [];
+  const panners = [];
+  for (let i = 0; i < N; i++) {
+    const source = new AudioBufferSourceNode(context, { buffer: buffers[i % buffers.length], loop: true });
+    const panner = new PannerNode(context, {
+      panningModel: MODEL,
+      distanceModel: 'inverse',
+      refDistance: 1,
+      rolloffFactor: 1,
+      positionX: paths[i].x[0],
+      positionY: 0,
+      positionZ: paths[i].z[0],
+    });
+    if (MOTION === 'ramps' || MOTION === 'krate') {
+      if (MOTION === 'krate') {
+        panner.positionX.automationRate = 'k-rate';
+        panner.positionZ.automationRate = 'k-rate';
+      }
+      panner.positionX.setValueCurveAtTime(paths[i].x, 0, span);
+      panner.positionZ.setValueCurveAtTime(paths[i].z, 0, span);
+      if (DOPPLER) {
+        source.playbackRate.setValueCurveAtTime(paths[i].rate, 0, span);
+      }
+    } else if (DOPPLER) {
+      source.playbackRate.value = paths[i].rate[0];
+    }
+    source.connect(panner).connect(sum);
+    source.start();
+    sources.push(source);
+    panners.push(panner);
+  }
+  let updates = 0;
+  let update_ms = 0;
+  if (MOTION === 'steps' || MOTION === 'legacy') {
+    // The context stops at every block boundary and waits for the page.
+    // Half a frame is added so that rounding never falls in the block before.
+    for (let k = 1; k * BLOCK < frames; k++) {
+      context.suspend((k * BLOCK + 0.5) / RATE).then(() => {
+        const before = performance.now();
+        for (let i = 0; i < N; i++) {
+          if (MOTION === 'legacy') {
+            panners[i].setPosition(paths[i].x[k], 0, paths[i].z[k]);
+          } else {
+            panners[i].positionX.value = paths[i].x[k];
+            panners[i].positionZ.value = paths[i].z[k];
+          }
+          if (DOPPLER) {
+            sources[i].playbackRate.value = paths[i].rate[k];
+          }
+        }
+        updates += 1;
+        update_ms += performance.now() - before;
+        context.resume();
+      });
+    }
+  }
+  const begun = performance.now();
+  const rendered = await context.startRendering();
+  const ended = performance.now();
+  const level = (channel) => {
+    const data = rendered.getChannelData(channel);
+    let energy = 0;
+    for (let i = 0; i < data.length; i++) {
+      energy += data[i] * data[i];
+    }
+    return Math.sqrt(energy / data.length);
+  };
+  return {
+    build_ms: begun - built,
+    render_ms: ended - begun,
+    updates,
+    update_ms,
+    rms: [level(0), level(1)],
+    frames: rendered.length,
+  };
+}
+
+async function main() {
+  if (!window.OfflineAudioContext) {
+    say({ event: 'error', message: 'this browser has no OfflineAudioContext' });
+    return;
+  }
+  if (!['steps', 'legacy', 'ramps', 'krate', 'none'].includes(MOTION)) {
+    say({ event: 'error', message: 'motion is one of steps, legacy, ramps, krate, none' });
+    return;
+  }
+  const frames = Math.round(SECONDS * RATE);
+  const points = Math.ceil(frames / BLOCK) + 1;
+  const span = ((points - 1) * BLOCK) / RATE;
+  const buffers = [];
+  for (let i = 0; i < Math.min(N, DISTINCT); i++) {
+    buffers.push(noise(0x05a6e + i));
+  }
+  const paths = [];
+  for (let i = 0; i < N; i++) {
+    paths.push(path(i, points));
+  }
+  say({
+    event: 'ready',
+    n: N,
+    model: MODEL,
+    seconds: SECONDS,
+    runs: RUNS,
+    block: BLOCK,
+    motion: MOTION,
+    doppler: DOPPLER,
+    user_agent: navigator.userAgent,
+    hardware_concurrency: navigator.hardwareConcurrency,
+  });
+  // Run 0 is the warm-up: it loads the HRTF data and compiles this script.
+  let measured_since = 0;
+  for (let run = 0; run <= RUNS; run++) {
+    await sleep(PAUSE_MS);
+    say({ event: 'begin', run });
+    await sleep(PAUSE_MS);
+    const result = await render(buffers, paths, frames, span);
+    say(Object.assign({ event: 'end', run }, result));
+    if (run === 0) {
+      measured_since = performance.now();
+    } else if (run >= MIN_RUNS && performance.now() - measured_since > BUDGET_MS) {
+      break;
+    }
+  }
+  await sleep(PAUSE_MS);
+  say({ event: 'done' });
+}
+
+main().catch((error) => say({ event: 'error', message: String(error) }));
+</script>
+</body>
+</html>

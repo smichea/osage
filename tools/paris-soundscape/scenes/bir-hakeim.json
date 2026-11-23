@@ -1,0 +1,842 @@
+{
+  "asset": {
+    "version": "2.0",
+    "generator": "osage paris-soundscape: scenes/make_bir_hakeim.py",
+    "copyright": "SPDX-FileCopyrightText: The osage contributors. SPDX-License-Identifier: LicenseRef-osage-AGPL-3.0-or-later-with-exceptions",
+    "extras": {
+      "osageObject": {
+        "version": 1,
+        "id": "bir-hakeim-sound-test",
+        "collisionMaterials": {
+          "asphalt": {"friction": 0.9, "restitution": 0.0},
+          "steel-plate": {"friction": 0.5, "restitution": 0.05},
+          "steel-runway-joint": {"friction": 0.6, "restitution": 0.0},
+          "rubber-sole": {"friction": 0.9, "restitution": 0.0},
+          "rubber-tyre": {"friction": 1.0, "restitution": 0.0},
+          "rubber-tyre-metro": {"friction": 1.0, "restitution": 0.0}
+        },
+        "acousticMaterials": {
+          "asphalt": {"absorption": [0.02, 0.03, 0.05], "transmission": [0.0, 0.0, 0.0], "scattering": 0.1},
+          "steel-deck": {"absorption": [0.08, 0.04, 0.03], "transmission": [0.02, 0.003, 0.0005], "scattering": 0.35},
+          "water": {"absorption": [0.008, 0.015, 0.025], "transmission": [0.0, 0.0, 0.0], "scattering": 0.05},
+          "stone": {"absorption": [0.02, 0.03, 0.05], "transmission": [0.0, 0.0, 0.0], "scattering": 0.2}
+        }
+      },
+      "osageSound": {
+        "version": 0,
+        "contactSounds": {
+          "asphalt": {"params": {"tone": 110.0, "ring": 0.045, "shape": 0, "scuff": 0.45}, "hardness": 0.6, "gainDb": -8.0},
+          "steel-plate": {"params": {"tone": 190.0, "ring": 0.7, "shape": 1, "scuff": 0.08}, "hardness": 0.9, "gainDb": -2.0},
+          "steel-runway-joint": {"voice": "metro-joint", "hardness": 0.8, "gainDb": 6.0},
+          "rubber-sole": {"hardness": 0.3},
+          "rubber-tyre": {"hardness": 0.12, "gainDb": 8.0},
+          "rubber-tyre-metro": {"hardness": 0.12, "gainDb": 0.0}
+        }
+      }
+    }
+  },
+  "scene": 0,
+  "scenes": [
+    {
+      "name": "Pont de Bir-Hakeim, upstream pavement, 45 seconds",
+      "nodes": [0],
+      "extras": {
+        "osageSound": {
+          "seconds": 45.0,
+          "seed": 6,
+          "loudnessLufs": -20.0,
+          "listener": {"node": ["bridge", "road-deck", "pavement-upstream", "walker", "head"]},
+          "reverb": {"secondsT60": [0.7, 0.55, 0.35], "gainDb": 0.0},
+          "air": {"celsius": 12.0, "humidityPercent": 75.0}
+        }
+      }
+    }
+  ],
+  "nodes": [
+    {"extras": {"osage": {"id": "bridge"}}, "children": [1, 17, 44, 52]},
+    {
+      "translation": [0, 8.0, 0],
+      "extras": {
+        "osage": {"id": "road-deck"},
+        "osageSound": {
+          "surfaces": [
+            {
+              "id": "roadway",
+              "quadM": [[-118.58, 0, -12.35], [-118.58, 0, 12.35], [118.58, 0, 12.35], [118.58, 0, -12.35]],
+              "acoustic": "asphalt",
+              "collision": "asphalt"
+            },
+            {
+              "id": "underside",
+              "quadM": [[-118.58, -1.6, -12.35], [-118.58, -1.6, 12.35], [118.58, -1.6, 12.35], [118.58, -1.6, -12.35]],
+              "acoustic": "steel-deck",
+              "reflects": false
+            },
+            {
+              "id": "joint-plate",
+              "quadM": [[-42.75, 0.005, -12.35], [-42.75, 0.005, -4.35], [-41.25, 0.005, -4.35], [-41.25, 0.005, -12.35]],
+              "collision": "steel-plate",
+              "strikes": true
+            }
+          ]
+        }
+      },
+      "children": [2, 5, 6, 7, 8]
+    },
+    {"translation": [0, 0, -11.35], "extras": {"osage": {"id": "pavement-upstream"}}, "children": [3]},
+    {
+      "translation": [-58.6, 0, 0],
+      "rotation": [0, -0.7071067811865476, 0, 0.7071067811865476],
+      "extras": {
+        "osage": {"id": "walker"},
+        "osageSound": {
+          "motion": {"alongM": [1, 0, 0], "atS": 0, "speedKmh": 5.04},
+          "touches": [
+            {
+              "kind": "steps",
+              "material": "rubber-sole",
+              "strideM": 0.75,
+              "feetM": [[-0.09, 0, 0], [0.09, 0, 0]],
+              "strength": 0.6
+            }
+          ]
+        }
+      },
+      "children": [4]
+    },
+    {"translation": [0, 1.6, 0], "extras": {"osage": {"id": "head"}}},
+    {"translation": [0, 0, -8.85], "extras": {"osage": {"id": "lane-to-passy-kerb"}}, "children": [9, 11, 13]},
+    {"translation": [0, 0, -5.85], "extras": {"osage": {"id": "lane-to-passy-middle"}}, "children": [10, 16]},
+    {"translation": [0, 0, 5.85], "extras": {"osage": {"id": "lane-to-grenelle-middle"}}, "children": [12, 15]},
+    {"translation": [0, 0, 8.85], "extras": {"osage": {"id": "lane-to-grenelle-kerb"}}, "children": [14]},
+    {
+      "translation": [-54.96, 0, 0],
+      "extras": {
+        "osage": {"id": "car-a"},
+        "osageSound": {
+          "motion": {"alongM": [-1, 0, 0], "atS": 2.6, "speedKmh": [[-45.0, 28.0], [45.0, 34.0]]},
+          "emitters": [{"id": "engine-and-tyres", "voice": "car", "positionM": [0, 0.35, 0], "params": {"size": 1.0}}],
+          "touches": [{"kind": "wheels", "material": "rubber-tyre", "pointsM": [[1.35, 0, 0], [-1.35, 0, 0]], "strength": 0.8}]
+        }
+      }
+    },
+    {
+      "translation": [-52.44, 0, 0],
+      "extras": {
+        "osage": {"id": "car-b"},
+        "osageSound": {
+          "motion": {"alongM": [-1, 0, 0], "atS": 4.4, "speedKmh": [[-45.0, 30.25], [45.0, 25.75]]},
+          "emitters": [
+            {
+              "id": "engine-and-tyres",
+              "voice": "car",
+              "positionM": [0, 0.35, 0],
+              "params": {"engine": 0.0, "size": 1.1}
+            }
+          ],
+          "touches": [{"kind": "wheels", "material": "rubber-tyre", "pointsM": [[1.35, 0, 0], [-1.35, 0, 0]], "strength": 0.8}]
+        }
+      }
+    },
+    {
+      "translation": [-48.94, 0, 0],
+      "extras": {
+        "osage": {"id": "car-c"},
+        "osageSound": {
+          "motion": {"alongM": [-1, 0, 0], "atS": 6.9, "speedKmh": [[-45.0, 31.5], [45.0, 34.5]]},
+          "emitters": [
+            {
+              "id": "engine-and-tyres",
+              "voice": "car",
+              "positionM": [0, 0.35, 0],
+              "params": {"size": 1.4, "rpm": 1500.0}
+            }
+          ],
+          "touches": [{"kind": "wheels", "material": "rubber-tyre", "pointsM": [[1.35, 0, 0], [-1.35, 0, 0]], "strength": 0.8}]
+        }
+      }
+    },
+    {
+      "translation": [-42.5, 0, 0],
+      "extras": {
+        "osage": {"id": "car-d"},
+        "osageSound": {
+          "motion": {"alongM": [1, 0, 0], "atS": 11.5, "speedKmh": [[-45.0, 39.0], [45.0, 33.0]]},
+          "emitters": [
+            {
+              "id": "engine-and-tyres",
+              "voice": "car",
+              "positionM": [0, 0.35, 0],
+              "params": {"size": 0.9, "rpm": 2000.0}
+            }
+          ],
+          "touches": [{"kind": "wheels", "material": "rubber-tyre", "pointsM": [[1.35, 0, 0], [-1.35, 0, 0]], "strength": 0.8}]
+        }
+      }
+    },
+    {
+      "translation": [-6.8, 0, 0],
+      "extras": {
+        "osage": {"id": "car-e"},
+        "osageSound": {
+          "motion": {"alongM": [-1, 0, 0], "atS": 37.0, "speedKmh": [[-45.0, 27.75], [45.0, 32.25]]},
+          "emitters": [
+            {
+              "id": "engine-and-tyres",
+              "voice": "car",
+              "positionM": [0, 0.35, 0],
+              "params": {"size": 1.0, "tone": 0.3}
+            }
+          ],
+          "touches": [{"kind": "wheels", "material": "rubber-tyre", "pointsM": [[1.35, 0, 0], [-1.35, 0, 0]], "strength": 0.8}]
+        }
+      }
+    },
+    {
+      "translation": [-4.28, 0, 0],
+      "extras": {
+        "osage": {"id": "car-f"},
+        "osageSound": {
+          "motion": {"alongM": [1, 0, 0], "atS": 38.8, "speedKmh": [[-45.0, 35.5], [45.0, 32.5]]},
+          "emitters": [{"id": "engine-and-tyres", "voice": "car", "positionM": [0, 0.35, 0], "params": {"size": 1.2}}],
+          "touches": [{"kind": "wheels", "material": "rubber-tyre", "pointsM": [[1.35, 0, 0], [-1.35, 0, 0]], "strength": 0.8}]
+        }
+      }
+    },
+    {
+      "translation": [-1.48, 0, 0],
+      "extras": {
+        "osage": {"id": "scooter"},
+        "osageSound": {
+          "motion": {"alongM": [1, 0, 0], "atS": 40.8, "speedKmh": [[-45.0, 38.25], [45.0, 45.75]]},
+          "emitters": [{"id": "engine-and-tyres", "voice": "scooter", "positionM": [0, 0.35, 0], "gainDb": 7.0}],
+          "touches": [{"kind": "wheels", "material": "rubber-tyre", "pointsM": [[1.35, 0, 0], [-1.35, 0, 0]], "strength": 0.8}]
+        }
+      }
+    },
+    {
+      "translation": [1.32, 0, 0],
+      "extras": {
+        "osage": {"id": "car-g"},
+        "osageSound": {
+          "motion": {"alongM": [-1, 0, 0], "atS": 42.8, "speedKmh": [[-45.0, 31.25], [45.0, 26.75]]},
+          "emitters": [
+            {
+              "id": "engine-and-tyres",
+              "voice": "car",
+              "positionM": [0, 0.35, 0],
+              "params": {"engine": 0.0, "size": 0.9}
+            }
+          ],
+          "touches": [{"kind": "wheels", "material": "rubber-tyre", "pointsM": [[1.35, 0, 0], [-1.35, 0, 0]], "strength": 0.8}]
+        }
+      }
+    },
+    {
+      "translation": [0, 16.0, 0],
+      "extras": {
+        "osage": {"id": "upper-deck"},
+        "osageSound": {
+          "surfaces": [
+            {
+              "id": "top",
+              "quadM": [[-118.58, 0, -3.8], [-118.58, 0, 3.8], [118.58, 0, 3.8], [118.58, 0, -3.8]],
+              "acoustic": "steel-deck",
+              "reflects": false
+            },
+            {
+              "id": "underside",
+              "quadM": [[-118.58, -1.5, -3.8], [-118.58, -1.5, 3.8], [118.58, -1.5, 3.8], [118.58, -1.5, -3.8]],
+              "acoustic": "steel-deck"
+            },
+            {
+              "id": "runway-joint",
+              "quadM": [
+                [-0.3, 0.20500000000000002, -3.6],
+                [-0.3, 0.20500000000000002, 3.6],
+                [0.3, 0.20500000000000002, 3.6],
+                [0.3, 0.20500000000000002, -3.6]
+              ],
+              "collision": "steel-runway-joint",
+              "strikes": true
+            }
+          ]
+        }
+      },
+      "children": [18, 19, 20, 21, 22, 23, 24, 25, 26, 27]
+    },
+    {
+      "translation": [-96.0, -1.5, 0],
+      "extras": {
+        "osage": {"id": "span-1"},
+        "osageSound": {
+          "emitters": [
+            {
+              "id": "rumble",
+              "voice": "metro-span",
+              "gainDb": 8.0,
+              "loadedBy": {
+                "under": ["bridge", "upper-deck", "track-to-passy", "train"],
+                "voice": "metro-bogie",
+                "radiusM": 18.0,
+                "full": 2.4
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "translation": [-72.0, -1.5, 0],
+      "extras": {
+        "osage": {"id": "span-2"},
+        "osageSound": {
+          "emitters": [
+            {
+              "id": "rumble",
+              "voice": "metro-span",
+              "gainDb": 8.0,
+              "loadedBy": {
+                "under": ["bridge", "upper-deck", "track-to-passy", "train"],
+                "voice": "metro-bogie",
+                "radiusM": 18.0,
+                "full": 2.4
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "translation": [-48.0, -1.5, 0],
+      "extras": {
+        "osage": {"id": "span-3"},
+        "osageSound": {
+          "emitters": [
+            {
+              "id": "rumble",
+              "voice": "metro-span",
+              "gainDb": 8.0,
+              "loadedBy": {
+                "under": ["bridge", "upper-deck", "track-to-passy", "train"],
+                "voice": "metro-bogie",
+                "radiusM": 18.0,
+                "full": 2.4
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "translation": [-24.0, -1.5, 0],
+      "extras": {
+        "osage": {"id": "span-4"},
+        "osageSound": {
+          "emitters": [
+            {
+              "id": "rumble",
+              "voice": "metro-span",
+              "gainDb": 8.0,
+              "loadedBy": {
+                "under": ["bridge", "upper-deck", "track-to-passy", "train"],
+                "voice": "metro-bogie",
+                "radiusM": 18.0,
+                "full": 2.4
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "translation": [0.0, -1.5, 0],
+      "extras": {
+        "osage": {"id": "span-5"},
+        "osageSound": {
+          "emitters": [
+            {
+              "id": "rumble",
+              "voice": "metro-span",
+              "gainDb": 8.0,
+              "loadedBy": {
+                "under": ["bridge", "upper-deck", "track-to-passy", "train"],
+                "voice": "metro-bogie",
+                "radiusM": 18.0,
+                "full": 2.4
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "translation": [24.0, -1.5, 0],
+      "extras": {
+        "osage": {"id": "span-6"},
+        "osageSound": {
+          "emitters": [
+            {
+              "id": "rumble",
+              "voice": "metro-span",
+              "gainDb": 8.0,
+              "loadedBy": {
+                "under": ["bridge", "upper-deck", "track-to-passy", "train"],
+                "voice": "metro-bogie",
+                "radiusM": 18.0,
+                "full": 2.4
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "translation": [48.0, -1.5, 0],
+      "extras": {
+        "osage": {"id": "span-7"},
+        "osageSound": {
+          "emitters": [
+            {
+              "id": "rumble",
+              "voice": "metro-span",
+              "gainDb": 8.0,
+              "loadedBy": {
+                "under": ["bridge", "upper-deck", "track-to-passy", "train"],
+                "voice": "metro-bogie",
+                "radiusM": 18.0,
+                "full": 2.4
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "translation": [72.0, -1.5, 0],
+      "extras": {
+        "osage": {"id": "span-8"},
+        "osageSound": {
+          "emitters": [
+            {
+              "id": "rumble",
+              "voice": "metro-span",
+              "gainDb": 8.0,
+              "loadedBy": {
+                "under": ["bridge", "upper-deck", "track-to-passy", "train"],
+                "voice": "metro-bogie",
+                "radiusM": 18.0,
+                "full": 2.4
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "translation": [96.0, -1.5, 0],
+      "extras": {
+        "osage": {"id": "span-9"},
+        "osageSound": {
+          "emitters": [
+            {
+              "id": "rumble",
+              "voice": "metro-span",
+              "gainDb": 8.0,
+              "loadedBy": {
+                "under": ["bridge", "upper-deck", "track-to-passy", "train"],
+                "voice": "metro-bogie",
+                "radiusM": 18.0,
+                "full": 2.4
+              }
+            }
+          ]
+        }
+      }
+    },
+    {"translation": [0, 0.2, -1.5], "extras": {"osage": {"id": "track-to-passy"}}, "children": [28]},
+    {
+      "translation": [-22.41, 0, 0],
+      "extras": {
+        "osage": {"id": "train"},
+        "osageSound": {
+          "motion": {
+            "alongM": [-1, 0, 0],
+            "atS": 25.85,
+            "speedKmh": [[-25.85, 0.0], [-11.85, 50.4], [8.25, 50.4], [22.25, 0.0]]
+          },
+          "proxyBeyondM": 160.0,
+          "emitters": [
+            {"id": "rolling", "voice": "metro-bogie", "positionM": [0, 0.3, 0], "gainDb": 18.0},
+            {"id": "traction", "voice": "metro-motor", "positionM": [0, 0.6, 0], "gainDb": 12.8}
+          ]
+        }
+      },
+      "children": [29, 32, 35, 38, 41]
+    },
+    {
+      "translation": [-30.0, 0, 0],
+      "extras": {
+        "osage": {"id": "car-1"},
+        "osageSound": {"emitters": [{"id": "traction", "voice": "metro-motor", "positionM": [0, 0.6, 0], "gainDb": 8.0}]}
+      },
+      "children": [30, 31]
+    },
+    {
+      "translation": [-5.0, 0, 0],
+      "extras": {
+        "osage": {"id": "bogie-1"},
+        "osageSound": {
+          "emitters": [{"id": "tyres", "voice": "metro-bogie", "positionM": [0, 0.3, 0], "gainDb": 8.0}],
+          "touches": [
+            {
+              "kind": "wheels",
+              "material": "rubber-tyre-metro",
+              "pointsM": [[-1.0, 0, 0], [1.0, 0, 0]],
+              "strength": 0.9
+            }
+          ]
+        }
+      }
+    },
+    {
+      "translation": [5.0, 0, 0],
+      "extras": {
+        "osage": {"id": "bogie-2"},
+        "osageSound": {
+          "emitters": [{"id": "tyres", "voice": "metro-bogie", "positionM": [0, 0.3, 0], "gainDb": 8.0}],
+          "touches": [
+            {
+              "kind": "wheels",
+              "material": "rubber-tyre-metro",
+              "pointsM": [[-1.0, 0, 0], [1.0, 0, 0]],
+              "strength": 0.9
+            }
+          ]
+        }
+      }
+    },
+    {"translation": [-15.0, 0, 0], "extras": {"osage": {"id": "car-2"}}, "children": [33, 34]},
+    {
+      "translation": [-5.0, 0, 0],
+      "extras": {
+        "osage": {"id": "bogie-3"},
+        "osageSound": {
+          "emitters": [{"id": "tyres", "voice": "metro-bogie", "positionM": [0, 0.3, 0], "gainDb": 8.0}],
+          "touches": [
+            {
+              "kind": "wheels",
+              "material": "rubber-tyre-metro",
+              "pointsM": [[-1.0, 0, 0], [1.0, 0, 0]],
+              "strength": 0.9
+            }
+          ]
+        }
+      }
+    },
+    {
+      "translation": [5.0, 0, 0],
+      "extras": {
+        "osage": {"id": "bogie-4"},
+        "osageSound": {
+          "emitters": [{"id": "tyres", "voice": "metro-bogie", "positionM": [0, 0.3, 0], "gainDb": 8.0}],
+          "touches": [
+            {
+              "kind": "wheels",
+              "material": "rubber-tyre-metro",
+              "pointsM": [[-1.0, 0, 0], [1.0, 0, 0]],
+              "strength": 0.9
+            }
+          ]
+        }
+      }
+    },
+    {
+      "translation": [0.0, 0, 0],
+      "extras": {
+        "osage": {"id": "car-3"},
+        "osageSound": {"emitters": [{"id": "traction", "voice": "metro-motor", "positionM": [0, 0.6, 0], "gainDb": 8.0}]}
+      },
+      "children": [36, 37]
+    },
+    {
+      "translation": [-5.0, 0, 0],
+      "extras": {
+        "osage": {"id": "bogie-5"},
+        "osageSound": {
+          "emitters": [{"id": "tyres", "voice": "metro-bogie", "positionM": [0, 0.3, 0], "gainDb": 8.0}],
+          "touches": [
+            {
+              "kind": "wheels",
+              "material": "rubber-tyre-metro",
+              "pointsM": [[-1.0, 0, 0], [1.0, 0, 0]],
+              "strength": 0.9
+            }
+          ]
+        }
+      }
+    },
+    {
+      "translation": [5.0, 0, 0],
+      "extras": {
+        "osage": {"id": "bogie-6"},
+        "osageSound": {
+          "emitters": [{"id": "tyres", "voice": "metro-bogie", "positionM": [0, 0.3, 0], "gainDb": 8.0}],
+          "touches": [
+            {
+              "kind": "wheels",
+              "material": "rubber-tyre-metro",
+              "pointsM": [[-1.0, 0, 0], [1.0, 0, 0]],
+              "strength": 0.9
+            }
+          ]
+        }
+      }
+    },
+    {"translation": [15.0, 0, 0], "extras": {"osage": {"id": "car-4"}}, "children": [39, 40]},
+    {
+      "translation": [-5.0, 0, 0],
+      "extras": {
+        "osage": {"id": "bogie-7"},
+        "osageSound": {
+          "emitters": [{"id": "tyres", "voice": "metro-bogie", "positionM": [0, 0.3, 0], "gainDb": 8.0}],
+          "touches": [
+            {
+              "kind": "wheels",
+              "material": "rubber-tyre-metro",
+              "pointsM": [[-1.0, 0, 0], [1.0, 0, 0]],
+              "strength": 0.9
+            }
+          ]
+        }
+      }
+    },
+    {
+      "translation": [5.0, 0, 0],
+      "extras": {
+        "osage": {"id": "bogie-8"},
+        "osageSound": {
+          "emitters": [{"id": "tyres", "voice": "metro-bogie", "positionM": [0, 0.3, 0], "gainDb": 8.0}],
+          "touches": [
+            {
+              "kind": "wheels",
+              "material": "rubber-tyre-metro",
+              "pointsM": [[-1.0, 0, 0], [1.0, 0, 0]],
+              "strength": 0.9
+            }
+          ]
+        }
+      }
+    },
+    {
+      "translation": [30.0, 0, 0],
+      "extras": {
+        "osage": {"id": "car-5"},
+        "osageSound": {"emitters": [{"id": "traction", "voice": "metro-motor", "positionM": [0, 0.6, 0], "gainDb": 8.0}]}
+      },
+      "children": [42, 43]
+    },
+    {
+      "translation": [-5.0, 0, 0],
+      "extras": {
+        "osage": {"id": "bogie-9"},
+        "osageSound": {
+          "emitters": [{"id": "tyres", "voice": "metro-bogie", "positionM": [0, 0.3, 0], "gainDb": 8.0}],
+          "touches": [
+            {
+              "kind": "wheels",
+              "material": "rubber-tyre-metro",
+              "pointsM": [[-1.0, 0, 0], [1.0, 0, 0]],
+              "strength": 0.9
+            }
+          ]
+        }
+      }
+    },
+    {
+      "translation": [5.0, 0, 0],
+      "extras": {
+        "osage": {"id": "bogie-10"},
+        "osageSound": {
+          "emitters": [{"id": "tyres", "voice": "metro-bogie", "positionM": [0, 0.3, 0], "gainDb": 8.0}],
+          "touches": [
+            {
+              "kind": "wheels",
+              "material": "rubber-tyre-metro",
+              "pointsM": [[-1.0, 0, 0], [1.0, 0, 0]],
+              "strength": 0.9
+            }
+          ]
+        }
+      }
+    },
+    {
+      "translation": [0, -0.05, 0],
+      "extras": {
+        "osage": {"id": "river"},
+        "osageSound": {
+          "surfaces": [
+            {
+              "id": "water-upstream",
+              "quadM": [[-118.58, 0, -300.0], [-118.58, 0, -12.4], [118.58, 0, -12.4], [118.58, 0, -300.0]],
+              "acoustic": "water",
+              "occludes": false
+            }
+          ]
+        }
+      },
+      "children": [45, 46, 47, 48, 49, 50, 51]
+    },
+    {
+      "translation": [-87.0, 0, -13.2],
+      "extras": {
+        "osage": {"id": "pier-1"},
+        "osageSound": {
+          "emitters": [
+            {
+              "id": "wash",
+              "voice": "water",
+              "positionM": [0, 0.05, 0],
+              "gainDb": 2.0,
+              "params": {"size": 0.7, "laps": 0.3},
+              "load": 0.6,
+              "reflections": false,
+              "maxDistanceM": 250.0
+            }
+          ]
+        }
+      }
+    },
+    {
+      "translation": [-42.0, 0, -13.2],
+      "extras": {
+        "osage": {"id": "pier-2"},
+        "osageSound": {
+          "emitters": [
+            {
+              "id": "wash",
+              "voice": "water",
+              "positionM": [0, 0.05, 0],
+              "gainDb": 2.0,
+              "params": {"size": 0.7, "laps": 0.3},
+              "load": 0.6,
+              "reflections": false,
+              "maxDistanceM": 250.0
+            }
+          ]
+        }
+      }
+    },
+    {
+      "translation": [0.0, 0, -12.9],
+      "extras": {
+        "osage": {"id": "island-tip"},
+        "osageSound": {
+          "emitters": [
+            {
+              "id": "wash",
+              "voice": "water",
+              "positionM": [0, 0.05, 0],
+              "gainDb": 4.0,
+              "params": {"size": 0.9, "laps": 0.4},
+              "load": 0.7,
+              "reflections": false,
+              "maxDistanceM": 250.0
+            }
+          ]
+        }
+      }
+    },
+    {
+      "translation": [-70.0, 0, -28.0],
+      "extras": {
+        "osage": {"id": "open-water-1"},
+        "osageSound": {
+          "emitters": [
+            {
+              "id": "wash",
+              "voice": "water",
+              "positionM": [0, 0.05, 0],
+              "gainDb": 4.0,
+              "params": {"size": 0.6, "bed": 0.6, "laps": 0.1},
+              "load": 0.4,
+              "reflections": false,
+              "maxDistanceM": 250.0
+            }
+          ]
+        }
+      }
+    },
+    {
+      "translation": [-36.0, 0, -34.0],
+      "extras": {
+        "osage": {"id": "open-water-2"},
+        "osageSound": {
+          "emitters": [
+            {
+              "id": "wash",
+              "voice": "water",
+              "positionM": [0, 0.05, 0],
+              "gainDb": 4.0,
+              "params": {"size": 0.6, "bed": 0.6, "laps": 0.1},
+              "load": 0.4,
+              "reflections": false,
+              "maxDistanceM": 250.0
+            }
+          ]
+        }
+      }
+    },
+    {
+      "translation": [-4.0, 0, -30.0],
+      "extras": {
+        "osage": {"id": "open-water-3"},
+        "osageSound": {
+          "emitters": [
+            {
+              "id": "wash",
+              "voice": "water",
+              "positionM": [0, 0.05, 0],
+              "gainDb": 4.0,
+              "params": {"size": 0.6, "bed": 0.6, "laps": 0.1},
+              "load": 0.4,
+              "reflections": false,
+              "maxDistanceM": 250.0
+            }
+          ]
+        }
+      }
+    },
+    {
+      "translation": [28.0, 0, -40.0],
+      "extras": {
+        "osage": {"id": "open-water-4"},
+        "osageSound": {
+          "emitters": [
+            {
+              "id": "wash",
+              "voice": "water",
+              "positionM": [0, 0.05, 0],
+              "gainDb": 4.0,
+              "params": {"size": 0.6, "bed": 0.6, "laps": 0.1},
+              "load": 0.4,
+              "reflections": false,
+              "maxDistanceM": 250.0
+            }
+          ]
+        }
+      }
+    },
+    {
+      "extras": {
+        "osage": {"id": "city"},
+        "osageSound": {
+          "emitters": [
+            {"id": "bed-left", "voice": "city-bed", "gainDb": -20.0, "type": "global", "pan": -1.0},
+            {"id": "bed-right", "voice": "city-bed", "gainDb": -20.0, "type": "global", "pan": 1.0}
+          ]
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,44 @@
+# SPDX-FileCopyrightText: The osage contributors
+# SPDX-License-Identifier: LicenseRef-osage-AGPL-3.0-or-later-with-exceptions
+
+# A workspace of its own: the prototype builds and runs without the engine's
+# workspace (and its Bevy), and the engine's own commands do not see it. Its
+# three parts are the ones a second batch moves: the voices and the engine to
+# crates of the engine, the measurements to the oracles.
+[workspace]
+resolver = "3"
+members = [".", "voices", "analysis"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.90"
+repository = "https://github.com/smichea/osage"
+
+[package]
+name = "osage-paris-soundscape"
+description = "Sound placed in an object tree and carried to a listener's two ears: delay, distance, air, edges and reflecting surfaces; the Pont de Bir-Hakeim heard for 45 seconds, rendered offline"
+license-file = "../../LICENSE-EXCEPTIONS.md"
+publish = false
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+
+[[bin]]
+name = "paris-soundscape"
+path = "src/main.rs"
+
+[dependencies]
+osage-paris-voices = { path = "voices" }
+osage-sound-analysis = { path = "analysis" }
+serde_json = "1.0.154"
+
+# A render is millions of samples through dozens of paths: tests render whole
+# scenes, so even a development build is optimised.
+[profile.dev]
+opt-level = 3
+
+[profile.release]
+codegen-units = 1
+lto = "thin"
