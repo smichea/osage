@@ -31,6 +31,8 @@ Advance a simulation to retrieve limb and box poses and the contact manifolds fo
 
 Mesh indices and positive shape dimensions are checked at creation. Each joint refers to a preceding part. In a contact record, static meshes come first in the surface table and dynamic boxes follow in input order. Both adapters orient the normal towards the actor.
 
+Circular and elliptical swing limits use the joint bind frames. The first approach to a prescribed platform can request a finer local clock. The support footprint reports the signed distance from the projected mass centre to the support boundary. [Angular stops](/algorithms/articulated-swing-envelope.md) · [Approach](/algorithms/lift-contact-clock.md) · [Transfer of load](/algorithms/lift-contact-response.md) · [Support footprint](/algorithms/articulated-support.md)
+
 # Knowledge
 
 The native tests drop a capsule at 55 m/s onto a thin upper deck, compare contact with the equation of a sloping plane and measure the transfer of momentum to an offset box. Further tests check supported impacts, accumulated impulses and sleeping contacts after terrain edits. [Contacts](https://github.com/smichea/osage/blob/main/crates/osage-dynamics/tests/contacts.rs) · [Supported impact](https://github.com/smichea/osage/blob/main/crates/osage-dynamics/tests/supported_impact.rs) · [Sleeping contacts](https://github.com/smichea/osage/blob/main/crates/osage-dynamics/tests/resting_contacts.rs)

@@ -1,6 +1,8 @@
 # Knowledge Update Log
 
 ## 2026-11-24
+
+* Articulated stops, first lift contact, load transfer, the support footprint and the closest capsule-to-box witness are documented in the algorithm cards. The [loaded landing](https://github.com/smichea/osage/blob/main/crates/osage-dynamics/tests/loaded_landing.rs) exercises the two engine crates together.
 * Added [osage-objects](/modules/osage-objects.md) for the glTF object tree and [osage-dynamics](/modules/osage-dynamics.md) for fixed-step contacts and articulated bodies.
 * **Creation**: Added the algorithm [far sound field](/algorithms/far-sound-field.md) to [osage-sound](/modules/osage-sound.md) (issue #17): far sound as an ambisonic field per cube, its cost, what it loses against ways, and its bit rate in Opus.
 * **Creation**: Added the module [osage-sound-web](/modules/osage-sound-web.md), the engine in a browser's AudioWorklet (issue #16). **Update**: [osage-sound](/modules/osage-sound.md) plays live, natively on a thread of its own and as a Bevy audio source, its nodes placed by a game.

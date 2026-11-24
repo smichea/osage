@@ -5106,6 +5106,7 @@ dependencies = [
  "oxijolt",
  "rapier3d",
  "serde",
+ "serde_json",
 ]
 
 [[package]]

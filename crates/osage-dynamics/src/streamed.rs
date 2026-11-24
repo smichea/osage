@@ -172,6 +172,14 @@ impl TerrainSimulation {
         self.collider(self.rapier().parts[index].1)
     }
 
+    pub fn plan_lift_approach(&mut self, parts: &[Part], duration_s: f64, hz: u32) -> Result<()> {
+        self.simulation.plan_lift_approach(parts, duration_s, hz)
+    }
+
+    pub fn sample_lift_response(&mut self, parts: &[Part], travel: f32) -> Result<()> {
+        self.simulation.sample_lift_response(parts, travel)
+    }
+
     pub fn state(&self) -> &Simulation {
         &self.simulation
     }

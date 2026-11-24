@@ -14,6 +14,7 @@ use std::sync::Mutex;
 
 mod hanging;
 mod supported_impact;
+mod swing;
 use hanging::HangingBranches;
 
 /// Raw native witnesses after a full sleeping step. The stiffness decision for the
@@ -26,7 +27,10 @@ struct RestingContacts {
 pub(super) struct World {
     pub(super) sim: PhysicsWorld,
     boxes: Vec<RigidBodyHandle>,
+    lift_body: Option<RigidBodyHandle>,
     hanging: HangingBranches,
+    envelopes: Vec<swing::JointEnvelope>,
+    contact_projections: bool,
     supported_impact: Option<supported_impact::SupportedImpact>,
     resting_contacts: Option<RestingContacts>,
     deferred: Deferred<ColliderHandle>,
@@ -139,6 +143,7 @@ impl World {
         let groups = InteractionGroups::new(Group::GROUP_2, !Group::GROUP_2, InteractionTestMode::And);
         let mut parts: Vec<(RigidBodyHandle, ColliderHandle)> = Vec::with_capacity(rig.len());
         let origin = Vector::from_array(origin);
+        let mut envelopes = Vec::new();
         let mut joints = Vec::with_capacity(rig.len() - 1);
         for p in rig {
             let frame = Isometry::from_parts(origin + p.center, p.rotation);
@@ -185,11 +190,31 @@ impl World {
                     .local_frame2(frame.inverse() * anchor)
                     .contacts_enabled(false);
                 for (axis, [lo, hi]) in axes.into_iter().zip(p.limits_deg) {
-                    if lo != hi {
+                    if lo != hi && (p.swing_envelope.is_independent() || axis == JointAxis::AngX) {
                         joint = joint.limits(axis, [lo.to_radians(), hi.to_radians()]);
                     }
                 }
-                joints.push(sim.insert_impulse_joint(parent_body, body, joint));
+                let joint = sim.insert_impulse_joint(parent_body, body, joint);
+                joints.push(joint);
+                if !p.swing_envelope.is_independent() {
+                    let widths = [p.limits_deg[1][1], p.limits_deg[2][1]];
+                    // The circumscribed cone is valid in every azimuth. Rapier
+                    // updates this bound inside its own solver iterations.
+                    let cone = GenericJointBuilder::new(JointAxesMask::empty())
+                        .local_frame1(sim.bodies[parent_body].position().inverse() * anchor)
+                        .local_frame2(frame.inverse() * anchor)
+                        .contacts_enabled(false)
+                        .coupled_axes(JointAxesMask::ANG_Y | JointAxesMask::ANG_Z)
+                        .limits(JointAxis::AngY, [-std::f32::consts::PI, widths[0].max(widths[1]).to_radians()]);
+                    sim.insert_impulse_joint(parent_body, body, cone);
+                    envelopes.push(swing::JointEnvelope::new(
+                        &mut sim,
+                        [parent_body, body],
+                        p.joint_rotation,
+                        joint,
+                        p.limits_deg,
+                    ));
+                }
             }
             parts.push((body, collider));
         }
@@ -202,7 +227,11 @@ impl World {
             sim,
             parts,
             boxes,
+            lift_body: None,
             hanging,
+            envelopes,
+            contact_projections: false,
+
             deferred,
             actor_radius,
             pair_suppressed: false,
@@ -227,10 +256,42 @@ impl World {
                 .user_data(surface as u128),
         );
         self.boxes.push(body);
+        self.lift_body = Some(body);
     }
 
     pub(super) fn move_lift(&mut self, target: [f32; 3]) {
         self.sim.bodies[self.boxes[0]].set_next_kinematic_translation(target.into());
+    }
+
+    fn refresh_lift_edges(&mut self, dt: f32) {
+        let Some(body) = self.lift_body else { return };
+        let platform = &self.sim.bodies[body];
+        // Page publication can replace the collider on this body.
+        let handle = platform.colliders()[0];
+        let lift = &self.sim.colliders[handle];
+        let half = lift.shape().as_cuboid().expect("the lift is a box").half_extents;
+        let center = platform.translation();
+        let travel = platform.next_position().translation - center;
+        let margin = self.sim.integration_parameters.contact_recycle_distance();
+        let near_edge = self.parts.iter().any(|&(body, shape)| {
+            let body = &self.sim.bodies[body];
+            let aabb = self.sim.colliders[shape].shape().compute_aabb(body.position());
+            let extent = aabb.half_extents();
+            let rotation = extent.length() * body.angvel().length() * dt;
+            let sweep = (body.linvel() * dt - travel).abs() + self.sim.gravity.abs() * dt.powi(2);
+            let band = extent + sweep + Vector::splat(margin + rotation);
+            let offset = (aabb.center() - center).abs() - half;
+            // A box edge is the meeting of two face planes inside the third slab.
+            offset.cmple(band).all() && offset.cmpge(-band).bitmask().count_ones() >= 2
+        });
+        // Rapier can recycle a face normal after its witness passed a finite
+        // edge. Pairs with an active hook refresh their manifold. The native
+        // no-op hook preserves the resulting solver contacts.
+        let mut hooks = lift.active_hooks();
+        if hooks.contains(ActiveHooks::MODIFY_SOLVER_CONTACTS) != near_edge {
+            hooks.set(ActiveHooks::MODIFY_SOLVER_CONTACTS, near_edge);
+            self.sim.colliders[handle].set_active_hooks(hooks);
+        }
     }
 
     pub(super) fn prepare_static(&mut self, cfg: Settings, dt: f32) -> Result<()> {
@@ -255,6 +316,7 @@ impl World {
         })
     }
     pub(super) fn starting_poses(&mut self, poses: &[Pose]) {
+        self.contact_projections = false;
         for (&(id, _), pose) in self.parts.iter().zip(poses) {
             let body = &mut self.sim.bodies[id];
             body.set_position(
@@ -461,7 +523,21 @@ impl World {
                 self.sim.bodies[*id].set_linvel(v, true);
             }
         }
+        self.refresh_lift_edges(dt);
         self.hanging.update(&mut self.sim, &self.parts, dt);
+        // The previous native step has written back actual normal impulses.
+        // A speculative witness alone does not load the articulation.
+        let loaded = !self.envelopes.is_empty()
+            && self.parts.iter().any(|&(_, collider)| {
+                self.sim.contact_pairs_with(collider).any(|pair| pair.total_impulse_magnitude() > 0.)
+            });
+        // Keep the same conservative projection directions while a moving rig
+        // leaves a support. Choose them afresh when the actor has come to rest.
+        self.contact_projections = (loaded || self.contact_projections)
+            && self.parts.iter().any(|&(body, _)| !self.sim.bodies[body].is_sleeping());
+        for envelope in &self.envelopes {
+            envelope.update(&mut self.sim, loaded, self.contact_projections);
+        }
         let observe = observation.output.is_some();
         let asleep = self.articulated_scene_is_asleep();
         if !asleep || observe != self.force_events {

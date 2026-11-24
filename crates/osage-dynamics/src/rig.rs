@@ -17,6 +17,7 @@ pub struct Part {
     pub material: Option<osage_objects::CollisionMaterial>,
     pub joint_rotation: Quat,
     pub anchor: Vec3,
+    pub swing_envelope: osage_objects::SwingEnvelope,
     pub limits_deg: [[f32; 2]; 3],
 }
 
@@ -44,6 +45,7 @@ impl Part {
             half_segment: (length * 0.5 - radius).max(0.0),
             mass,
             anchor: a,
+            swing_envelope: Default::default(),
             limits_deg,
         }
     }

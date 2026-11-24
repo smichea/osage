@@ -15,6 +15,8 @@ use impulses::{Interval, Observation};
 #[cfg(not(target_arch = "wasm32"))]
 mod jolt;
 mod lift;
+pub mod lift_flight;
+pub mod lift_response;
 pub use lift::Lift;
 pub mod mesh_contacts;
 pub mod page_edges;
@@ -22,6 +24,7 @@ mod rapier;
 mod rig;
 mod static_instances;
 pub mod streamed;
+pub mod support_footprint;
 use glam::{Quat, Vec3};
 pub use rig::Part;
 
@@ -125,6 +128,7 @@ impl Capsule {
             half_segment: self.half_segment,
             mass: self.mass,
             anchor: Vec3::ZERO,
+            swing_envelope: Default::default(),
             limits_deg: [[0.; 2]; 3],
         }
     }
@@ -185,6 +189,7 @@ pub struct Simulation {
     substeps: u8,
     completed_ticks: u64,
     lift: Option<Lift>,
+    lift_approach: Option<lift_flight::LiftApproach>,
     free_pair: Option<Box<free_pair::FreePair>>,
     articulated_sweep: Option<Box<free_pair::ArticulatedSweep>>,
     /// First inward contact time within the last public tick for an isolated translating
@@ -271,6 +276,7 @@ impl Simulation {
                     && [p.radius, p.mass].iter().all(|v| v.is_finite() && *v > 0.)
                     && p.half_segment.is_finite()
                     && p.half_segment >= 0.
+                    && p.swing_envelope.accepts(p.limits_deg)
                     && p.limits_deg.iter().all(|[a, b]| a.is_finite()
                         && b.is_finite()
                         && *a <= 0.
@@ -337,6 +343,7 @@ impl Simulation {
             substeps,
             completed_ticks: 0,
             lift: None,
+            lift_approach: None,
             free_pair: free_pair::FreePair::for_scene(parts, boxes, meshes, settings).map(Box::new),
             articulated_sweep: free_pair::ArticulatedSweep::for_scene(parts, boxes, meshes).map(Box::new),
             swept_impact_offset_s: None,
@@ -366,6 +373,125 @@ impl Simulation {
         }
         self.box_poses.push(pose);
         self.lift = Some(lift);
+        Ok(())
+    }
+
+    /// Forecast the first lift encounter from the current rig pose and refine native
+    /// integration around that event. All other intervals remain on the original clock.
+    pub fn plan_lift_approach(&mut self, parts: &[Part], duration_s: f64, contact_hz: u32) -> Result<()> {
+        let lift = self.lift.ok_or_else(|| anyhow::anyhow!("a lift is required for an approach"))?;
+        ensure!(
+            parts.len() == self.part_poses.len() && (1..=3840).contains(&contact_hz),
+            "invalid lift approach rig or rate"
+        );
+        let clock = lift_flight::FlightClock {
+            start_s: self.substep_time(0),
+            duration_s,
+            gravity_m_s2: f64::from(self.settings.gravity),
+            terminal_m_s: f64::from(self.settings.terminal_speed),
+        };
+        let mut earliest = duration_s;
+        let mut predicted_contacts = Vec::new();
+        // Keep all contacts simultaneous to the flight query's time resolution.
+        const SAME_TIME_S: f64 = 1e-8;
+        for (part, (shape, pose)) in parts.iter().zip(&self.part_poses).enumerate() {
+            let window = lift_flight::FlightClock { duration_s: (earliest + SAME_TIME_S).min(duration_s), ..clock };
+            if let Some(hit) = lift.first_impact(shape, *pose, window)? {
+                earliest = earliest.min(hit.seconds);
+                predicted_contacts.push(lift_flight::PredictedContact { part, hit });
+            }
+        }
+        predicted_contacts.retain(|c| c.hit.seconds <= earliest + SAME_TIME_S);
+        predicted_contacts.sort_by(|a, b| a.hit.seconds.total_cmp(&b.hit.seconds).then(a.part.cmp(&b.part)));
+        self.lift_approach = Some(lift_flight::LiftApproach {
+            start_s: clock.start_s,
+            contact_hz,
+            predicted_contacts,
+            response: None,
+            first_manifold: None,
+            interrupted_at_s: None,
+            extra_intervals: 0,
+        });
+        Ok(())
+    }
+
+    /// Limit estimated incoming travel per solve after a measured lift contact.
+    pub fn sample_lift_response(&mut self, parts: &[Part], target_travel_m: f32) -> Result<()> {
+        ensure!(parts.len() == self.part_poses.len(), "invalid lift response rig");
+        let plan = self.lift_approach.as_mut().ok_or_else(|| anyhow::anyhow!("configure the lift approach first"))?;
+        plan.response = Some(lift_response::LiftResponse::new(parts, target_travel_m)?);
+        Ok(())
+    }
+
+    pub fn lift_approach(&self) -> Option<&lift_flight::LiftApproach> {
+        self.lift_approach.as_ref()
+    }
+
+    fn advance_lift(&mut self, lift: Lift, substep: u8, output: &mut Option<&mut Vec<ContactImpulse>>) -> Result<()> {
+        let start = self.substep_time(substep - 1);
+        let hz = self.settings.tick_hz;
+        let plan = self.lift_approach.as_mut().expect("configured approach");
+        let step = self.completed_ticks * u64::from(self.substeps) + u64::from(substep - 1);
+        let mut count = plan.intervals(start, hz);
+        if let Some(response) = &mut plan.response
+            && response.is_loading(step)
+        {
+            count = response.divisions(
+                &self.part_poses,
+                self.box_poses[0],
+                self.settings.dt(),
+                plan.contact_hz.div_ceil(hz).max(1),
+            );
+            response.record(step, count);
+        }
+        let dt = self.settings.dt() / count as f32;
+        let mut offset = f32::from(substep - 1) * self.settings.dt();
+        for slice in 0..count {
+            let elapsed = |index| f64::from(index) / (f64::from(hz) * f64::from(count));
+            let target = lift.center_at(start + elapsed(slice + 1));
+            let surface = match &mut self.solver {
+                Solver::Rapier(world) => {
+                    world.move_lift(target);
+                    world.first_box_surface()
+                }
+                #[cfg(not(target_arch = "wasm32"))]
+                Solver::Jolt(world) => {
+                    world.move_lift(target, dt)?;
+                    world.first_box_surface()
+                }
+            };
+            let before = self.contacts.len();
+            self.advance(dt, substep, false, &mut offset, output)?;
+            let approach = self.lift_approach.as_mut().unwrap();
+            if slice > 0 {
+                approach.extra_intervals += 1;
+            }
+            if approach.first_manifold.is_none()
+                && let Some(c) = self.contacts[before..].iter().find(|c| c.surface == surface && c.separation <= 0.)
+            {
+                if let Some(response) = &mut approach.response {
+                    response.start(step, self.substeps);
+                }
+                approach.first_manifold = Some(lift_flight::ManifoldTime {
+                    start_s: start + elapsed(slice),
+                    end_s: start + elapsed(slice + 1),
+                    part: c.part,
+                    point_m: c.point,
+                    separation_m: c.separation,
+                });
+            } else if approach.first_manifold.is_none()
+                && approach.interrupted_at_s.is_none()
+                && self.contacts[before..].iter().any(|c| c.surface != surface && c.separation <= 0.)
+            {
+                // An earlier terrain reaction invalidates the uninterrupted flight.
+                approach.interrupted_at_s = Some(start + elapsed(slice + 1));
+            }
+            if let Some(response) = &mut approach.response
+                && response.is_loading(step + 1)
+            {
+                response.observe(&self.contacts[before..], surface);
+            }
+        }
         Ok(())
     }
 
@@ -439,6 +565,9 @@ impl Simulation {
         let dt = self.settings.dt();
         let mut offset = f32::from(substep - 1) * dt;
         if let Some(lift) = self.lift {
+            if self.lift_approach.is_some() {
+                return self.advance_lift(lift, substep, output);
+            }
             let target = lift.center_at(self.substep_time(substep));
             match &mut self.solver {
                 Solver::Rapier(world) => world.move_lift(target),

@@ -222,6 +222,16 @@ impl ObjectProfile {
 
     /// A missing asset tag identifies older or ordinary glTF content. A malformed tag is an error.
     pub fn read(doc: &Document) -> Result<Option<Self>> {
+        Self::parse(doc, None)
+    }
+
+    /// Return the original glTF node index for each parent-first profile slot.
+    pub fn read_with_source_indices(doc: &Document) -> Result<Option<(Self, Vec<usize>)>> {
+        let mut indices = Vec::new();
+        Ok(Self::parse(doc, Some(&mut indices))?.map(|profile| (profile, indices)))
+    }
+
+    fn parse(doc: &Document, mut source_indices: Option<&mut Vec<usize>>) -> Result<Option<Self>> {
         let Some(header): Option<ObjectHeader> = metadata(&doc.as_json().asset.extras, "osageObject")? else {
             return Ok(None);
         };
@@ -320,6 +330,9 @@ impl ObjectProfile {
                 ancestor.children.push(index);
             } else {
                 roots.push(index);
+            }
+            if let Some(indices) = &mut source_indices {
+                indices.push(node.index());
             }
             nodes.push(ObjectNode {
                 parent,
@@ -422,6 +435,21 @@ mod tests {
         let distance = ray.hit(face).unwrap();
         assert_eq!(ray.point(distance), [0., 1., 0.]);
         assert!(TriangleRay::new([0.; 3], [0.; 3]).is_none());
+    }
+
+    #[test]
+    fn indexed_profile_keeps_file_addresses_across_reordered_and_inactive_nodes() {
+        let asset = json!({
+            "asset":{"version":"2.0","extras":{"osageObject":{
+                "id":"rig","version":1,"collisionMaterials":{},"acousticMaterials":{}}}},
+            "scene":0, "scenes":[{"nodes":[2]}],
+            "nodes":[{},{"extras":{"osage":{"id":"right"}}},
+                {"children":[3,1],"extras":{"osage":{"id":"root"}}},{"extras":{"osage":{"id":"left"}}}]
+        });
+        let doc = gltf::Gltf::from_slice(&serde_json::to_vec(&asset).unwrap()).unwrap();
+        let (profile, indices) = ObjectProfile::read_with_source_indices(&doc).unwrap().unwrap();
+        assert_eq!(indices, [2, 3, 1]);
+        assert_eq!(profile.node_path(2).unwrap(), ["root", "right"]);
     }
 
     fn doc(channels: Value) -> gltf::Gltf {

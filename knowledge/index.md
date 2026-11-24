@@ -68,6 +68,12 @@ What osage knows about its own modules: their architecture, the algorithms and t
 
 ## Algorithms
 
+* [Articulated swing envelope](algorithms/articulated-swing-envelope.md)
+* [Continuous approach to a moving lift](algorithms/lift-contact-clock.md)
+* [Load transfer at first contact with a lift](algorithms/lift-contact-response.md)
+* [Horizontal support footprint of an articulated body](algorithms/articulated-support.md)
+* [First impact of a freely translating rigid pair](algorithms/free-pair-impact.md)
+
 * [Exact client-side prediction](algorithms/exact-client-prediction.md) - A client predicts its own vehicle with no visible correction, because the server applies exactly the steps the client sent and never makes one up.
 * [Arcade kart physics](algorithms/arcade-kart-physics.md) - A small kart model with drifting, three mini-turbo levels, crests and tricks, starts and slipstreams, made of a forward speed, a sideways slide, a heading and a height.
 * [Capsule contacts with impulses](algorithms/capsule-contacts.md) - Two bodies in the plane, each a capsule with a mass and a moment of inertia, touch — they are pushed apart and exchange one impulse at the contact point, with restitution and friction, so that a knock pushes, slows and spins each by where it lands.

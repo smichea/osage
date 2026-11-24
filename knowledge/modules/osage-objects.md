@@ -37,6 +37,8 @@ Each reachable node has at most one parent. Each referenced mesh and material mu
 
 The profile tests construct a glTF tree with independently assigned channels. Separate controls check nearest hits on a shared diagonal, acoustic energy bounds, joint endpoints and the effect of shear on projected geometry error. [Profile tests](https://github.com/smichea/osage/blob/main/crates/osage-objects/src/profile.rs) · [Projection tests](https://github.com/smichea/osage/blob/main/crates/osage-objects/src/visual_detail.rs)
 
+An articulated joint can select independent angular stops or an angular ellipse in its bind frame. The latter requires positive symmetric limits on both transverse axes. Existing definitions default to independent stops. [Swing limits](/algorithms/articulated-swing-envelope.md)
+
 # Reuse
 
 Use the default features for the shared collision material. Enable `profile` to inspect a glTF scene. Run `cargo test -p osage-objects --all-features` for the reader and articulation controls.

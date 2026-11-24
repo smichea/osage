@@ -16,6 +16,25 @@ mod visual_detail;
 #[cfg(feature = "profile")]
 pub use visual_detail::*;
 
+/// Shape of the allowed swing about the two transverse joint axes.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum SwingEnvelope {
+    #[default]
+    Independent,
+    AngularEllipse,
+}
+
+impl SwingEnvelope {
+    pub fn is_independent(&self) -> bool {
+        *self == Self::Independent
+    }
+
+    pub fn accepts(self, limits: [[f32; 2]; 3]) -> bool {
+        self.is_independent() || limits[1..].iter().all(|&[lo, hi]| hi > 0. && lo == -hi)
+    }
+}
+
 #[derive(Clone, Copy, Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct CollisionMaterial {

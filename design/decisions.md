@@ -1316,3 +1316,51 @@ How osage makes and places sound, as the prototype of the Pont de Bir-Hakeim bui
   - The scene's order is no part of it, and what a thing sounds like does not depend on who else is there.
 - **Why:** a server already sends where things are; with sound made from state and placed by node, it sends nothing more for sound, and the same scene is heard on every device at what that device affords. Placing by node path gives sound the tree's cut for free: from afar a node's own emitters stand for its branch, as `subtreeProxy` does for the eye.
 - **Not decided here:** where a contact's modes are set (object or material), when the fields move into the object format and in which version, how far sound is carried as a field (design/09 §6). [Design note](09-sound.md)
+
+## D-206 — Measure the extent of support from the reported contact points
+
+Project the mass centre and the upward witnesses of one numbered substep onto the horizontal plane. Keep the body slots in the support set and report a signed Euclidean margin. Two rear paws on a ledge can then give a negative margin while contact persists. With no witnesses the distance is undefined. Solvers supply the contacts and the measurement has no feedback into the dynamics. [Support footprint](../knowledge/algorithms/articulated-support.md)
+
+## D-209 — Spend a finer solver clock around the predicted first lift contact
+
+Use the actual swept capsule and moving box to predict the first inward encounter of an airborne rig. A route may spend additional native solves near that encounter and record the first interval with a nonpositive manifold. Preserve the geometric time, the native witness time and the number of additional solves separately. [Method and oracle](../knowledge/algorithms/lift-contact-clock.md)
+
+## D-210 — Bound local load-transfer sampling after the first lift impact
+
+A route can request a travel target for the tick following first contact. Choose native subdivisions from both closing velocity at the witness and incoming momentum of the rig. Bound the response window to one replay tick so a later slide off an edge cannot consume an open-ended number of extra solves. Record the intervals and measure their effect from the posed geometry. [Method and oracle](../knowledge/algorithms/lift-contact-response.md)
+
+## D-212 — Carry the swing boundary in the joint definition
+
+A joint may specify an angular ellipse for tilt about its two transverse axes. Twist keeps its own interval. The converter marks eligible joints on explicit request. Both native solvers consume the same portable field and the replay measures first response and residual error from identical compound poses. [Swing envelope](../knowledge/algorithms/articulated-swing-envelope.md)
+
+## D-213 — Apply a loaded twist stop along the bisector of its moving axes
+
+For the Rapier angular envelope, form both angular constraint frames from half of the current swing and the original signed twist. The bisector gives the direction of the twist derivative during a tumble. The pivot and swing limits retain their own bind information. A falling quadruped on a rear-paw ledge checks the stop after the contact ends. [Constraint and oracle](../knowledge/algorithms/articulated-swing-envelope.md)
+
+## D-214 — Repeat the impulse solve when a joint exceeds its angular range
+
+For an articulated Rapier joint with an angular envelope, expand each directional half-range by one sixteenth to form a threshold for additional work. A breach requests three additional projected Gauss–Seidel passes on the child for the next native solve. Rapier takes the maximum request in the connected component. The elapsed time, authored limits and contact clock stay fixed. Rear-paw landings qualify this choice against uniform time division. [Angular stops](../knowledge/algorithms/articulated-swing-envelope.md)
+
+## D-215 — Refresh lift contacts when a limb can cross a finite face edge
+
+A cached face normal can extend past the edge and divert a falling limb that clears the actual box. Use expanded limb bounds to request native manifold refresh on a level kinematic lift near an edge. A central rider keeps the usual contact persistence. Compare an oblique pass with an identical free flight and certify positive geometric separation. [Lift contact response](../knowledge/algorithms/lift-contact-response.md)
+
+## D-216 — Constrain transverse projections during the angular solve
+
+For a joint with unequal swing widths, give Rapier fixed, two-sided angular stops between the child twist axis and four transverse directions in the parent bind frame. Each range contains every tilt admitted by the authored angular ellipse. The native solver can enforce those directions as an impact propagates along the chain, including during iterations between direction updates. Keep the circular bound and the directional stop for the exact boundary. Release the projection rows when the child axis faces backwards so the joint can pass the equator during recovery. On that side the original directional stop and circular cone guide recovery. The loaded quadruped oracle measures angular error at the existing public and native frequencies, including one-paw landings and five sliding speeds.
+
+## D-217 — Increase the joint solve budget during sustained contact
+
+When an unequal-width swing envelope belongs to a rig that received a positive normal contact impulse in the preceding native step, size its twist refinement margin using the smaller of its available twist range and its narrowest tilt range. A stop beyond the margin requests three extra projected Gauss–Seidel passes. On consecutive breaches under load the child doubles its request up to 24 passes. Inside the margin it releases the request. Without a contact impulse the ordinary refinement rule applies. The marked joint keeps its authored angular limits and the existing simulation clock. The loaded quadruped replay checks the maximum excess on a small pad without horizontal motion. Paired free-flight and isolated-pose replays exercise the contact condition.
+
+## D-218 — Keep transverse stop directions through departure from a support
+
+For unequal tilt widths, retain the two principal transverse projection directions throughout forward swing. A newly placed Rapier actor uses ordinary diagonals during unforced pose recovery. After the first measured contact impulse, use the normals of the two diagonals of a unit disk transformed into the transverse ellipse. Divide each component of the disk normal by the matching transverse half-width and normalise. Keep these directions while the actor is moving, including when it leaves a ledge. A sleeping actor or an explicit starting pose clears the selection. Prebuild the alternative rows and enable at most four fixed projections at once. Every projection still contains the authored envelope. The extra iteration budget continues to follow the current contact and limit error. The loaded quadruped replay checks an oblique landing five centimetres off centre and the departure from the ledge alongside the 300 isolated activation poses.
+
+## D-219 — Test capsule endpoints before partitioning the spine
+
+Use the derivative of squared distance to the solid box along the capsule spine to certify an endpoint minimum. At the first endpoint accept a nonnegative derivative. At the last endpoint require a strictly negative derivative so that a flat minimum keeps its earliest witness. For an interior minimum, partition at the face planes and minimize each quadratic as before. Free rigid pairs, jointly translating actors and lift flight queries use the same witness calculation. The solver clock and the contact response continue to use the resulting points.
+
+## D-220 — Refine simultaneous twist and swing stops under load
+
+A circular swing cone can press against its rim while the joint twists past a signed stop. After a measured external normal impulse, request additional impulse passes when the tilt has reached fifteen sixteenths of the permitted cone angle and twist has crossed its authored limit. Use three extra passes for the circular cone. Keeping the request fixed bounds the cost of sustained pressure at the rim. The ordinary angular error band applies again when either condition clears. A full-turn swing has no rim. Solving both constraints uses the existing native timestep. The regression drops a sixteen-part quadruped on a frictionless moving platform and checks angular error and penetration after touchdown at two local sampling rates.

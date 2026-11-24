@@ -155,6 +155,8 @@ pub struct RigJoint {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub child_frame: Option<RigFrame>,
     pub limits_rad: [[f32; 2]; 3],
+    #[serde(default, skip_serializing_if = "crate::SwingEnvelope::is_independent")]
+    pub swing_envelope: crate::SwingEnvelope,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -275,6 +277,7 @@ impl Articulation {
             if let Some(j) = &b.joint {
                 ensure!(
                     j.valid_frames(self.space)
+                        && j.swing_envelope.accepts(j.limits_rad)
                         && j.limits_rad.iter().all(|&[lo, hi]| (-PI..=0.).contains(&lo) && (0. ..=PI).contains(&hi))
                         && (!matches!(j.kind, RigJointKind::Hinge) || j.limits_rad[1..] == [[0.; 2]; 2]),
                     "invalid joint on {}",
@@ -357,6 +360,15 @@ mod tests {
         let materials = [("solid".to_owned(), CollisionMaterial { friction: 0.6, restitution: 0. })].into();
         let accepts = |v| serde_json::from_value::<Articulation>(v).unwrap().validate(&nodes, &materials).is_ok();
         assert!(accepts(valid.clone()));
+        let mut ellipse = valid.clone();
+        let joint = &mut ellipse["bodies"][1]["joint"];
+        joint["swingEnvelope"] = json!("angular-ellipse");
+        assert!(!accepts(ellipse.clone()));
+        ellipse["bodies"][1]["joint"]["kind"] = json!("three-axis");
+        ellipse["bodies"][1]["joint"]["limitsRad"] = json!([[-0.2, 1.3], [-0.3, 0.3], [-0.1, 0.1]]);
+        assert!(accepts(ellipse.clone()));
+        ellipse["bodies"][1]["joint"]["limitsRad"][1] = json!([-0.2, 0.3]);
+        assert!(!accepts(ellipse));
         for (path, value) in [
             ("/bodies/0/parent", json!(1)),
             ("/bodies/1/parent", json!(1)),

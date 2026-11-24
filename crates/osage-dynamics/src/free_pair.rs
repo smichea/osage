@@ -54,49 +54,9 @@ struct Closest {
 impl Sweep {
     fn closest(&self, time: f64) -> Closest {
         let center = self.center + time * self.velocity;
-        // Between consecutive face-plane crossings the squared distance is one quadratic
-        // in the spine parameter. Clamp its unconstrained minimizer to that interval.
-        let mut knots = [0.; 8];
-        knots[..2].copy_from_slice(&[-1., 1.]);
-        let mut count = 2;
-        for i in 0..3 {
-            if self.axis[i].abs() <= 1.0e-15 {
-                continue;
-            }
-            for plane in [-self.extents[i], self.extents[i]] {
-                let parameter = (plane - center[i]) / self.axis[i];
-                if (-1.0..1.0).contains(&parameter) {
-                    knots[count] = parameter;
-                    count += 1;
-                }
-            }
-        }
-        knots[..count].sort_unstable_by(f64::total_cmp);
-        let mut best_squared = f64::INFINITY;
-        let mut pair = (DVec3::ZERO, DVec3::ZERO);
-        for interval in knots[..count].windows(2) {
-            let mid = center + 0.5 * (interval[0] + interval[1]) * self.axis;
-            let mut quadratic = 0.;
-            let mut linear = 0.;
-            for i in 0..3 {
-                if mid[i].abs() > self.extents[i] {
-                    quadratic += self.axis[i] * self.axis[i];
-                    linear += self.axis[i] * (center[i] - mid[i].signum() * self.extents[i]);
-                }
-            }
-            let parameter =
-                if quadratic > 0. { (-linear / quadratic).clamp(interval[0], interval[1]) } else { interval[0] };
-            let spine = center + parameter * self.axis;
-            let surface = spine.clamp(-self.extents, self.extents);
-            let squared = spine.distance_squared(surface);
-            if squared < best_squared {
-                best_squared = squared;
-                pair = (spine, surface);
-            }
-        }
-        let (spine, surface) = pair;
+        let (spine, surface) = spine_box_points(center, self.axis, self.extents);
         Closest {
-            gap: best_squared.sqrt() - self.radius,
+            gap: spine.distance(surface) - self.radius,
             derivative: (spine - surface).dot(self.velocity),
             spine,
             surface,
@@ -133,9 +93,60 @@ impl Sweep {
 
 /// Closest points on a capsule spine and a cuboid, in cuboid-local coordinates.
 pub(super) fn spine_box_points(center: DVec3, axis: DVec3, extents: DVec3) -> (DVec3, DVec3) {
-    let shape = Sweep { center, axis, extents, radius: 0., velocity: DVec3::ZERO };
-    let closest = shape.closest(0.);
-    (closest.spine, closest.surface)
+    // Squared distance to a convex box is convex along the spine. Its slope
+    // has the sign of (point - projection) · axis. Prefer the first minimizer
+    // when a spine is parallel to a face or already intersects the box.
+    let first = center - axis;
+    let first_surface = first.clamp(-extents, extents);
+    if (first - first_surface).dot(axis) >= 0. {
+        return (first, first_surface);
+    }
+    let last = center + axis;
+    let last_surface = last.clamp(-extents, extents);
+    if (last - last_surface).dot(axis) < 0. {
+        return (last, last_surface);
+    }
+    // Between consecutive face-plane crossings the squared distance is one quadratic
+    // in the spine parameter. Clamp its unconstrained minimizer to that interval.
+    let mut knots = [0.; 8];
+    knots[..2].copy_from_slice(&[-1., 1.]);
+    let mut count = 2;
+    for i in 0..3 {
+        if axis[i].abs() <= 1.0e-15 {
+            continue;
+        }
+        for plane in [-extents[i], extents[i]] {
+            let parameter = (plane - center[i]) / axis[i];
+            if (-1.0..1.0).contains(&parameter) {
+                knots[count] = parameter;
+                count += 1;
+            }
+        }
+    }
+    knots[..count].sort_unstable_by(f64::total_cmp);
+    let mut best_squared = f64::INFINITY;
+    let mut pair = (DVec3::ZERO, DVec3::ZERO);
+    for interval in knots[..count].windows(2) {
+        let mid = center + 0.5 * (interval[0] + interval[1]) * axis;
+        let mut quadratic = 0.;
+        let mut linear = 0.;
+        for i in 0..3 {
+            if mid[i].abs() > extents[i] {
+                quadratic += axis[i] * axis[i];
+                linear += axis[i] * (center[i] - mid[i].signum() * extents[i]);
+            }
+        }
+        let parameter =
+            if quadratic > 0. { (-linear / quadratic).clamp(interval[0], interval[1]) } else { interval[0] };
+        let spine = center + parameter * axis;
+        let surface = spine.clamp(-extents, extents);
+        let squared = spine.distance_squared(surface);
+        if squared < best_squared {
+            best_squared = squared;
+            pair = (spine, surface);
+        }
+    }
+    pair
 }
 
 fn bisect(end: f64, iterations: usize, before: impl Fn(f64) -> bool) -> f64 {
@@ -464,5 +475,26 @@ impl ArticulatedSweep {
             return None;
         }
         Some(at as f32)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn nearest_spine_point_preserves_the_first_witness_on_a_flat_minimum() {
+        let face = DVec3::Y;
+        let above = 2. * face;
+        let arm = 0.5 * DVec3::X;
+        // The whole spine is parallel to the top face.
+        assert_eq!(spine_box_points(above, arm, DVec3::ONE), (above - arm, face - arm));
+        // The last cap enters the flat minimum before the end of the spine.
+        let center = above - DVec3::X;
+        assert_eq!(spine_box_points(center, arm, DVec3::ONE), (center, center - face));
+        for axis in [arm, -arm] {
+            let center = above + 2. * DVec3::X;
+            assert_eq!(spine_box_points(center, axis, DVec3::ONE), (center - arm, face + DVec3::X));
+        }
     }
 }

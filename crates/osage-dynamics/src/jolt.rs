@@ -204,6 +204,10 @@ impl World {
         Ok(())
     }
 
+    pub(super) fn first_box_surface(&self) -> usize {
+        self.surfaces[&self.boxes[0]]
+    }
+
     pub(super) fn move_lift(&mut self, target: [f32; 3], dt: f32) -> Result<()> {
         self.sim
             .body_mut(self.boxes[0])?
@@ -366,7 +370,8 @@ fn joint_settings(p: &Part, anchor: RVec3) -> RagdollJoint {
         let hinge = oxijolt::HingeConstraintSettings::new(anchor, axes[axis], axes[(axis + 1) % 3]);
         return RagdollJoint::Hinge(hinge.limits(lo.to_radians(), hi.to_radians()));
     }
-    let mut j = SixDofConstraintSettings::new(anchor, axes[0], axes[1]).swing_type(SwingType::Pyramid);
+    let mut j = SixDofConstraintSettings::new(anchor, axes[0], axes[1])
+        .swing_type(if p.swing_envelope.is_independent() { SwingType::Pyramid } else { SwingType::Cone });
 
     for axis in [TranslationX, TranslationY, TranslationZ] {
         j = j.axis(axis, SixDofAxis::Fixed);

@@ -29,7 +29,7 @@ impl Lift {
             && self.friction >= 0.
     }
 
-    fn phase(&self, time_s: f64) -> f64 {
+    pub(super) fn phase(&self, time_s: f64) -> f64 {
         let period = f64::from(self.period_s);
         std::f64::consts::TAU * (time_s.rem_euclid(period) / period)
     }
