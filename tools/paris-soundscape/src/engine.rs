@@ -45,6 +45,8 @@ const NEAREST: f64 = 0.3;
 const PARTS: [f64; 3] = [500.0, 2_000.0, 6_000.0];
 /// How long a contact's voice is kept, s.
 const CONTACT_SECONDS: f64 = 2.5;
+/// From how far a contact is heard, m.
+const CONTACT_REACH: f64 = 150.0;
 /// The small lines a way keeps for the outer ear and the two ears, samples.
 const SHORT: usize = 64;
 /// Under this a sample is taken for nothing: 300 dB under full scale.
@@ -342,6 +344,13 @@ struct Source {
     waking: u32,
     /// A contact's voice is free once this block is past.
     until: u64,
+    /// How loud a contact arrived when it was struck, and how much of that
+    /// its voice still makes — the largest sample of its last block against
+    /// the largest of any: what the voice is worth keeping against another
+    /// contact.
+    worth: f32,
+    top: f32,
+    last: f32,
     /// A contact's first block: its level is there at once.
     struck: bool,
     hit: Option<Hit>,
@@ -649,6 +658,9 @@ impl Engine {
                     None => scene.tree.proxy_over(emitter.node).map(|(over, beyond)| (over, beyond, false)),
                 },
                 until: u64::MAX,
+                worth: 0.0,
+                top: 0.0,
+                last: 0.0,
                 struck: false,
                 hit: None,
                 load: 0.0,
@@ -668,9 +680,9 @@ impl Engine {
                 gain: 0.0,
                 reach: Reach::Positional,
                 mirrors: true,
-                max_distance: 150.0,
+                max_distance: CONTACT_REACH,
                 emitter: None,
-                ring: vec![0.0; ((150.0 / SOUND * RATE as f64) as usize + 4 * BLOCK).next_power_of_two()],
+                ring: vec![0.0; ((CONTACT_REACH / SOUND * RATE as f64) as usize + 4 * BLOCK).next_power_of_two()],
                 lines: vec![Line::default(); lines],
                 targets: vec![None; lines],
                 left: 1,
@@ -679,10 +691,13 @@ impl Engine {
                 asleep: false,
                 waking: 0,
                 moves: false,
-                trail: vec![Vec3::ZERO; trail_blocks(150.0)],
+                trail: vec![Vec3::ZERO; trail_blocks(CONTACT_REACH)],
                 trailed: 0,
                 cut: None,
                 until: 0,
+                worth: 0.0,
+                top: 0.0,
+                last: 0.0,
                 struck: false,
                 hit: None,
                 load: 0.0,
@@ -820,8 +835,11 @@ impl Engine {
     /// — one for what was touched and, if what touched it sounds too (a
     /// clog, a hammer's head), one for that. Both bear the names of the two
     /// that met, the surface as an emitter is named and the node by its
-    /// path: solo and mute take either.
-    fn strike(&mut self, surface: usize, point: Vec3, by: usize, material: &str, strength: f64, at: usize) {
+    /// path: solo and mute take either. `ears` is where it is heard from:
+    /// what cannot be heard there takes no voice, and what is heard less
+    /// takes none from what is heard more.
+    #[allow(clippy::too_many_arguments)]
+    fn strike(&mut self, surface: usize, point: Vec3, by: usize, material: &str, strength: f64, at: usize, ears: Vec3) {
         let Some(key) = self.scene.surfaces[surface].collision.clone() else { return };
         let (Some(struck), Some(striker)) = (self.scene.contacts.get(&key), self.scene.contacts.get(material)) else {
             return;
@@ -845,19 +863,40 @@ impl Engine {
         let first = self.scene.emitters.len();
         let pool = self.sources.len() - first;
         let moves = Self::moves(&self.scene, node);
+        // How loud it arrives, straight.
+        let distance = point.distance(ears);
+        let loud = (gain * strength.clamp(0.0, 1.0) / distance.max(NEAREST)) as f32;
         for (voice, mut params) in sounding {
             if pool == 0 {
                 return;
             }
-            // What solo or mute leaves out takes no voice from what is
-            // heard; and it is counted all the same, so that a contact heard
-            // alone is made of the seed it has among the others.
+            // What solo or mute leaves out, and what is too far to be heard,
+            // takes no voice from what is heard; and it is counted all the
+            // same, so that a contact has the seed it has among the others
+            // whoever else is there.
             self.contacts += 1;
-            if !heard {
+            if !heard || distance > CONTACT_REACH {
                 continue;
             }
-            // A free voice, or the one nearest its end.
-            let slot = first + (0..pool).min_by_key(|&k| self.sources[first + k].until).unwrap_or(0);
+            // The voice that matters least: a free one, or the one least
+            // heard now — as loud as it arrived, by what its voice still
+            // makes of what it made at its loudest (all of it, for one just
+            // struck). A contact takes it only if it matters more itself:
+            // steps far off do not silence a step close by, and a step that
+            // has died gives way to any that is heard.
+            let block = self.block;
+            let worth = |source: &Source| {
+                let still = if source.top > 0.0 { source.last / source.top } else { 1.0 };
+                if block > source.until { 0.0 } else { source.worth * still }
+            };
+            let least = (0..pool).min_by(|&a, &b| {
+                let (a, b) = (&self.sources[first + a], &self.sources[first + b]);
+                worth(a).total_cmp(&worth(b)).then(a.until.cmp(&b.until))
+            });
+            let slot = first + least.unwrap_or(0);
+            if worth(&self.sources[slot]) >= loud {
+                continue;
+            }
             params.set("hardness", hardness);
             let seed = seed_for(self.scene.seed, &format!("contact {}", self.contacts));
             let source = &mut self.sources[slot];
@@ -868,6 +907,7 @@ impl Engine {
             source.offset = offset;
             source.gain = gain;
             source.until = self.block + (CONTACT_SECONDS / (BLOCK as f64 * DT)) as u64;
+            (source.worth, source.top, source.last) = (loud, 0.0, 0.0);
             source.struck = true;
             source.asleep = false;
             source.waking = 0;
@@ -883,8 +923,9 @@ impl Engine {
         }
     }
 
-    /// What the scene's feet and wheels touch during this block of `seconds`.
-    fn touch(&mut self, t1: f64, seconds: f64) {
+    /// What the scene's feet and wheels touch during this block of `seconds`,
+    /// heard from `ears`.
+    fn touch(&mut self, t1: f64, seconds: f64, ears: Vec3) {
         if self.scene.touches.is_empty() {
             return;
         }
@@ -936,7 +977,7 @@ impl Engine {
         }
         for (surface, point, k, strength, at) in blows {
             let (by, material) = (self.scene.touches[k].node, self.scene.touches[k].material.clone());
-            self.strike(surface, point, by, &material, strength, at);
+            self.strike(surface, point, by, &material, strength, at, ears);
         }
     }
 
@@ -965,7 +1006,7 @@ impl Engine {
         }
         .turned(self.options.turn);
         let faces = self.faces();
-        self.touch(t1, seconds);
+        self.touch(t1, seconds, head.at);
         self.tally.touching += clock.elapsed().as_secs_f64();
 
         // Where each source is; one that moves leaves a trail, from which
@@ -1159,6 +1200,8 @@ impl Engine {
                     source.ring.fill(0.0);
                     source.asleep = true;
                 }
+                // A contact that is not heard is worth nothing against another.
+                (source.top, source.last) = (source.top.max(f32::MIN_POSITIVE), 0.0);
                 continue;
             }
             if source.asleep {
@@ -1174,6 +1217,10 @@ impl Engine {
             };
             source.voice.render(&drive, &mut self.made);
             self.tally.voices += 1;
+            if source.emitter.is_none() {
+                source.last = self.made.iter().fold(0.0f32, |peak, sample| peak.max(sample.abs()));
+                source.top = source.top.max(source.last);
+            }
             if source.waking > 0 {
                 for sample in self.made.iter_mut() {
                     *sample *= 1.0 - source.waking as f32 / WAKE as f32;

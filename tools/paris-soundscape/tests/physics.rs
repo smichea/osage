@@ -13,8 +13,8 @@ use osage_paris_soundscape::{
 };
 
 /// A scene from its nodes (the first is the root; the listener is the node
-/// "ears" under it), with four materials to mirror with and three things to
-/// touch.
+/// "ears" under it), with six materials to mirror or hide with and three
+/// things to touch.
 fn scene(nodes: &str, seconds: f64) -> Scene {
     let text = format!(
         r#"{{
@@ -26,7 +26,9 @@ fn scene(nodes: &str, seconds: f64) -> Scene {
             "hard": {{"absorption": [0.0, 0.0, 0.0], "transmission": [0.0, 0.0, 0.0], "scattering": 0.0}},
             "felt": {{"absorption": [0.19, 0.51, 0.75], "transmission": [0.0, 0.0, 0.0], "scattering": 0.0}},
             "rough": {{"absorption": [0.1, 0.1, 0.1], "transmission": [0.0, 0.0, 0.0], "scattering": 0.6}},
-            "matte": {{"absorption": [0.0, 0.0, 0.0], "transmission": [0.0, 0.0, 0.0], "scattering": 1.0}}}}}},
+            "matte": {{"absorption": [0.0, 0.0, 0.0], "transmission": [0.0, 0.0, 0.0], "scattering": 1.0}},
+            "thin": {{"absorption": [0.0, 0.0, 0.0], "transmission": [0.64, 0.64, 0.64], "scattering": 0.0}},
+            "clear": {{"absorption": [0.0, 0.0, 0.0], "transmission": [1.0, 1.0, 1.0], "scattering": 0.0}}}}}},
         "osageSound": {{"version": 0, "contactSounds": {{
           "ground": {{"hardness": 0.5}},
           "plate": {{"params": {{"tone": 400, "ring": 0.3, "shape": 1, "scuff": 0.0}}, "hardness": 1.0}},
@@ -668,4 +670,115 @@ fn a_contact_left_out_takes_no_voice_from_one_that_is_heard() {
         let ratio = rms(&listed_first.left) / rms(&listed_last.left);
         assert!((0.5..2.0).contains(&ratio), "walker-{who} listed first or last: {ratio}");
     }
+}
+
+/// People walking in step along X on the boards of a floor, each at its own distance in front of the ears.
+fn walkers(ahead: &[f64]) -> Scene {
+    let floor = r#"{"extras": {"osage": {"id": "floor"}, "osageSound": {"surfaces": [
+        {"id": "boards", "quadM": [[-900, 0, -900], [-900, 0, 900], [900, 0, 900], [900, 0, -900]], "collision": "ground"}]}}}"#;
+    let ears = r#"{"translation": [0, 1.6, 0], "extras": {"osage": {"id": "ears"}}}"#;
+    let mut nodes = vec![world(ahead.len() + 2, ""), ears.to_owned(), floor.to_owned()];
+    nodes.extend(ahead.iter().map(|metres| {
+        format!(
+            r#"{{"translation": [0, 0, {}], "extras": {{"osage": {{"id": "walker-at-{metres}"}}, "osageSound": {{
+                 "motion": {{"alongM": [1, 0, 0], "atS": 0, "speedKmh": 5.4}},
+                 "touches": [{{"kind": "steps", "material": "sole", "strideM": 0.7, "feetM": [[0, 0, 0]]}}]}}}}}}"#,
+            -metres
+        )
+    }));
+    scene(&nodes.join(","), 1.5)
+}
+
+#[test]
+fn steps_too_far_to_be_heard_take_no_voice_from_a_step_close_by() {
+    // One person 2 m away and four more than 300 m away, where a step is not heard, with four voices for
+    // all their steps: what is heard is what is heard without the four, whichever is listed first.
+    let four_voices = |mute: &[&str]| Options {
+        quality: Quality { contacts: 4, ..DRY },
+        listening: Listening::Speakers,
+        mute: mute.iter().map(|text| (*text).to_owned()).collect(),
+        ..Options::default()
+    };
+    for ahead in [[2.0, 310.0, 320.0, 330.0, 340.0], [310.0, 320.0, 330.0, 340.0, 2.0]] {
+        let scene = walkers(&ahead);
+        let (all, near) = (render(&scene, &four_voices(&[]), 1.5), render(&scene, &four_voices(&["walker-at-3"]), 1.5));
+        assert!(near.tally.contacts >= 3 && near.peak() > 1e-4, "{} steps, peak {}", near.tally.contacts, near.peak());
+        assert!(all.left == near.left && all.right == near.right, "{ahead:?}");
+        assert_eq!(all.tally.contacts, near.tally.contacts);
+    }
+}
+
+#[test]
+fn a_step_heard_less_takes_no_voice_from_one_heard_more() {
+    // The same, the four at 100 m, where their steps are heard, thirty times less: the step close by keeps
+    // its voice, and three of theirs are heard with it.
+    let options = |solo: &[&str]| Options {
+        quality: Quality { contacts: 4, ..DRY },
+        listening: Listening::Speakers,
+        solo: solo.iter().map(|text| (*text).to_owned()).collect(),
+        ..Options::default()
+    };
+    for ahead in [[2.0, 100.0, 101.0, 102.0, 103.0], [100.0, 101.0, 102.0, 103.0, 2.0]] {
+        let scene = walkers(&ahead);
+        let (all, near) = (render(&scene, &options(&[]), 1.5), render(&scene, &options(&["walker-at-2"]), 1.5));
+        let ratio = rms(&all.left) / rms(&near.left);
+        assert!((0.97..1.1).contains(&ratio), "{ahead:?}: {ratio}");
+        assert!(all.left != near.left);
+    }
+}
+
+#[test]
+fn two_faces_that_meet_at_an_edge_are_heard_alike_in_either_order() {
+    // The wall that stops everything and the one that lets most through, from the same edge: heard, listed
+    // one way or the other, the same samples.
+    let heard = |swapped: bool| {
+        let wall = |id: &str, material: &str, z: f64| {
+            format!(
+                r#"{{"id": "{id}", "acoustic": "{material}", "reflects": false,
+                     "quadM": [[-1, -5, 0], [4, -5, {z}], [4, 5, {z}], [-1, 5, 0]]}}"#
+            )
+        };
+        let mut walls = [wall("stops", "hard", -2.0), wall("lets", "thin", 2.0)];
+        if swapped {
+            walls.swap(0, 1);
+        }
+        let sound = format!(r#", "osageSound": {{"surfaces": [{}]}}"#, walls.join(","));
+        let ears = r#"{"translation": [0, 0, 6], "extras": {"osage": {"id": "ears"}}}"#;
+        let nodes = [world(2, &sound), ears.to_owned(), emitter("hiss", "noise", 0.0, [0.0, 0.0, -6.0])].join(",");
+        render(&scene(&nodes, 0.5), &options(Listening::Speakers), 0.5)
+    };
+    let (one, other) = (heard(false), heard(true));
+    assert!(rms(&one.left) > 0.0);
+    assert!(one.left == other.left && one.right == other.right);
+}
+
+#[test]
+fn a_pane_that_lets_everything_through_changes_nothing_beside_a_screen() {
+    // A tone whose straight way grazes the edge of a screen, and the same with a pane stood across the way
+    // that lets everything through: the same samples, at half the level of the open air.
+    let heard = |screen: bool, pane: bool| {
+        let mut faces = Vec::new();
+        if screen {
+            faces.push(
+                r#"{"id": "screen", "acoustic": "hard", "reflects": false,
+                    "quadM": [[0, -5, 0], [0, 5, 0], [0, 5, 9], [0, -5, 9]]}"#,
+            );
+        }
+        if pane {
+            faces.push(
+                r#"{"id": "pane", "acoustic": "clear", "reflects": false,
+                    "quadM": [[0.5, -5, -5], [0.5, 5, -5], [0.5, 5, 5], [0.5, -5, 5]]}"#,
+            );
+        }
+        let sound = format!(r#", "osageSound": {{"surfaces": [{}]}}"#, faces.join(","));
+        let ears = r#"{"translation": [1, 0, 0], "extras": {"osage": {"id": "ears"}}}"#;
+        let nodes = [world(2, &sound), ears.to_owned(), emitter("tone", "tone", 1_000.0, [-1.0, 0.0, 0.0])].join(",");
+        render(&scene(&nodes, 0.5), &options(Listening::Speakers), 0.5)
+    };
+    let (open, screened, both) = (heard(false, false), heard(true, false), heard(true, true));
+    // (The tone is on the left: that is the ear to read.)
+    let ratio = rms(&screened.left) / rms(&open.left);
+    assert!((ratio - 0.501).abs() < 0.002, "{ratio}");
+    assert!(both.left == screened.left && both.right == screened.right);
+    assert!(heard(false, true).left == open.left);
 }

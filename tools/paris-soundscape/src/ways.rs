@@ -7,11 +7,12 @@
 //! - **straight**, when nothing hides the emitter — or through what hides
 //!   it, with what its material lets through, when that arrives louder than
 //!   round its edge;
-//! - **round an edge**, when a face hides it: over the edge that lengthens
-//!   the way least, quieter and duller by how much longer the way is, counted
-//!   in wavelengths (the Fresnel number) — and already a little quieter when
-//!   the straight way only grazes an edge, so that nothing switches as an
-//!   emitter goes behind a deck;
+//! - **round an edge**, when a face hides it: over the edge by which it
+//!   arrives loudest (the one that lengthens the way least, among faces that
+//!   stop everything), quieter and duller by how much longer the way is,
+//!   counted in wavelengths (the Fresnel number) — and already a little
+//!   quieter when the straight way only grazes an edge, so that nothing
+//!   switches as an emitter goes behind a deck;
 //! - **mirrored** by each face that reflects, from the emitter's image
 //!   behind it, less what the face's material takes in each band; what the
 //!   material scatters goes to the reverberation instead.
@@ -19,7 +20,9 @@
 //! What stands on a leg of a way round an edge or of a mirrored way takes
 //! what its material does not let through, band by band: all of it for a
 //! wall, nothing for a pane that lets everything through. Any number of
-//! faces may hide, listed in any order.
+//! faces may hide, and the order they are listed in changes no way by a
+//! bit: which way is followed is told by the ways alone, and the faces one
+//! goes through are taken in the order it meets them.
 //!
 //! and what the air takes on the way (ISO 9613-1).
 //!
@@ -163,15 +166,46 @@ fn apex(a: Vec3, b: Vec3, source: Vec3, head: Vec3) -> Vec3 {
 
 /// What is left of the pressure, in each of [`BANDS`], of a sound that goes
 /// straight from `a` to `b`: 1 with nothing between, and what each face
-/// that hides lets through for those it crosses.
+/// that hides lets through for those it crosses. The product is the same to
+/// the last bit however the faces are listed: two shares multiply alike in
+/// either order, and three or more are taken in the order the way meets
+/// their faces ([`through_many`]).
 fn through(a: Vec3, b: Vec3, faces: &[Face], but: Option<usize>) -> [f64; 4] {
     let mut left = [1.0; 4];
+    let mut count = 0;
     for (i, face) in faces.iter().enumerate() {
         if face.occludes && Some(i) != but && face.crossed(a, b).is_some() {
+            count += 1;
+            if count > 2 {
+                return through_many(a, b, faces, but);
+            }
             let passed = face.material.passed();
             for (band, share) in left.iter_mut().enumerate() {
                 *share *= passed[band.min(2)];
             }
+        }
+    }
+    left
+}
+
+/// [`through`] for a way that crosses three faces or more: what they let
+/// through, multiplied in the order the way meets them — and, of two met at
+/// one point, by what they let through.
+fn through_many(a: Vec3, b: Vec3, faces: &[Face], but: Option<usize>) -> [f64; 4] {
+    let mut met: Vec<(f64, [f64; 3])> = Vec::new();
+    for (i, face) in faces.iter().enumerate() {
+        if face.occludes
+            && Some(i) != but
+            && let Some(at) = face.crossed(a, b)
+        {
+            met.push((a.distance(at), face.material.passed()));
+        }
+    }
+    met.sort_unstable_by(|one, other| one.partial_cmp(other).unwrap_or(std::cmp::Ordering::Equal));
+    let mut left = [1.0; 4];
+    for (_, passed) in &met {
+        for (band, share) in left.iter_mut().enumerate() {
+            *share *= passed[band.min(2)];
         }
     }
     left
@@ -201,51 +235,90 @@ pub fn ways(source: Vec3, head: Vec3, faces: &[Face], mirrors: bool, careful: bo
     out
 }
 
-/// Whether the way of `length` that turns at `p` comes before the one of
-/// `other` that turns at `q`: the shorter; of two as long, the one whose
-/// turning point comes first by its x, then its y, then its z — never by
-/// the order the faces are listed in.
-fn sooner(length: f64, p: Vec3, other: f64, q: Vec3) -> bool {
-    (length, p.x, p.y, p.z) < (other, q.x, q.y, q.z)
+/// Whether the way `one` is followed rather than `other`: the one that
+/// arrives louder at 1 kHz; of two as loud, the shorter; of two as long, the
+/// one whose turning point comes first by its x, then its y, then its z;
+/// and of two by the same point, the one that keeps more, band by band.
+/// Nothing but the two ways enters — never the order the faces are listed
+/// in.
+fn rather(one: &Way, other: &Way) -> bool {
+    let key = |way: &Way| {
+        let loud = way.bands[1] / way.length.max(1e-9);
+        (-loud, way.length, way.from.x, way.from.y, way.from.z, -way.bands[0], -way.bands[2], -way.bands[3])
+    };
+    key(one) < key(other)
 }
 
 /// The way that is not mirrored: straight, through what lets sound through,
-/// or round the edge that lengthens it least.
+/// or round an edge.
 pub fn direct(source: Vec3, head: Vec3, faces: &[Face]) -> Option<Way> {
     let straight = source.distance(head);
-    let hides = |face: &Face| face.occludes && face.crossed(source, head).is_some();
-    if !faces.iter().any(hides) {
-        // Grazing an edge already costs something — as much of it as the
-        // face stops: a pane that lets everything through has no edge to
-        // sound. The face that takes most is the one heard.
-        let mut bands = [1.0f64; 4];
-        for face in faces.iter().filter(|face| face.occludes) {
-            let mut nearest = f64::INFINITY;
-            for i in 0..4 {
-                let p = apex(face.corners[i], face.corners[(i + 1) % 4], source, head);
-                nearest = nearest.min(source.distance(p) + p.distance(head) - straight);
-            }
+    // The straight way: of each face it goes through, what the face lets
+    // through; and of the faces it passes beside, what grazing an edge
+    // leaves — as much of it as the face stops (a pane that lets everything
+    // through has no edge to sound), and of all those beside, the one that
+    // takes most. A face gone through does not take the others' edges away.
+    let mut bands = [1.0f64; 4];
+    let mut beside = [1.0f64; 4];
+    let mut gone_through = 0;
+    for face in faces.iter().filter(|face| face.occludes) {
+        if face.crossed(source, head).is_some() {
+            // Its own edge is what the way round it is for.
+            gone_through += 1;
             let passed = face.material.passed();
-            for (b, band) in bands.iter_mut().enumerate() {
-                let loss = edge_loss(-nearest, BANDS[b]);
-                if loss > 0.0 {
-                    let (edge, through) = (10f64.powf(-loss / 20.0), passed[b.min(2)]);
-                    *band = band.min(through + (1.0 - through) * edge);
-                }
+            for (band, share) in bands.iter_mut().enumerate() {
+                *share *= passed[band.min(2)];
+            }
+            continue;
+        }
+        let mut nearest = f64::INFINITY;
+        for i in 0..4 {
+            let p = apex(face.corners[i], face.corners[(i + 1) % 4], source, head);
+            nearest = nearest.min(source.distance(p) + p.distance(head) - straight);
+        }
+        let passed = face.material.passed();
+        for (b, band) in beside.iter_mut().enumerate() {
+            let loss = edge_loss(-nearest, BANDS[b]);
+            if loss > 0.0 {
+                let (edge, through) = (10f64.powf(-loss / 20.0), passed[b.min(2)]);
+                *band = band.min(through + (1.0 - through) * edge);
             }
         }
-        return Some(Way { length: straight, from: source, bands });
     }
-    // Round an edge of a face that hides it: the one that lengthens the way
-    // least, of those whose two legs are heard — with what that face stops,
-    // since what it lets through does not go round.
+    if gone_through > 2 {
+        // Three shares or more are multiplied in the order the way meets their faces.
+        bands = through(source, head, faces, None);
+    }
+    for (band, beside) in bands.iter_mut().zip(beside) {
+        *band *= beside;
+    }
+    let passing = Way { length: straight, from: source, bands };
+    if gone_through == 0 {
+        return Some(passing);
+    }
+    // Round an edge of a face that hides it: of all the edges, the one by
+    // which it arrives loudest — the shortest way round, among faces that
+    // stop everything — with what that face stops, since what it lets
+    // through does not go round, and what its two legs keep.
     let mut round: Option<Way> = None;
-    for face in faces.iter().filter(|face| hides(face)) {
+    // Of the one kept: what its face stops and its legs keep at 1 kHz.
+    let mut kept = 0.0;
+    for face in faces.iter().filter(|face| face.occludes && face.crossed(source, head).is_some()) {
         let passed = face.material.passed();
         for side in 0..4 {
             let p = apex(face.corners[side], face.corners[(side + 1) % 4], source, head);
             let length = source.distance(p) + p.distance(head);
-            if round.is_some_and(|best| !sooner(length, p, best.length, best.from)) {
+            // A longer way round an edge that stops no more arrives quieter:
+            // it is not looked at further.
+            if round.is_some_and(|best| best.bands[1] > 0.0 && length > best.length && 1.0 - passed[1] <= kept) {
+                continue;
+            }
+            let mut bands: [f64; 4] = std::array::from_fn(|b| {
+                10f64.powf(-edge_loss(length - straight, BANDS[b]) / 20.0) * (1.0 - passed[b.min(2)])
+            });
+            // Nor is one that with both legs clear would be no louder than
+            // the one kept.
+            if round.is_some_and(|best| !rather(&Way { length, from: p, bands }, &best)) {
                 continue;
             }
             // Each leg stops a hair short of the edge, so that the faces
@@ -253,14 +326,13 @@ pub fn direct(source: Vec3, head: Vec3, faces: &[Face]) -> Option<Way> {
             let (near_source, near_head) =
                 (p + (source - p).unit_or(Vec3::Y) * 1e-4, p + (head - p).unit_or(Vec3::Y) * 1e-4);
             let (first, second) = (through(source, near_source, faces, None), through(near_head, head, faces, None));
-            let bands: [f64; 4] = std::array::from_fn(|b| {
-                10f64.powf(-edge_loss(length - straight, BANDS[b]) / 20.0)
-                    * (1.0 - passed[b.min(2)])
-                    * first[b]
-                    * second[b]
-            });
-            if heard(&bands) {
-                round = Some(Way { length, from: p, bands });
+            for (b, band) in bands.iter_mut().enumerate() {
+                *band *= first[b] * second[b];
+            }
+            let way = Way { length, from: p, bands };
+            if heard(&bands) && round.is_none_or(|best| rather(&way, &best)) {
+                round = Some(way);
+                kept = (1.0 - passed[1]) * first[1] * second[1];
             }
         }
     }
@@ -271,7 +343,6 @@ pub fn direct(source: Vec3, head: Vec3, faces: &[Face]) -> Option<Way> {
     // wavelength the other is added, all of it at the edge itself, so that
     // nothing steps as an emitter goes behind a face, whatever it lets
     // through.
-    let passing = Way { length: straight, from: source, bands: through(source, head, faces, None) };
     match round {
         Some(round) => {
             let together = BANDS.map(|hz| (1.0 - 2.0 * (round.length - straight) * hz / SOUND).clamp(0.0, 1.0));
@@ -498,6 +569,129 @@ mod tests {
         assert_eq!((one.length, one.from, one.bands), (other.length, other.from, other.bands));
         // Of the two, the one whose turning point has the smaller x.
         assert!(one.from.distance(vec3(-1.0, 0.0, -1.0)) < 1e-9, "{:?}", one.from);
+    }
+
+    #[test]
+    fn two_faces_that_meet_at_an_edge_hide_alike_in_either_order() {
+        // Two walls from the same edge, one that stops everything and one that lets through 64 % of the
+        // energy: round their edge the way is the same, and so is what is left of it, whichever is listed
+        // first — what the wall that stops everything leaves.
+        let wall = |z: f64, transmission: f64| {
+            let of = Material { absorption: [0.0; 3], transmission: [transmission; 3], scattering: 0.0 };
+            Face::new(
+                [vec3(-1.0, -5.0, 0.0), vec3(4.0, -5.0, z), vec3(4.0, 5.0, z), vec3(-1.0, 5.0, 0.0)],
+                of,
+                false,
+                true,
+            )
+        };
+        let (stops, lets) = (wall(-2.0, 0.0), wall(2.0, 0.64));
+        let (source, head) = (vec3(0.0, 0.0, -6.0), vec3(0.0, 0.0, 6.0));
+        let one = direct(source, head, &[stops.clone(), lets.clone()]).unwrap();
+        let other = direct(source, head, &[lets, stops.clone()]).unwrap();
+        assert_eq!(one, other);
+        assert!((one.length - 2.0 * 37f64.sqrt()).abs() < 1e-9 && one.from.distance(vec3(-1.0, 0.0, 0.0)) < 1e-9);
+        let alone = direct(source, head, &[stops]).unwrap();
+        assert!((one.bands[1] / alone.bands[1] - 1.0).abs() < 1e-9, "{:?} for {:?}", one.bands, alone.bands);
+    }
+
+    #[test]
+    fn a_pane_gone_through_leaves_a_screen_its_edge() {
+        // A screen whose edge the straight way grazes, and what it takes there: half the pressure. A pane
+        // that lets everything through, stood across the way, changes nothing of it — on the edge, a
+        // millimetre before it, a millimetre behind it.
+        let clear = Material { absorption: [0.0; 3], transmission: [1.0; 3], scattering: 0.0 };
+        let screen = Face::new(
+            [vec3(0.0, -5.0, 0.0), vec3(0.0, 5.0, 0.0), vec3(0.0, 5.0, 9.0), vec3(0.0, -5.0, 9.0)],
+            HARD,
+            false,
+            true,
+        );
+        let pane = Face::new(
+            [vec3(0.5, -5.0, -5.0), vec3(0.5, 5.0, -5.0), vec3(0.5, 5.0, 5.0), vec3(0.5, -5.0, 5.0)],
+            clear,
+            false,
+            true,
+        );
+        for z in [-0.001, 0.0, 0.001] {
+            let (source, head) = (vec3(-1.0, 0.0, z), vec3(1.0, 0.0, z));
+            let without = direct(source, head, std::slice::from_ref(&screen)).unwrap();
+            for faces in [[screen.clone(), pane.clone()], [pane.clone(), screen.clone()]] {
+                let with = direct(source, head, &faces).unwrap();
+                for b in 0..4 {
+                    assert!(
+                        (with.bands[b] / without.bands[b] - 1.0).abs() < 1e-9,
+                        "at {z}: {:?} for {:?}",
+                        with.bands,
+                        without.bands
+                    );
+                }
+                assert!((with.length - without.length).abs() < 1e-12);
+            }
+            if z == 0.0 {
+                assert!((without.bands[1] - 0.501).abs() < 0.001, "{:?}", without.bands);
+            }
+        }
+    }
+
+    #[test]
+    fn the_order_the_faces_are_listed_in_never_changes_a_way() {
+        use osage_paris_voices::dsp::Noise;
+        // Faces drawn on a coarse grid, so that edges are shared, detours are as long as each other and ways
+        // graze: walls, floors and panes of every kind, listed in one order and in others.
+        let mut chance = Noise::new(2026);
+        let mut pick = |from: &[f64]| from[((chance.unit() * from.len() as f32) as usize).min(from.len() - 1)];
+        let grid = [-4.0, -2.0, -1.0, 0.0, 1.0, 2.0, 4.0];
+        // (Shares that do not multiply evenly: three of them in another order differ in the last bit.)
+        let shares = [0.0, 0.07, 0.31, 0.53, 0.83, 1.0];
+        for scene in 0..600 {
+            let count = 2 + scene % 11;
+            let mut faces = Vec::new();
+            for _ in 0..count {
+                let transmission = [pick(&shares), pick(&shares), pick(&shares)];
+                let absorption = transmission.map(|t| (1.0 - t) * pick(&[0.0, 0.1, 0.5]));
+                let of = Material { absorption, transmission, scattering: pick(&[0.0, 0.3, 1.0]) };
+                let (a, b, low, high) = (pick(&grid), pick(&grid), pick(&[-5.0, -1.0, 0.0]), pick(&[1.0, 5.0]));
+                let (c, d) = (pick(&grid), pick(&grid));
+                // A wall from (a, c) to (b, d) on the ground, or a floor between them at a height.
+                let corners = if pick(&[0.0, 0.0, 1.0]) == 0.0 {
+                    [vec3(a, low, c), vec3(b, low, d), vec3(b, high, d), vec3(a, high, c)]
+                } else {
+                    [vec3(a, low, c), vec3(b, low, c), vec3(b, low, d), vec3(a, low, d)]
+                };
+                if (corners[1] - corners[0]).cross(corners[3] - corners[0]).length() < 1e-9 {
+                    continue;
+                }
+                faces.push(Face::new(corners, of, pick(&[0.0, 1.0]) == 1.0, pick(&[0.0, 1.0, 1.0]) == 1.0));
+            }
+            let (source, head) = (
+                vec3(pick(&grid), pick(&[0.0, 0.5, 2.0]), pick(&[-6.0, -3.0, 0.5])),
+                vec3(pick(&grid), pick(&[0.0, 0.5, 2.0]), pick(&[6.0, 3.0, -0.5])),
+            );
+            let straight = direct(source, head, &faces);
+            let by: Vec<_> = (0..faces.len()).map(|i| mirrored(i, source, head, &faces, true)).collect();
+            // Turned end to end, and each face moved a few places on.
+            for turn in 1..=3 {
+                let order: Vec<usize> = match turn {
+                    1 => (0..faces.len()).rev().collect(),
+                    _ => (0..faces.len()).map(|i| (i * 2 + turn) % faces.len()).collect::<Vec<_>>(),
+                };
+                let mut seen = vec![false; faces.len()];
+                order.iter().for_each(|&i| seen[i] = true);
+                if seen.contains(&false) {
+                    continue;
+                }
+                let listed: Vec<Face> = order.iter().map(|&i| faces[i].clone()).collect();
+                assert_eq!(direct(source, head, &listed), straight, "scene {scene}, order {order:?}");
+                for (at, &i) in order.iter().enumerate() {
+                    assert_eq!(
+                        mirrored(at, source, head, &listed, true),
+                        by[i],
+                        "scene {scene}, face {i} in {order:?}"
+                    );
+                }
+            }
+        }
     }
 
     #[test]
