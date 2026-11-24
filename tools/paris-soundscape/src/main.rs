@@ -286,6 +286,20 @@ fn file(scene: &Scene, options: &Options, seconds: f64) -> (Vec<u8>, f64, usize)
     (wav::pcm16(RATE, 2, &mastered.samples), reached, mastered.held)
 }
 
+/// A render of `seconds` cut into spans of `span` seconds, to its very end: what is left over is a span of
+/// its own — joined to the one before it when it is under a second, too short to read anything in.
+fn spans(seconds: f64, span: f64) -> Vec<(f64, f64)> {
+    let whole = (seconds / span) as usize;
+    let mut spans: Vec<(f64, f64)> = (0..whole).map(|k| (k as f64 * span, (k + 1) as f64 * span)).collect();
+    let left = seconds - whole as f64 * span;
+    match spans.last_mut() {
+        Some(last) if left < 1.0 => last.1 = seconds,
+        _ if left > 0.0 => spans.push((whole as f64 * span, seconds)),
+        _ => {}
+    }
+    spans
+}
+
 fn run_verify(args: &Args) -> Result<(), String> {
     use osage_sound_analysis::{Band, cue, envelope, measure};
     let scene = scene(args)?;
@@ -384,16 +398,18 @@ fn run_verify(args: &Args) -> Result<(), String> {
             river.left == turned.right && river.right == turned.left,
             "the two renders are each other's mirror, sample for sample".to_owned(),
         );
-        // Five seconds at a time — the whole of a render shorter than that.
-        let spans = ((seconds / 5.0) as usize).max(1);
-        let span = (seconds / spans as f64).min(5.0);
-        let worst = (0..spans)
-            .map(|k| cue(&river.left, &river.right, RATE, &wide, k as f64 * 5.0, k as f64 * 5.0 + span).ild_db)
-            .fold(f64::NEG_INFINITY, f64::max);
+        // Five seconds at a time, to the very end of the render.
+        let worst = spans(seconds, 5.0)
+            .into_iter()
+            .map(|(from, to)| (cue(&river.left, &river.right, RATE, &wide, from, to).ild_db, from, to))
+            .fold((f64::NEG_INFINITY, 0.0, 0.0), |worst, span| if span.0 > worst.0 { span } else { worst });
         check(
             "the river stays on the left",
-            worst < -1.0,
-            format!("right minus left never above {worst:+.1} dB over {span} s"),
+            worst.0 < -1.0,
+            format!(
+                "right minus left never above {:+.1} dB (from {} to {} s), 5 s at a time",
+                worst.0, worst.1, worst.2
+            ),
         );
     }
 
@@ -620,6 +636,29 @@ fn main() -> ExitCode {
         Err(why) => {
             eprintln!("paris-soundscape: {why}");
             ExitCode::FAILURE
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::spans;
+
+    #[test]
+    fn a_render_is_checked_to_its_very_end() {
+        assert_eq!(spans(45.0, 5.0).len(), 9);
+        assert_eq!(spans(45.0, 5.0)[8], (40.0, 45.0));
+        // What is left over is looked at too: two seconds of it by themselves, less than one with the last five.
+        assert_eq!(spans(42.0, 5.0)[8], (40.0, 42.0));
+        assert_eq!(spans(47.0, 5.0)[9], (45.0, 47.0));
+        assert_eq!(spans(45.4, 5.0).last(), Some(&(40.0, 45.4)));
+        assert_eq!(spans(1.0, 5.0), vec![(0.0, 1.0)]);
+        assert_eq!(spans(0.4, 5.0), vec![(0.0, 0.4)]);
+        // Every instant is in a span, and in one only.
+        for seconds in [0.4, 1.0, 4.99, 5.0, 5.5, 6.0, 42.0, 45.0, 47.0] {
+            let cut = spans(seconds, 5.0);
+            assert_eq!((cut[0].0, cut[cut.len() - 1].1), (0.0, seconds));
+            assert!(cut.windows(2).all(|pair| pair[0].1 == pair[1].0));
         }
     }
 }

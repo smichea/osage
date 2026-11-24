@@ -31,7 +31,7 @@ use crate::{
     ears::{HEAD_RADIUS, Heard, Listening, PINNA, hear_for},
     scene::{Head, Load, Material, Reach, Scene, Touching},
     space::{Placement, Vec3},
-    ways::{Face, SOUND, Way, Ways, air_loss, direct, mirrored},
+    ways::{Face, SOUND, Scatter, Way, Ways, air_loss, direct, mirrored},
 };
 
 pub use osage_paris_voices::RATE;
@@ -234,6 +234,17 @@ impl Aim {
         Aim { gains: [0.0; 4], send: 0.0, ..self }
     }
 
+    /// This way with nothing for the ears: only what it feeds the space's
+    /// own answer.
+    fn feeding(self) -> Aim {
+        Aim { gains: [0.0; 4], ..self }
+    }
+
+    /// Whether it reaches the ears with something.
+    fn sounds(&self) -> bool {
+        self.gains != [0.0; 4]
+    }
+
     /// This aim gone `share` of the way to `to`.
     fn toward(&self, to: &Aim, share: f32) -> Aim {
         let mix = |a: f32, b: f32| a + (b - a) * share;
@@ -313,8 +324,13 @@ struct Source {
     /// one, and what arrives by it left the emitter earlier, from where the
     /// emitter then was.
     lags: Vec<f64>,
-    /// Where it was at the end of the last block, if it was anywhere.
-    was: Option<Vec3>,
+    /// Whether its node or anything above it moves or turns. Where it was
+    /// at the end of each of the last blocks is then kept, for as long as
+    /// its sound can take to arrive: the newest at the block's own number.
+    moves: bool,
+    trail: Vec<Vec3>,
+    /// How many of them are kept since it was last placed.
+    trailed: usize,
     /// The node whose emitters stand for its branch from afar, from how far,
     /// and whether this is one of them (or one of the branch).
     cut: Option<(usize, f64, bool)>,
@@ -333,6 +349,33 @@ struct Source {
     speed: f32,
     accel: f32,
     detail: f32,
+}
+
+impl Source {
+    /// Where it was `ago` blocks before the end of block `block`, at which
+    /// it is at `now`: from what was kept, between two of them — and before
+    /// the oldest kept, where it then was. The sound that arrives now left
+    /// it then, whatever it has done since.
+    fn was(&self, now: Vec3, block: usize, ago: f64) -> Vec3 {
+        if self.trailed < 2 {
+            return now;
+        }
+        let kept = self.trail.len();
+        let oldest = self.trailed - 1;
+        let ago = ago.clamp(0.0, oldest as f64);
+        let whole = ago as usize;
+        let at = |back: usize| self.trail[(block + kept - back) % kept];
+        let newer = at(whole);
+        if whole >= oldest {
+            return newer;
+        }
+        newer + (at(whole + 1) - newer) * (ago - whole as f64)
+    }
+}
+
+/// How many blocks sound takes from `metres` away, and a few more.
+fn trail_blocks(metres: f64) -> usize {
+    (metres / SOUND / (BLOCK as f64 * DT)).ceil() as usize + 3
 }
 
 /// The space's own answer: eight lines feeding one another (a feedback
@@ -500,10 +543,9 @@ pub struct Engine {
     order: Vec<usize>,
     placed: Vec<Placement>,
     /// Kept from one block to the next, so that none makes a list: where
-    /// each source was when the sound now arriving straight left it; where
-    /// it is and how fast it goes.
-    places: Vec<Vec3>,
-    moves: Vec<(Vec3, Vec3)>,
+    /// each source is; what each face scatters of the one being looked at.
+    nows: Vec<Vec3>,
+    scatters: Vec<Option<Scatter>>,
     found: Ways,
     ranked: Vec<(f32, usize, usize)>,
     /// What the air takes at 4 kHz, dB a metre.
@@ -576,6 +618,7 @@ impl Engine {
         let mut sources = Vec::new();
         for (i, emitter) in scene.emitters.iter().enumerate() {
             let name = scene.emitter_name(i);
+            let moves = Self::moves(&scene, emitter.node);
             // As long as sound takes from as far as it is heard, and room to read.
             let ring = ((emitter.max_distance / SOUND * RATE as f64) as usize + 4 * BLOCK).next_power_of_two();
             sources.push(Source {
@@ -598,7 +641,9 @@ impl Engine {
                 lags: vec![0.0; lines],
                 asleep: false,
                 waking: 0,
-                was: None,
+                moves,
+                trail: if moves { vec![Vec3::ZERO; trail_blocks(emitter.max_distance)] } else { Vec::new() },
+                trailed: 0,
                 cut: match scene.tree.nodes[emitter.node].proxy_beyond {
                     Some(beyond) => Some((emitter.node, beyond, true)),
                     None => scene.tree.proxy_over(emitter.node).map(|(over, beyond)| (over, beyond, false)),
@@ -633,7 +678,9 @@ impl Engine {
                 lags: vec![0.0; lines],
                 asleep: false,
                 waking: 0,
-                was: None,
+                moves: false,
+                trail: vec![Vec3::ZERO; trail_blocks(150.0)],
+                trailed: 0,
                 cut: None,
                 until: 0,
                 struck: false,
@@ -681,8 +728,8 @@ impl Engine {
             loading,
             order: scene.tree.order(),
             placed: Vec::new(),
-            places: Vec::new(),
-            moves: Vec::new(),
+            nows: Vec::new(),
+            scatters: Vec::new(),
             found: Ways::default(),
             ranked: Vec::new(),
             air,
@@ -701,6 +748,18 @@ impl Engine {
 
     pub fn scene(&self) -> &Scene {
         &self.scene
+    }
+
+    /// Whether `node` or anything above it moves or turns.
+    fn moves(scene: &Scene, node: usize) -> bool {
+        let mut at = Some(node);
+        while let Some(i) = at {
+            if scene.tree.nodes[i].motion.is_some() || scene.tree.nodes[i].turning.is_some() {
+                return true;
+            }
+            at = scene.tree.nodes[i].parent;
+        }
+        false
     }
 
     /// The instant of the next sample to be rendered, s.
@@ -785,14 +844,21 @@ impl Engine {
         let offset = self.placed[node].local(point + Vec3::Y * 0.03);
         let first = self.scene.emitters.len();
         let pool = self.sources.len() - first;
+        let moves = Self::moves(&self.scene, node);
         for (voice, mut params) in sounding {
             if pool == 0 {
                 return;
             }
+            // What solo or mute leaves out takes no voice from what is
+            // heard; and it is counted all the same, so that a contact heard
+            // alone is made of the seed it has among the others.
+            self.contacts += 1;
+            if !heard {
+                continue;
+            }
             // A free voice, or the one nearest its end.
             let slot = first + (0..pool).min_by_key(|&k| self.sources[first + k].until).unwrap_or(0);
             params.set("hardness", hardness);
-            self.contacts += 1;
             let seed = seed_for(self.scene.seed, &format!("contact {}", self.contacts));
             let source = &mut self.sources[slot];
             source.voice = osage_paris_voices::make(&voice, seed, &params).expect("a contact's voice exists");
@@ -807,7 +873,8 @@ impl Engine {
             source.waking = 0;
             source.hit = Some(Hit { at: at.min(BLOCK - 1), strength: strength.clamp(0.0, 1.0) as f32 });
             source.lags.fill(0.0);
-            source.was = None;
+            source.moves = moves;
+            source.trailed = 0;
             source.ring.fill(0.0);
             for line in &mut source.lines {
                 *line = Line::default();
@@ -901,26 +968,32 @@ impl Engine {
         self.touch(t1, seconds);
         self.tally.touching += clock.elapsed().as_secs_f64();
 
-        // Where each source was when the sound now arriving straight left
-        // it: where it is, less what it has moved since.
+        // Where each source is; one that moves leaves a trail, from which
+        // where it was when a sound left it is read back.
         let clock = std::time::Instant::now();
-        let (mut places, mut moves) = (std::mem::take(&mut self.places), std::mem::take(&mut self.moves));
-        places.clear();
-        moves.clear();
+        let (mut nows, mut scatters) = (std::mem::take(&mut self.nows), std::mem::take(&mut self.scatters));
+        let block = self.block as usize;
+        nows.clear();
         for source in &mut self.sources {
             let now = self.placed[source.node].point(source.offset);
-            let moved = source.was.map_or(Vec3::ZERO, |was| (now - was) / seconds);
-            source.was = Some(now);
-            places.push(now - moved * source.lags[0]);
-            moves.push((now, moved));
+            if source.moves {
+                let kept = source.trail.len();
+                source.trail[block % kept] = now;
+                source.trailed = (source.trailed + 1).min(kept);
+            }
+            nows.push(now);
         }
         let mut ranked = std::mem::take(&mut self.ranked);
         let mut found = std::mem::take(&mut self.found);
         ranked.clear();
         for i in 0..self.sources.len() {
-            let place = places[i];
+            // Where it was when the sound now arriving straight left it.
+            let now = nows[i];
+            let place = self.sources[i].was(now, block, self.sources[i].lags[0] / seconds);
             let straight = place.distance(head.at);
-            let (speed, accel) = self.scene.tree.going(self.sources[i].node, t1 - self.sources[i].lags[0]);
+            // What its voice makes now is what it is doing now: the line
+            // carries it to the ears in its own time.
+            let (speed, accel) = self.scene.tree.going(self.sources[i].node, t1);
             let mut load = 0.5f32;
             let mut near_speed = None;
             match self.sources[i].emitter.map(|e| &self.scene.emitters[e].load) {
@@ -928,7 +1001,7 @@ impl Engine {
                     // How much of what loads it is near, and how fast that goes.
                     let (mut weight, mut moving) = (0.0f64, 0.0f64);
                     for &j in &self.loading[i] {
-                        let near = (1.0 - places[j].distance(place) / radius).max(0.0);
+                        let near = (1.0 - nows[j].distance(now) / radius).max(0.0);
                         weight += near;
                         moving += near * f64::from(self.sources[j].speed);
                     }
@@ -974,6 +1047,7 @@ impl Engine {
                 continue;
             }
             let mirrors = source.mirrors && (quality.mirrors || quality.folded);
+            let feeds = source.mirrors && quality.reverb;
             // A way longer than the emitter is heard from is not one: its
             // sound is no longer in the line, and is never read sooner than
             // it took to come.
@@ -981,22 +1055,21 @@ impl Engine {
             found.direct = direct(place, head.at, &faces);
             found.mirrored.clear();
             found.mirrored.resize(faces.len(), None);
-            found.scattered = 0.0;
-            if mirrors {
-                let (now, moved) = moves[i];
-                for k in 0..faces.len() {
+            scatters.clear();
+            scatters.resize(faces.len(), None);
+            if mirrors || feeds {
+                for k in (0..faces.len()).filter(|&k| faces[k].reflects) {
                     // What a face sends back left the emitter earlier than
                     // what comes straight: from where the emitter was then,
                     // by the way found last.
-                    let from = now - moved * source.lags[1 + k];
-                    let (way, scattered) = mirrored(k, from, head.at, &faces, quality.careful);
-                    source.lags[1 + k] = way.map_or(source.lags[0], |way| way.length / SOUND);
-                    found.mirrored[k] = way.filter(|way| way.length <= reach);
-                    found.scattered += scattered;
+                    let from = source.was(now, block, source.lags[1 + k] / seconds);
+                    let (way, scatter) = mirrored(k, from, head.at, &faces, quality.careful);
+                    let length = way.map(|way| way.length).or(scatter.map(|scatter| scatter.length));
+                    source.lags[1 + k] = length.map_or(source.lags[0], |length| length / SOUND);
+                    found.mirrored[k] = way.filter(|way| mirrors && way.length <= reach);
+                    scatters[k] = scatter.filter(|scatter| feeds && scatter.length <= reach);
                 }
             }
-            let send =
-                if quality.reverb { (level * found.scattered.sqrt() * self.scene.reverb.gain) as f32 } else { 0.0 };
             let aim = |way: &Way, send: f32| {
                 let length = way.length.max(NEAREST);
                 let gains: [f32; 4] = std::array::from_fn(|b| (level * way.bands[b] / length) as f32);
@@ -1023,34 +1096,55 @@ impl Engine {
                         }
                     }
                 }
-                source.targets[0] = Some(aim(&way, send));
+                source.targets[0] = Some(aim(&way, 0.0));
             }
-            if quality.mirrors {
-                for (k, way) in found.mirrored.iter().enumerate() {
-                    source.targets[1 + k] = way.as_ref().map(|way| aim(way, 0.0));
-                }
+            for (k, scatter) in scatters.iter().enumerate() {
+                // What a face scatters goes to the space's own answer by the
+                // way it takes by that face, at the time that way takes: on
+                // the mirrored way when it is followed, and otherwise on a
+                // way of its own that reaches the ears with nothing.
+                let send =
+                    scatter.map_or(0.0, |scatter| (level * scatter.energy.sqrt() * self.scene.reverb.gain) as f32);
+                source.targets[1 + k] = match (found.mirrored[k].filter(|_| quality.mirrors), scatter) {
+                    (Some(way), _) => Some(aim(&way, send)),
+                    (None, Some(scatter)) if send > 0.0 => {
+                        Some(aim(&Way { length: scatter.length, from: scatter.from, bands: [0.0; 4] }, send))
+                    }
+                    _ => None,
+                };
             }
         }
         for (i, source) in self.sources.iter_mut().enumerate() {
             source.aims.copy_from_slice(&source.targets);
             for (k, aim) in source.aims.iter().enumerate() {
-                if let Some(aim) = aim {
+                // (What only feeds the space's answer is not a way to the
+                // ears, and costs next to nothing: it is not counted.)
+                if let Some(aim) = aim.filter(Aim::sounds) {
                     // A way already followed is kept against one a little
                     // louder: two near the budget's edge would otherwise
                     // take each other's place block after block.
-                    let held = if source.lines[k].live { 1.2 } else { 1.0 };
+                    let held = if source.lines[k].live && source.lines[k].now.sounds() { 1.2 } else { 1.0 };
                     ranked.push((aim.gains[1].max(aim.gains[0]) * held, i, k));
                 }
             }
         }
-        // Only the loudest ways are rendered.
+        // Only the loudest ways are rendered; one left out still feeds the
+        // space's answer what its face scatters.
         if ranked.len() > quality.ways {
             ranked.sort_by(|a, b| b.0.total_cmp(&a.0).then(a.1.cmp(&b.1)).then(a.2.cmp(&b.2)));
             for &(_, i, k) in &ranked[quality.ways..] {
-                self.sources[i].aims[k] = None;
+                let aim = &mut self.sources[i].aims[k];
+                *aim = aim.map(Aim::feeding).filter(|aim| k > 0 && aim.send > 0.0);
             }
         }
-        (self.places, self.moves, self.ranked, self.found) = (places, moves, ranked, found);
+        // An emitter none of whose ways reaches the ears feeds nothing
+        // either: its voice sleeps.
+        for source in &mut self.sources {
+            if !source.aims.iter().flatten().any(Aim::sounds) {
+                source.aims.fill(None);
+            }
+        }
+        (self.nows, self.scatters, self.ranked, self.found) = (nows, scatters, ranked, found);
         self.tally.finding += clock.elapsed().as_secs_f64();
 
         // Every voice that is heard makes its block, into its own line.
@@ -1115,8 +1209,10 @@ impl Engine {
                 let goal = match aim {
                     Some(target) => {
                         if !line.live {
-                            // A new way: from silence where it will be — or, for a
-                            // contact, there at once (nothing was sounding before).
+                            // A new way, with nothing left of an older one: from
+                            // silence where it will be — or, for a contact, there
+                            // at once (nothing was sounding before).
+                            *line = Line::default();
                             line.now = if source.struck { *target } else { target.silent() };
                         }
                         // Evenly, over the blocks left until its ways are found anew.
@@ -1125,22 +1221,26 @@ impl Engine {
                     None if line.live => line.now.silent(),
                     None => continue,
                 };
-                run(
-                    line,
-                    &goal,
-                    &source.ring,
-                    base,
-                    parts,
-                    self.clear,
-                    &self.sinc,
-                    quality,
-                    self.options.listening,
-                    left,
-                    right,
-                    &mut self.send,
-                );
+                if goal.sounds() || line.now.sounds() {
+                    run(
+                        line,
+                        &goal,
+                        &source.ring,
+                        base,
+                        parts,
+                        self.clear,
+                        &self.sinc,
+                        quality,
+                        self.options.listening,
+                        left,
+                        right,
+                        &mut self.send,
+                    );
+                    ways_now += 1;
+                } else {
+                    feed(line, &goal, &source.ring, base, &mut self.send);
+                }
                 line.live = aim.is_some();
-                ways_now += 1;
             }
             source.struck = false;
             source.left = source.left.saturating_sub(1).max(1);
@@ -1177,6 +1277,31 @@ fn cubic(p: f32, q: f32, r: f32, s: f32, f: f32) -> f32 {
         + q * ((f + 1.0) * (f - 1.0) * (f - 2.0) / 2.0)
         + r * (-(f + 1.0) * f * (f - 2.0) / 2.0)
         + s * ((f + 1.0) * f * (f - 1.0) / 6.0)
+}
+
+/// A way that reaches the ears with nothing, for one block: only what it
+/// feeds the space's own answer — the emitter's line read `delay` back,
+/// between two samples (that answer blurs far more than this does).
+fn feed(line: &mut Line, goal: &Aim, ring: &[f32], base: u64, send: &mut [f32]) {
+    let mask = ring.len() - 1;
+    let from = line.now;
+    if from.send != 0.0 || goal.send != 0.0 {
+        // The point read, in whole samples and 2³² parts of one, as in `run`.
+        let slope = (goal.delay - from.delay) / BLOCK as f64;
+        let first = base as f64 + (ring.len() * 4) as f64 - from.delay - slope;
+        const ONE: f64 = 4_294_967_296.0;
+        let mut point = (((first.floor() as u64) & 0xffff_ffff) << 32) | ((first - first.floor()) * ONE) as u64;
+        let advance = ((1.0 - slope) * ONE) as u64;
+        let step = (goal.send - from.send) / BLOCK as f32;
+        for (n, to) in send.iter_mut().enumerate() {
+            let (i, f) = ((point >> 32) as usize, ((point as u32) >> 8) as f32 * (1.0 / 16_777_216.0));
+            let here = ring[i & mask];
+            *to += (here + (ring[i.wrapping_add(1) & mask] - here) * f) * (from.send + step * (n + 1) as f32);
+            point = point.wrapping_add(advance);
+        }
+    }
+    // What it would hold had it been carried to the ears: nothing.
+    *line = Line { live: line.live, now: *goal, ..Line::default() };
 }
 
 /// One way for one block: the emitter's line read `delay` back, through the

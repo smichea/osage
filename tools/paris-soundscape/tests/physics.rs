@@ -13,7 +13,7 @@ use osage_paris_soundscape::{
 };
 
 /// A scene from its nodes (the first is the root; the listener is the node
-/// "ears" under it), with three materials to mirror with and three things to
+/// "ears" under it), with four materials to mirror with and three things to
 /// touch.
 fn scene(nodes: &str, seconds: f64) -> Scene {
     let text = format!(
@@ -25,7 +25,8 @@ fn scene(nodes: &str, seconds: f64) -> Scene {
           "acousticMaterials": {{
             "hard": {{"absorption": [0.0, 0.0, 0.0], "transmission": [0.0, 0.0, 0.0], "scattering": 0.0}},
             "felt": {{"absorption": [0.19, 0.51, 0.75], "transmission": [0.0, 0.0, 0.0], "scattering": 0.0}},
-            "rough": {{"absorption": [0.1, 0.1, 0.1], "transmission": [0.0, 0.0, 0.0], "scattering": 0.6}}}}}},
+            "rough": {{"absorption": [0.1, 0.1, 0.1], "transmission": [0.0, 0.0, 0.0], "scattering": 0.6}},
+            "matte": {{"absorption": [0.0, 0.0, 0.0], "transmission": [0.0, 0.0, 0.0], "scattering": 1.0}}}}}},
         "osageSound": {{"version": 0, "contactSounds": {{
           "ground": {{"hardness": 0.5}},
           "plate": {{"params": {{"tone": 400, "ring": 0.3, "shape": 1, "scuff": 0.0}}, "hardness": 1.0}},
@@ -379,8 +380,8 @@ fn the_same_scene_twice_is_the_same_samples() {
 }
 
 /// What an engine started at the instant 0 makes of `scene` in `seconds`: nothing sounded before.
-fn from_the_first_sample(scene: Scene, seconds: f64) -> Vec<f32> {
-    let mut engine = Engine::new(scene, Options { start: 0.0, ..options(Listening::Speakers) });
+fn from_the_first_sample(scene: Scene, quality: Quality, seconds: f64) -> Vec<f32> {
+    let mut engine = Engine::new(scene, Options { quality, listening: Listening::Speakers, ..Options::default() });
     let (mut left, mut right) = ([0.0f32; BLOCK], [0.0f32; BLOCK]);
     let mut heard = Vec::new();
     while heard.len() < (seconds * RATE as f64) as usize {
@@ -406,7 +407,7 @@ fn an_echo_arrives_when_its_way_says_or_not_at_all() {
             r#"{{"extras": {{"osage": {{"id": "hiss"}}, "osageSound": {{
                  "emitters": [{{"id": "sound", "voice": "noise", "maxDistanceM": {reach}}}]}}}}}}"#
         );
-        from_the_first_sample(scene(&[world(2, wall), ears.to_owned(), hiss].join(","), 1.0), 0.25)
+        from_the_first_sample(scene(&[world(2, wall), ears.to_owned(), hiss].join(","), 1.0), DRY, 0.25)
     };
     let (alone, mirrored) = (heard(60.0, false), heard(60.0, true));
     // Straight, half a metre: 70 samples.
@@ -539,4 +540,132 @@ fn the_space_answers_each_band_for_as_long_as_it_is_asked() {
         1.0,
     );
     assert!(other.left != short.left);
+}
+
+#[test]
+fn what_a_wall_scatters_is_answered_when_its_way_says_or_not_at_all() {
+    // The same noise, ears and wall 25 m away as for the echo, but the wall mirrors nothing and scatters
+    // everything: what it sends goes to the space's own answer, 50.5 m late like the echo — then through the
+    // shortest of the answer's own lines, 631 samples more.
+    let heard = |reach: f64, wall: bool| {
+        let surfaces = if wall {
+            r#", "osageSound": {"surfaces": [{"id": "wall", "acoustic": "matte", "occludes": false,
+                 "quadM": [[-25, -40, -40], [-25, -40, 40], [-25, 40, 40], [-25, 40, -40]]}]}"#
+        } else {
+            ""
+        };
+        let ears = r#"{"translation": [0.5, 0, 0], "extras": {"osage": {"id": "ears"}}}"#;
+        let hiss = format!(
+            r#"{{"extras": {{"osage": {{"id": "hiss"}}, "osageSound": {{
+                 "emitters": [{{"id": "sound", "voice": "noise", "maxDistanceM": {reach}}}]}}}}}}"#
+        );
+        let scene = scene(&[world(2, surfaces), ears.to_owned(), hiss].join(","), 1.0);
+        from_the_first_sample(scene, Quality::REFERENCE, 0.25)
+    };
+    let (alone, scattered) = (heard(60.0, false), heard(60.0, true));
+    let first = alone.iter().zip(&scattered).position(|(a, b)| a != b).expect("the wall is answered");
+    assert!((7_067 + 631 - 3..=7_067 + 631 + 2).contains(&first), "the answer starts at sample {first}");
+    // An emitter heard from a metre at most is not answered by a wall 25 m away.
+    assert_eq!(heard(1.0, true), heard(1.0, false));
+}
+
+#[test]
+fn an_echo_changes_when_what_changed_it_arrives() {
+    // A horn at rest, a mirror 60 m behind it, ears 80 m in front. At 1 s it sets off towards the ears, at
+    // 50 m/s within a hundredth of a second. By the mirror the way is 200 m: nothing of that reaches the ears
+    // before 1.583 s.
+    let heard = |mirror: bool| {
+        let wall = if mirror {
+            r#", "osageSound": {"surfaces": [{"id": "mirror", "acoustic": "hard", "occludes": false,
+                 "quadM": [[-60, -300, -300], [-60, -300, 300], [-60, 300, 300], [-60, 300, -300]]}]}"#
+        } else {
+            ""
+        };
+        let ears = r#"{"translation": [80, 0, 0], "extras": {"osage": {"id": "ears"}}}"#;
+        let horn = r#"{"extras": {"osage": {"id": "car"}, "osageSound": {
+            "motion": {"alongM": [1, 0, 0], "atS": 1.0, "speedKmh": [[0, 0], [0.01, 180]]},
+            "emitters": [{"id": "horn", "voice": "tone", "params": {"hz": 1000}}]}}}"#;
+        let made = render(
+            &scene(&[world(2, wall), ears.to_owned(), horn.to_owned()].join(","), 2.0),
+            &options(Listening::Speakers),
+            2.0,
+        );
+        made.left.iter().zip(&made.right).map(|(l, r)| l + r).collect::<Vec<f32>>()
+    };
+    let (alone, mirrored) = (heard(false), heard(true));
+    let echo: Vec<f32> = mirrored.iter().zip(&alone).map(|(both, straight)| both - straight).collect();
+    // Straight, 80 m: the horn is heard to move from 1.243 s.
+    assert!((pitch(part(&alone, 1.0, 1.2)) - 1_000.0).abs() < 0.3);
+    assert!((pitch(part(&alone, 1.3, 1.5)) - 1_170.65).abs() < 0.3);
+    // By the mirror it still sounds at rest then, and until 1.583 s; after, it is heard to go away.
+    let (before, after) = (pitch(part(&echo, 1.14, 1.44)), pitch(part(&echo, 1.65, 1.95)));
+    assert!((before - 1_000.0).abs() < 0.3, "by the mirror before 1.583 s: {before} Hz");
+    assert!((after - 872.77).abs() < 0.3, "by the mirror after: {after} Hz");
+}
+
+#[test]
+fn two_walls_hide_alike_in_either_order() {
+    // The two walls of equal detours, heard: listed one way or the other, the same samples.
+    let heard = |swapped: bool| {
+        let wall = |id: &str, z: f64, from: f64, to: f64| {
+            format!(
+                r#"{{"id": "{id}", "acoustic": "hard", "reflects": false,
+                     "quadM": [[{from}, -5, {z}], [{to}, -5, {z}], [{to}, 5, {z}], [{from}, 5, {z}]]}}"#
+            )
+        };
+        let mut walls = [wall("first", -1.0, -1.0, 0.2), wall("second", 1.0, -0.2, 1.0)];
+        if swapped {
+            walls.swap(0, 1);
+        }
+        let sound = format!(r#", "osageSound": {{"surfaces": [{}]}}"#, walls.join(","));
+        let ears = r#"{"translation": [0, 0, 6], "extras": {"osage": {"id": "ears"}}}"#;
+        let nodes = [world(2, &sound), ears.to_owned(), emitter("hiss", "noise", 0.0, [0.0, 0.0, -6.0])].join(",");
+        render(&scene(&nodes, 0.5), &options(Listening::Speakers), 0.5)
+    };
+    let (one, other) = (heard(false), heard(true));
+    assert!(rms(&one.left) > 0.0);
+    assert!(one.left == other.left && one.right == other.right);
+}
+
+#[test]
+fn a_contact_left_out_takes_no_voice_from_one_that_is_heard() {
+    // Five people walking in step, and four voices for their steps. Whoever is listened to alone is heard,
+    // the first listed as the last.
+    let floor = r#"{"extras": {"osage": {"id": "floor"}, "osageSound": {"surfaces": [
+        {"id": "boards", "quadM": [[-50, 0, -50], [-50, 0, 50], [50, 0, 50], [50, 0, -50]], "collision": "ground"}]}}}"#;
+    let ears = r#"{"translation": [0, 1.6, 0], "extras": {"osage": {"id": "ears"}}}"#;
+    let walker = |k: usize| {
+        format!(
+            r#"{{"translation": [0, 0, {}], "extras": {{"osage": {{"id": "walker-{k}"}}, "osageSound": {{
+                 "motion": {{"alongM": [1, 0, 0], "atS": 0, "speedKmh": 5.4}},
+                 "touches": [{{"kind": "steps", "material": "sole", "strideM": 0.7, "feetM": [[0, 0, 0]]}}]}}}}}}"#,
+            -2.0 - k as f64
+        )
+    };
+    let alone = |order: [usize; 5], who: usize| {
+        let mut nodes = vec![world(7, ""), ears.to_owned(), floor.to_owned()];
+        nodes.extend(order.map(walker));
+        let quality = Quality { contacts: 4, ..DRY };
+        let options = Options {
+            quality,
+            listening: Listening::Speakers,
+            solo: vec![format!("walker-{who}")],
+            ..Options::default()
+        };
+        render(&scene(&nodes.join(","), 1.5), &options, 1.5)
+    };
+    for who in [0, 4] {
+        let (listed_first, listed_last) = (alone([who, 1, 2, 3, 4 - who], who), alone([4 - who, 1, 2, 3, who], who));
+        for heard in [&listed_first, &listed_last] {
+            assert!(
+                heard.tally.contacts >= 3 && heard.peak() > 1e-4,
+                "{} steps, peak {}",
+                heard.tally.contacts,
+                heard.peak()
+            );
+        }
+        // The same steps on the same boards, each with its own grain: as loud within a few decibels.
+        let ratio = rms(&listed_first.left) / rms(&listed_last.left);
+        assert!((0.5..2.0).contains(&ratio), "walker-{who} listed first or last: {ratio}");
+    }
 }
