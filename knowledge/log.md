@@ -2,6 +2,7 @@
 
 ## 2026-11-24
 
+* **Creation**: Added the algorithm [sound faces from meshes](/algorithms/sound-faces.md) to [osage-sound](/modules/osage-sound.md) (issue #15): faces from an object's meshes through [osage-objects](/modules/osage-objects.md), sheets, a tree of boxes over the faces, and contacts as [osage-dynamics](/modules/osage-dynamics.md) reports them.
 * Articulated stops, first lift contact, load transfer, the support footprint and the closest capsule-to-box witness are documented in the algorithm cards. The [loaded landing](https://github.com/smichea/osage/blob/main/crates/osage-dynamics/tests/loaded_landing.rs) exercises the two engine crates together.
 * Added [osage-objects](/modules/osage-objects.md) for the glTF object tree and [osage-dynamics](/modules/osage-dynamics.md) for fixed-step contacts and articulated bodies.
 * **Creation**: Added the algorithm [far sound field](/algorithms/far-sound-field.md) to [osage-sound](/modules/osage-sound.md) (issue #17): far sound as an ambisonic field per cube, its cost, what it loses against ways, and its bit rate in Opus.

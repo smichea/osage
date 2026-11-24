@@ -5444,6 +5444,9 @@ version = "0.1.0"
 dependencies = [
  "bevy",
  "crossbeam-channel",
+ "gltf",
+ "osage-dynamics",
+ "osage-objects",
  "osage-sound-analysis",
  "osage-sound-voices",
  "serde_json",
@@ -5585,6 +5588,8 @@ dependencies = [
 name = "paris-soundscape"
 version = "0.1.0"
 dependencies = [
+ "gltf",
+ "osage-objects",
  "osage-sound",
  "osage-sound-analysis",
  "osage-sound-voices",

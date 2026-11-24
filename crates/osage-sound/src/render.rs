@@ -12,7 +12,7 @@
 use osage_sound_voices::dsp::{Noise, seed_for};
 
 use crate::{
-    engine::{BLOCK, Engine, FieldEars, Options, Pose, RATE, Tally},
+    engine::{BLOCK, Engine, FieldEars, Options, Pose, RATE, Struck, Tally},
     field::MOST,
     scene::Scene,
 };
@@ -55,6 +55,14 @@ impl Hearing {
     pub fn drive(&mut self, node: usize, pose: Pose) {
         let at = self.instant();
         self.drive_at(node, pose, at);
+    }
+
+    /// A contact a solver reports, in both parts ([`Engine::strike_told`]).
+    pub fn strike_told(&mut self, struck: Struck) {
+        if let Some((far, ..)) = &mut self.far {
+            far.strike_told(struck.clone());
+        }
+        self.near.strike_told(struck);
     }
 
     /// The next block for each ear: the near part, and the far field heard

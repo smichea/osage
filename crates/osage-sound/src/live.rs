@@ -42,7 +42,7 @@ use std::{
 use crossbeam_channel::{Receiver, Sender, TryRecvError, bounded, unbounded};
 
 use crate::{
-    engine::{BLOCK, Options, Pose},
+    engine::{BLOCK, Options, Pose, Struck},
     render::{Hearing, LEAD, Replay, Told},
     scene::Scene,
 };
@@ -54,6 +54,7 @@ pub const CHANNELS: u16 = 2;
 
 enum Order {
     Pose { node: usize, pose: Pose, sent: Instant },
+    Strike(Struck),
 }
 
 /// A block made, as the output reads it.
@@ -130,6 +131,7 @@ impl Live {
                                 engine.drive(node, pose);
                                 told = Some(told.map_or(sent, |earlier: Instant| earlier.min(sent)));
                             }
+                            Ok(Order::Strike(struck)) => engine.strike_told(struck),
                             Err(TryRecvError::Empty) => break,
                             Err(TryRecvError::Disconnected) => return,
                         }
@@ -156,6 +158,13 @@ impl Live {
     /// ([`crate::engine::Engine::drive`]).
     pub fn drive(&self, node: usize, pose: Pose) {
         let _ = self.orders.send(Order::Pose { node, pose, sent: Instant::now() });
+    }
+
+    /// A contact the physics reports, struck at its instant on the scene's
+    /// clock or as soon as the next block if that is past
+    /// ([`crate::engine::Engine::strike_told`]).
+    pub fn strike(&self, struck: Struck) {
+        let _ = self.orders.send(Order::Strike(struck));
     }
 
     /// What the audio output reads.

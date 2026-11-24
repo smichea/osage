@@ -31,7 +31,11 @@
 //! screens" (Applied Acoustics 1, 1968) in the piecewise form that continues
 //! into the lit side; ISO 9613-1:1993.
 
-use crate::{scene::Material, space::Vec3};
+use crate::{
+    faces::Faces,
+    scene::Material,
+    space::{Vec3, vec3},
+};
 
 /// The speed of sound, m/s, as `osage-kart-native` takes it.
 pub const SOUND: f64 = 343.0;
@@ -44,13 +48,24 @@ pub const BANDS: [f64; 4] = [250.0, 1_000.0, 4_000.0, 9_000.0];
 /// the rim of its face.
 const RIM: f64 = 0.5;
 
-/// A flat face in the world.
+/// A flat face in the world: four corners in order round it, or three — a
+/// triangle is a face whose last two corners are one.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Face {
     pub corners: [Vec3; 4],
     pub normal: Vec3,
     /// For each side, the direction into the face, in its plane.
     inward: [Vec3; 4],
+    /// For each side, whether the face ends there: an edge sound bends
+    /// round and a reflection fades out at. A side shared with a face of the
+    /// same plane is not one ([`crate::faces::sheets`]); nor is the side of
+    /// no length a triangle has.
+    pub open: [bool; 4],
+    /// Which sheet it is of: the number of its first face, among the faces
+    /// it is given with (its own, alone). A way that goes through a sheet
+    /// goes round the sheet's edges, wherever they are; a sheet mirrors from
+    /// its plane, by the faces the mirror point is on, and scatters once.
+    pub sheet: usize,
     pub material: Material,
     pub reflects: bool,
     pub occludes: bool,
@@ -58,15 +73,32 @@ pub struct Face {
 
 impl Face {
     pub fn new(corners: [Vec3; 4], material: Material, reflects: bool, occludes: bool) -> Face {
-        let normal = (corners[1] - corners[0]).cross(corners[3] - corners[0]).unit_or(Vec3::Y);
-        let centre = (corners[0] + corners[1] + corners[2] + corners[3]) / 4.0;
-        let inward = std::array::from_fn(|i| {
+        let normal = (corners[1] - corners[0]).cross(corners[3] - corners[0]);
+        // A triangle: its normal from its three corners.
+        let normal =
+            if normal.length() > 1e-12 { normal } else { (corners[1] - corners[0]).cross(corners[2] - corners[0]) };
+        let normal = normal.unit_or(Vec3::Y);
+        let triangle = corners[2].distance(corners[3]) < 1e-9;
+        let centre = if triangle {
+            (corners[0] + corners[1] + corners[2]) / 3.0
+        } else {
+            (corners[0] + corners[1] + corners[2] + corners[3]) / 4.0
+        };
+        let open: [bool; 4] = std::array::from_fn(|i| corners[i].distance(corners[(i + 1) % 4]) >= 1e-9);
+        let mut inward: [Vec3; 4] = std::array::from_fn(|i| {
             let side = corners[(i + 1) % 4] - corners[i];
             let across = normal.cross(side).unit_or(Vec3::X);
             // Whichever way round the corners are given.
             if (centre - corners[i]).dot(across) < 0.0 { -across } else { across }
         });
-        Face { corners, normal, inward, material, reflects, occludes }
+        // A side of no length bounds nothing of its own: it repeats the
+        // side before it, whose line it lies on.
+        for i in 0..4 {
+            if !open[i] {
+                inward[i] = inward[(i + 3) % 4];
+            }
+        }
+        Face { corners, normal, inward, open, sheet: usize::MAX, material, reflects, occludes }
     }
 
     /// How far above the face's plane a point is, m, along its normal.
@@ -80,6 +112,32 @@ impl Face {
         (0..4).map(|i| (p - self.corners[i]).dot(self.inward[i])).fold(f64::INFINITY, f64::min)
     }
 
+    /// Whether a point of its plane is on the face. On a side it shares
+    /// with another face of its plane, it is on one of the two only — the
+    /// one whose direction into it comes first by x, then y, then z — so
+    /// that nothing passes between two faces of one wall, and nothing is
+    /// stopped twice.
+    pub fn covers(&self, p: Vec3) -> bool {
+        (0..4).all(|i| {
+            let d = (p - self.corners[i]).dot(self.inward[i]);
+            if self.open[i] || !owns(self.inward[i]) { d > 0.0 } else { d >= 0.0 }
+        })
+    }
+
+    /// How much of a reflection whose mirror point is `p` the face sends:
+    /// 1 inside, fading to nothing over [`RIM`] as `p` nears a side where
+    /// the face ends, and across a side it shares, half on it, so that the
+    /// two faces' shares sum to one.
+    fn rim(&self, p: Vec3) -> f64 {
+        (0..4)
+            .map(|i| {
+                let d = (p - self.corners[i]).dot(self.inward[i]) / RIM;
+                if self.open[i] { d } else { 0.5 + d }
+            })
+            .fold(f64::INFINITY, f64::min)
+            .clamp(0.0, 1.0)
+    }
+
     /// Where the straight line from `a` to `b` goes through the face, if it
     /// does strictly between them.
     pub fn crossed(&self, a: Vec3, b: Vec3) -> Option<Vec3> {
@@ -88,7 +146,7 @@ impl Face {
             return None;
         }
         let p = a + (b - a) * (ha / (ha - hb));
-        (self.inside(p) > 0.0).then_some(p)
+        self.covers(p).then_some(p)
     }
 
     /// The point of the face nearest to a point of its plane.
@@ -103,6 +161,39 @@ impl Face {
         }
         p
     }
+
+    /// The box the face lies in.
+    pub fn bounds(&self) -> [Vec3; 2] {
+        let mut lo = self.corners[0];
+        let mut hi = lo;
+        for c in &self.corners[1..] {
+            lo = vec3(lo.x.min(c.x), lo.y.min(c.y), lo.z.min(c.z));
+            hi = vec3(hi.x.max(c.x), hi.y.max(c.y), hi.z.max(c.z));
+        }
+        [lo, hi]
+    }
+
+    /// The direction into the face across its side `side`, in its plane.
+    pub fn inward(&self, side: usize) -> Vec3 {
+        self.inward[side]
+    }
+
+    /// Its area, m².
+    pub fn area(&self) -> f64 {
+        let [a, b, c, d] = self.corners;
+        ((b - a).cross(c - a).length() + (c - a).cross(d - a).length()) / 2.0
+    }
+}
+
+/// Of the two faces that share a side, whether the one whose direction into
+/// it is `inward` has the side as its own.
+fn owns(inward: Vec3) -> bool {
+    for c in [inward.x, inward.y, inward.z] {
+        if c.abs() > 1e-9 {
+            return c > 0.0;
+        }
+    }
+    false
 }
 
 /// One way from an emitter to the head.
@@ -123,7 +214,7 @@ pub struct Way {
 pub struct Ways {
     /// Straight or round an edge.
     pub direct: Option<Way>,
-    /// By each face, in the faces' order; `None` where a face mirrors
+    /// By each face (in the engine, by each sheet), in their order; `None` where it mirrors
     /// nothing to the head.
     pub mirrored: Vec<Option<Way>>,
     /// The energy the faces scatter towards the head, of what the emitter
@@ -166,44 +257,50 @@ fn apex(a: Vec3, b: Vec3, source: Vec3, head: Vec3) -> Vec3 {
 
 /// What is left of the pressure, in each of [`BANDS`], of a sound that goes
 /// straight from `a` to `b`: 1 with nothing between, and what each face
-/// that hides lets through for those it crosses. The product is the same to
+/// that hides lets through for those it crosses (but those of the sheet
+/// `but`, which the way ends on). The product is the same to
 /// the last bit however the faces are listed: two shares multiply alike in
 /// either order, and three or more are taken in the order the way meets
 /// their faces ([`through_many`]).
-fn through(a: Vec3, b: Vec3, faces: &[Face], but: Option<usize>) -> [f64; 4] {
+fn through(a: Vec3, b: Vec3, faces: &Faces, but: Option<usize>) -> [f64; 4] {
     let mut left = [1.0; 4];
     let mut count = 0;
-    for (i, face) in faces.iter().enumerate() {
-        if face.occludes && Some(i) != but && face.crossed(a, b).is_some() {
-            count += 1;
-            if count > 2 {
-                return through_many(a, b, faces, but);
-            }
-            let passed = face.material.passed();
-            for (band, share) in left.iter_mut().enumerate() {
-                *share *= passed[band.min(2)];
-            }
+    let mut many = false;
+    faces.along(a, b, 0.0, |i| {
+        let face = &faces[i];
+        if many || !face.occludes || Some(face.sheet) == but || face.crossed(a, b).is_none() {
+            return;
         }
-    }
-    left
+        count += 1;
+        if count > 2 {
+            many = true;
+            return;
+        }
+        let passed = face.material.passed();
+        for (band, share) in left.iter_mut().enumerate() {
+            *share *= passed[band.min(2)];
+        }
+    });
+    if many { through_many(a, b, faces, but) } else { left }
 }
 
 /// [`through`] for a way that crosses three faces or more: what they let
 /// through, multiplied in the order the way meets them — and, of two met at
-/// one point, by what they let through.
-fn through_many(a: Vec3, b: Vec3, faces: &[Face], but: Option<usize>) -> [f64; 4] {
-    let mut met: Vec<(f64, [f64; 3])> = Vec::new();
-    for (i, face) in faces.iter().enumerate() {
+/// one point, in the order of the faces.
+fn through_many(a: Vec3, b: Vec3, faces: &Faces, but: Option<usize>) -> [f64; 4] {
+    let mut met: Vec<(f64, usize, [f64; 3])> = Vec::new();
+    faces.along(a, b, 0.0, |i| {
+        let face = &faces[i];
         if face.occludes
-            && Some(i) != but
+            && Some(face.sheet) != but
             && let Some(at) = face.crossed(a, b)
         {
-            met.push((a.distance(at), face.material.passed()));
+            met.push((a.distance(at), i, face.material.passed()));
         }
-    }
-    met.sort_unstable_by(|one, other| one.partial_cmp(other).unwrap_or(std::cmp::Ordering::Equal));
+    });
+    met.sort_unstable_by(|one, other| one.0.total_cmp(&other.0).then(one.1.cmp(&other.1)));
     let mut left = [1.0; 4];
-    for (_, passed) in &met {
+    for (_, _, passed) in &met {
         for (band, share) in left.iter_mut().enumerate() {
             *share *= passed[band.min(2)];
         }
@@ -224,12 +321,17 @@ fn heard(bands: &[f64; 4]) -> bool {
 /// for each way by itself, [`direct`] and [`mirrored`]: an emitter that
 /// moves was not in the same place when the sound of each left it.)
 pub fn ways(source: Vec3, head: Vec3, faces: &[Face], mirrors: bool, careful: bool) -> Ways {
-    let mut out = Ways { direct: direct(source, head, faces), mirrored: vec![None; faces.len()], scattered: 0.0 };
+    let faces = Faces::new(faces.to_vec(), &[]);
+    let mut out = Ways { direct: direct(source, head, &faces), mirrored: vec![None; faces.len()], scattered: 0.0 };
     if mirrors {
-        for i in 0..faces.len() {
-            let (way, scatter) = mirrored(i, source, head, faces, careful);
-            out.mirrored[i] = way;
-            out.scattered += scatter.map_or(0.0, |scatter| scatter.energy);
+        let mut found = Vec::new();
+        for i in (0..faces.len()).filter(|&i| faces[i].sheet == i) {
+            found.clear();
+            let scatter = mirrored(i, source, head, &faces, careful, &mut found);
+            for &(k, way) in &found {
+                out.mirrored[k] = Some(way);
+            }
+            out.scattered += scatter.map_or(0.0, |(_, scatter)| scatter.energy);
         }
     }
     out
@@ -251,32 +353,50 @@ fn rather(one: &Way, other: &Way) -> bool {
 
 /// The way that is not mirrored: straight, through what lets sound through,
 /// or round an edge.
-pub fn direct(source: Vec3, head: Vec3, faces: &[Face]) -> Option<Way> {
+pub fn direct(source: Vec3, head: Vec3, faces: &Faces) -> Option<Way> {
     let straight = source.distance(head);
     // The straight way: of each face it goes through, what the face lets
-    // through; and of the faces it passes beside, what grazing an edge
-    // leaves — as much of it as the face stops (a pane that lets everything
+    // through; and of the sheets it passes beside, what grazing an edge
+    // leaves — as much of it as the sheet stops (a pane that lets everything
     // through has no edge to sound), and of all those beside, the one that
-    // takes most. A face gone through does not take the others' edges away.
+    // takes most. A sheet gone through does not take the others' edges away.
     let mut bands = [1.0f64; 4];
     let mut beside = [1.0f64; 4];
-    let mut gone_through = 0;
-    for face in faces.iter().filter(|face| face.occludes) {
-        if face.crossed(source, head).is_some() {
-            // Its own edge is what the way round it is for.
-            gone_through += 1;
-            let passed = face.material.passed();
-            for (band, share) in bands.iter_mut().enumerate() {
-                *share *= passed[band.min(2)];
-            }
-            continue;
+    let mut crossing: Vec<usize> = Vec::new();
+    faces.along(source, head, 0.0, |k| {
+        if faces[k].occludes && faces[k].crossed(source, head).is_some() {
+            crossing.push(k);
         }
+    });
+    crossing.sort_unstable();
+    let gone_through = crossing.len();
+    for &k in &crossing {
+        let passed = faces[k].material.passed();
+        for (band, share) in bands.iter_mut().enumerate() {
+            *share *= passed[band.min(2)];
+        }
+    }
+    // The sheets an edge of which can sound on the straight way: an edge
+    // lengthens a way by at least 2·√(L²/4 + h²) − L when it is h from it,
+    // and none is heard beyond a quarter of a half wavelength at the lowest
+    // band. Taken in their order; a sheet gone through has its edges for the
+    // way round it.
+    let reach = 0.25 * SOUND / (2.0 * BANDS[0]);
+    let mut near: Vec<usize> = Vec::new();
+    faces.sheets_along(source, head, (reach * (2.0 * straight + reach)).sqrt() / 2.0 + reach, |sheet| {
+        if faces[sheet].occludes && !crossing.iter().any(|&k| faces[k].sheet == sheet) {
+            near.push(sheet);
+        }
+    });
+    near.sort_unstable();
+    for sheet in near {
         let mut nearest = f64::INFINITY;
-        for i in 0..4 {
-            let p = apex(face.corners[i], face.corners[(i + 1) % 4], source, head);
+        for (a, b, _) in faces.edges(sheet) {
+            let p = apex(a, b, source, head);
             nearest = nearest.min(source.distance(p) + p.distance(head) - straight);
         }
-        let passed = face.material.passed();
+        // The faces of a sheet are alike.
+        let passed = faces[sheet].material.passed();
         for (b, band) in beside.iter_mut().enumerate() {
             let loss = edge_loss(-nearest, BANDS[b]);
             if loss > 0.0 {
@@ -296,44 +416,46 @@ pub fn direct(source: Vec3, head: Vec3, faces: &[Face]) -> Option<Way> {
     if gone_through == 0 {
         return Some(passing);
     }
-    // Round an edge of a face that hides it: of all the edges, the one by
+    // Round an edge of a sheet that hides it — the faces of the sheets it
+    // goes through that end somewhere: of all the edges, the one by
     // which it arrives loudest — the shortest way round, among faces that
     // stop everything — with what that face stops, since what it lets
     // through does not go round, and what its two legs keep.
     let mut round: Option<Way> = None;
     // Of the one kept: what its face stops and its legs keep at 1 kHz.
     let mut kept = 0.0;
-    for face in faces.iter().filter(|face| face.occludes && face.crossed(source, head).is_some()) {
-        let passed = face.material.passed();
-        for side in 0..4 {
-            let p = apex(face.corners[side], face.corners[(side + 1) % 4], source, head);
-            let length = source.distance(p) + p.distance(head);
-            // A longer way round an edge that stops no more arrives quieter:
-            // it is not looked at further.
-            if round.is_some_and(|best| best.bands[1] > 0.0 && length > best.length && 1.0 - passed[1] <= kept) {
-                continue;
-            }
-            let mut bands: [f64; 4] = std::array::from_fn(|b| {
-                10f64.powf(-edge_loss(length - straight, BANDS[b]) / 20.0) * (1.0 - passed[b.min(2)])
-            });
-            // Nor is one that with both legs clear would be no louder than
-            // the one kept.
-            if round.is_some_and(|best| !rather(&Way { length, from: p, bands }, &best)) {
-                continue;
-            }
-            // Each leg stops a hair short of the edge, so that the faces
-            // that meet there do not count as standing on it.
-            let (near_source, near_head) =
-                (p + (source - p).unit_or(Vec3::Y) * 1e-4, p + (head - p).unit_or(Vec3::Y) * 1e-4);
-            let (first, second) = (through(source, near_source, faces, None), through(near_head, head, faces, None));
-            for (b, band) in bands.iter_mut().enumerate() {
-                *band *= first[b] * second[b];
-            }
-            let way = Way { length, from: p, bands };
-            if heard(&bands) && round.is_none_or(|best| rather(&way, &best)) {
-                round = Some(way);
-                kept = (1.0 - passed[1]) * first[1] * second[1];
-            }
+    let mut sheets: Vec<usize> = crossing.iter().map(|&k| faces[k].sheet).collect();
+    sheets.sort_unstable();
+    sheets.dedup();
+    for (a, b, k) in sheets.iter().flat_map(|&sheet| faces.edges(sheet)) {
+        let passed = faces[k].material.passed();
+        let p = apex(a, b, source, head);
+        let length = source.distance(p) + p.distance(head);
+        // A longer way round an edge that stops no more arrives quieter:
+        // it is not looked at further.
+        if round.is_some_and(|best| best.bands[1] > 0.0 && length > best.length && 1.0 - passed[1] <= kept) {
+            continue;
+        }
+        let mut bands: [f64; 4] = std::array::from_fn(|b| {
+            10f64.powf(-edge_loss(length - straight, BANDS[b]) / 20.0) * (1.0 - passed[b.min(2)])
+        });
+        // Nor is one that with both legs clear would be no louder than
+        // the one kept.
+        if round.is_some_and(|best| !rather(&Way { length, from: p, bands }, &best)) {
+            continue;
+        }
+        // Each leg stops a hair short of the edge, so that the faces
+        // that meet there do not count as standing on it.
+        let (near_source, near_head) =
+            (p + (source - p).unit_or(Vec3::Y) * 1e-4, p + (head - p).unit_or(Vec3::Y) * 1e-4);
+        let (first, second) = (through(source, near_source, faces, None), through(near_head, head, faces, None));
+        for (b, band) in bands.iter_mut().enumerate() {
+            *band *= first[b] * second[b];
+        }
+        let way = Way { length, from: p, bands };
+        if heard(&bands) && round.is_none_or(|best| rather(&way, &best)) {
+            round = Some(way);
+            kept = (1.0 - passed[1]) * first[1] * second[1];
         }
     }
     // Through the faces or round an edge: whichever arrives louder is the
@@ -371,53 +493,93 @@ pub struct Scatter {
     pub from: Vec3,
 }
 
-/// The way mirrored by the face `i`, from the emitter's image behind it, and
-/// what that face scatters towards the head. With `careful`, what stands on
-/// either leg takes its share, or all of it.
-pub fn mirrored(i: usize, source: Vec3, head: Vec3, faces: &[Face], careful: bool) -> (Option<Way>, Option<Scatter>) {
-    let face = &faces[i];
-    if !face.reflects {
-        return (None, None);
+/// The ways mirrored by the sheet `sheet` (a face alone, or faces of one
+/// plane that share sides), from the emitter's image behind its plane, each
+/// by a face the mirror point is on, into `ways`; and what the sheet
+/// scatters towards the head, with the face it is scattered from. With
+/// `careful`, what stands on either leg takes its share, or all of it.
+pub fn mirrored(
+    sheet: usize,
+    source: Vec3,
+    head: Vec3,
+    faces: &Faces,
+    careful: bool,
+    ways: &mut Vec<(usize, Way)>,
+) -> Option<(usize, Scatter)> {
+    let plane = &faces[sheet];
+    if !plane.reflects {
+        return None;
     }
-    let (hs, hh) = (face.height(source), face.height(head));
+    let (hs, hh) = (plane.height(source), plane.height(head));
     // Both on the same side, and off the face.
     if hs * hh <= 0.0 || hs.abs() < 1e-3 || hh.abs() < 1e-3 {
-        return (None, None);
+        return None;
     }
-    let image = source - face.normal * (2.0 * hs);
+    let image = source - plane.normal * (2.0 * hs);
     let p = image + (head - image) * (hs.abs() / (hs.abs() + hh.abs()));
-    // What the face scatters reaches the head from all of it: from its point
-    // nearest the mirror point, as far as that way is — if that point sees
-    // both: a deck that hides the emitter from the head hides it from the
-    // road under the head as well.
-    let q = face.nearest(p);
-    let (to, fro) = (through(source, q, faces, Some(i)), through(q, head, faces, Some(i)));
-    let scattered = face.material.scattered();
+    // The sheet's faces near the mirror point, in their order.
+    let mut near: Vec<usize> = Vec::new();
+    faces.along(p, p, RIM, |k| {
+        if faces[k].sheet == sheet {
+            near.push(k);
+        }
+    });
+    near.sort_unstable();
+    // What the sheet scatters reaches the head from all of it: from its
+    // point nearest the mirror point, as far as that way is — if that point
+    // sees both: a deck that hides the emitter from the head hides it from
+    // the road under the head as well. That point is the mirror point when
+    // a face is under it, and otherwise on one of the faces where the sheet
+    // ends.
+    let nearest = |k: usize| (faces[k].nearest(p), k);
+    let (q, by_face) = match near.iter().copied().find(|&k| faces[k].inside(p) >= 0.0) {
+        Some(k) => nearest(k),
+        None if faces.alone(sheet) => nearest(sheet),
+        // The nearest point of its edges.
+        None => faces
+            .edges(sheet)
+            .map(|(a, b, k)| {
+                let along = b - a;
+                let t = ((p - a).dot(along) / along.dot(along).max(1e-300)).clamp(0.0, 1.0);
+                (a + along * t, k)
+            })
+            .min_by(|a, b| a.0.distance(p).total_cmp(&b.0.distance(p)).then(a.1.cmp(&b.1)))
+            .unwrap_or_else(|| nearest(sheet)),
+    };
+    let (to, fro) = (through(source, q, faces, Some(sheet)), through(q, head, faces, Some(sheet)));
+    let scattered = faces[by_face].material.scattered();
     let by = source.distance(q) + q.distance(head);
     let seen = (to[1] * fro[1]).powi(2);
     let energy = (scattered[0] + scattered[1] + scattered[2]) / 3.0 / (by * by).max(1e-6) * seen;
-    let scatter = (energy > 0.0).then_some(Scatter { energy, length: by, from: q });
+    let scatter = (energy > 0.0).then_some((by_face, Scatter { energy, length: by, from: q }));
 
-    let rim = (face.inside(p) / RIM).clamp(0.0, 1.0);
-    if rim <= 0.0 {
-        return (None, scatter);
-    }
-    // Smooth at both ends of the rim.
-    let fade = rim * rim * (3.0 - 2.0 * rim);
-    let share = face.material.mirrored();
-    let mut bands: [f64; 4] = std::array::from_fn(|b| share[b.min(2)] * fade);
-    if careful {
-        let (to, fro) = (through(source, p, faces, Some(i)), through(p, head, faces, Some(i)));
-        for (b, band) in bands.iter_mut().enumerate() {
-            *band *= to[b] * fro[b];
+    // What stands on the legs to the mirror point: the same for every face.
+    let mut legs: Option<([f64; 4], [f64; 4])> = None;
+    for k in near {
+        let face = &faces[k];
+        let rim = face.rim(p);
+        if rim <= 0.0 || !face.reflects {
+            continue;
         }
-        // A way whose legs something stops is not one; a face that mirrors
-        // nothing in itself is still a way, a silent one.
-        if !heard(&std::array::from_fn(|b| to[b] * fro[b])) {
-            return (None, scatter);
+        // Smooth at both ends of the rim.
+        let fade = rim * rim * (3.0 - 2.0 * rim);
+        let share = face.material.mirrored();
+        let mut bands: [f64; 4] = std::array::from_fn(|b| share[b.min(2)] * fade);
+        if careful {
+            let (to, fro) = *legs
+                .get_or_insert_with(|| (through(source, p, faces, Some(sheet)), through(p, head, faces, Some(sheet))));
+            for (b, band) in bands.iter_mut().enumerate() {
+                *band *= to[b] * fro[b];
+            }
+            // A way whose legs something stops is not one; a face that
+            // mirrors nothing in itself is still a way, a silent one.
+            if !heard(&std::array::from_fn(|b| to[b] * fro[b])) {
+                continue;
+            }
         }
+        ways.push((k, Way { length: image.distance(head), from: p, bands }));
     }
-    (Some(Way { length: image.distance(head), from: p, bands }), scatter)
+    scatter
 }
 
 /// What the air takes from a pure tone, dB a metre, at `celsius` degrees
@@ -447,6 +609,26 @@ mod tests {
     use crate::space::vec3;
 
     const HARD: Material = Material { absorption: [0.0; 3], transmission: [0.0; 3], scattering: 0.0 };
+
+    /// [`super::direct`] among faces given as a list, indexed — half of them
+    /// as faces that move, which the index does not hold, so that both
+    /// kinds are looked at.
+    fn direct(source: Vec3, head: Vec3, faces: &[Face]) -> Option<Way> {
+        super::direct(source, head, &indexed(faces))
+    }
+
+    /// [`super::mirrored`] by the face `i` among faces given as a list,
+    /// each a sheet of its own.
+    fn mirrored(i: usize, source: Vec3, head: Vec3, faces: &[Face], careful: bool) -> (Option<Way>, Option<Scatter>) {
+        let mut ways = Vec::new();
+        let scatter = super::mirrored(i, source, head, &indexed(faces), careful, &mut ways);
+        (ways.first().map(|&(_, way)| way), scatter.map(|(_, scatter)| scatter))
+    }
+
+    fn indexed(faces: &[Face]) -> Faces {
+        let moving: Vec<bool> = (0..faces.len()).map(|i| i % 2 == 1).collect();
+        Faces::new(faces.to_vec(), &moving)
+    }
 
     /// A horizontal face at height `y`, from `x0` to `x1` and `z0` to `z1`.
     fn slab(y: f64, x: [f64; 2], z: [f64; 2], material: Material) -> Face {

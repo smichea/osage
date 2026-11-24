@@ -286,7 +286,12 @@ fn node_at(tree: &Tree, at: &At) -> Read<usize> {
     tree.find(&ids).ok_or_else(|| format!("{}: no node at {}", at.place, ids.join(" / ")))
 }
 
-fn material(at: &At) -> Read<Material> {
+/// An acoustic material; `None` for one the object format leaves unknown
+/// (`{}`), which sound does not meet.
+fn material(at: &At) -> Read<Option<Material>> {
+    if at.entries()?.is_empty() {
+        return Ok(None);
+    }
     let absorption: [f64; 3] = at.need("absorption")?.numbers()?;
     let transmission: [f64; 3] = at.need("transmission")?.numbers()?;
     let scattering = at.need("scattering")?.number()?;
@@ -302,7 +307,7 @@ fn material(at: &At) -> Read<Material> {
     if !(0.0..=1.0).contains(&scattering) {
         return at.fail("scattering is a fraction, 0 to 1");
     }
-    Ok(Material { absorption, transmission, scattering })
+    Ok(Some(Material { absorption, transmission, scattering }))
 }
 
 impl Scene {
@@ -489,11 +494,9 @@ impl Scene {
                     return s.fail("a face that is not flat");
                 }
                 let material = match s.get("acoustic") {
-                    Some(key) => Some(
-                        *acoustic
-                            .get(key.text()?)
-                            .ok_or_else(|| format!("{}: no such acoustic material", key.place))?,
-                    ),
+                    Some(key) => {
+                        *acoustic.get(key.text()?).ok_or_else(|| format!("{}: no such acoustic material", key.place))?
+                    }
                     None => None,
                 };
                 let collision_key = match s.get("collision") {
@@ -621,6 +624,14 @@ impl Scene {
     pub fn emitter(&self, path: &[&str], id: &str) -> Option<usize> {
         let node = self.tree.find(path)?;
         self.emitters.iter().position(|e| e.node == node && e.id == id)
+    }
+
+    /// The collision surface `id` of the node at `path`: its node, and its
+    /// collision material — what a contact on it a solver reports is struck
+    /// as ([`crate::engine::Struck`]).
+    pub fn collision_surface(&self, path: &[&str], id: &str) -> Option<(usize, String)> {
+        let node = self.tree.find(path)?;
+        self.surfaces.iter().find(|s| s.node == node && s.id == id).and_then(|s| Some((node, s.collision.clone()?)))
     }
 
     /// An emitter's name: its node's path and its own identifier.

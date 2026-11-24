@@ -183,6 +183,26 @@ pub struct Cost {
     pub shares: [f64; 5],
 }
 
+/// `scene` with each of its faces cut into `strips` strips along its first
+/// side, each strip two triangles: `2 × strips` faces for one, the same
+/// surfaces (the faces of one are one sheet: they sound as the face did).
+pub fn cut(scene: &Scene, strips: usize) -> Scene {
+    let mut out = scene.clone();
+    out.surfaces.clear();
+    let strips = strips.max(1);
+    for surface in &scene.surfaces {
+        let [a, b, c, d] = surface.quad;
+        for k in 0..strips {
+            let (t0, t1) = (k as f64 / strips as f64, (k + 1) as f64 / strips as f64);
+            let (p0, p1, q1, q0) = (a.lerp(b, t0), a.lerp(b, t1), d.lerp(c, t1), d.lerp(c, t0));
+            for quad in [[p0, p1, q1, q1], [p0, q1, q0, q0]] {
+                out.surfaces.push(crate::scene::Surface { quad, ..surface.clone() });
+            }
+        }
+    }
+    out
+}
+
 /// What `seconds` of `scene` cost at `options`, lead left out: the median of
 /// `runs`, as the baselines of `bench/` take theirs.
 pub fn cost(scene: &Scene, options: &Options, seconds: f64, runs: usize) -> Cost {

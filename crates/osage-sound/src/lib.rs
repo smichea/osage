@@ -6,6 +6,10 @@
 //! - [`tree`]: the nodes a sound is placed in, as the object format's;
 //! - [`scene`]: what a scene gives sound — emitters, surfaces, touches, a
 //!   listener — read from the JSON of a glTF asset;
+//! - [`faces`]: the faces sound meets, indexed so that a way is looked for
+//!   among those near it; faces made from a mesh's triangles;
+//! - [`objects`]: a scene read from an object of the object format, its
+//!   faces from the meshes of its acoustic and collision surfaces;
 //! - [`ways`]: the ways sound takes from an emitter to a head: straight,
 //!   round an edge, mirrored by a face; what the air takes;
 //! - [`ears`]: how a sound from a direction reaches each ear;
@@ -20,8 +24,10 @@
 pub mod bench;
 pub mod ears;
 pub mod engine;
+pub mod faces;
 pub mod field;
 pub mod live;
+pub mod objects;
 pub mod render;
 pub mod scene;
 pub mod space;

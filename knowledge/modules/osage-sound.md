@@ -17,7 +17,7 @@ Hear a scene as the object tree has it: what each node sounds like, what sound m
 
 - **Tree:** nodes, each with an identifier, a parent and a placement relative to it — the object format's tree. A source is named by its node's path and placed by a position local to that node: when a parent moves or turns, its sound follows.
 - **Emitter:** what a node sounds like by itself — a voice (a generator from [osage-sound-voices](/modules/osage-sound-voices.md)) and its parameters, a position in the node, a gain, a reach (`maxDistanceM`), and optionally a load from other emitters (a viaduct span loaded by the bogies on it). `positional`, or `global` (straight into the ears, panned).
-- **Surface:** a flat face of four corners with an acoustic material (for each of three bands, the share it absorbs, lets through, mirrors and scatters) and a collision material. It may reflect, hide, and be struck.
+- **Surface:** a flat face of four corners (or three) with an acoustic material (for each of three bands, the share it absorbs, lets through, mirrors and scatters) and a collision material. It may reflect, hide, and be struck. Written by hand in a scene, or taken from the triangles of an object's `acoustic[]` and `collision[]` meshes ([sound faces from meshes](/algorithms/sound-faces.md)); faces of one plane that share a side are one sheet.
 - **Touch:** what a node touches as it goes — feet with a stride, wheels at points — so that a contact sounds as the two materials meeting do.
 - **Way:** one route from an emitter to the head: its length, the point it arrives from, and what is left of the pressure in four bands (250 Hz, 1, 4 and 9 kHz).
 - **Quality:** what a device can afford — how a line is read, whether reflections are followed, whether the outer ear and the reverberation are made, how many ways at once, how often the scene is looked at.
@@ -28,8 +28,8 @@ Hear a scene as the object tree has it: what each node sounds like, what sound m
 48 000 samples a second, in blocks of 128 (2.7 ms, a Web Audio render quantum). For each block:
 
 1. **Place:** every node is placed once at the block's end; the head is the listener node's point and axes.
-2. **Touch:** feet and wheels are walked along; each contact on a surface that strikes may take a voice from a small pool ([contact voices](/algorithms/contact-voices.md)).
-3. **Find the ways** of each emitter whose turn it is ([sound ways](/algorithms/sound-ways.md)): the straight one (or through, or round an edge) and one mirrored by each face that reflects, each from where the emitter was when the sound now arriving by it left.
+2. **Touch:** contacts a physics solver reports (`Engine::strike_told`, a `Struck`: where, the struck node and its collision material, what struck it, how hard, when) are struck at their own sample; feet and wheels, which stand in for a solver, are walked along. Each contact may take a voice from a small pool ([contact voices](/algorithms/contact-voices.md)).
+3. **Find the ways** of each emitter whose turn it is ([sound ways](/algorithms/sound-ways.md)): the straight one (or through, or round an edge) and those mirrored by each sheet that reflects, each from where the emitter was when the sound now arriving by it left. The faces are indexed by a tree of boxes: a way looks only among those near it ([sound faces from meshes](/algorithms/sound-faces.md)).
 4. **Rank:** the ways are ranked by how loud they arrive; only the loudest the quality affords are rendered. An emitter none of whose ways is rendered sleeps.
 5. **Voice:** each voice that is heard makes its block into its own ring (its delay line).
 6. **Carry:** each way reads its ring as far back as its length takes, through four bands, the air and the ears, moving evenly from where the last block left it ([delay lines](/algorithms/sound-delay-lines.md)).
@@ -54,14 +54,17 @@ Order: the engine sorts the scene's emitters, surfaces and touches by node path 
 
 # Interfaces
 
+- `objects::from_gltf(bytes)`: a scene from an object of the format with meshes (`.gltf` with inline buffers, or `.glb`), validated by `osage-objects`; its faces from `acoustic[]` and `collision[]`, their sound flags in `node.extras.osageSound.surfaceSound`. `objects::with_meshes(text)`: a hand-written scene as such an object.
 - `scene::Scene::from_json(text)`: a scene from the JSON of a glTF 2.0 asset without meshes. The object format's header and node identifiers are read where the format has them; what is new is in sibling `osageSound` keys (`asset.extras.osageSound.contactSounds`, `node.extras.osageSound.{emitters, surfaces, touches, motion, turning, proxyBeyondM}`, `scene.extras.osageSound.{seconds, seed, loudnessLufs, reverb}`).
 - `engine::Engine::{new(scene, options), render(left, right)}`: the next block for each ear. `Options`: `quality`, `listening`, `turn` (the head turned), `solo` and `mute` (by name), `start`. `Quality::{LOW, MEDIUM, HIGH, REFERENCE}`. `Tally`: what a render cost, stage by stage.
 - `ways::{direct, mirrored, edge_loss, air_loss}`, `ears::hear_for`: usable alone.
 - `Engine::{drive, drive_at, node}`, `Pose`: a node placed from outside.
+- `Engine::strike_told(Struck)`, `engine::strength(impulse, mass)`, `Scene::collision_surface(path, id)`, `render::Hearing::strike_told`, `Live::strike`: contacts a solver reports.
+- `faces::{Faces, sheets, quads}`: the index and the sheets, usable alone.
 - `field::{Far, Decoder, harmonics, far_share, channels}`, `Options::far`, `Engine::{field, render_field, head, part}`, `Part`, `FieldEars`, `render::Hearing`: far sound as a field, made and heard.
 - `render::{render, render_told, Told, Replay, fade, level, master}`: a scene to a file's samples, with or without poses told.
 - `live::{Live::{start, drive, feed, report}, Feed, Listening::{sample, next_block}, Report}`; `live::bevy::{LivePlugin, LiveSource}` with the `bevy` feature.
-- `bench::{cost, ring, peak_memory}`: processor time and memory, on the bridge and on a ring of noises.
+- `bench::{cost, ring, cut, peak_memory}`: processor time and memory, on the bridge, on the bridge with its faces cut into triangles, and on a ring of noises.
 
 # Invariants
 
@@ -73,11 +76,12 @@ Each is a test of `crates/osage-sound/tests/` or of the module, or a check of [s
 - Nothing steps as an emitter goes behind a face, whatever the face lets through. A way never reads sound sooner than its length takes.
 - With nothing far, a field changes not a sample; a far noise keeps its side and its level through it; hearing a field costs a listener the same for 8 emitters or 256; the bridge with what is beyond 60 m as a field passes `verify`.
 - Played live with poses told in advance, it gives the samples of an offline render with the same poses, block for block (the bridge with a walking listener, at two qualities); a node told where it is sixty times a second sounds as one that moves by itself, within −60 dB.
+- The bridge as an object with meshes sounds as the bridge written by hand (within −126 dB); a wall cut into triangles sounds as the whole wall; a contact the Rapier solver reports is heard where and when it was made.
 - A contact with no way to the ears takes no voice; a step is the same whoever else walks; of two echoes as loud, the one kept does not depend on which wall is listed first.
 
 # Knowledge
 
-- Algorithms: [far sound field](/algorithms/far-sound-field.md), [sound ways](/algorithms/sound-ways.md), [sound delay lines](/algorithms/sound-delay-lines.md), [contact voices](/algorithms/contact-voices.md), [feedback delay reverberation](/algorithms/feedback-delay-reverb.md), [loudness mastering](/algorithms/loudness-mastering.md).
+- Algorithms: [far sound field](/algorithms/far-sound-field.md), [sound ways](/algorithms/sound-ways.md), [sound faces from meshes](/algorithms/sound-faces.md), [sound delay lines](/algorithms/sound-delay-lines.md), [contact voices](/algorithms/contact-voices.md), [feedback delay reverberation](/algorithms/feedback-delay-reverb.md), [loudness mastering](/algorithms/loudness-mastering.md).
 - Oracle: [soundscape verify](/oracles/soundscape-verify.md), and the crate's tests, which measure their claims with [osage-sound-analysis](/modules/osage-sound-analysis.md).
 - Voices: [osage-sound-voices](/modules/osage-sound-voices.md). The scooter is [osage-kart-sound](/modules/kart-sound.md)'s two-stroke.
 - Design: [design/09](https://github.com/smichea/osage/blob/main/design/09-sound.md) (what an object carries for sound, qualities by device, server and clients, far sound as a field; decision D-185) and the prototype's [DESIGN.md](https://github.com/smichea/osage/blob/main/tools/paris-soundscape/DESIGN.md) (its measurements and its limits).
@@ -92,6 +96,7 @@ The engine knows nothing of Paris: any tree of nodes with emitters, faces and to
 - Live, a pose is heard after the blocks kept ahead and the one made with it, plus the output's own buffer: on the bridge with a 10 ms output buffer, 13 ms on average from a pose to the output taking it, 23 ms to the ears. Rendering in the output's callback would save the blocks kept ahead, at the cost of making the output wait on the engine.
 - One reflection off each face and one edge per way: no reflection of a reflection, no way round two edges.
 - Ears without a measured head: height is weak and behind sounds like its mirror in front (issue #18).
-- Faces are flat quadrilaterals written in the scene; real meshes and contacts from the physics are issue #15.
+- Faces are flat: a curved mesh is many small sheets. Meshes are given whole; paging a district's in and out is not built into the engine. Each emitter keeps a line for every sheet, most idle.
+- Contacts from a solver are told as they are reported; feet and wheels remain for scenes without one.
 - The reverberation's decay is given by the scene, not found from its geometry.
 - See `tools/paris-soundscape/DESIGN.md` and issue #21 for the full list.

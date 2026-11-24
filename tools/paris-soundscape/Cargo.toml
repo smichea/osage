@@ -22,3 +22,8 @@ osage-sound.workspace = true
 osage-sound-voices.workspace = true
 osage-sound-analysis.workspace = true
 serde_json.workspace = true
+
+[dev-dependencies]
+# The scene of the bridge in the engine's own reader of the object format.
+osage-objects = { workspace = true, features = ["profile"] }
+gltf = { version = "1.4.1", default-features = false, features = ["extras", "names"] }

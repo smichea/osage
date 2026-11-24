@@ -64,6 +64,17 @@ Measured on 2026-11-23 on an Intel Core i5-1335U whose power setting held it at 
 | high | 63 | 38 | 133 | 184 | 229 | 300 |
 | reference | 63 | 38 | 188 | 241 | 344 | 416 |
 
+**Ten times the faces and more** (issue #15), `paris-soundscape bench --part faces`: the bridge with each of its 7 faces cut into strips of two triangles each, which sound as the faces whole ([sound faces from meshes](../../knowledge/algorithms/sound-faces.md)). Headphones, 10 seconds, one run each, on 2026-11-25 while other sessions held the machine at a load of 10 to 24 (so the first column is above the table's):
+
+| Quality | 7 faces | 70 | 700 | 7 000 |
+|---|---:|---:|---:|---:|
+| low | 126 | 150 | 198 | 251 |
+| medium | 306 | 337 | 386 | 493 |
+| high | 487 | 570 | 744 | 993 |
+| reference | 763 | 824 | 966 | 1 188 |
+
+At ten times the faces each quality costs 8 to 19 % more; at a thousand times, 1.6 to 2 times as much (the whole program held 38.8 MB at most). What grows is what each face still costs where a way passes near it — the straight way's faces gone through, a leg's, a foot's — and building the index once.
+
 WebAssembly is the same program built for `wasm32-wasip1` and run in V8 (Node 26), the engine of Chromium: what a browser client would pay. Voices, the search for ways and the ears are all in these figures.
 
 It keeps 21.8 MB of sound on its way: a line for each emitter, as long as its sound can take to arrive (512 kB for a reach of 600 m). The whole program held 32 MB at most. The scene is a file of 24 kB and there is no sound file: nothing is read or sent for sound beyond where things are. No part of it runs on a GPU.
@@ -102,7 +113,7 @@ How a server and its clients could share the work, and how what is far could be 
 
 ## Where it stands, and what is not there
 
-Checked by `verify` and by the tests: the same seed gives the same bytes; nothing clips; the file is as loud as asked once its ends are faded; turning the listener half round moves a side source to the other ear, sample for sample; distance, Doppler shift (an echo's too), the floor's reflection and its delay, what a pane lets through, an echo's time of arrival and that of what a wall scatters, an echo unchanged until what changed it has had time to arrive, the reverberation's decay in each band, a contact's place and time agree with the physics they stand for within the tolerances the tests state; another glTF scene in the same file changes nothing; a wall hides wherever it is listed among the faces, and no way changes by a bit when faces drawn at random are listed in another order; a pane gone through leaves a screen beside it its edge; steps too far to be heard, behind a wall, or heard less, take no voice from a step that is heard; a step is the same whoever else walks; of two echoes as loud, the one kept is the same whichever wall is listed first; the file of the bridge with its nodes and their lists in another order renders to the same samples at every quality; nothing steps as an emitter goes behind a pane, whatever the pane lets through; a contact left out by solo or mute takes no voice from one that is heard. A check kept apart (`object-check/`, which needs the engine's `osage-objects`) loads the scene of the bridge in the engine's own reader of the object format and finds the same node paths.
+Checked by `verify` and by the tests: the same seed gives the same bytes; nothing clips; the file is as loud as asked once its ends are faded; turning the listener half round moves a side source to the other ear, sample for sample; distance, Doppler shift (an echo's too), the floor's reflection and its delay, what a pane lets through, an echo's time of arrival and that of what a wall scatters, an echo unchanged until what changed it has had time to arrive, the reverberation's decay in each band, a contact's place and time agree with the physics they stand for within the tolerances the tests state; another glTF scene in the same file changes nothing; a wall hides wherever it is listed among the faces, and no way changes by a bit when faces drawn at random are listed in another order; a pane gone through leaves a screen beside it its edge; steps too far to be heard, behind a wall, or heard less, take no voice from a step that is heard; a step is the same whoever else walks; of two echoes as loud, the one kept is the same whichever wall is listed first; the file of the bridge with its nodes and their lists in another order renders to the same samples at every quality; nothing steps as an emitter goes behind a pane, whatever the pane lets through; a contact left out by solo or mute takes no voice from one that is heard. `tests/object_format.rs` loads the scene of the bridge in the engine's own reader of the object format and finds the same node paths, and builds it with meshes, which sounds the same within −126 dB.
 
 What instruments say of the example (each group of sources rendered alone and set against all the rest, three seconds at a time):
 
@@ -131,8 +142,8 @@ Not there, or weak:
 
 ## Second batch
 
-1. ~~Move the engine, its voices and the analyser into crates of the engine~~: done (#13): `crates/osage-sound`, `crates/osage-sound-voices` (the engine's licence keeps them out of `worlds/`), `crates/osage-sound-analysis`. Cards, a design note and a decision followed (#14: [design/09](../../design/09-sound.md), D-185). Still to do: emitters and contact sounds into the object format and its reader (#15).
-2. Read real objects: surfaces from `acoustic[]` meshes through `osage-objects`, contacts from `osage-dynamics`.
+1. ~~Move the engine, its voices and the analyser into crates of the engine~~: done (#13): `crates/osage-sound`, `crates/osage-sound-voices` (the engine's licence keeps them out of `worlds/`), `crates/osage-sound-analysis`. Cards, a design note and a decision followed (#14: [design/09](../../design/09-sound.md), D-185). Still to do: emitters and contact sounds into the object format's own keys and its reader, with a decision entry.
+2. ~~Read real objects~~: done (#15). Faces from the triangles of `acoustic[]` and `collision[]` meshes, read through `osage-objects` (`osage_sound::objects`), joined into sheets and indexed by a tree of boxes; contacts as `osage-dynamics` reports them (`Engine::strike_told`). The bridge built with meshes sounds as the bridge written by hand.
 3. ~~A Bevy audio source fed by the engine; the browser client through an AudioWorklet~~: done (#16). Natively, `osage_sound::live` plays the engine on a thread of its own a few blocks ahead of the output, its nodes placed by a game (`Engine::drive`), and `live::bevy::LiveSource` is a Bevy audio source; `paris-soundscape live` measures it. In a browser, `crates/osage-sound-web` is the engine as WebAssembly in an AudioWorklet, a block in each render quantum; `web/live.py` checks and measures it in Chromium.
 4. ~~The sound field for what is far, and its stream~~: built and measured (#17): `osage_sound::field`, `paris-soundscape far`, `field`, `decode` and `bench/field_opus.py`; see the card [far sound field](../../knowledge/algorithms/far-sound-field.md). Still to do: a crossfade between two cubes' fields, and the stream itself.
 5. Ears from measured responses, once the data is chosen.

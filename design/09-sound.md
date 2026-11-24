@@ -41,13 +41,13 @@ Four contacts, as the `impact` voice makes them (measured by its tests):
 | Leather sole on a paving stone | long | almost nothing; the sole rubs | 0.07 s, weight at 2.7 kHz |
 | Wooden clog on the same stone | medium | the clog itself, a hollow body: a note at 520 Hz | 0.08 s, weight at 1.3 kHz |
 
-The same hammer ticks less on limestone than on steel, because the stone gives way and the push lasts longer. Nothing says so: it follows from giving each object its own modes and the pair one push. In the engine, the contact will come from the physics solver, which already reports where, between which surfaces and how hard (issue #15). Which contacts are heard when there are more than voices is [contact voices](../knowledge/algorithms/contact-voices.md).
+The same hammer ticks less on limestone than on steel, because the stone gives way and the push lasts longer. Nothing says so: it follows from giving each object its own modes and the pair one push. In the engine, a contact comes from the physics solver, which reports where, between which surfaces, how hard and when (issue #15): the world tells it to the engine (`Engine::strike_told`) as the struck node and its collision material, what struck it, and a strength — by default the change of speed the impulse made, full at 5 m/s. It is struck at its own sample. Feet and wheels remain as stand-ins for a scene without a solver. Which contacts are heard when there are more than voices is [contact voices](../knowledge/algorithms/contact-voices.md).
 
 Listened to on 2026-11-24 (issue #20), the default contact — a slab struck by something soft — sounds like a hand on a thin metal sheet: the modes need checking against recordings before the presets are trusted.
 
 ### Proposed fields
 
-The prototype writes them in sibling `osageSound` keys, because the engine's reader of the object format refuses a key it does not know inside `osage` and `osageObject` and steps over a sibling: the bridge's scene loads today as a version 1 object tree. Moving them into the format is a change to its reader, its specification and a decision entry of its own, made when real objects are read (issue #15).
+The prototype writes them in sibling `osageSound` keys, because the engine's reader of the object format refuses a key it does not know inside `osage` and `osageObject` and steps over a sibling: the bridge's scene loads today as a version 1 object tree. Moving them into the format is a change to its reader, its specification and a decision entry of its own. Real objects are now read (issue #15) with the sibling keys kept: `osage-objects` validates the object and gives the meshes, the engine's reader gives what sound adds.
 
 | Location | Meaning |
 |---|---|
@@ -55,6 +55,7 @@ The prototype writes them in sibling `osageSound` keys, because the engine's rea
 | `node.extras.osageSound.proxyBeyondM` | From this far from the listener, the node's own emitters stand for its whole branch. The same cut through the tree as `subtreeProxy` makes for the eye and for contact ([06 §2](06-objects.md)): thirteen emitters of a train become two. |
 | `asset.extras.osageSound.contactSounds` | For a key of `collisionMaterials`: `voice` and `params` (`tone`, `ring`, `shape`, `scuff`, `grain`), `hardness`, `gainDb`. |
 | `node.extras.osageSound.surfaces[]` | Stands for `acoustic[]` and `collision[]` while a scene has no meshes: `quadM` (four corners), `acoustic` and `collision` (material keys), `reflects`, `occludes`, `strikes`. |
+| `node.extras.osageSound.surfaceSound` | For an object with meshes: by the identifier of an `acoustic[]` or `collision[]` surface, `reflects` and `occludes` (true when not said) and `strikes` (false). The faces are the meshes' triangles, two of a flat convex quad taken as one; faces of one plane that share a side are one surface ([sound faces from meshes](../knowledge/algorithms/sound-faces.md)). An acoustic material the format leaves unknown (`{}`) is not met by sound. |
 | `node.extras.osageSound.motion`, `turning`, `touches` | Stand for the simulation: a node going along a straight way at a speed that changes, a node turning, feet and wheels. |
 
 Two things the format should decide before these move in. A thing's **modes belong to the object** (its size sets them) and its **damping to the material**: today both are parameters set by hand on the collision material. And an acoustic material has three bands; the engine shapes a way in four, the fourth for what the air and edges take first.

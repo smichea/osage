@@ -16,8 +16,15 @@ osage-sound-voices.workspace = true
 osage-sound-analysis.workspace = true
 serde_json.workspace = true
 crossbeam-channel.workspace = true
+# The object format's reader, for a scene's meshes (objects).
+osage-objects = { workspace = true, features = ["profile"] }
+gltf = { version = "1.4.1", default-features = false, features = ["extras", "names", "utils"] }
 # The live engine as a Bevy audio source (live::bevy).
 bevy = { workspace = true, features = ["bevy_asset", "bevy_audio"], optional = true }
+
+[dev-dependencies]
+# A contact heard where and when the physics reports it (tests/objects.rs).
+osage-dynamics.workspace = true
 
 [features]
 bevy = ["dep:bevy"]

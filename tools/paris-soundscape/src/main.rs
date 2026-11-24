@@ -64,7 +64,7 @@ paris-soundscape: a scene's sound placed in its object tree and carried to two e
            on the bridge and on a ring of 1 to 256 noises (the scene of bench/), and the memory it keeps
              --json FILE         a receipt
              --quick             fewer and shorter runs
-             --part NAME         only the bridge, the ring or the way
+             --part NAME         only the bridge, the faces (cut 10, 100 and 1 000 times), the ring or the way
   measure FILE.wav
            what any stereo file tells of where its sounds are: peaks, loudness, octaves, and second
            by second the level and time differences between the ears (--json for a receipt)
@@ -660,6 +660,38 @@ fn run_bench(args: &Args) -> Result<(), String> {
             }
         }
         receipt.push(format!("\"bridge\": [{}]", rows.join(", ")));
+    }
+
+    if part("faces") {
+        use osage_sound::bench::cut;
+        println!(
+            "\n{} with its faces cut into triangles, headphones. Milliseconds of one processor for a second of sound:",
+            scene.id
+        );
+        let times = [1usize, 10, 100, 1000];
+        print!("  {:<10}", "faces");
+        let counts: Vec<usize> =
+            times.iter().map(|&n| if n == 1 { scene.surfaces.len() } else { scene.surfaces.len() * n }).collect();
+        counts.iter().for_each(|n| print!(" {n:>9}"));
+        println!();
+        let mut rows = Vec::new();
+        for quality in Quality::ALL {
+            print!("  {:<10}", quality.name);
+            for &n in &times {
+                let cut_up = if n == 1 { scene.clone() } else { cut(&scene, n / 2) };
+                let options = Options { quality, listening: Listening::Headphones, ..Options::default() };
+                let found = cost(&cut_up, &options, if quick { 10.0 } else { 20.0 }, runs);
+                print!(" {:>9.1}", found.ms_per_second);
+                rows.push(format!(
+                    "{{\"quality\": \"{}\", \"faces\": {}, \"ms_per_second\": {:.3}}}",
+                    quality.name,
+                    cut_up.surfaces.len(),
+                    found.ms_per_second
+                ));
+            }
+            println!();
+        }
+        receipt.push(format!("\"faces\": [{}]", rows.join(", ")));
     }
 
     if part("ring") {

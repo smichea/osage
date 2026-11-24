@@ -29,6 +29,7 @@ use osage_sound_voices::{Drive, Hit, Voice, dsp::Noise, dsp::seed_for};
 
 use crate::{
     ears::{HEAD_RADIUS, Heard, Listening, PINNA, hear_for},
+    faces::{Faces, Sheets, sheets},
     field::{Decoder, Far, MOST, far_share, harmonics},
     scene::{Head, Load, Material, Reach, Scene, Touching},
     space::{Placement, Vec3, vec3},
@@ -413,6 +414,18 @@ impl Source {
     }
 }
 
+impl Source {
+    /// The farthest it has been, of what its trail keeps, from where it is
+    /// at `now`, m: how much farther than now a way it is heard by may have
+    /// left it.
+    fn slack(&self, now: Vec3, block: usize) -> f64 {
+        let kept = self.trail.len();
+        (0..self.trailed.min(kept))
+            .map(|back| self.trail[(block + kept - back) % kept].distance(now))
+            .fold(0.0, f64::max)
+    }
+}
+
 /// How many blocks sound takes from `metres` away, and a few more.
 fn trail_blocks(metres: f64) -> usize {
     (metres / SOUND / (BLOCK as f64 * DT)).ceil() as usize + 3
@@ -563,16 +576,48 @@ enum Last {
     Wheels { on: Vec<Option<usize>> },
 }
 
-/// A contact about to be made: on which surface and where, by which touch,
-/// how strong, at which sample of the block, and what tells it from every
-/// other.
+/// A contact about to be made: on which node and by which collision
+/// materials, the struck surface's name, where, by what, how strong, at
+/// which sample of the block, and what tells it from every other.
 struct Blow {
-    surface: usize,
+    node: usize,
+    material: String,
+    id: String,
+    by: String,
+    by_node: Option<usize>,
     point: Vec3,
-    touch: usize,
     strength: f64,
     at: usize,
     seed: u32,
+}
+
+/// A contact as a physics solver tells it (`osage-dynamics` reports where,
+/// between which surfaces, how hard and when): it sounds as the two
+/// collision materials meeting do, where it is, from its instant.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Struck {
+    /// When, s, on the scene's clock.
+    pub at: f64,
+    /// Where, in the world, m.
+    pub point: Vec3,
+    /// What was struck: the node its surface is on, and the collision
+    /// material of that surface ([`Scene::collision_surface`] finds both
+    /// from the surface's name).
+    pub node: usize,
+    pub material: String,
+    /// What struck it: its collision material, and its node if it is one of
+    /// the scene's.
+    pub by: String,
+    pub by_node: Option<usize>,
+    /// How hard, 0 to 1 ([`strength`]).
+    pub strength: f64,
+}
+
+/// How hard a contact is, 0 to 1, from the impulse a solver measured on a
+/// body, N·s, and the body's mass, kg: the change of speed it made, full at
+/// 5 m/s — a fall from 1.3 m. A world may tell strength its own way.
+pub fn strength(impulse: f64, mass: f64) -> f64 {
+    if mass > 0.0 { (impulse.abs() / mass / 5.0).clamp(0.0, 1.0) } else { 0.0 }
 }
 
 /// A scene's emitters, surfaces and touches in an order of their own — by
@@ -638,6 +683,23 @@ pub struct Engine {
     facing: Vec<usize>,
     /// Those a foot or a wheel can be on.
     treading: Vec<usize>,
+    /// Of each face, the sides where its surface ends and its sheet
+    /// ([`sheets`]); and of each ground, the same.
+    sheet: Sheets,
+    tread_sheet: Sheets,
+    /// The faces in the world, and the grounds, indexed: those that stay
+    /// are made once, those that move each block. Made anew when a node
+    /// comes to be driven.
+    faces: Faces,
+    ground: Faces,
+    placed_faces: bool,
+    /// Kept from one block to the next: the faces a source's ways are
+    /// looked for by.
+    near: Vec<usize>,
+    /// Contacts told by a solver, soonest first, not yet struck.
+    told: std::collections::VecDeque<Struck>,
+    /// How many of them have been struck.
+    struck: u64,
     /// For each source, the sources that load its voice.
     loading: Vec<Vec<usize>>,
     /// The nodes, parents first, and where each is in the world this block.
@@ -921,7 +983,22 @@ impl Engine {
     fn make(mut scene: Scene, options: Options, part: Part) -> Engine {
         settle(&mut scene);
         let facing: Vec<usize> = (0..scene.surfaces.len()).filter(|&i| scene.surfaces[i].acoustic.is_some()).collect();
-        let lines = 1 + facing.len();
+        let treading: Vec<usize> =
+            (0..scene.surfaces.len()).filter(|&i| scene.surfaces[i].collision.is_some()).collect();
+        let sheet_of = |of: &[usize]| {
+            let quads: Vec<[Vec3; 4]> = of.iter().map(|&i| scene.surfaces[i].quad).collect();
+            let nodes: Vec<usize> = of.iter().map(|&i| scene.surfaces[i].node).collect();
+            let alike = |a: usize, b: usize| {
+                let (a, b) = (&scene.surfaces[of[a]], &scene.surfaces[of[b]]);
+                (a.acoustic, a.reflects, a.occludes, &a.collision, a.strikes)
+                    == (b.acoustic, b.reflects, b.occludes, &b.collision, b.strikes)
+            };
+            sheets(&quads, &nodes, alike)
+        };
+        let (sheet, tread_sheet) = (sheet_of(&facing), sheet_of(&treading));
+        // The straight way, and one for each sheet: the faces of a sheet
+        // are alike, and what they mirror is one way.
+        let lines = 1 + (0..sheet.of.len()).filter(|&k| sheet.of[k] == k).count();
         let air = air_loss(4_000.0, scene.air.celsius, scene.air.humidity);
         let mut sources = Vec::new();
         for (i, emitter) in scene.emitters.iter().enumerate() {
@@ -1009,7 +1086,6 @@ impl Engine {
                 detail: 1.0,
             });
         }
-        let treading = (0..scene.surfaces.len()).filter(|&i| scene.surfaces[i].collision.is_some()).collect();
         let loading = (0..sources.len())
             .map(|i| match sources[i].emitter.map(|e| &scene.emitters[e].load) {
                 Some(Load::Near { under, voice, .. }) => (0..scene.emitters.len())
@@ -1052,6 +1128,14 @@ impl Engine {
             block: 0,
             facing,
             treading,
+            sheet,
+            tread_sheet,
+            faces: Faces::default(),
+            ground: Faces::default(),
+            placed_faces: false,
+            near: Vec::new(),
+            told: Default::default(),
+            struck: 0,
             loading,
             order: scene.tree.order(),
             placed: Vec::new(),
@@ -1140,6 +1224,10 @@ impl Engine {
         n.motion = (speed > 1e-9).then(|| Motion::steady(pose.velocity, at, speed));
         n.turning = None;
         self.driven.resize(self.scene.tree.nodes.len(), false);
+        if !self.driven[node] {
+            // What is under it now moves: its faces leave the index.
+            self.placed_faces = false;
+        }
         self.driven[node] = true;
         for source in &mut self.sources {
             if !source.moves && self.scene.tree.under(source.node, node) {
@@ -1164,34 +1252,64 @@ impl Engine {
         self.scene.surfaces[surface].quad.map(|corner| placement.point(corner))
     }
 
-    /// The faces of the scene in the world this block.
-    fn faces(&self) -> Vec<Face> {
-        self.facing
-            .iter()
-            .map(|&i| {
-                let surface = &self.scene.surfaces[i];
-                Face::new(
-                    self.corners(i),
-                    surface.acoustic.expect("a face has a material"),
-                    surface.reflects,
-                    surface.occludes,
-                )
-            })
-            .collect()
+    /// A face of the scene as it is in the world this block: the `k`th of
+    /// those sound meets, or of the grounds.
+    fn face(&self, k: usize, ground: bool) -> Face {
+        const NOTHING: Material = Material { absorption: [0.0; 3], transmission: [0.0; 3], scattering: 0.0 };
+        let (i, sheet) = if ground { (self.treading[k], &self.tread_sheet) } else { (self.facing[k], &self.sheet) };
+        let surface = &self.scene.surfaces[i];
+        let mut face = if ground {
+            Face::new(self.corners(i), NOTHING, false, false)
+        } else {
+            Face::new(
+                self.corners(i),
+                surface.acoustic.expect("a face has a material"),
+                surface.reflects,
+                surface.occludes,
+            )
+        };
+        for side in 0..4 {
+            face.open[side] &= sheet.open[k][side];
+        }
+        face.sheet = sheet.of[k];
+        face
     }
 
-    /// The scene's surfaces a foot or a wheel can be on, in the world this
-    /// block.
-    fn ground(&self) -> Vec<(usize, Face)> {
-        const NOTHING: Material = Material { absorption: [0.0; 3], transmission: [0.0; 3], scattering: 0.0 };
-        self.treading.iter().map(|&i| (i, Face::new(self.corners(i), NOTHING, false, false))).collect()
+    /// The faces and the grounds where they are this block: all of them
+    /// the first time (and when a node has come to be driven), those that
+    /// move after that.
+    fn place_faces(&mut self) {
+        if self.placed_faces {
+            for k in self.faces.moving().to_vec() {
+                let face = self.face(k, false);
+                self.faces.update(k, face);
+            }
+            for k in self.ground.moving().to_vec() {
+                let face = self.face(k, true);
+                self.ground.update(k, face);
+            }
+            return;
+        }
+        let moves = |i: usize| Self::moves(&self.scene, &self.driven, self.scene.surfaces[i].node);
+        let faces = (0..self.facing.len()).map(|k| self.face(k, false)).collect();
+        let moving: Vec<bool> = self.facing.iter().map(|&i| moves(i)).collect();
+        self.faces = Faces::new(faces, &moving);
+        let ground = (0..self.treading.len()).map(|k| self.face(k, true)).collect();
+        let moving: Vec<bool> = self.treading.iter().map(|&i| moves(i)).collect();
+        self.ground = Faces::new(ground, &moving);
+        self.placed_faces = true;
     }
 
     /// The surface a foot or a wheel at `point` is on: the highest one of
-    /// `ground` under it, within a step's height.
-    fn under(ground: &[(usize, Face)], point: Vec3) -> Option<usize> {
+    /// the grounds under it, within a step's height (of two as high, the
+    /// first in the engine's order).
+    fn under(&self, point: Vec3) -> Option<usize> {
+        let mut near = Vec::new();
+        self.ground.along(point + Vec3::Y * 0.6, point - Vec3::Y * 1.5, 0.0, |k| near.push(k));
+        near.sort_unstable();
         let mut found: Option<(usize, f64)> = None;
-        for (i, face) in ground {
+        for k in near {
+            let face = &self.ground[k];
             if face.normal.y.abs() < 0.3 {
                 continue;
             }
@@ -1199,7 +1317,7 @@ impl Engine {
             let height = face.height(point) / face.normal.y;
             let on = point - Vec3::Y * height;
             if (-0.6..=1.5).contains(&height) && face.inside(on) >= 0.0 && found.is_none_or(|(_, best)| on.y > best) {
-                found = Some((*i, on.y));
+                found = Some((self.treading[k], on.y));
             }
         }
         found.map(|(i, _)| i)
@@ -1210,7 +1328,7 @@ impl Engine {
     /// by — straight, through what lets it through or round what hides it,
     /// and mirrored by a face when the quality follows that — in its loudest
     /// band; and nothing when none of them comes within a contact's reach.
-    fn arriving(&self, place: Vec3, ears: Vec3, faces: &[Face]) -> f64 {
+    fn arriving(&self, place: Vec3, ears: Vec3, faces: &Faces) -> f64 {
         let quality = self.options.quality;
         let loud = |way: &Way| {
             let most = way.bands.iter().fold(0.0f64, |most, &band| most.max(band));
@@ -1218,9 +1336,20 @@ impl Engine {
         };
         let mut most = direct(place, ears, faces).as_ref().map_or(0.0, loud);
         if quality.mirrors {
-            for k in (0..faces.len()).filter(|&k| faces[k].reflects) {
-                if let (Some(way), _) = mirrored(k, place, ears, faces, quality.careful) {
-                    most = most.max(loud(&way));
+            let mut sheets = Vec::new();
+            faces.sheets_within(place, ears, CONTACT_REACH, |sheet| {
+                if faces[sheet].reflects {
+                    sheets.push(sheet);
+                }
+            });
+            sheets.sort_unstable();
+            sheets.dedup();
+            let mut ways = Vec::new();
+            for sheet in sheets {
+                ways.clear();
+                mirrored(sheet, place, ears, faces, quality.careful, &mut ways);
+                for (_, way) in &ways {
+                    most = most.max(loud(way));
                 }
             }
         }
@@ -1234,13 +1363,9 @@ impl Engine {
     /// node by its path: solo and mute take either. `ears` is where it is
     /// heard from, among `faces`: what does not reach them takes no voice,
     /// and what is heard less takes none from what is heard more.
-    fn strike(&mut self, blow: Blow, ears: Vec3, faces: &[Face]) {
-        let Blow { surface, point, touch, strength, at, seed } = blow;
-        let by = self.scene.touches[touch].node;
-        let Some(key) = self.scene.surfaces[surface].collision.as_ref() else { return };
-        let (Some(struck), Some(striker)) =
-            (self.scene.contacts.get(key), self.scene.contacts.get(&self.scene.touches[touch].material))
-        else {
+    fn strike(&mut self, blow: Blow, ears: Vec3, faces: &Faces) {
+        let Blow { node, material, id, by, by_node, point, strength, at, seed } = blow;
+        let (Some(struck), Some(striker)) = (self.scene.contacts.get(&material), self.scene.contacts.get(&by)) else {
             return;
         };
         // The softer of the two sets how long the push lasts, for both.
@@ -1250,12 +1375,11 @@ impl Engine {
         if striker.params.get("tone", 0.0) > 0.0 && striker.params.get("ring", 0.0) > 0.0 {
             sounding.push((striker.voice.clone(), striker.params.clone()));
         }
-        let node = self.scene.surfaces[surface].node;
         let name = format!(
             "{} : {} : contact with {}",
             self.scene.tree.path_text(node),
-            self.scene.surfaces[surface].id,
-            self.scene.tree.path_text(by)
+            id,
+            by_node.map_or(by, |by| self.scene.tree.path_text(by))
         );
         let heard = self.options.hears(&name);
         let place = point + Vec3::Y * 0.03;
@@ -1328,14 +1452,14 @@ impl Engine {
 
     /// What the scene's feet and wheels touch during this block of `seconds`,
     /// heard from `ears` among `faces`.
-    fn touch(&mut self, t1: f64, seconds: f64, ears: Vec3, faces: &[Face]) {
+    fn touch(&mut self, t1: f64, seconds: f64, ears: Vec3, faces: &Faces) {
         if self.scene.touches.is_empty() {
             return;
         }
-        let ground = self.ground();
         let every = self.options.quality.every.max(1);
-        let mut blows: Vec<Blow> = Vec::new();
-        for (k, (touch, touched)) in self.scene.touches.iter().zip(&mut self.touched).enumerate() {
+        let mut blows: Vec<(usize, usize, Vec3, f64, usize, u32)> = Vec::new();
+        let mut touched = std::mem::take(&mut self.touched);
+        for (k, (touch, touched)) in self.scene.touches.iter().zip(&mut touched).enumerate() {
             let (speed, _) = self.scene.tree.going(touch.node, t1);
             let placement = &self.placed[touch.node];
             // A contact is told from every other by whose it is and which
@@ -1343,7 +1467,7 @@ impl Engine {
             let mut blow = |made: &mut u64, surface, point, strength, at| {
                 *made += 1;
                 let seed = seed_for(u64::from(touched.seed), &format!("contact {made}"));
-                blows.push(Blow { surface, point, touch: k, strength, at, seed });
+                blows.push((k, surface, point, strength, at, seed));
             };
             match (&touch.touching, &mut touched.last) {
                 (Touching::Steps { stride, feet }, Last::Steps { gone, foot }) => {
@@ -1357,7 +1481,7 @@ impl Engine {
                         *foot += 1;
                         // No two steps alike.
                         let strength = touch.strength * (1.0 + 0.18 * f64::from(touched.chance.next()));
-                        if let Some(surface) = Self::under(&ground, point) {
+                        if let Some(surface) = self.under(point) {
                             blow(&mut touched.made, surface, point, strength, (part * BLOCK as f64) as usize);
                         }
                     }
@@ -1370,10 +1494,15 @@ impl Engine {
                     }
                     for (i, local) in points.iter().enumerate() {
                         let point = placement.point(*local);
-                        let now = Self::under(&ground, point);
+                        let now = self.under(point);
                         let before = std::mem::replace(&mut on[i], now);
-                        // Coming onto something that strikes; not what it was on at the start.
-                        let onto = now.filter(|s| before.is_some() && before != now && self.scene.surfaces[*s].strikes);
+                        // Coming onto something that strikes; not what it was on at the start,
+                        // nor another face of the same surface (a mesh's next triangle).
+                        let surfaces = &self.scene.surfaces;
+                        let other = |a: usize, b: usize| {
+                            surfaces[a].node != surfaces[b].node || surfaces[a].id != surfaces[b].id
+                        };
+                        let onto = now.filter(|&s| before.is_some_and(|b| other(b, s)) && surfaces[s].strikes);
                         if let Some(surface) = onto {
                             // A wheel knocks harder the faster it goes: full at 50 km/h.
                             let strength = touch.strength * (speed.abs() / 14.0).clamp(0.15, 1.0);
@@ -1384,7 +1513,60 @@ impl Engine {
                 _ => {}
             }
         }
-        for blow in blows {
+        self.touched = touched;
+        for (k, surface, point, strength, at, seed) in blows {
+            let (touch, surface) = (&self.scene.touches[k], &self.scene.surfaces[surface]);
+            let blow = Blow {
+                node: surface.node,
+                material: surface.collision.clone().expect("a ground has a collision material"),
+                id: surface.id.clone(),
+                by: touch.material.clone(),
+                by_node: Some(touch.node),
+                point,
+                strength,
+                at,
+                seed,
+            };
+            self.strike(blow, ears, faces);
+        }
+    }
+
+    /// Tells the engine of a contact a solver reports ([`Struck`]): it is
+    /// struck at its instant, or at the start of the next block if that is
+    /// past. Contacts may be told in any order and ahead of time.
+    pub fn strike_told(&mut self, struck: Struck) {
+        let at = self.told.partition_point(|other| other.at <= struck.at);
+        self.told.insert(at, struck);
+    }
+
+    /// The contacts told that fall in this block, struck.
+    fn told_contacts(&mut self, ears: Vec3, faces: &Faces) {
+        let start = self.instant();
+        let end = start + BLOCK as f64 * DT;
+        while self.told.front().is_some_and(|struck| struck.at < end) {
+            let struck = self.told.pop_front().expect("one is there");
+            let at = (((struck.at - start) / DT).floor().max(0.0) as usize).min(BLOCK - 1);
+            // Told from every other by what met and when.
+            let by = struck.by_node.map_or(struck.by.clone(), |by| self.scene.tree.path_text(by));
+            let what = format!(
+                "{} : {} : {by} : {}",
+                self.scene.tree.path_text(struck.node),
+                struck.material,
+                struck.at.to_bits()
+            );
+            let seed = seed_for(self.scene.seed, &what);
+            self.struck += 1;
+            let blow = Blow {
+                node: struck.node,
+                id: struck.material.clone(),
+                material: struck.material,
+                by: struck.by,
+                by_node: struck.by_node,
+                point: struck.point,
+                strength: struck.strength,
+                at,
+                seed,
+            };
             self.strike(blow, ears, faces);
         }
     }
@@ -1427,14 +1609,18 @@ impl Engine {
             .turned(self.options.turn),
         };
         self.head = head;
-        let faces = self.faces();
+        self.place_faces();
+        let faces = std::mem::take(&mut self.faces);
         self.touch(t1, seconds, head.at, &faces);
+        self.told_contacts(head.at, &faces);
         self.tally.touching += clock.seconds();
 
         // Where each source is; one that moves leaves a trail, from which
         // where it was when a sound left it is read back.
         let clock = Clock::now();
         let (mut nows, mut scatters) = (std::mem::take(&mut self.nows), std::mem::take(&mut self.scatters));
+        let mut near = std::mem::take(&mut self.near);
+        let mut mirroring: Vec<(usize, Way)> = Vec::new();
         let block = self.block as usize;
         nows.clear();
         for source in &mut self.sources {
@@ -1523,20 +1709,52 @@ impl Engine {
             let reach = source.max_distance;
             found.direct = direct(place, head.at, &faces);
             found.mirrored.clear();
-            found.mirrored.resize(faces.len(), None);
+            found.mirrored.resize(faces.sheets().len(), None);
             scatters.clear();
-            scatters.resize(faces.len(), None);
+            scatters.resize(faces.sheets().len(), None);
             if mirrors || feeds {
-                for k in (0..faces.len()).filter(|&k| faces[k].reflects) {
-                    // What a face sends back left the emitter earlier than
+                // The faces by which a way could be no longer than the
+                // emitter is heard from, from wherever its sound left it.
+                let slack = source.slack(now, block);
+                near.clear();
+                faces.sheets_within(place, head.at, reach + slack, |sheet| {
+                    if faces[sheet].reflects {
+                        near.push(sheet);
+                    }
+                });
+                near.sort_unstable();
+                near.dedup();
+                // The others send nothing; they are looked at again from
+                // where the straight way's sound left.
+                let mut next = 0;
+                for (slot, &sheet) in faces.sheets().iter().enumerate() {
+                    if near.get(next) == Some(&sheet) {
+                        next += 1;
+                    } else if faces[sheet].reflects {
+                        source.lags[1 + slot] = source.lags[0];
+                    }
+                }
+                for &sheet in &near {
+                    // What a sheet sends back left the emitter earlier than
                     // what comes straight: from where the emitter was then,
                     // by the way found last.
-                    let from = source.was(now, block, source.lags[1 + k] / seconds);
-                    let (way, scatter) = mirrored(k, from, head.at, &faces, quality.careful);
-                    let length = way.map(|way| way.length).or(scatter.map(|scatter| scatter.length));
-                    source.lags[1 + k] = length.map_or(source.lags[0], |length| length / SOUND);
-                    found.mirrored[k] = way.filter(|way| mirrors && way.length <= reach);
-                    scatters[k] = scatter.filter(|scatter| feeds && scatter.length <= reach);
+                    let slot = faces.slot(sheet);
+                    let from = source.was(now, block, source.lags[1 + slot] / seconds);
+                    mirroring.clear();
+                    let scatter = mirrored(sheet, from, head.at, &faces, quality.careful, &mut mirroring);
+                    let length =
+                        mirroring.first().map(|(_, way)| way.length).or(scatter.map(|(_, scatter)| scatter.length));
+                    source.lags[1 + slot] = length.map_or(source.lags[0], |length| length / SOUND);
+                    // The faces under the mirror point mirror one way: from
+                    // the same image, by the same point; across a side they
+                    // share, their fades sum to one.
+                    let way = mirroring.iter().map(|&(_, way)| way).reduce(|one, other| Way {
+                        bands: std::array::from_fn(|b| one.bands[b] + other.bands[b]),
+                        ..one
+                    });
+                    found.mirrored[slot] = way.filter(|way| mirrors && way.length <= reach);
+                    scatters[slot] =
+                        scatter.map(|(_, scatter)| scatter).filter(|scatter| feeds && scatter.length <= reach);
                 }
             }
             let aim = |way: &Way, send: f32| {
@@ -1625,7 +1843,8 @@ impl Engine {
                 source.aims.fill(None);
             }
         }
-        (self.nows, self.scatters, self.ranked, self.found) = (nows, scatters, ranked, found);
+        (self.nows, self.scatters, self.ranked, self.found, self.near) = (nows, scatters, ranked, found, near);
+        self.faces = faces;
         self.tally.finding += clock.seconds();
 
         // Every voice that is heard makes its block, into its own line.
