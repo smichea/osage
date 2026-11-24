@@ -7,12 +7,12 @@ Forty-five seconds on the upstream pavement of the bridge, walking from Passy to
 
 ## Hear it
 
-From the repository root, with Rust 1.90 or later (the only crate from outside the repository is `serde_json`, to read the scene):
+From the repository root, with Rust 1.90 or later. The command is a member of the repository's workspace; the sound itself is the engine's: `crates/osage-sound` (the scene, the ways, the ears, the engine), `crates/osage-sound-voices` (the voices) and `crates/osage-sound-analysis` (what `verify` and `measure` read in a recording). The only crate they take from outside the repository is `serde_json`, to read the scene.
 
 ```sh
-cargo run --release --manifest-path tools/paris-soundscape/Cargo.toml -- \
+cargo run --release -p paris-soundscape -- \
   render --out tools/paris-soundscape/example/bir-hakeim-headphones.wav
-cargo run --release --manifest-path tools/paris-soundscape/Cargo.toml -- \
+cargo run --release -p paris-soundscape -- \
   render --listening speakers --out tools/paris-soundscape/example/bir-hakeim-speakers.wav
 ```
 
@@ -23,7 +23,7 @@ Each writes a stereo WAV (16 bits, 48 kHz) and prints its SHA-256. Use the first
 A source is a node path in an object tree and a position local to that node. The tree is `scenes/bir-hakeim.json`, a small made-up bridge in the frame of the city fixture (metres, Y up, +X from Passy to Grenelle, −Z upstream). This prints it, with where each source is heard from at an instant:
 
 ```sh
-cargo run --release --manifest-path tools/paris-soundscape/Cargo.toml -- tree --at 25.85
+cargo run --release -p paris-soundscape -- tree --at 25.85
 ```
 
 ```
@@ -58,7 +58,7 @@ The train is the node `bridge / upper-deck / track-to-passy / train`. Three opti
 For more, edit `scenes/bir-hakeim.json` (or the constants at the top of `scenes/make_bir_hakeim.py`, then run it):
 
 - **Which way and which track:** `motion.alongM` is the way it goes; the track node's `translation` puts it on the upstream or the downstream track.
-- **What it sounds like:** the voices' parameters — `metro-motor` (`carrier`, `electrical`, `mesh`, `gear`), `metro-bogie` (`wheel`, `body`, `rattle`), `metro-span` (`tone`, `ring`, `rattle`). `cargo run --manifest-path tools/paris-soundscape/Cargo.toml -p osage-paris-voices --example audition -- --list` names them all.
+- **What it sounds like:** the voices' parameters — `metro-motor` (`carrier`, `electrical`, `mesh`, `gear`), `metro-bogie` (`wheel`, `body`, `rattle`), `metro-span` (`tone`, `ring`, `rattle`). `cargo run --release -p osage-sound-voices --example audition -- --list` names them all.
 - **How muffled it is:** the viaduct's deck hides the wheels from the pavement. The `top` and `underside` surfaces of `upper-deck` set where its edge is, and their material what it lets through.
 - **From how far each bogie is heard for itself:** `proxyBeyondM` on the train node. Beyond it, two emitters stand for the thirteen.
 - **The knock of the axles:** the `runway-joint` surface of `upper-deck`, and `steel-runway-joint` in `contactSounds`.
@@ -68,8 +68,8 @@ For more, edit `scenes/bir-hakeim.json` (or the constants at the top of `scenes/
 ## Checking it
 
 ```sh
-cargo run --release --manifest-path tools/paris-soundscape/Cargo.toml -- verify
-cargo test --manifest-path tools/paris-soundscape/Cargo.toml --workspace
+cargo run --release -p paris-soundscape -- verify
+cargo test -p osage-sound -p osage-sound-voices -p osage-sound-analysis -p paris-soundscape
 ```
 
 `verify` renders the scene several times and checks that the same seed gives the same bytes, that nothing clips (no sample held, true peak under −1 dBTP), that the file as written is as loud as the scene asks (within 0.3 LU, or held under it by its peaks, which are then at the ceiling), that turning the listener half round moves the river to the other ear (sample for sample: the river feeds no reverberation, which does not turn with the head), that the river stays on its side a second at a time and in the render's last second whatever its length (what it does for less than a second is in its second's mean), and that the train comes, passes and goes. These are the brief's checks: on a scene without a river or a train, or a render too short to hold the train's passage, the check that cannot be made has failed, and says why. `measure FILE.wav` prints the same figures for any mono or stereo file, whatever made it.

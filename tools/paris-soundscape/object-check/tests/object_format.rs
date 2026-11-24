@@ -6,7 +6,7 @@
 //! (`osage-objects`) loads the file as it is.
 
 use osage_objects::ObjectProfile;
-use osage_paris_soundscape::scene::{BIR_HAKEIM, Scene};
+use paris_soundscape::BIR_HAKEIM;
 
 #[test]
 fn the_engine_s_reader_loads_the_scene_as_an_object_tree() {
@@ -14,7 +14,7 @@ fn the_engine_s_reader_loads_the_scene_as_an_object_tree() {
         .expect("the scene is the JSON of a glTF asset");
     let profile =
         ObjectProfile::read(&gltf.document).expect("a well-formed object").expect("an object, not a plain glTF");
-    let scene = Scene::bundled();
+    let scene = paris_soundscape::bridge();
     assert_eq!(profile.header.id, scene.id);
     assert_eq!(profile.nodes.len(), scene.tree.nodes.len());
     assert_eq!(profile.roots.len(), 1);

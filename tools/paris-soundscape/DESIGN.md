@@ -5,7 +5,7 @@
 
 2026-11-23 · status: a prototype and a proposal · by claude-code (Fable 5.2), for the responsible person to review
 
-A first batch of sound for osage: a standalone program that hears a scene offline, and what it shows about how an object should carry sound. It lives in `tools/paris-soundscape/` and touches nothing else. The second batch moves its parts into the engine (the last section says where).
+A first batch of sound for osage: an engine that hears a scene offline, and what it shows about how an object should carry sound. The engine is `crates/osage-sound`, its voices `crates/osage-sound-voices`, what is measured in a recording `crates/osage-sound-analysis`; the command and the scene of the bridge are here, in `tools/paris-soundscape/`.
 
 ## What it does
 
@@ -27,7 +27,7 @@ Each emitter's voice writes into a line of its own. A way is that line read some
 
 For headphones the ears are a model, not a measurement: the far ear hears up to 0.66 ms later and through the head's shadow, and five short echoes stand for the outer ear and say a little about height. [Brown and Duda, 1998](https://escholarship.org/content/qt0cr9d23p/qt0cr9d23p_noSplash_c6f0ae8be6c4003ba4f479c6ef3d369b.pdf). For loudspeakers, where the listener's own head does this, the level alone is shared between the two channels, as `osage-kart-native` places its karts.
 
-The voices are synthesised sample by sample from the state of what makes them (`voices/`): the Seine as bubbles, a noise bed and laps ([van den Doel, 2005](http://persianney.com/kvdoelcsubc/publications/tap05.pdf)); cars shaped to the European road-noise model's octave levels (CNOSSOS-EU, Directive (EU) 2015/996); a scooter, which is the kart's two-stroke (`osage-kart-sound`, reused as its card suggests); a rubber-tyred metro as rolling bogies, the stepped whine of its traction, and the steel viaduct rumbling under it; contacts as a short push that sets ringing what was struck. Each lists its own assumptions in its module.
+The voices are synthesised sample by sample from the state of what makes them (`crates/osage-sound-voices`): the Seine as bubbles, a noise bed and laps ([van den Doel, 2005](http://persianney.com/kvdoelcsubc/publications/tap05.pdf)); cars shaped to the European road-noise model's octave levels (CNOSSOS-EU, Directive (EU) 2015/996); a scooter, which is the kart's two-stroke (`osage-kart-sound`, reused as its card suggests); a rubber-tyred metro as rolling bogies, the stepped whine of its traction, and the steel viaduct rumbling under it; contacts as a short push that sets ringing what was struck. Each lists its own assumptions in its module.
 
 ## What an object carries for sound
 
@@ -47,7 +47,7 @@ The sound of a contact never belongs to one object. It is made of:
 - **the modes of each object**: its shape and size set their frequencies, its material how fast each dies. The ear tells materials by how the decay quickens with pitch (Klatzky, Pai and Krotkov, "Perception of material from contact sounds", Presence 9(4), 2000), so one number per material — a decay rate proportional to frequency — goes a long way (van den Doel and Pai, "The sounds of physical shapes", Presence 7(4), 1998). These two papers are cited from memory and were not read again for this work;
 - **a noise**: the rub of something rough or soft, the crackle of something brittle.
 
-Four contacts, as the `impact` voice makes them (`voices/src/contact.rs`, whose test measures these):
+Four contacts, as the `impact` voice makes them (`crates/osage-sound-voices/src/contact.rs`, whose test measures these):
 
 | Contact | The push | What rings | Measured |
 |---|---|---|---|
@@ -188,7 +188,7 @@ Not there, or weak:
 
 ## Second batch
 
-1. Move `src/` to an engine crate (`crates/osage-sound`), `voices/` to a crate of the engine too (they carry the engine's licence, which keeps them out of `worlds/`), `analysis/` to the oracles; emitters and contact sounds into the object format and its reader, with a decision-log entry and cards. The city world (`worlds/ville-paris`) already uses the ears, the faces and the contact voice from here by path: what it uses is to be kept as it moves.
+1. ~~Move the engine, its voices and the analyser into crates of the engine~~: done (#13): `crates/osage-sound`, `crates/osage-sound-voices` (the engine's licence keeps them out of `worlds/`), `crates/osage-sound-analysis`. Still to do: emitters and contact sounds into the object format and its reader, with cards (#14).
 2. Read real objects: surfaces from `acoustic[]` meshes through `osage-objects`, contacts from `osage-dynamics`.
 3. A Bevy audio source fed by the engine, as `osage-music` feeds its own; the browser client through an AudioWorklet (the engine's block is its render quantum).
 4. The sound field for what is far, and its stream.

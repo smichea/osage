@@ -636,7 +636,7 @@ mod tests {
 
     #[test]
     fn the_order_the_faces_are_listed_in_never_changes_a_way() {
-        use osage_paris_voices::dsp::Noise;
+        use osage_sound_voices::dsp::Noise;
         // Faces drawn on a coarse grid, so that edges are shared, detours are as long as each other and ways
         // graze: walls, floors and panes of every kind, listed in one order and in others.
         let mut chance = Noise::new(2026);

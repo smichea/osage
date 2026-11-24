@@ -1285,3 +1285,19 @@ Date: 2026-11-22 · the maintainer asked for a release of the Paris walk that ru
 Date: 2026-11-22
 
 `ville-paris` owns the city-scale scenarios and starts with the two decks of Pont de Bir-Hakeim. Its native viewer, CPU replay and render bench consume one self-contained glTF scene and a separate fixed-tick input file. The files can be supplied to another implementation. Each measurement identifies both by SHA-256. The existing Bistro walk supplies the S0 lighting control. The first fixture has authored city geometry and fixed deck heights. Geographic acceptance requires a survey. [World module](../knowledge/modules/ville-paris.md) · [City programme](07-city-scale-quality.md)
+
+## D-180 — Sound becomes crates of the engine: osage-sound, its voices, its analyser
+
+Date: 2026-11-24
+
+The prototype of the Pont de Bir-Hakeim had its own Cargo workspace under `tools/paris-soundscape/`. It now lives in three crates of the root workspace. `paris-soundscape` remains a tool: the command and the bridge's scene. (Numbered after the entries written in the working copy for the city programme, D-145 to D-179, not yet committed, so that no two decisions share a number.)
+
+- **Decision:**
+  - `crates/osage-sound` holds the scene read from a glTF asset's extras, the ways, the ears, the engine and the offline render.
+  - `crates/osage-sound-voices` holds the voices synthesised from their state.
+  - `crates/osage-sound-analysis` holds what a recording tells of where its sounds are, read by the oracles (`verify`, `measure`) and by the tests.
+  - `tools/paris-soundscape` keeps the command (`render`, `verify`, `measure`, `bench`, `tree`) and the scene of the bridge, which leaves the engine (`paris_soundscape::bridge()`).
+- **Why:** other crates and worlds can depend on the engine's sound properly, and continuous integration runs its tests in a job of its own. The city world (`worlds/ville-paris`) already uses the ears, the faces, the loss round an edge and the contact voice.
+- **Licence:** the engine's (AGPL with the osage exceptions) for all three crates and for the tool. The voices stay out of `worlds/` and out of the specification, SDK and example-world directories.
+- **Kept:** the renders do not change. Built in the root workspace, without the prototype's own release profile (one codegen unit, thin LTO), the command gives the same bytes: the two digests of its README.
+- **For the code that used the prototype by path:** the packages are renamed: `osage-paris-soundscape` becomes `osage-sound`, `osage-paris-voices` becomes `osage-sound-voices`, `osage-sound-analysis` keeps its name. Renaming them in a manifest keeps its code as it is: `osage-paris-soundscape = { package = "osage-sound", path = "../../crates/osage-sound" }`. `Scene::bundled()` is gone with the bridge's scene; code that used it depends on `paris-soundscape = { path = "../../tools/paris-soundscape" }` and calls `paris_soundscape::bridge()`, which returns the same `Scene`. [Prototype](../tools/paris-soundscape/DESIGN.md)

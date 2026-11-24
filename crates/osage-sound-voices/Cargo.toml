@@ -2,9 +2,9 @@
 # SPDX-License-Identifier: LicenseRef-osage-AGPL-3.0-or-later-with-exceptions
 
 [package]
-name = "osage-paris-voices"
-description = "The voices of a Paris bridge, synthesised sample by sample from their state: the Seine, cars and a scooter, a rubber-tyred metro and the viaduct under it, footsteps, the city far off"
-license-file = "../../../LICENSE-EXCEPTIONS.md"
+name = "osage-sound-voices"
+description = "Voices synthesised sample by sample from the state of what makes them: a river, cars and a scooter, a rubber-tyred metro and its viaduct, footsteps, contacts, the city far off"
+license-file = "../../LICENSE-EXCEPTIONS.md"
 publish = false
 version.workspace = true
 edition.workspace = true
@@ -14,4 +14,4 @@ repository.workspace = true
 [dependencies]
 # The kart's two-stroke, for a scooter: its card says "any small
 # single-cylinder engine".
-osage-kart-sound = { path = "../../../worlds/kart/components/sound" }
+osage-kart-sound.workspace = true

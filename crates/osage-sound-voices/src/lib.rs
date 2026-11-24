@@ -1,8 +1,9 @@
 // SPDX-FileCopyrightText: The osage contributors
 // SPDX-License-Identifier: LicenseRef-osage-AGPL-3.0-or-later-with-exceptions
 
-//! The voices of a Paris bridge, each synthesised sample by sample from the
-//! state of what makes it ([`Drive`]) — no recording:
+//! Voices for osage-sound, each synthesised sample by sample from the state
+//! of what makes it ([`Drive`]) — no recording. First those of a Paris
+//! bridge:
 //!
 //! - **the Seine** ([`river`]): water washing round a pier, lapping, bubbles;
 //! - **the road** ([`road`]): a car's tyres and engine, a scooter (the

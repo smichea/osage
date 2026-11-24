@@ -6,14 +6,14 @@
 //! the tests. The `verify` command checks the same on the whole 45 seconds
 //! at the quality of the examples.
 
-use osage_paris_soundscape::{
+use osage_sound::{
     ears::Listening,
     engine::{BLOCK, Engine, Options, Quality, RATE},
     render::{fade, level, master, render},
-    scene::{BIR_HAKEIM, Reach, Scene},
+    scene::{Reach, Scene},
 };
-use osage_paris_voices::dsp::Noise;
 use osage_sound_analysis::{Band, cue, envelope, measure, sha256, wav};
+use osage_sound_voices::dsp::Noise;
 use serde_json::{Value, json};
 
 fn options(quality: Quality, solo: &[&str]) -> Options {
@@ -31,7 +31,7 @@ fn file(scene: &Scene, options: &Options, seconds: f64) -> (Vec<u8>, usize) {
 
 #[test]
 fn every_source_is_a_node_path_and_a_place_in_that_node() {
-    let scene = Scene::bundled();
+    let scene = paris_soundscape::bridge();
     assert_eq!(scene.tree.path(scene.listener), ["bridge", "road-deck", "pavement-upstream", "walker", "head"]);
     // A bogie of the train: five nodes down, 30 cm above its own node.
     let tyres =
@@ -70,7 +70,7 @@ fn every_source_is_a_node_path_and_a_place_in_that_node() {
 
 #[test]
 fn the_same_seed_gives_the_same_file_and_nothing_clips() {
-    let scene = Scene::bundled();
+    let scene = paris_soundscape::bridge();
     // The loudest stretch for the near lane: three cars in the first eight seconds.
     let (first, held) = file(&scene, &options(Quality::HIGH, &[]), 8.0);
     let (second, _) = file(&scene, &options(Quality::HIGH, &[]), 8.0);
@@ -85,7 +85,7 @@ fn the_same_seed_gives_the_same_file_and_nothing_clips() {
 
 #[test]
 fn turning_the_listener_half_round_moves_the_river_to_the_other_ear() {
-    let scene = Scene::bundled();
+    let scene = paris_soundscape::bridge();
     let ahead = render(&scene, &options(Quality::HIGH, &["river"]), 6.0);
     let turned = render(&scene, &Options { turn: std::f64::consts::PI, ..options(Quality::HIGH, &["river"]) }, 6.0);
     let wide = Band::new(500.0, 8_000.0);
@@ -105,7 +105,7 @@ fn turning_the_listener_half_round_moves_the_river_to_the_other_ear() {
 
 #[test]
 fn the_train_comes_passes_and_goes_on_the_right() {
-    let scene = Scene::bundled();
+    let scene = paris_soundscape::bridge();
     let train = scene.tree.find(&["bridge", "upper-deck", "track-to-passy", "train"]).unwrap();
     let abeam = scene.tree.nodes[train].motion.as_ref().unwrap().at;
     // Alone, and as a weak device would make it: the passage must not depend on the quality.
@@ -122,7 +122,7 @@ fn the_train_comes_passes_and_goes_on_the_right() {
 
 #[test]
 fn cars_pass_on_the_right_and_a_weak_device_hears_the_same_scene_for_less() {
-    let scene = Scene::bundled();
+    let scene = paris_soundscape::bridge();
     // The first car of the near lane is level with the listener at 2.6 s.
     let cars = render(&scene, &options(Quality::HIGH, &["lane-"]), 5.0);
     let near = cue(&cars.left, &cars.right, RATE, &Band::new(500.0, 8_000.0), 2.1, 3.1);
@@ -135,14 +135,14 @@ fn cars_pass_on_the_right_and_a_weak_device_hears_the_same_scene_for_less() {
     assert!(low.tally.most_ways <= Quality::LOW.ways + 8, "{} ways at once", low.tally.most_ways);
     assert!(high.tally.most_ways > low.tally.most_ways + 8, "{} ways at once", high.tally.most_ways);
     assert!(low.tally.ways <= Quality::LOW.ways as u64 * low.tally.blocks + low.tally.blocks / 4);
-    let loud = |r: &osage_paris_soundscape::render::Rendered| envelope(&r.right, RATE, 0.5).peak().unwrap();
+    let loud = |r: &osage_sound::render::Rendered| envelope(&r.right, RATE, 0.5).peak().unwrap();
     assert!((loud(&low).0 - loud(&high).0).abs() < 1.0, "the car peaks at {} s and {} s", loud(&low).0, loud(&high).0);
     assert!((loud(&low).1 - loud(&high).1).abs() < 4.0, "{} dB and {} dB", loud(&low).1, loud(&high).1);
 }
 
 #[test]
 fn for_speakers_the_sides_are_kept_and_the_ears_are_not_delayed() {
-    let scene = Scene::bundled();
+    let scene = paris_soundscape::bridge();
     let speakers = Options { listening: Listening::Speakers, ..options(Quality::HIGH, &["river"]) };
     let heard = render(&scene, &speakers, 4.0);
     let wide = cue(&heard.left, &heard.right, RATE, &Band::new(500.0, 8_000.0), 0.0, 4.0);
@@ -155,7 +155,7 @@ fn for_speakers_the_sides_are_kept_and_the_ears_are_not_delayed() {
 /// The bridge as another hand could have written the same file: with `chance`, its nodes, and each node's
 /// children, emitters, surfaces and touches, listed in another order.
 fn written(chance: Option<u32>) -> Scene {
-    let mut file: Value = serde_json::from_str(BIR_HAKEIM).unwrap();
+    let mut file: Value = serde_json::from_str(paris_soundscape::BIR_HAKEIM).unwrap();
     let Some(seed) = chance else { return Scene::from_json(&file.to_string()).unwrap() };
     let mut chance = Noise::new(seed);
     let mut shuffle = |list: &mut [Value]| {
@@ -197,8 +197,8 @@ fn written(chance: Option<u32>) -> Scene {
 
 #[test]
 fn the_order_the_file_lists_things_in_is_no_part_of_the_scene() {
-    assert_eq!(written(None), Scene::bundled());
-    assert!(written(Some(1)) != Scene::bundled());
+    assert_eq!(written(None), paris_soundscape::bridge());
+    assert!(written(Some(1)) != paris_soundscape::bridge());
     // Two seconds of the train coming, with the cars, the river, the steps and the wheels on the joints:
     // the same samples from the file as it is and from the same file in two other orders, at every
     // quality — what is summed, taken in turn or told apart by its place in a list does not move.

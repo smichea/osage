@@ -4,15 +4,15 @@
 //! Renders one voice alone to a mono WAV file, to listen to it and to look
 //! at it without the scene (as `osage-kart-sound`'s `lap`):
 //!
-//!     cargo run -p osage-paris-voices --example audition -- car car.wav --seconds 8 --speed 30
-//!     cargo run -p osage-paris-voices --example audition -- --list
+//!     cargo run -p osage-sound-voices --example audition -- car car.wav --seconds 8 --speed 30
+//!     cargo run -p osage-sound-voices --example audition -- --list
 //!
 //! `--speed` and `--to` are km/h (the speed moves from one to the other over
 //! the file), `--load` and `--detail` 0…1, `--hits` blows a second,
 //! `--set name=value` a parameter of the voice. Prints the level, the peak and the level in each
 //! octave.
 
-use osage_paris_voices::{Drive, Hit, KINDS, Params, RATE, dsp::Biquad, make};
+use osage_sound_voices::{Drive, Hit, KINDS, Params, RATE, dsp::Biquad, make};
 
 fn main() -> std::io::Result<()> {
     let args: Vec<String> = std::env::args().skip(1).collect();

@@ -73,12 +73,12 @@ Web Audio's figures include moving every source every 1 024 frames, which an off
 ## The prototype's own figures
 
 ```sh
-cargo build --release --manifest-path tools/paris-soundscape/Cargo.toml
-taskset -c 0 tools/paris-soundscape/target/release/paris-soundscape bench --json prototype.json
+cargo build --release -p paris-soundscape
+taskset -c 0 target/release/paris-soundscape bench --json prototype.json
 
-cargo build --release --target wasm32-wasip1 --manifest-path tools/paris-soundscape/Cargo.toml
+cargo build --release --target wasm32-wasip1 -p paris-soundscape
 taskset -c 2 node tools/paris-soundscape/bench/run_wasm.mjs \
-    tools/paris-soundscape/target/wasm32-wasip1/release/paris-soundscape.wasm bench
+    target/wasm32-wasip1/release/paris-soundscape.wasm bench
 ```
 
 `bench` renders the bridge at each quality, then this same ring with 1 to 256 sources, then one way alone; `--part bridge`, `ring` or `way` runs one of them, `--quick` shortens them. It reads its own thread's processor time from `/proc`, so a busy machine changes its figures less than it changes a clock's. The second command runs the same program as WebAssembly in V8, the engine of Chromium.

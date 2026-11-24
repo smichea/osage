@@ -96,33 +96,43 @@ dependencies = [
 ]
 
 [[package]]
-name = "osage-paris-soundscape"
-version = "0.1.0"
-dependencies = [
- "osage-paris-voices",
- "osage-sound-analysis",
- "serde_json",
-]
-
-[[package]]
 name = "osage-paris-soundscape-object-check"
 version = "0.1.0"
 dependencies = [
  "gltf",
  "osage-objects",
- "osage-paris-soundscape",
+ "paris-soundscape",
 ]
 
 [[package]]
-name = "osage-paris-voices"
+name = "osage-sound"
+version = "0.1.0"
+dependencies = [
+ "osage-sound-analysis",
+ "osage-sound-voices",
+ "serde_json",
+]
+
+[[package]]
+name = "osage-sound-analysis"
+version = "0.1.0"
+
+[[package]]
+name = "osage-sound-voices"
 version = "0.1.0"
 dependencies = [
  "osage-kart-sound",
 ]
 
 [[package]]
-name = "osage-sound-analysis"
+name = "paris-soundscape"
 version = "0.1.0"
+dependencies = [
+ "osage-sound",
+ "osage-sound-analysis",
+ "osage-sound-voices",
+ "serde_json",
+]
 
 [[package]]
 name = "proc-macro2"

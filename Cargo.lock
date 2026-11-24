@@ -5237,6 +5237,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "osage-sound"
+version = "0.1.0"
+dependencies = [
+ "osage-sound-analysis",
+ "osage-sound-voices",
+ "serde_json",
+]
+
+[[package]]
+name = "osage-sound-analysis"
+version = "0.1.0"
+
+[[package]]
+name = "osage-sound-voices"
+version = "0.1.0"
+dependencies = [
+ "osage-kart-sound",
+]
+
+[[package]]
 name = "osage-update"
 version = "0.1.0"
 dependencies = [
@@ -5325,6 +5345,16 @@ dependencies = [
  "primefield",
  "primeorder",
  "sha2",
+]
+
+[[package]]
+name = "paris-soundscape"
+version = "0.1.0"
+dependencies = [
+ "osage-sound",
+ "osage-sound-analysis",
+ "osage-sound-voices",
+ "serde_json",
 ]
 
 [[package]]

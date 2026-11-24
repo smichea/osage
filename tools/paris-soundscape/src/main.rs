@@ -10,7 +10,7 @@
 
 use std::{path::PathBuf, process::ExitCode, time::Instant};
 
-use osage_paris_soundscape::{
+use osage_sound::{
     ears::Listening,
     engine::{Options, Quality, RATE},
     render::{fade, level, master, render},
@@ -86,7 +86,7 @@ const TRAIN: [&str; 4] = ["bridge", "upper-deck", "track-to-passy", "train"];
 fn scene(args: &Args) -> Result<Scene, String> {
     let mut scene = match args.value("--scene") {
         Some(path) => Scene::from_json(&std::fs::read_to_string(path).map_err(|e| format!("{path}: {e}"))?)?,
-        None => Scene::bundled(),
+        None => paris_soundscape::bridge(),
     };
     if let Some(seed) = args.number("--seed")? {
         scene.seed = seed as u64;
@@ -464,8 +464,8 @@ fn run_verify(args: &Args) -> Result<(), String> {
 }
 
 fn run_bench(args: &Args) -> Result<(), String> {
-    use osage_paris_soundscape::bench::{cost, peak_memory, ring, unbounded};
-    use osage_paris_soundscape::engine::way_cost;
+    use osage_sound::bench::{cost, peak_memory, ring, unbounded};
+    use osage_sound::engine::way_cost;
     let quick = args.0.iter().any(|a| a == "--quick");
     let (runs, ring_seconds) = if quick { (1, 4.0) } else { (3, 10.0) };
     let both = [("headphones", Listening::Headphones), ("speakers", Listening::Speakers)];

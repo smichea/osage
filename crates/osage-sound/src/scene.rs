@@ -23,7 +23,7 @@
 
 use std::collections::BTreeMap;
 
-use osage_paris_voices::Params;
+use osage_sound_voices::Params;
 use serde_json::Value;
 
 use crate::{
@@ -194,9 +194,6 @@ pub struct Scene {
     pub air: Air,
 }
 
-/// The scene that comes with the program: the Pont de Bir-Hakeim.
-pub const BIR_HAKEIM: &str = include_str!("../scenes/bir-hakeim.json");
-
 /// A value of the file and where it is, to say where a mistake is.
 #[derive(Clone)]
 struct At<'a> {
@@ -309,11 +306,6 @@ fn material(at: &At) -> Read<Material> {
 }
 
 impl Scene {
-    /// The scene that comes with the program.
-    pub fn bundled() -> Scene {
-        Scene::from_json(BIR_HAKEIM).expect("the bundled scene reads")
-    }
-
     /// A scene from the JSON of a glTF asset; a mistake is told with where
     /// it is.
     pub fn from_json(text: &str) -> Read<Scene> {
@@ -431,7 +423,7 @@ impl Scene {
             let mut given = params(at.get("params"))?;
             let hardness = at.number_or("hardness", 0.5)?;
             given.set("hardness", hardness as f32);
-            if osage_paris_voices::kind(&voice).is_none() {
+            if osage_sound_voices::kind(&voice).is_none() {
                 return at.fail(format!("no voice named \"{voice}\""));
             }
             let level = gain(at.number_or("gainDb", 0.0)?);
@@ -522,7 +514,7 @@ impl Scene {
             }
             for e in extra.get("emitters").map_or(Ok(Vec::new()), |e| e.list())? {
                 let voice = e.need("voice")?.text()?.to_owned();
-                let Some(kind) = osage_paris_voices::kind(&voice) else {
+                let Some(kind) = osage_sound_voices::kind(&voice) else {
                     return e.fail(format!("no voice named \"{voice}\""));
                 };
                 let given = params(e.get("params"))?;

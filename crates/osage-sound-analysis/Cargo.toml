@@ -4,7 +4,7 @@
 [package]
 name = "osage-sound-analysis"
 description = "What a stereo recording tells of where its sounds are: level and time differences between the ears, bands, pitch, peaks and loudness; WAV files read and written"
-license-file = "../../../LICENSE-EXCEPTIONS.md"
+license-file = "../../LICENSE-EXCEPTIONS.md"
 publish = false
 version.workspace = true
 edition.workspace = true

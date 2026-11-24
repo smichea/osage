@@ -9,7 +9,7 @@
 //! the level is that of the file as it will be heard, ends faded),
 //! dithered and rounded to 16 bits.
 
-use osage_paris_voices::dsp::{Noise, seed_for};
+use osage_sound_voices::dsp::{Noise, seed_for};
 
 use crate::{
     engine::{BLOCK, Engine, Options, RATE, Tally},

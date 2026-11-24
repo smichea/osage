@@ -1,8 +1,7 @@
 # SPDX-FileCopyrightText: The osage contributors
 # SPDX-License-Identifier: LicenseRef-osage-AGPL-3.0-or-later-with-exceptions
 
-# Built programs, and what they render: the example is made again, to the
-# same bytes, by the command in the README.
-/target/
+# What the command renders: the example is made again, to the same bytes,
+# by the command in the README.
 /example/*.wav
 /out/

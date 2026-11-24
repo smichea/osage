@@ -5,7 +5,7 @@
 //! known sound in a small tree and checks what reaches the ears against the
 //! physics it stands for.
 
-use osage_paris_soundscape::{
+use osage_sound::{
     ears::Listening,
     engine::{BLOCK, Engine, Options, Quality, RATE},
     render::{Rendered, render},

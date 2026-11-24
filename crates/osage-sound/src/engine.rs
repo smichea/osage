@@ -25,7 +25,7 @@
 //! on a joint — wakes a voice from a small pool, placed where the contact is
 //! on the node that was touched.
 
-use osage_paris_voices::{Drive, Hit, Voice, dsp::Noise, dsp::seed_for};
+use osage_sound_voices::{Drive, Hit, Voice, dsp::Noise, dsp::seed_for};
 
 use crate::{
     ears::{HEAD_RADIUS, Heard, Listening, PINNA, hear_for},
@@ -34,7 +34,7 @@ use crate::{
     ways::{Face, SOUND, Scatter, Way, Ways, air_loss, direct, mirrored},
 };
 
-pub use osage_paris_voices::RATE;
+pub use osage_sound_voices::RATE;
 
 /// Samples between two looks at the scene.
 pub const BLOCK: usize = 128;
@@ -712,7 +712,7 @@ impl Engine {
             let ring = ((emitter.max_distance / SOUND * RATE as f64) as usize + 4 * BLOCK).next_power_of_two();
             let seed = seed_for(scene.seed, &name);
             sources.push(Source {
-                voice: osage_paris_voices::make(&emitter.voice, seed, &emitter.params)
+                voice: osage_sound_voices::make(&emitter.voice, seed, &emitter.params)
                     .expect("a scene names voices that exist"),
                 heard: options.hears(&name),
                 turn: u64::from(seed),
@@ -753,7 +753,7 @@ impl Engine {
         }
         for slot in 0..options.quality.contacts {
             sources.push(Source {
-                voice: osage_paris_voices::make("impact", 1, &Default::default()).expect("the impact voice exists"),
+                voice: osage_sound_voices::make("impact", 1, &Default::default()).expect("the impact voice exists"),
                 turn: slot as u64,
                 // Named, and heard or not, when it is struck: by what was struck and what struck it.
                 heard: false,
@@ -1019,7 +1019,7 @@ impl Engine {
             params.set("hardness", hardness);
             let source = &mut self.sources[slot];
             let seed = seed_for(u64::from(seed), &format!("voice {which}"));
-            source.voice = osage_paris_voices::make(&voice, seed, &params).expect("a contact's voice exists");
+            source.voice = osage_sound_voices::make(&voice, seed, &params).expect("a contact's voice exists");
             source.name.clone_from(&name);
             source.heard = heard;
             source.node = node;
@@ -1756,7 +1756,7 @@ pub fn way_cost(quality: Quality, listening: Listening, seconds: f64) -> f64 {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use osage_paris_voices::dsp::Biquad;
+    use osage_sound_voices::dsp::Biquad;
 
     /// How long the tail takes to fall by 60 dB round `hz`, s: what it answers to one sample, through a
     /// band a third of an octave wide; the energy left after each instant (Schroeder's curve), from 5 dB

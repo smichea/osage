@@ -4,9 +4,9 @@
 // Runs the prototype built as WebAssembly in Node, that is in V8, the engine
 // of Chromium: what it costs where a browser game runs.
 //
-//     cargo build --release --target wasm32-wasip1 --manifest-path tools/paris-soundscape/Cargo.toml
+//     cargo build --release --target wasm32-wasip1 -p paris-soundscape
 //     taskset -c 2 node tools/paris-soundscape/bench/run_wasm.mjs \
-//         tools/paris-soundscape/target/wasm32-wasip1/release/paris-soundscape.wasm bench --quick
+//         target/wasm32-wasip1/release/paris-soundscape.wasm bench --quick
 //
 // The program's own arguments follow the file's name. It is given /proc, to
 // read the processor's time of its own thread as the native program does,

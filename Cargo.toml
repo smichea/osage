@@ -3,7 +3,7 @@
 
 [workspace]
 resolver = "3"
-members = ["crates/*", "worlds/kart/physics", "worlds/kart/world", "worlds/kart/server", "worlds/kart/native", "worlds/kart/components/*", "worlds/paris/world", "worlds/paris/server", "worlds/paris/native"]
+members = ["crates/*", "worlds/kart/physics", "worlds/kart/world", "worlds/kart/server", "worlds/kart/native", "worlds/kart/components/*", "worlds/paris/world", "worlds/paris/server", "worlds/paris/native", "tools/paris-soundscape"]
 
 [workspace.package]
 version = "0.1.0"
@@ -44,6 +44,9 @@ osage-cubes = { path = "crates/osage-cubes" }
 osage-world-paris = { path = "worlds/paris/world" }
 osage-humans = { path = "crates/osage-humans" }
 osage-music = { path = "crates/osage-music" }
+osage-sound = { path = "crates/osage-sound" }
+osage-sound-voices = { path = "crates/osage-sound-voices" }
+osage-sound-analysis = { path = "crates/osage-sound-analysis" }
 osage-voice = { path = "crates/osage-voice" }
 osage-report = { path = "crates/osage-report" }
 anyhow = "1.0.104"
@@ -78,3 +81,18 @@ zune-jpeg = "0.4"
 # 60 Hz region needs it, while osage's own crates stay quick to build and debug.
 [profile.dev.package."*"]
 opt-level = 2
+
+# Sound is rendered sample by sample, millions of samples through dozens of
+# ways: its tests render whole scenes, so even a development build of it is
+# optimised.
+[profile.dev.package.osage-sound]
+opt-level = 3
+
+[profile.dev.package.osage-sound-voices]
+opt-level = 3
+
+[profile.dev.package.osage-sound-analysis]
+opt-level = 3
+
+[profile.dev.package.paris-soundscape]
+opt-level = 3

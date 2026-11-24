@@ -1,9 +1,9 @@
 # SPDX-FileCopyrightText: The osage contributors
 # SPDX-License-Identifier: LicenseRef-osage-AGPL-3.0-or-later-with-exceptions
 
-# A check of its own, outside the prototype's workspace: it needs the
+# A check of its own, outside the repository's workspace: it needs the
 # engine's reader of the object format (crates/osage-objects), which the
-# prototype itself does not, and builds only where that crate is.
+# sound itself does not, and builds only where that crate is.
 #
 #     cargo test --manifest-path tools/paris-soundscape/object-check/Cargo.toml
 [workspace]
@@ -18,6 +18,6 @@ edition = "2024"
 rust-version = "1.90"
 
 [dev-dependencies]
-osage-paris-soundscape = { path = ".." }
+paris-soundscape = { path = ".." }
 osage-objects = { path = "../../../crates/osage-objects", features = ["profile"] }
 gltf = { version = "1.4.1", default-features = false, features = ["extras", "names"] }

@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: LicenseRef-osage-AGPL-3.0-or-later-with-exceptions
 
 //! What a stereo recording tells of where its sounds are, measured the same
-//! way whatever made it — this prototype, another engine, a microphone in
+//! way whatever made it — osage-sound, another engine, a microphone in
 //! each ear: so that two renders of a like scene can be compared by numbers
 //! before they are compared by ear.
 //!
