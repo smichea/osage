@@ -5240,6 +5240,8 @@ dependencies = [
 name = "osage-sound"
 version = "0.1.0"
 dependencies = [
+ "bevy",
+ "crossbeam-channel",
  "osage-sound-analysis",
  "osage-sound-voices",
  "serde_json",

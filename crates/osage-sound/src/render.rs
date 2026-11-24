@@ -12,9 +12,45 @@
 use osage_sound_voices::dsp::{Noise, seed_for};
 
 use crate::{
-    engine::{BLOCK, Engine, Options, RATE, Tally},
+    engine::{BLOCK, Engine, Options, Pose, RATE, Tally},
     scene::Scene,
 };
+
+/// A pose told at an instant: a node placed from outside
+/// ([`Engine::drive`]), as a recorded replay holds it.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Told {
+    /// The instant it was told at, s, on the scene's clock.
+    pub at: f64,
+    pub node: usize,
+    pub pose: Pose,
+}
+
+/// Poses told in advance, given to an engine as its blocks come: each
+/// before the first block that starts at or after its instant, those of the
+/// same instant in the order they were told.
+#[derive(Clone, Debug, Default)]
+pub struct Replay {
+    told: Vec<Told>,
+    next: usize,
+}
+
+impl Replay {
+    pub fn new(told: &[Told]) -> Replay {
+        let mut told = told.to_vec();
+        told.sort_by(|a, b| a.at.total_cmp(&b.at));
+        Replay { told, next: 0 }
+    }
+
+    /// Gives `engine` every pose due by the instant of its next block.
+    pub fn tell(&mut self, engine: &mut Engine) {
+        let now = engine.instant() + 1e-9;
+        while let Some(told) = self.told.get(self.next).filter(|told| told.at <= now) {
+            engine.drive_at(told.node, told.pose, told.at);
+            self.next += 1;
+        }
+    }
+}
 
 /// How long before its first sample a render starts, s: longer than sound
 /// takes from the farthest emitter, and a whole number of blocks.
@@ -42,17 +78,28 @@ impl Rendered {
 /// `seconds` of the scene from its instant 0, as `options` ask (their own
 /// start is replaced by the lead).
 pub fn render(scene: &Scene, options: &Options, seconds: f64) -> Rendered {
+    render_told(scene, options, seconds, &[])
+}
+
+/// [`render`], with the poses a game or a server told, each from the first
+/// block that starts at or after its instant ([`Told`]): what a recorded
+/// replay gives, and what [`crate::live`] makes of the same replay, block
+/// for block.
+pub fn render_told(scene: &Scene, options: &Options, seconds: f64, told: &[Told]) -> Rendered {
     let mut engine = Engine::new(scene.clone(), Options { start: -LEAD, ..options.clone() });
+    let mut replay = Replay::new(told);
     let lead = (LEAD * RATE as f64 / BLOCK as f64).round() as usize;
     let frames = (seconds * RATE as f64).round() as usize;
     let (mut left, mut right) = (Vec::with_capacity(frames + BLOCK), Vec::with_capacity(frames + BLOCK));
     let (mut l, mut r) = ([0.0f32; BLOCK], [0.0f32; BLOCK]);
     for _ in 0..lead {
+        replay.tell(&mut engine);
         engine.render(&mut l, &mut r);
     }
     // What the lead cost is not the render's.
     let before = engine.tally;
     while left.len() < frames {
+        replay.tell(&mut engine);
         engine.render(&mut l, &mut r);
         left.extend_from_slice(&l);
         right.extend_from_slice(&r);

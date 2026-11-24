@@ -74,6 +74,14 @@ cargo test -p osage-sound -p osage-sound-voices -p osage-sound-analysis -p paris
 
 `verify` renders the scene several times and checks that the same seed gives the same bytes, that nothing clips (no sample held, true peak under −1 dBTP), that the file as written is as loud as the scene asks (within 0.3 LU, or held under it by its peaks, which are then at the ceiling), that turning the listener half round moves the river to the other ear (sample for sample: the river feeds no reverberation, which does not turn with the head), that the river stays on its side a second at a time and in the render's last second whatever its length (what it does for less than a second is in its second's mean), and that the train comes, passes and goes. These are the brief's checks: on a scene without a river or a train, or a render too short to hold the train's passage, the check that cannot be made has failed, and says why. `measure FILE.wav` prints the same figures for any mono or stereo file, whatever made it.
 
+## Live
+
+```sh
+cargo run --release -p paris-soundscape -- live --quality medium
+```
+
+plays the scene as it goes, as an audio output takes it (`--buffer-ms`, 10 by default, at a time on the clock) while a game walks the listener along the bridge with a pose sixty times a second; it prints what the output found missing and how late a pose was heard. Nothing is sent to a device: it measures. A client plays the same engine through `osage_sound::live` (with the `bevy` feature, as a Bevy audio source).
+
 ## More
 
 - [DESIGN.md](DESIGN.md): how it works, what an object carries for sound (what it emits, what it reflects, how it sounds when touched), what each quality costs, and what a second batch should do.

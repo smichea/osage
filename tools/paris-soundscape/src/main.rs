@@ -51,6 +51,11 @@ paris-soundscape: a scene's sound placed in its object tree and carried to two e
            what any stereo file tells of where its sounds are: peaks, loudness, octaves, and second
            by second the level and time differences between the ears (--json for a receipt)
 
+  live     the scene played as it goes, as an audio output takes it, its listener walked by a game: what
+           the output found missing, and how late a pose is heard (takes --quality, --listening, --seconds)
+             --buffer-ms MS      how much the output takes at once (default 10)
+             --ahead N           blocks kept made for it (default: the buffer in blocks, and one more)
+
   --scene FILE on either: another scene than the bridge that comes with the program.
 ";
 
@@ -463,6 +468,87 @@ fn run_verify(args: &Args) -> Result<(), String> {
     Ok(())
 }
 
+/// The scene played live, its output taking `--buffer-ms` at a time on the
+/// clock and its listener walked at 1.4 m/s by poses told sixty times a
+/// second, as a game would: what the output found missing, and how late a
+/// pose was heard.
+fn run_live(args: &Args) -> Result<(), String> {
+    use osage_sound::{
+        engine::{BLOCK, Pose},
+        live::Live,
+        space::Placement,
+    };
+    let scene = scene(args)?;
+    let options = options(args)?;
+    let seconds = args.number("--seconds")?.unwrap_or(scene.seconds);
+    let buffer_ms = args.number("--buffer-ms")?.unwrap_or(10.0).max(1.0);
+    let frames = (buffer_ms / 1000.0 * RATE as f64).round() as usize;
+    let ahead = match args.number("--ahead")? {
+        Some(n) => n as usize,
+        None => frames.div_ceil(BLOCK) + 1,
+    };
+    let listener = scene.listener;
+    let rest = scene.tree.nodes[listener].rest;
+    let walk = Vec3::X * 1.4;
+    println!(
+        "{} live — {seconds} s, {} quality, for {}; the output takes {frames} frames ({buffer_ms} ms) at once, {ahead} blocks kept ahead",
+        scene.id,
+        options.quality.name,
+        if options.listening == Listening::Headphones { "headphones" } else { "speakers" },
+    );
+    let live = Live::start(scene, options, &[], ahead);
+    let mut heard = live.feed().listen();
+    let period = std::time::Duration::from_secs_f64(frames as f64 / RATE as f64);
+    let start = Instant::now();
+    let cpu = osage_sound::bench::cpu_seconds();
+    let (mut told, mut taken) = (0u64, 0usize);
+    let total = (seconds * RATE as f64) as usize;
+    while taken < total {
+        // The game: a pose every sixtieth of a second, on the clock.
+        let now = start.elapsed().as_secs_f64();
+        while (told as f64) / 60.0 <= now {
+            let at = told as f64 / 60.0;
+            let placement = Placement { translation: rest.translation + walk * at, ..rest };
+            live.drive(listener, Pose { placement, velocity: walk });
+            told += 1;
+        }
+        // The output: a buffer's worth when its time comes.
+        let due = start + period * (taken / frames) as u32;
+        if Instant::now() < due {
+            std::thread::sleep((due - Instant::now()).min(std::time::Duration::from_micros(500)));
+            continue;
+        }
+        for _ in 0..2 * frames {
+            heard.sample();
+        }
+        taken += frames;
+    }
+    let report = live.report();
+    let block_ms = BLOCK as f64 / RATE as f64 * 1000.0;
+    println!(
+        "  {} blocks heard, {} frames missing ({:.1} ms of silence){}",
+        report.blocks,
+        report.underruns,
+        report.underruns as f64 / RATE as f64 * 1000.0,
+        if report.underruns == 0 { ": the output never waited" } else { "" }
+    );
+    println!(
+        "  a pose heard {:.1} ms after it was told on average, {:.1} ms at most ({} poses; a block is {block_ms:.1} ms), plus the output's own buffer: {:.1} ms to the ears on average",
+        report.latency_mean * 1000.0,
+        report.latency_max * 1000.0,
+        report.latency_count,
+        report.latency_mean * 1000.0 + buffer_ms,
+    );
+    println!(
+        "  this thread (the output and the game) used {:.0} ms of processor; the engine's thread is not counted",
+        (osage_sound::bench::cpu_seconds() - cpu) * 1000.0
+    );
+    if report.underruns > 0 {
+        return Err(format!("the output found {} frames missing", report.underruns));
+    }
+    Ok(())
+}
+
 fn run_bench(args: &Args) -> Result<(), String> {
     use osage_sound::bench::{cost, peak_memory, ring, unbounded};
     use osage_sound::engine::way_cost;
@@ -622,6 +708,7 @@ fn main() -> ExitCode {
         "measure" => run_measure(&args),
         "verify" => run_verify(&args),
         "bench" => run_bench(&args),
+        "live" => run_live(&args),
         _ => {
             print!("{HELP}");
             return if command.is_empty() || command == "help" || command == "--help" {

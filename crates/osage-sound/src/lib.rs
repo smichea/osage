@@ -11,11 +11,14 @@
 //! - [`ears`]: how a sound from a direction reaches each ear;
 //! - [`engine`]: a scene heard block by block, at what a device can afford;
 //! - [`render`]: a scene rendered to a file's samples, offline;
+//! - [`live`]: a scene played as it goes, a block ahead of the output, its
+//!   nodes placed by a game; with the `bevy` feature, a Bevy audio source;
 //! - [`bench`]: what all this costs a processor.
 
 pub mod bench;
 pub mod ears;
 pub mod engine;
+pub mod live;
 pub mod render;
 pub mod scene;
 pub mod space;

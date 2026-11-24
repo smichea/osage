@@ -1,17 +1,17 @@
 ---
 type: Module
 title: osage-sound
-description: Sound placed in an object tree and carried to a listener's two ears — emitters, surfaces and touches on the tree's nodes, the ways each sound takes (straight, through, round an edge, mirrored), a delay line per emitter so that distance and Doppler need no rule, ears without a measured head, a reverberation tail — at four qualities a device can afford, rendered offline today.
+description: Sound placed in an object tree and carried to a listener's two ears — emitters, surfaces and touches on the tree's nodes, the ways each sound takes (straight, through, round an edge, mirrored), a delay line per emitter so that distance and Doppler need no rule, ears without a measured head, a reverberation tail — at four qualities a device can afford, rendered offline or played live on a thread of its own with its nodes placed by a game.
 resource: https://github.com/smichea/osage/tree/main/crates/osage-sound
 licence: LicenseRef-osage-AGPL-3.0-or-later-with-exceptions
 status: draft
 tags: [sound, spatial-audio, acoustics, object-tree]
-generated: { by: "claude-code/claude-opus-5-5", at: "2026-11-24T09:00:00Z" }
+generated: { by: "claude-code/claude-opus-5-5", at: "2026-11-24T12:00:00Z" }
 ---
 
 # Purpose
 
-Hear a scene as the object tree has it: what each node sounds like, what sound meets, what touches what, and where the listener is. The engine is the first batch of osage's sound (D-180): it renders offline to a file, so that its behaviour can be measured and listened to before it is played live. The command that renders the Pont de Bir-Hakeim is `tools/paris-soundscape`.
+Hear a scene as the object tree has it: what each node sounds like, what sound meets, what touches what, and where the listener is. The engine is the first batch of osage's sound (D-180): it renders offline to a file, so that its behaviour can be measured and listened to, and plays live for a client (issue #16). The command that renders the Pont de Bir-Hakeim is `tools/paris-soundscape`.
 
 # Concepts
 
@@ -35,6 +35,8 @@ Hear a scene as the object tree has it: what each node sounds like, what sound m
 6. **Carry:** each way reads its ring as far back as its length takes, through four bands, the air and the ears, moving evenly from where the last block left it ([delay lines](/algorithms/sound-delay-lines.md)).
 7. **Tail:** what faces scatter feeds an eight-line feedback delay network ([feedback delay reverberation](/algorithms/feedback-delay-reverb.md)).
 
+**Live** (`live`), the engine runs on a thread of its own and keeps a set number of blocks made ahead of the audio output (the output's buffer in blocks, and one more), making the next as soon as the output takes one; the output never waits, and a block it finds missing is silence, counted. A game places nodes as it learns where they are (`Engine::drive`, a placement and a velocity): the node goes on at that velocity until it is told again, so that a pose told sixty times a second moves it evenly and what it carries is not heard to lurch. Poses recorded in advance (`Told`) are given at the same blocks live and offline: the same replay gives the same samples. With the `bevy` feature, `live::bevy::LiveSource` is the feed as a Bevy audio source.
+
 Offline (`render`), the engine starts three seconds before the first sample so that sound already on its way arrives, and the file is faded at both ends, brought to a loudness by one gain and dithered to 16 bits ([loudness mastering](/algorithms/loudness-mastering.md)).
 
 Ears: the structural model of Brown and Duda (1998) — the far ear later by up to 0.66 ms (a sphere of 8.75 cm), the head's shadow as one pole and one zero per ear, five short echoes of the outer ear for height. For loudspeakers, an equal-power pan.
@@ -53,7 +55,9 @@ Order: the engine sorts the scene's emitters, surfaces and touches by node path 
 - `scene::Scene::from_json(text)`: a scene from the JSON of a glTF 2.0 asset without meshes. The object format's header and node identifiers are read where the format has them; what is new is in sibling `osageSound` keys (`asset.extras.osageSound.contactSounds`, `node.extras.osageSound.{emitters, surfaces, touches, motion, turning, proxyBeyondM}`, `scene.extras.osageSound.{seconds, seed, loudnessLufs, reverb}`).
 - `engine::Engine::{new(scene, options), render(left, right)}`: the next block for each ear. `Options`: `quality`, `listening`, `turn` (the head turned), `solo` and `mute` (by name), `start`. `Quality::{LOW, MEDIUM, HIGH, REFERENCE}`. `Tally`: what a render cost, stage by stage.
 - `ways::{direct, mirrored, edge_loss, air_loss}`, `ears::hear_for`: usable alone.
-- `render::{render, fade, level, master}`: a scene to a file's samples.
+- `Engine::{drive, drive_at, node}`, `Pose`: a node placed from outside.
+- `render::{render, render_told, Told, Replay, fade, level, master}`: a scene to a file's samples, with or without poses told.
+- `live::{Live::{start, drive, feed, report}, Feed, Listening::{sample, next_block}, Report}`; `live::bevy::{LivePlugin, LiveSource}` with the `bevy` feature.
 - `bench::{cost, ring, peak_memory}`: processor time and memory, on the bridge and on a ring of noises.
 
 # Invariants
@@ -64,6 +68,7 @@ Each is a test of `crates/osage-sound/tests/` or of the module, or a check of [s
 - Turning the head half round moves a side source to the other ear, sample for sample.
 - Distance, Doppler shift (of an echo too), the floor's reflection and its delay, what a pane lets through, an echo's time of arrival, the reverberation's decay in each band and a contact's place and time agree with the physics they stand for, within stated tolerances.
 - Nothing steps as an emitter goes behind a face, whatever the face lets through. A way never reads sound sooner than its length takes.
+- Played live with poses told in advance, it gives the samples of an offline render with the same poses, block for block (the bridge with a walking listener, at two qualities); a node told where it is sixty times a second sounds as one that moves by itself, within −60 dB.
 - A contact with no way to the ears takes no voice; a step is the same whoever else walks; of two echoes as loud, the one kept does not depend on which wall is listed first.
 
 # Knowledge
@@ -79,7 +84,8 @@ The engine knows nothing of Paris: any tree of nodes with emitters, faces and to
 
 # Limits
 
-- Offline only; one thread. Live playback in Bevy and in a browser is issue #16.
+- One thread for the engine, at the system's ordinary priority: on a busy machine it can be late, and the output then hears silence (measured below). Played live natively; the browser's AudioWorklet is still to come (issue #16).
+- Live, a pose is heard after the blocks kept ahead and the one made with it, plus the output's own buffer: on the bridge with a 10 ms output buffer, 13 ms on average from a pose to the output taking it, 23 ms to the ears. Rendering in the output's callback would save the blocks kept ahead, at the cost of making the output wait on the engine.
 - One reflection off each face and one edge per way: no reflection of a reflection, no way round two edges.
 - Ears without a measured head: height is weak and behind sounds like its mirror in front (issue #18).
 - Faces are flat quadrilaterals written in the scene; real meshes and contacts from the physics are issue #15.

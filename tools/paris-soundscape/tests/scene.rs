@@ -223,3 +223,45 @@ fn the_order_the_file_lists_things_in_is_no_part_of_the_scene() {
         }
     }
 }
+
+#[test]
+fn the_bridge_played_live_with_a_walking_listener_is_its_offline_render_block_for_block() {
+    use osage_sound::{
+        engine::Pose,
+        live::Live,
+        render::{Told, render_told},
+        space::{Placement, Vec3},
+    };
+    // A player walking along the bridge, told sixty times a second, from before the start: the car that
+    // passes, the river and the steps heard as they would be live.
+    let scene = paris_soundscape::bridge();
+    let listener = scene.listener;
+    let rest = scene.tree.nodes[listener].rest;
+    let told: Vec<Told> = (0..=300)
+        .map(|i| {
+            let at = -1.0 + f64::from(i) / 60.0;
+            let walk = Vec3::X * 1.4;
+            Told {
+                at,
+                node: listener,
+                pose: Pose {
+                    placement: Placement { translation: rest.translation + walk * at, ..rest },
+                    velocity: walk,
+                },
+            }
+        })
+        .collect();
+    let seconds = 2.0;
+    for quality in [Quality::LOW, Quality::MEDIUM] {
+        let options = options(quality, &[]);
+        let offline = render_told(&scene, &options, seconds, &told);
+        let live = Live::start(scene.clone(), options, &told, 4);
+        let mut heard = live.feed().listen();
+        for b in 0..offline.left.len() / BLOCK {
+            let block = heard.next_block();
+            let (l, r): (Vec<f32>, Vec<f32>) = block.chunks(2).map(|frame| (frame[0], frame[1])).unzip();
+            let span = b * BLOCK..(b + 1) * BLOCK;
+            assert!(l == offline.left[span.clone()] && r == offline.right[span], "{}: block {b} differs", quality.name);
+        }
+    }
+}

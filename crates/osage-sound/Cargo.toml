@@ -3,7 +3,7 @@
 
 [package]
 name = "osage-sound"
-description = "Sound placed in an object tree and carried to a listener's two ears: delay, distance, air, edges and reflecting surfaces, at what a device can afford; a scene rendered offline"
+description = "Sound placed in an object tree and carried to a listener's two ears: delay, distance, air, edges and reflecting surfaces, at what a device can afford; a scene rendered offline or played live"
 license-file = "../../LICENSE-EXCEPTIONS.md"
 publish = false
 version.workspace = true
@@ -15,3 +15,9 @@ repository.workspace = true
 osage-sound-voices.workspace = true
 osage-sound-analysis.workspace = true
 serde_json.workspace = true
+crossbeam-channel.workspace = true
+# The live engine as a Bevy audio source (live::bevy).
+bevy = { workspace = true, features = ["bevy_asset", "bevy_audio"], optional = true }
+
+[features]
+bevy = ["dep:bevy"]

@@ -31,6 +31,7 @@ use crate::{
     ears::{HEAD_RADIUS, Heard, Listening, PINNA, hear_for},
     scene::{Head, Load, Material, Reach, Scene, Touching},
     space::{Placement, Vec3},
+    tree::Motion,
     ways::{Face, SOUND, Scatter, Way, Ways, air_loss, direct, mirrored},
 };
 
@@ -653,7 +654,21 @@ pub struct Engine {
     made: Vec<f32>,
     /// What each ear's sum holds that is not sound: its mean, followed slowly.
     still: [f32; 2],
+    /// For each node, whether it is driven from outside ([`Engine::drive`]):
+    /// what is placed in it then moves, whatever its pose says now.
+    driven: Vec<bool>,
     pub tally: Tally,
+}
+
+/// Where a node is and how it goes, as a game or a server tells it
+/// ([`Engine::drive`]): its placement in its parent and its velocity there.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct Pose {
+    pub placement: Placement,
+    /// m/s, in the parent's frame. Until the next pose the node goes on at
+    /// this velocity: a position told sixty times a second then moves
+    /// evenly, and what it carries is not heard to lurch at each one.
+    pub velocity: Vec3,
 }
 
 /// The air's low-pass for a way on which it takes `loss` dB at 4 kHz: two
@@ -707,7 +722,7 @@ impl Engine {
         let mut sources = Vec::new();
         for (i, emitter) in scene.emitters.iter().enumerate() {
             let name = scene.emitter_name(i);
-            let moves = Self::moves(&scene, emitter.node);
+            let moves = Self::moves(&scene, &[], emitter.node);
             // As long as sound takes from as far as it is heard, and room to read.
             let ring = ((emitter.max_distance / SOUND * RATE as f64) as usize + 4 * BLOCK).next_power_of_two();
             let seed = seed_for(scene.seed, &name);
@@ -845,6 +860,7 @@ impl Engine {
             send: vec![0.0; BLOCK],
             made: vec![0.0; BLOCK],
             still: [0.0; 2],
+            driven: Vec::new(),
             tally,
             scene,
             options,
@@ -856,16 +872,56 @@ impl Engine {
         &self.scene
     }
 
-    /// Whether `node` or anything above it moves or turns.
-    fn moves(scene: &Scene, node: usize) -> bool {
+    /// Whether `node` or anything above it moves, turns or is driven.
+    fn moves(scene: &Scene, driven: &[bool], node: usize) -> bool {
         let mut at = Some(node);
         while let Some(i) = at {
-            if scene.tree.nodes[i].motion.is_some() || scene.tree.nodes[i].turning.is_some() {
+            let n = &scene.tree.nodes[i];
+            if n.motion.is_some() || n.turning.is_some() || driven.get(i).copied().unwrap_or(false) {
                 return true;
             }
-            at = scene.tree.nodes[i].parent;
+            at = n.parent;
         }
         false
+    }
+
+    /// The node at `path`, identifiers from a root.
+    pub fn node(&self, path: &[&str]) -> Option<usize> {
+        self.scene.tree.find(path)
+    }
+
+    /// Places `node` as a game or a server tells it, from the next block on:
+    /// at `pose.placement` at the instant of the next sample, going on at
+    /// `pose.velocity` until it is told again. Whatever motion or turning
+    /// the scene gave it is replaced. What is placed in it follows — its
+    /// emitters, its faces, its touches, the listener if it is the
+    /// listener's — and what it carries leaves a trail from then on, so
+    /// that each way is heard from where it was when its sound left it.
+    pub fn drive(&mut self, node: usize, pose: Pose) {
+        self.drive_at(node, pose, self.instant());
+    }
+
+    /// [`Engine::drive`], for a pose that held at the instant `at`, s, on
+    /// the scene's clock — a recorded replay's, given at the first block
+    /// after it: the node goes on from there at its velocity, so that a
+    /// pose given a little late is not heard late.
+    pub fn drive_at(&mut self, node: usize, pose: Pose, at: f64) {
+        let n = &mut self.scene.tree.nodes[node];
+        n.rest = pose.placement;
+        let speed = pose.velocity.length();
+        n.motion = (speed > 1e-9).then(|| Motion::steady(pose.velocity, at, speed));
+        n.turning = None;
+        self.driven.resize(self.scene.tree.nodes.len(), false);
+        self.driven[node] = true;
+        for source in &mut self.sources {
+            if !source.moves && self.scene.tree.under(source.node, node) {
+                source.moves = true;
+                if source.trail.is_empty() {
+                    source.trail = vec![Vec3::ZERO; trail_blocks(source.max_distance)];
+                }
+                source.trailed = 0;
+            }
+        }
     }
 
     /// The instant of the next sample to be rendered, s.
@@ -978,7 +1034,7 @@ impl Engine {
         let offset = self.placed[node].local(place);
         let first = self.scene.emitters.len();
         let pool = self.sources.len() - first;
-        let moves = Self::moves(&self.scene, node);
+        let moves = Self::moves(&self.scene, &self.driven, node);
         let strength = strength.clamp(0.0, 1.0);
         let distance = place.distance(ears);
         // What solo or mute leaves out, what is too far and what makes no
