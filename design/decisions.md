@@ -1301,3 +1301,18 @@ The prototype of the Pont de Bir-Hakeim had its own Cargo workspace under `tools
 - **Licence:** the engine's (AGPL with the osage exceptions) for all three crates and for the tool. The voices stay out of `worlds/` and out of the specification, SDK and example-world directories.
 - **Kept:** the renders do not change. Built in the root workspace, without the prototype's own release profile (one codegen unit, thin LTO), the command gives the same bytes: the two digests of its README.
 - **For the code that used the prototype by path:** the packages are renamed: `osage-paris-soundscape` becomes `osage-sound`, `osage-paris-voices` becomes `osage-sound-voices`, `osage-sound-analysis` keeps its name. Renaming them in a manifest keeps its code as it is: `osage-paris-soundscape = { package = "osage-sound", path = "../../crates/osage-sound" }`. `Scene::bundled()` is gone with the bridge's scene; code that used it depends on `paris-soundscape = { path = "../../tools/paris-soundscape" }` and calls `paris_soundscape::bridge()`, which returns the same `Scene`. [Prototype](../tools/paris-soundscape/DESIGN.md)
+
+## D-185 — Sound is synthesised from state and placed in the object tree
+
+Date: 2026-11-24
+
+How osage makes and places sound, as the prototype of the Pont de Bir-Hakeim built it and its review checked it (D-180, issues #13 to #22). (Numbered after the city programme's entries written in the working copy up to D-184, not yet committed, so that no two decisions share a number.)
+
+- **Decision:**
+  - A sound is **synthesised from the state of what makes it** — speed, acceleration, load, a blow — by a voice, a generator with parameters. No audio file is read or sent for it; recorded voices may be added where synthesis falls short (issue #22), as `osage-kart-sound` already does.
+  - A sound is **placed in the object tree**: an emitter is a node path and a position local to that node, so that it follows the node and its parents. Nothing else locates it.
+  - What an object carries for sound has three sides: what it does to sound that reaches it (the acoustic material the object format already has), what it emits by itself (an **emitter** on a node), and what it emits when touched (a **contact sound** on a collision material). Emitters and contact sounds are to become fields of the object format; until its reader and specification take them, they are written in sibling `osageSound` keys, which the reader steps over.
+  - A contact sounds as **two objects**: the softer of the two sets the push, each rings its own modes.
+  - The scene's order is no part of it, and what a thing sounds like does not depend on who else is there.
+- **Why:** a server already sends where things are; with sound made from state and placed by node, it sends nothing more for sound, and the same scene is heard on every device at what that device affords. Placing by node path gives sound the tree's cut for free: from afar a node's own emitters stand for its branch, as `subtreeProxy` does for the eye.
+- **Not decided here:** where a contact's modes are set (object or material), when the fields move into the object format and in which version, how far sound is carried as a field (design/09 §6). [Design note](09-sound.md)

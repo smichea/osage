@@ -43,6 +43,9 @@ What osage knows about its own modules: their architecture, the algorithms and t
 * [osage-kart-tracks](modules/kart-tracks.md) - The kart game's tracks as data: a plain text format (centre line, road and verge widths, crests, start, sky, scenery), checked for crossings, bends too tight and crests in bends, and built into the physics' Track; four tracks come with the game.
 * [osage-kart-racecraft](modules/kart-racecraft.md) - How the kart world's AI drivers race — a temperament each, braking for bends, a racing line, overtaking or waiting, defending, steering round things on the road, mistakes and grudges after a knock — deterministic, for the server's bots and the bench.
 * [osage-kart-sound](modules/kart-sound.md) - A kart's sound synthesised from its state — a two-stroke engine following the revs and the throttle, tyres squealing as they slide, kerbs drumming, grass, wind, knocks — sample by sample, deterministic.
+* [osage-sound](modules/osage-sound.md) - Sound placed in an object tree and carried to a listener's two ears — emitters, surfaces and touches on the tree's nodes, the ways each sound takes, a delay line per emitter so that distance and Doppler need no rule, ears without a measured head, a reverberation tail — at four qualities a device can afford, rendered offline today.
+* [osage-sound-voices](modules/osage-sound-voices.md) - The voices osage-sound places in a scene, each synthesised sample by sample from the state of what makes it — a river, cars, a scooter, a rubber-tyred metro and its viaduct, footsteps, the city far off, contacts — with no recording, deterministic.
+* [osage-sound-analysis](modules/osage-sound-analysis.md) - What a stereo recording tells of where its sounds are, measured the same way whatever made it — true peak, loudness by BS.1770-4, octaves, level and time differences between the ears, a tone's Doppler shift, a passage.
 * [osage-region-link](modules/region-link.md) - The message contract between the replication gateway and a region server, the same in one process and across machines.
 
 ## Rendering techniques
@@ -71,11 +74,17 @@ What osage knows about its own modules: their architecture, the algorithms and t
 * [Blended solids](algorithms/blended-solids.md) - Organic shapes — a figure, cloth over limbs — made of round cones, ellipsoids and boxes blended by a signed distance field and meshed by surface nets, painted by the piece nearest each point or by paint volumes.
 * [Tree cards](algorithms/tree-cards.md) - Woods of thousands of trees for a few thousand triangles — each tree drawn as crossed cards showing pictures of the real model, rendered on the processor at load from its own geometry and textures.
 * [Particle pool](algorithms/particle-pool.md) - A fixed pool of camera-facing squares for sparks, smoke and flames, where a particle fades by shrinking so that each kind is drawn in one batch.
+* [Sound ways](algorithms/sound-ways.md) - The ways a sound takes among flat faces — straight, through, round the loudest edge (Maekawa from the Fresnel number, continued into the lit side), mirrored from an image source — chosen by what the ways are, so that nothing steps behind an edge and the faces' order changes nothing.
+* [Sound delay lines](algorithms/sound-delay-lines.md) - Each emitter's voice in a ring of its own, each way reading it as far back as it is long, so that delay, Doppler and an echo's own shift need no rule; a moving emitter's trail; ways found in staggered blocks, gliding between, ranked by loudness under a budget.
+* [Contact voices](algorithms/contact-voices.md) - Which contacts get one of a few voices — only one that reaches the ears by a real way, and only from a voice heard less — with each contact's strength and grain drawn from whose contact it is.
+* [Feedback delay reverberation](algorithms/feedback-delay-reverb.md) - Eight prime-length lines mixed by a Householder matrix, each keeping per turn what a decay at 250 Hz, 1 kHz and 4 kHz asks of its three bands, solved for gently parted bands and capped at twice the longest decay.
+* [Loudness mastering](algorithms/loudness-mastering.md) - A render made into a file without falsifying it: faded ends, one gain to a BS.1770 loudness capped by a true-peak ceiling, triangular dither, 16 bits.
 
 ## Oracles
 
 * [The render bench](oracles/render-bench.md) - Proves that a fidelity tier holds its frame-time budget on a machine, and records what was drawn.
 * [Physics golden file](oracles/physics-golden.md) - Proves that the kart physics gives the same bits natively and in WebAssembly, which exact prediction relies on.
+* [Soundscape verify](oracles/soundscape-verify.md) - Proves that a render of a scene is reproducible, does not clip, is as loud as asked, keeps a side source on its side and swaps it when the head turns, and hears the train come, pass on the right and go.
 
 ## Elsewhere in the repository
 

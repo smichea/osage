@@ -1,5 +1,8 @@
 # Knowledge Update Log
 
+## 2026-11-24
+* **Creation**: Added the modules [osage-sound](/modules/osage-sound.md), [osage-sound-voices](/modules/osage-sound-voices.md) and [osage-sound-analysis](/modules/osage-sound-analysis.md) (D-180, issue #14); the algorithms [sound ways](/algorithms/sound-ways.md), [sound delay lines](/algorithms/sound-delay-lines.md), [contact voices](/algorithms/contact-voices.md), [feedback delay reverberation](/algorithms/feedback-delay-reverb.md) and [loudness mastering](/algorithms/loudness-mastering.md); and the oracle [soundscape verify](/oracles/soundscape-verify.md).
+
 ## 2026-11-22
 * **Update**: the Paris walk released as the kart is (D-143): [osage-update](/modules/osage-update.md) gains `folder`, the policy `kart-update` and the new `paris-update` share; [osage-paris-native](/modules/paris-native.md) gains its launchers and its content zip.
 * **Update**: the light ahead made ready (D-142): [osage-paris-native](/modules/paris-native.md) makes the probes' texture arrays once, lends their layers and writes the light of the cubes the walker goes to before it gets there, its light threads fetching what presses most; [osage-world-paris](/modules/paris-world.md) tells what is on a walker's way from what is beside it; a film's measure is paced as a window's and counts every frame.

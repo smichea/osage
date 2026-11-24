@@ -5,11 +5,13 @@
 
 2026-11-23 · status: a prototype and a proposal · by claude-code (Fable 5.2), for the responsible person to review
 
+The proposal — what an object carries for sound, qualities by device, server and clients, far sound as a field — is now [design/09](../../design/09-sound.md), with the decision D-185; the engine's cards are in [knowledge/](../../knowledge/modules/osage-sound.md). This note keeps the prototype: what it does, what it costs, against what it was measured, and where it stands.
+
 A first batch of sound for osage: an engine that hears a scene offline, and what it shows about how an object should carry sound. The engine is `crates/osage-sound`, its voices `crates/osage-sound-voices`, what is measured in a recording `crates/osage-sound-analysis`; the command and the scene of the bridge are here, in `tools/paris-soundscape/`.
 
 ## What it does
 
-A scene is an object tree, as the object format has it ([design/08](../../design/08-object-format.md)): nodes, each placed relative to its parent. Sound adds three things to a node, and a listener.
+A scene is an object tree, as the object format has it (the city programme's design note 08): nodes, each placed relative to its parent. Sound adds three things to a node, and a listener.
 
 1. **Emitters**: what the node sounds like by itself. A voice (a generator, not a recording) placed at a position local to the node.
 2. **Surfaces**: what sound meets. Flat faces with an acoustic material; they reflect and they hide.
@@ -31,48 +33,7 @@ The voices are synthesised sample by sample from the state of what makes them (`
 
 ## What an object carries for sound
 
-An object has a look: colour, relief, gloss. It also has a sound, and it has three sides.
-
-| Side | What it says | Where it is carried |
-|---|---|---|
-| **What it does to sound that reaches it** | For each band: the share it absorbs, lets through, mirrors, scatters | The acoustic material of a surface. The object format has it already (`acousticMaterials`, `node.extras.osage.acoustic[]`), at 250, 1 000 and 4 000 Hz. |
-| **What it emits by itself** | A voice and its parameters, a place in the node, a level, from how far it is heard | New: an **emitter** on a node. |
-| **What it emits when touched** | How it rings (its lowest mode, how long it lasts, its shape), how hard it is, how much it rubs or crumbles | New: a **contact sound** on a collision material, beside its friction and its bounce. |
-
-### A contact is two objects
-
-The sound of a contact never belongs to one object. It is made of:
-
-- **a push**, whose length the softer of the two sets. Steel on steel lasts a few tenths of a millisecond, a sole several milliseconds. A long push leaves the high modes alone: the sound is dull;
-- **the modes of each object**: its shape and size set their frequencies, its material how fast each dies. The ear tells materials by how the decay quickens with pitch (Klatzky, Pai and Krotkov, "Perception of material from contact sounds", Presence 9(4), 2000), so one number per material — a decay rate proportional to frequency — goes a long way (van den Doel and Pai, "The sounds of physical shapes", Presence 7(4), 1998). These two papers are cited from memory and were not read again for this work;
-- **a noise**: the rub of something rough or soft, the crackle of something brittle.
-
-Four contacts, as the `impact` voice makes them (`crates/osage-sound-voices/src/contact.rs`, whose test measures these):
-
-| Contact | The push | What rings | Measured |
-|---|---|---|---|
-| Hammer on an anvil | very short | the anvil, for most of a second; the hammer's head ticks | within 40 dB of its peak for 0.89 s, weight at 1.7 kHz |
-| Hammer on limestone | short, but the stone gives way | the block, a few hundredths of a second; then it crumbles | 0.07 s, weight at 4.1 kHz (the crackle) |
-| Leather sole on a paving stone | long | almost nothing; the sole rubs | 0.07 s, weight at 2.7 kHz |
-| Wooden clog on the same stone | medium | the clog itself, a hollow body: a note at 520 Hz | 0.08 s, weight at 1.3 kHz |
-
-The same hammer ticks less on limestone than on steel, because the stone gives way and the push lasts longer. Nothing says so: it follows from giving each object its own modes and the pair one push.
-
-In the scene the walker's steps change as the ground does (asphalt, then a steel plate over an expansion joint), the cars knock on the same plate, and each axle of the train knocks on the viaduct's joint. Here feet and wheels stand for the physics; in the engine the contact comes from the solver, which already reports where, between which surfaces and how hard ([osage-dynamics](../../knowledge/modules/osage-dynamics.md)).
-
-### Proposed fields
-
-They are written here in sibling `osageSound` keys, because the engine's reader refuses a key it does not know inside `osage` and `osageObject` and steps over a sibling: the scene file loads today as a version 1 object tree. Moving them in is a change to the reader, a decision-log entry and a card: second batch.
-
-| Location | Meaning |
-|---|---|
-| `node.extras.osageSound.emitters[]` | `id`; `type`: `positional` or `global` (straight into the ears, with a `pan`); `voice` and `params`: a generator and what it is given; `positionM`: where in the node; `gainDb`; `maxDistanceM`; `load` or `loadedBy` (which other emitters, when near, excite it: a span under a train); `reflections`. The names follow the draft glTF extension `KHR_audio_emitter` (an open pull request on the Khronos glTF repository) where it has one. |
-| `node.extras.osageSound.proxyBeyondM` | From this far from the listener, the node's own emitters stand for its whole branch. The same cut through the tree as `subtreeProxy` makes for the eye and for contact ([design/06 §2](../../design/06-objects.md)): thirteen emitters of a train become two. |
-| `asset.extras.osageSound.contactSounds` | For a key of `collisionMaterials`: `voice` and `params` (`tone`, `ring`, `shape`, `scuff`, `grain`), `hardness`, `gainDb`. |
-| `node.extras.osageSound.surfaces[]` | Stands for `acoustic[]` and `collision[]` while the scene has no meshes: `quadM` (four corners), `acoustic` and `collision` (material keys), `reflects`, `occludes`, `strikes`. |
-| `node.extras.osageSound.motion`, `turning`, `touches` | Stand for the simulation: a node going along a straight way at a speed that changes, a node turning, feet and wheels. |
-
-Two things the format should decide before these move in. A material's **modes belong to the object** (its size sets them) and its **damping to the material**: today both are parameters set by hand on the collision material. And an acoustic material has three bands; the engine shapes a way in four, the fourth for what the air and edges take first.
+What an object carries for sound — its acoustic material, its emitters, the sound it makes when touched — the four contacts the `impact` voice makes, and the fields proposed for the object format are in [design/09 §2](../../design/09-sound.md#2-what-an-object-carries-for-sound). In the scene the walker's steps change as the ground does (asphalt, then a steel plate over an expansion joint), the cars knock on the same plate, and each axle of the train knocks on the viaduct's joint; here feet and wheels stand for the physics.
 
 ## What it costs, and for whom
 
@@ -129,33 +90,15 @@ It keeps 21.8 MB of sound on its way: a line for each emitter, as long as its so
 
 One way alone is a line of noise read through a way that goes from 40 m before the listener to 160 m beyond; the air's filter is at work on most of it.
 
-### Server and clients
+### Server and clients, and what is far
 
-Nothing in this batch needs a server. The design keeps three splits open, by what each side can afford:
-
-1. **The client finds the ways and renders them** (what the prototype does). The server sends what it sends anyway: where things are. The voices are generators, so no sound is sent and none is read from disk: the bridge is 24 kB of scene and no audio file.
-2. **The server (or an edge) finds the ways, the client renders them.** A way is seven numbers every few milliseconds (a delay, four gains, a direction). For a client too weak to hold the acoustic geometry this trades a few kilobytes a second for the search. The engine already separates the two: `finding the ways` and `carrying` in the tables above.
-3. **Far sound as a field** (next section): what comes from far is the same for everyone in a place, so it is made once for the place.
-
-The server never mixes for a listener: that would cost it a voice count per player and a round trip in latency.
-
-No part of this uses the GPU. On a tier that already traces rays for light, the same acceleration structure could find ways; nothing here depends on it.
-
-## Sound holograms: a field for what is far
-
-osage draws what is far from a viewer as holograms: the light arriving at a cube from outside it, baked or streamed, shared by everyone in the cube ([osage-cubes](../../knowledge/modules/osage-cubes.md), [osage-hologram-stream](../../knowledge/modules/osage-hologram-stream.md)). Sound has the same shape, and a known form for it.
-
-- **Near** (the listener's own cube and its neighbours): emitters, ways, ears — this prototype.
-- **Far**: the sound arriving at a cube from outside it, kept as a **sound field** at the cube's centre: a few channels that hold the sound by direction (ambisonics; four channels for the first order, nine for the second). It is made once per cube, whoever listens, and each listener turns it to their own head and decodes it to their own ears. A listener that moves inside the cube hears the far field unchanged, as a far light field changes little with a step.
-- **Carried** as light is: a stream per cube and level, the larger cubes at a lower order and rate. The research notes give 64 to 128 kbit/s for such a bed with Opus; that figure is from memory and is not verified here.
-
-What this buys is the same as for light: the cost of the far world no longer grows with the number of sources or of listeners. What the prototype would need to show it: a bus that takes the ways of far emitters as a direction and a gain instead of two ears (cheaper than a way: no ear stage), a decoder to two ears, and a measurement of what is lost against rendering every source — the `measure` command gives the figures to compare. It is not built in this batch.
+How a server and its clients could share the work, and how what is far could be heard as a field made once per cube (sound holograms), are in [design/09 §5 and §6](../../design/09-sound.md#5-server-and-clients).
 
 ## Against what it was measured
 
 **Open-source engines, on this machine.** `bench/` plays the same ring of noises in OpenAL Soft 1.25 through its loopback device and in Chromium's Web Audio through an offline context; the tables above set the prototype beside them. They do not do the same work, and [bench/README.md](bench/README.md) says exactly what each does. OpenAL Soft and Web Audio convolve with measured responses of a head, which give height and front-back cues that a sphere cannot. The prototype carries each sound over its way, with its delay, its Doppler shift, its air and its reflections, which neither does. So the fair reading is by function: a panned source, a source heard by two ears, a source with its reflections.
 
-**The external reference** of the city programme ([design/07](../../design/07-city-scale-quality.md)) was not opened by the author of this code. Its behaviour was asked for as measurements and answered by the evaluation track; the questions, the answers and two 45-second captures are in the evaluator's private notes, with a side-by-side reading of them. `measure` reads those captures as it reads this prototype's renders: every sample of a file counts alike, its last tenth of a second as any other, and a mono capture's one channel counts once.
+**The external reference** of the city programme (its design note 07) was not opened by the author of this code. Its behaviour was asked for as measurements and answered by the evaluation track; the questions, the answers and two 45-second captures are in the evaluator's private notes, with a side-by-side reading of them. `measure` reads those captures as it reads this prototype's renders: every sample of a file counts alike, its last tenth of a second as any other, and a mono capture's one channel counts once.
 
 ## Where it stands, and what is not there
 
@@ -170,7 +113,7 @@ What instruments say of the example (each group of sources rendered alone and se
 
 Not there, or weak:
 
-- **Nobody has listened to it.** Every claim here is a measurement. Whether the Seine sounds like water and the train like a train is for ears to say.
+- **Listened to once**, on 2026-11-24, on a laptop's loudspeakers (issue #20): the places, the passages, the train, the city and the steps are as described; the river is exaggerated (its bed too loud, its laps like waves on sand, bubbles that chirp where the Seine has hardly any); in the bridge the cars and the steps do not sound real, though the steps alone do; the car alone sounds a little like a propeller aircraft's engine, the metro's traction like a motorbike shifting gears, and the default contact like a hand on a thin metal sheet. The loudspeaker render and the viaduct on headphones are still to be heard. Every other claim here is a measurement.
 - **Height** is conveyed weakly: the outer-ear model is fitted in front of the listener, and ears differ. Measured responses of a head (SADIE II is Apache-2.0, MIT KEMAR is free to use) would do better; they are data to download and to enter in the asset manifest, so they wait for a decision.
 - **Behind** sounds like its mirror in front, for the same reason.
 - **What a face scatters** is one late copy of the emitter's sound for each face: two faces' copies of a steady tone add or cancel in the reverberation as the emitter moves, where a rough wall would blur them. An emitter none of whose ways reaches the ears is not answered by the space either, so what is wholly hidden is not heard by what a wall scatters. A face that moves mirrors from where it is now, not from where it was when the sound met it.
@@ -188,7 +131,7 @@ Not there, or weak:
 
 ## Second batch
 
-1. ~~Move the engine, its voices and the analyser into crates of the engine~~: done (#13): `crates/osage-sound`, `crates/osage-sound-voices` (the engine's licence keeps them out of `worlds/`), `crates/osage-sound-analysis`. Still to do: emitters and contact sounds into the object format and its reader, with cards (#14).
+1. ~~Move the engine, its voices and the analyser into crates of the engine~~: done (#13): `crates/osage-sound`, `crates/osage-sound-voices` (the engine's licence keeps them out of `worlds/`), `crates/osage-sound-analysis`. Cards, a design note and a decision followed (#14: [design/09](../../design/09-sound.md), D-185). Still to do: emitters and contact sounds into the object format and its reader (#15).
 2. Read real objects: surfaces from `acoustic[]` meshes through `osage-objects`, contacts from `osage-dynamics`.
 3. A Bevy audio source fed by the engine, as `osage-music` feeds its own; the browser client through an AudioWorklet (the engine's block is its render quantum).
 4. The sound field for what is far, and its stream.
