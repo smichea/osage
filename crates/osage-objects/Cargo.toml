@@ -1,0 +1,22 @@
+# SPDX-FileCopyrightText: The osage contributors
+# SPDX-License-Identifier: LicenseRef-osage-AGPL-3.0-or-later-with-exceptions
+
+[package]
+name = "osage-objects"
+description = "Materials and the glTF object profile for visual, physical and acoustic geometry"
+license-file = "../../LICENSE-EXCEPTIONS.md"
+publish = false
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+
+[features]
+profile = ["dep:anyhow", "dep:glam", "dep:gltf", "dep:serde_json"]
+
+[dependencies]
+serde.workspace = true
+anyhow = { workspace = true, optional = true }
+glam = { version = "0.33", default-features = false, features = ["std", "f64"], optional = true }
+gltf = { version = "1.4.1", default-features = false, features = ["extras", "names"], optional = true }
+serde_json = { workspace = true, optional = true }

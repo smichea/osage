@@ -13,6 +13,9 @@ What osage knows about its own modules: their architecture, the algorithms and t
 
 ## Modules
 
+* [osage-objects](modules/osage-objects.md) - Visual, physical and acoustic geometry in a glTF object tree.
+* [osage-dynamics](modules/osage-dynamics.md) - Fixed-step rigid bodies, articulated actors and contact reports with Rapier and Jolt.
+
 * [osage-render](modules/osage-render.md) - Rendering techniques as independent Bevy plugins, each configured for the fidelity tier the application runs at.
 * [osage-kart-physics](modules/kart-physics.md) - The kart world's arcade physics, one deterministic Rust crate run natively by the server and as WebAssembly by clients.
 * [osage-kart-client](modules/kart-client.md) - The browser client of the kart world: three.js, the kart predicted by the shared physics in WebAssembly, the paddock's things and the rain drawn.

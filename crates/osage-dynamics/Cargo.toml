@@ -1,0 +1,22 @@
+# SPDX-FileCopyrightText: The osage contributors
+# SPDX-License-Identifier: LicenseRef-osage-AGPL-3.0-or-later-with-exceptions
+
+[package]
+name = "osage-dynamics"
+description = "Fixed-step rigid-body simulation and mesh contacts for Osage worlds"
+license-file = "../../LICENSE-EXCEPTIONS.md"
+publish = false
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+
+[dependencies]
+osage-objects.workspace = true
+anyhow.workspace = true
+glam = { version = "0.33", default-features = false, features = ["std", "f64"] }
+rapier3d = "0.36.1"
+serde.workspace = true
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+oxijolt = "=1.6.0"
