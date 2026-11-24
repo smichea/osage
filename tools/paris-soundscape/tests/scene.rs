@@ -8,11 +8,13 @@
 
 use osage_paris_soundscape::{
     ears::Listening,
-    engine::{Options, Quality, RATE},
+    engine::{BLOCK, Engine, Options, Quality, RATE},
     render::{fade, level, master, render},
-    scene::{Reach, Scene},
+    scene::{BIR_HAKEIM, Reach, Scene},
 };
+use osage_paris_voices::dsp::Noise;
 use osage_sound_analysis::{Band, cue, envelope, measure, sha256, wav};
+use serde_json::{Value, json};
 
 fn options(quality: Quality, solo: &[&str]) -> Options {
     Options { quality, solo: solo.iter().map(|text| (*text).to_owned()).collect(), ..Options::default() }
@@ -148,4 +150,76 @@ fn for_speakers_the_sides_are_kept_and_the_ears_are_not_delayed() {
     let low = cue(&heard.left, &heard.right, RATE, &Band::new(100.0, 400.0), 0.0, 4.0);
     // Level only: the same difference low and high, where a head makes almost none low.
     assert!(low.ild_db < -3.0, "{:+.1} dB", low.ild_db);
+}
+
+/// The bridge as another hand could have written the same file: with `chance`, its nodes, and each node's
+/// children, emitters, surfaces and touches, listed in another order.
+fn written(chance: Option<u32>) -> Scene {
+    let mut file: Value = serde_json::from_str(BIR_HAKEIM).unwrap();
+    let Some(seed) = chance else { return Scene::from_json(&file.to_string()).unwrap() };
+    let mut chance = Noise::new(seed);
+    let mut shuffle = |list: &mut [Value]| {
+        for i in (1..list.len()).rev() {
+            list.swap(i, ((chance.unit() * (i + 1) as f32) as usize).min(i));
+        }
+    };
+    let nodes = file["nodes"].as_array().unwrap().clone();
+    // Where each node goes: `moved[from]` is its new number.
+    let mut order: Vec<Value> = (0..nodes.len()).map(|from| json!(from)).collect();
+    shuffle(&mut order);
+    let mut moved = vec![json!(0); nodes.len()];
+    for (to, from) in order.iter().enumerate() {
+        moved[from.as_u64().unwrap() as usize] = json!(to);
+    }
+    let renumber =
+        |list: &mut Vec<Value>| list.iter_mut().for_each(|n| *n = moved[n.as_u64().unwrap() as usize].clone());
+    let mut listed: Vec<Value> = order.iter().map(|from| nodes[from.as_u64().unwrap() as usize].clone()).collect();
+    let mut lists = 0;
+    for node in &mut listed {
+        if let Some(children) = node.get_mut("children").and_then(Value::as_array_mut) {
+            renumber(children);
+            shuffle(children);
+        }
+        for key in ["emitters", "surfaces", "touches"] {
+            if let Some(list) = node.pointer_mut(&format!("/extras/osageSound/{key}")).and_then(Value::as_array_mut) {
+                shuffle(list);
+                lists += usize::from(list.len() > 1);
+            }
+        }
+    }
+    assert!(lists > 0 && nodes.len() > 50, "{lists} lists of {} nodes had an order to lose", nodes.len());
+    file["nodes"] = Value::Array(listed);
+    for scene in file["scenes"].as_array_mut().unwrap() {
+        renumber(scene["nodes"].as_array_mut().unwrap());
+    }
+    Scene::from_json(&file.to_string()).unwrap()
+}
+
+#[test]
+fn the_order_the_file_lists_things_in_is_no_part_of_the_scene() {
+    assert_eq!(written(None), Scene::bundled());
+    assert!(written(Some(1)) != Scene::bundled());
+    // Two seconds of the train coming, with the cars, the river, the steps and the wheels on the joints:
+    // the same samples from the file as it is and from the same file in two other orders, at every
+    // quality — what is summed, taken in turn or told apart by its place in a list does not move.
+    let heard = |scene: Scene, quality: Quality, listening: Listening| {
+        let mut engine = Engine::new(scene, Options { quality, listening, start: 23.0, ..Options::default() });
+        let (mut left, mut right) = ([0.0f32; BLOCK], [0.0f32; BLOCK]);
+        let mut heard = Vec::new();
+        for _ in 0..2 * RATE as usize / BLOCK {
+            engine.render(&mut left, &mut right);
+            heard.extend(left.iter().chain(&right).copied());
+        }
+        (heard, engine.tally.contacts)
+    };
+    for quality in Quality::ALL {
+        let listening = if quality.outer_ear { Listening::Headphones } else { Listening::Speakers };
+        let (as_written, contacts) = heard(written(None), quality, listening);
+        assert!(contacts > 0 && as_written.iter().any(|sample| sample.abs() > 1e-3), "{}", quality.name);
+        for chance in [1, 2] {
+            let (otherwise, _) = heard(written(Some(chance)), quality, listening);
+            let differing = as_written.iter().zip(&otherwise).filter(|(a, b)| a != b).count();
+            assert_eq!(differing, 0, "{}, order {chance}: samples that differ", quality.name);
+        }
+    }
 }

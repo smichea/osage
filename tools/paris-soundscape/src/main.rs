@@ -286,16 +286,14 @@ fn file(scene: &Scene, options: &Options, seconds: f64) -> (Vec<u8>, f64, usize)
     (wav::pcm16(RATE, 2, &mastered.samples), reached, mastered.held)
 }
 
-/// A render of `seconds` cut into spans of `span` seconds, to its very end: what is left over is a span of
-/// its own — joined to the one before it when it is under half a span, too short to read anything in.
+/// A render of `seconds` cut into spans of `span` seconds, to its very end: when something is left over, one
+/// span more ends where the render does, as long as the others and over the one before it — how a render
+/// ends is read as finely as the rest of it. A render shorter than a span is one span.
 fn spans(seconds: f64, span: f64) -> Vec<(f64, f64)> {
     let whole = (seconds / span) as usize;
     let mut spans: Vec<(f64, f64)> = (0..whole).map(|k| (k as f64 * span, (k + 1) as f64 * span)).collect();
-    let left = seconds - whole as f64 * span;
-    match spans.last_mut() {
-        Some(last) if left < span / 2.0 => last.1 = seconds,
-        _ if left > 0.0 => spans.push((whole as f64 * span, seconds)),
-        _ => {}
+    if seconds > whole as f64 * span {
+        spans.push(((seconds - span).max(0.0), seconds));
     }
     spans
 }
@@ -398,8 +396,9 @@ fn run_verify(args: &Args) -> Result<(), String> {
             river.left == turned.right && river.right == turned.left,
             "the two renders are each other's mirror, sample for sample".to_owned(),
         );
-        // A second at a time, to the very end of the render: a river that is on the right for one of them
-        // has not stayed on the left.
+        // A second at a time, and the last second of the render whatever its length: a river that is on the
+        // right for one of them has not stayed on the left. (What it does for less than a second is in its
+        // second's mean.)
         let worst = spans(seconds, 1.0)
             .into_iter()
             .map(|(from, to)| (cue(&river.left, &river.right, RATE, &wide, from, to).ild_db, from, to))
@@ -649,20 +648,20 @@ mod tests {
     fn a_render_is_checked_to_its_very_end() {
         assert_eq!(spans(45.0, 1.0).len(), 45);
         assert_eq!(spans(45.0, 1.0)[44], (44.0, 45.0));
-        // What is left over is looked at too: half a second of it by itself, less with the last second.
-        assert_eq!(spans(45.5, 1.0)[45], (45.0, 45.5));
-        assert_eq!(spans(42.75, 1.0)[42], (42.0, 42.75));
-        assert_eq!(spans(45.4, 1.0).last(), Some(&(44.0, 45.4)));
+        // What is left over is looked at in a whole second of its own: the render's last.
+        assert_eq!(spans(45.5, 1.0)[45], (44.5, 45.5));
+        assert_eq!(spans(42.75, 1.0)[42], (41.75, 42.75));
         assert_eq!(spans(1.0, 1.0), vec![(0.0, 1.0)]);
         assert_eq!(spans(0.4, 1.0), vec![(0.0, 0.4)]);
-        assert_eq!(spans(42.0, 5.0).last(), Some(&(35.0, 42.0)));
-        assert_eq!(spans(47.5, 5.0)[9], (45.0, 47.5));
-        // Every instant is in a span, and in one only.
-        for seconds in [0.4, 1.0, 1.49, 1.5, 4.99, 5.0, 5.5, 42.0, 45.0, 45.5, 47.0] {
+        assert_eq!(spans(42.0, 5.0).last(), Some(&(37.0, 42.0)));
+        // Every instant is in a span, and every span is as long as the others — but for a render shorter
+        // than one.
+        for seconds in [0.4, 1.0, 1.25, 1.5, 4.99, 5.0, 5.5, 42.0, 45.0, 45.4, 45.5, 47.0] {
             for span in [1.0, 5.0] {
                 let cut = spans(seconds, span);
                 assert_eq!((cut[0].0, cut[cut.len() - 1].1), (0.0, seconds));
-                assert!(cut.windows(2).all(|pair| pair[0].1 == pair[1].0));
+                assert!(cut.windows(2).all(|pair| pair[1].0 <= pair[0].1));
+                assert!(cut.iter().all(|(from, to)| (to - from - span.min(seconds)).abs() < 1e-9), "{cut:?}");
             }
         }
     }

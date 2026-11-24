@@ -247,6 +247,24 @@ impl Aim {
         self.gains != [0.0; 4]
     }
 
+    /// Which of two aims comes first when both are as loud: the one that
+    /// arrives sooner, then the one more to the left, then by whatever else
+    /// tells them apart. Two that nothing does are heard alike, from the
+    /// same emitter.
+    fn before(&self, other: &Aim) -> std::cmp::Ordering {
+        let rest = |aim: &Aim| {
+            let [g0, g1, g2, g3] = aim.gains;
+            let ([l0, l1], [s0, s1], [p0, p1, p2, p3, p4]) = (aim.late, aim.shadow, aim.pinna);
+            [-g0, -g1, -g2, -g3, aim.air, aim.send, l0, l1, s0, s1, aim.pan[1], p0, p1, p2, p3, p4]
+        };
+        let (one, two) = (rest(self), rest(other));
+        let rest = one.iter().zip(&two).map(|(a, b)| a.total_cmp(b)).find(|order| order.is_ne());
+        self.delay
+            .total_cmp(&other.delay)
+            .then(other.pan[0].total_cmp(&self.pan[0]))
+            .then(rest.unwrap_or(std::cmp::Ordering::Equal))
+    }
+
     /// This aim gone `share` of the way to `to`.
     fn toward(&self, to: &Aim, share: f32) -> Aim {
         let mix = |a: f32, b: f32| a + (b - a) * share;
@@ -319,6 +337,9 @@ struct Source {
     /// is to be there.
     targets: Vec<Option<Aim>>,
     left: u32,
+    /// Which blocks its ways are found anew in, of those the quality finds
+    /// them in: by its name, so that it is the same whoever else is there.
+    turn: u64,
     /// The ways rendered this block: the targets the budget keeps.
     aims: Vec<Option<Aim>>,
     /// How long its sound took to arrive when its ways were last found, s,
@@ -509,12 +530,73 @@ impl Tail {
     }
 }
 
-/// What a node touching the ground remembers.
-enum Touched {
+/// What a node touching the ground remembers. Its contacts are its own: how
+/// strong each is and how each sounds comes from the scene's seed, the node
+/// and how many it has made — never from who else is in the scene.
+struct Touched {
+    /// What tells its contacts from every other touch's.
+    seed: u32,
+    /// What differs from one of its steps to the next.
+    chance: Noise,
+    /// The contacts it has made, heard or not.
+    made: u64,
+    /// Which blocks its wheels are looked at in, of those the quality looks
+    /// at.
+    turn: u64,
+    last: Last,
+}
+
+enum Last {
     /// Metres gone since the last step, and which foot is next.
     Steps { gone: f64, foot: usize },
     /// The surface under each point.
     Wheels { on: Vec<Option<usize>> },
+}
+
+/// A contact about to be made: on which surface and where, by which touch,
+/// how strong, at which sample of the block, and what tells it from every
+/// other.
+struct Blow {
+    surface: usize,
+    point: Vec3,
+    touch: usize,
+    strength: f64,
+    at: usize,
+    seed: u32,
+}
+
+/// A scene's emitters, surfaces and touches in an order of their own — by
+/// the node each is on and by what it is — whatever order the file lists
+/// them and their nodes in. What is summed, taken in turn or told apart in
+/// the order of a list is then the same for the same scene.
+fn settle(scene: &mut Scene) {
+    let paths: Vec<String> = (0..scene.tree.nodes.len()).map(|node| scene.tree.path_text(node)).collect();
+    // (Any order will do that only what a thing is decides: a number's bits
+    // are as good as its size.)
+    let bits = |point: Vec3| [point.x.to_bits(), point.y.to_bits(), point.z.to_bits()];
+    scene.emitters.sort_by(|a, b| (&paths[a.node], &a.id).cmp(&(&paths[b.node], &b.id)));
+    scene.surfaces.sort_by_cached_key(|surface| {
+        let material = surface.acoustic.map(|material| {
+            let of = |three: [f64; 3]| three.map(f64::to_bits);
+            (of(material.absorption), of(material.transmission), material.scattering.to_bits())
+        });
+        (
+            paths[surface.node].clone(),
+            surface.quad.map(bits),
+            surface.id.clone(),
+            (surface.reflects, surface.occludes, surface.strikes),
+            material,
+            surface.collision.clone(),
+        )
+    });
+    scene.touches.sort_by_cached_key(|touch| {
+        let (wheels, stride, points) = match &touch.touching {
+            Touching::Steps { stride, feet } => (false, stride.to_bits(), feet),
+            Touching::Wheels { points } => (true, 0, points),
+        };
+        let points: Vec<[u64; 3]> = points.iter().map(|&point| bits(point)).collect();
+        (paths[touch.node].clone(), touch.material.clone(), touch.strength.to_bits(), wheels, stride, points)
+    });
 }
 
 /// What a render did, to say what it cost.
@@ -566,9 +648,6 @@ pub struct Engine {
     block: u64,
     tail: Tail,
     touched: Vec<Touched>,
-    /// What differs from one contact to the next.
-    chance: Noise,
-    contacts: u64,
     sinc: Vec<[f32; 8]>,
     send: Vec<f32>,
     made: Vec<f32>,
@@ -620,7 +699,8 @@ fn sinc_table() -> Vec<[f32; 8]> {
 }
 
 impl Engine {
-    pub fn new(scene: Scene, options: Options) -> Engine {
+    pub fn new(mut scene: Scene, options: Options) -> Engine {
+        settle(&mut scene);
         let facing: Vec<usize> = (0..scene.surfaces.len()).filter(|&i| scene.surfaces[i].acoustic.is_some()).collect();
         let lines = 1 + facing.len();
         let air = air_loss(4_000.0, scene.air.celsius, scene.air.humidity);
@@ -630,10 +710,12 @@ impl Engine {
             let moves = Self::moves(&scene, emitter.node);
             // As long as sound takes from as far as it is heard, and room to read.
             let ring = ((emitter.max_distance / SOUND * RATE as f64) as usize + 4 * BLOCK).next_power_of_two();
+            let seed = seed_for(scene.seed, &name);
             sources.push(Source {
-                voice: osage_paris_voices::make(&emitter.voice, seed_for(scene.seed, &name), &emitter.params)
+                voice: osage_paris_voices::make(&emitter.voice, seed, &emitter.params)
                     .expect("a scene names voices that exist"),
                 heard: options.hears(&name),
+                turn: u64::from(seed),
                 name,
                 node: emitter.node,
                 offset: emitter.offset,
@@ -669,9 +751,10 @@ impl Engine {
                 detail: 1.0,
             });
         }
-        for _ in 0..options.quality.contacts {
+        for slot in 0..options.quality.contacts {
             sources.push(Source {
                 voice: osage_paris_voices::make("impact", 1, &Default::default()).expect("the impact voice exists"),
+                turn: slot as u64,
                 // Named, and heard or not, when it is struck: by what was struck and what struck it.
                 heard: false,
                 name: String::new(),
@@ -721,12 +804,22 @@ impl Engine {
                 _ => Vec::new(),
             })
             .collect();
-        let touched = scene
-            .touches
-            .iter()
-            .map(|touch| match &touch.touching {
-                Touching::Steps { .. } => Touched::Steps { gone: 0.0, foot: 0 },
-                Touching::Wheels { points } => Touched::Wheels { on: vec![None; points.len()] },
+        let touched = (0..scene.touches.len())
+            .map(|k| {
+                let touch = &scene.touches[k];
+                // Which of its node's touches it is, in the engine's order.
+                let nth = scene.touches[..k].iter().filter(|other| other.node == touch.node).count();
+                let seed = seed_for(scene.seed, &format!("{} : touch {nth}", scene.tree.path_text(touch.node)));
+                Touched {
+                    seed,
+                    chance: Noise::new(seed),
+                    made: 0,
+                    turn: u64::from(seed),
+                    last: match &touch.touching {
+                        Touching::Steps { .. } => Last::Steps { gone: 0.0, foot: 0 },
+                        Touching::Wheels { points } => Last::Wheels { on: vec![None; points.len()] },
+                    },
+                }
             })
             .collect();
         let tally = Tally { ring_bytes: sources.iter().map(|s| s.ring.len() * 4).sum(), ..Tally::default() };
@@ -734,7 +827,6 @@ impl Engine {
             parts: PARTS.map(|frequency| (1.0 - (-std::f64::consts::TAU * frequency * DT).exp()) as f32),
             clear: clear_pass(options.quality.clear_db),
             tail: Tail::new(scene.reverb.seconds),
-            chance: Noise::new(seed_for(scene.seed, "contacts")),
             // Blocks are counted from the instant 0: a render that starts
             // earlier starts at a block before it.
             block: 0,
@@ -749,7 +841,6 @@ impl Engine {
             ranked: Vec::new(),
             air,
             touched,
-            contacts: 0,
             sinc: sinc_table(),
             send: vec![0.0; BLOCK],
             made: vec![0.0; BLOCK],
@@ -830,18 +921,42 @@ impl Engine {
         found.map(|(i, _)| i)
     }
 
-    /// A contact on `surface` at `point` by the node `by`, made of
-    /// `material`: voices from the pool, placed there on the surface's node
-    /// — one for what was touched and, if what touched it sounds too (a
-    /// clog, a hammer's head), one for that. Both bear the names of the two
-    /// that met, the surface as an emitter is named and the node by its
-    /// path: solo and mute take either. `ears` is where it is heard from:
-    /// what cannot be heard there takes no voice, and what is heard less
-    /// takes none from what is heard more.
-    #[allow(clippy::too_many_arguments)]
-    fn strike(&mut self, surface: usize, point: Vec3, by: usize, material: &str, strength: f64, at: usize, ears: Vec3) {
-        let Some(key) = self.scene.surfaces[surface].collision.clone() else { return };
-        let (Some(struck), Some(striker)) = (self.scene.contacts.get(&key), self.scene.contacts.get(material)) else {
+    /// How loud what is made at `place` arrives at `ears`, for a level of one
+    /// at a metre: by the loudest of the ways a contact's voice is carried
+    /// by — straight, through what lets it through or round what hides it,
+    /// and mirrored by a face when the quality follows that — in its loudest
+    /// band; and nothing when none of them comes within a contact's reach.
+    fn arriving(&self, place: Vec3, ears: Vec3, faces: &[Face]) -> f64 {
+        let quality = self.options.quality;
+        let loud = |way: &Way| {
+            let most = way.bands.iter().fold(0.0f64, |most, &band| most.max(band));
+            if way.length <= CONTACT_REACH { most / way.length.max(NEAREST) } else { 0.0 }
+        };
+        let mut most = direct(place, ears, faces).as_ref().map_or(0.0, loud);
+        if quality.mirrors {
+            for k in (0..faces.len()).filter(|&k| faces[k].reflects) {
+                if let (Some(way), _) = mirrored(k, place, ears, faces, quality.careful) {
+                    most = most.max(loud(&way));
+                }
+            }
+        }
+        most
+    }
+
+    /// A contact: voices from the pool, placed where it is made on the
+    /// surface's node — one for what was touched and, if what touched it
+    /// sounds too (a clog, a hammer's head), one for that. Both bear the
+    /// names of the two that met, the surface as an emitter is named and the
+    /// node by its path: solo and mute take either. `ears` is where it is
+    /// heard from, among `faces`: what does not reach them takes no voice,
+    /// and what is heard less takes none from what is heard more.
+    fn strike(&mut self, blow: Blow, ears: Vec3, faces: &[Face]) {
+        let Blow { surface, point, touch, strength, at, seed } = blow;
+        let by = self.scene.touches[touch].node;
+        let Some(key) = self.scene.surfaces[surface].collision.as_ref() else { return };
+        let (Some(struck), Some(striker)) =
+            (self.scene.contacts.get(key), self.scene.contacts.get(&self.scene.touches[touch].material))
+        else {
             return;
         };
         // The softer of the two sets how long the push lasts, for both.
@@ -859,31 +974,31 @@ impl Engine {
             self.scene.tree.path_text(by)
         );
         let heard = self.options.hears(&name);
-        let offset = self.placed[node].local(point + Vec3::Y * 0.03);
+        let place = point + Vec3::Y * 0.03;
+        let offset = self.placed[node].local(place);
         let first = self.scene.emitters.len();
         let pool = self.sources.len() - first;
         let moves = Self::moves(&self.scene, node);
-        // How loud it arrives, straight.
-        let distance = point.distance(ears);
-        let loud = (gain * strength.clamp(0.0, 1.0) / distance.max(NEAREST)) as f32;
-        for (voice, mut params) in sounding {
-            if pool == 0 {
-                return;
-            }
-            // What solo or mute leaves out, and what is too far to be heard,
-            // takes no voice from what is heard; and it is counted all the
-            // same, so that a contact has the seed it has among the others
-            // whoever else is there.
-            self.contacts += 1;
-            if !heard || distance > CONTACT_REACH {
-                continue;
-            }
+        let strength = strength.clamp(0.0, 1.0);
+        let distance = place.distance(ears);
+        // What solo or mute leaves out, what is too far and what makes no
+        // sound takes no voice from what is heard.
+        if pool == 0 || !heard || distance > CONTACT_REACH || gain <= 1e-6 {
+            return;
+        }
+        // As loud as it could arrive, with nothing in its way; and as loud
+        // as it does, by the ways it has among the faces — looked for only
+        // once a voice could be taken at all: in a crowd, most steps are
+        // told to be too faint by how far they are.
+        let most = (gain * strength / distance.max(NEAREST)) as f32;
+        let mut arrives: Option<f32> = None;
+        for (which, (voice, mut params)) in sounding.into_iter().enumerate() {
             // The voice that matters least: a free one, or the one least
             // heard now — as loud as it arrived, by what its voice still
             // makes of what it made at its loudest (all of it, for one just
             // struck). A contact takes it only if it matters more itself:
-            // steps far off do not silence a step close by, and a step that
-            // has died gives way to any that is heard.
+            // steps far off or behind a wall do not silence a step that is
+            // heard, and a step that has died gives way to any that is.
             let block = self.block;
             let worth = |source: &Source| {
                 let still = if source.top > 0.0 { source.last / source.top } else { 1.0 };
@@ -894,12 +1009,16 @@ impl Engine {
                 worth(a).total_cmp(&worth(b)).then(a.until.cmp(&b.until))
             });
             let slot = first + least.unwrap_or(0);
-            if worth(&self.sources[slot]) >= loud {
+            if worth(&self.sources[slot]) >= most {
+                continue;
+            }
+            let loud = *arrives.get_or_insert_with(|| (gain * strength * self.arriving(place, ears, faces)) as f32);
+            if loud <= 0.0 || worth(&self.sources[slot]) >= loud {
                 continue;
             }
             params.set("hardness", hardness);
-            let seed = seed_for(self.scene.seed, &format!("contact {}", self.contacts));
             let source = &mut self.sources[slot];
+            let seed = seed_for(u64::from(seed), &format!("voice {which}"));
             source.voice = osage_paris_voices::make(&voice, seed, &params).expect("a contact's voice exists");
             source.name.clone_from(&name);
             source.heard = heard;
@@ -911,7 +1030,7 @@ impl Engine {
             source.struck = true;
             source.asleep = false;
             source.waking = 0;
-            source.hit = Some(Hit { at: at.min(BLOCK - 1), strength: strength.clamp(0.0, 1.0) as f32 });
+            source.hit = Some(Hit { at: at.min(BLOCK - 1), strength: strength as f32 });
             source.lags.fill(0.0);
             source.moves = moves;
             source.trailed = 0;
@@ -924,20 +1043,26 @@ impl Engine {
     }
 
     /// What the scene's feet and wheels touch during this block of `seconds`,
-    /// heard from `ears`.
-    fn touch(&mut self, t1: f64, seconds: f64, ears: Vec3) {
+    /// heard from `ears` among `faces`.
+    fn touch(&mut self, t1: f64, seconds: f64, ears: Vec3, faces: &[Face]) {
         if self.scene.touches.is_empty() {
             return;
         }
         let ground = self.ground();
         let every = self.options.quality.every.max(1);
-        // (surface, where, which touch, how strong, at which sample)
-        let mut blows: Vec<(usize, Vec3, usize, f64, usize)> = Vec::new();
-        for (k, (touch, state)) in self.scene.touches.iter().zip(&mut self.touched).enumerate() {
+        let mut blows: Vec<Blow> = Vec::new();
+        for (k, (touch, touched)) in self.scene.touches.iter().zip(&mut self.touched).enumerate() {
             let (speed, _) = self.scene.tree.going(touch.node, t1);
             let placement = &self.placed[touch.node];
-            match (&touch.touching, state) {
-                (Touching::Steps { stride, feet }, Touched::Steps { gone, foot }) => {
+            // A contact is told from every other by whose it is and which
+            // one of them.
+            let mut blow = |made: &mut u64, surface, point, strength, at| {
+                *made += 1;
+                let seed = seed_for(u64::from(touched.seed), &format!("contact {made}"));
+                blows.push(Blow { surface, point, touch: k, strength, at, seed });
+            };
+            match (&touch.touching, &mut touched.last) {
+                (Touching::Steps { stride, feet }, Last::Steps { gone, foot }) => {
                     let step = speed.abs() * seconds;
                     *gone += step;
                     if *gone >= *stride && !feet.is_empty() && step > 0.0 {
@@ -947,16 +1072,16 @@ impl Engine {
                         let point = placement.point(feet[*foot % feet.len()]);
                         *foot += 1;
                         // No two steps alike.
-                        let strength = touch.strength * (1.0 + 0.18 * f64::from(self.chance.next()));
+                        let strength = touch.strength * (1.0 + 0.18 * f64::from(touched.chance.next()));
                         if let Some(surface) = Self::under(&ground, point) {
-                            blows.push((surface, point, k, strength, (part * BLOCK as f64) as usize));
+                            blow(&mut touched.made, surface, point, strength, (part * BLOCK as f64) as usize);
                         }
                     }
                 }
-                (Touching::Wheels { points }, Touched::Wheels { on }) => {
+                (Touching::Wheels { points }, Last::Wheels { on }) => {
                     // As often as the ways are found: a wheel at 50 km/h goes
                     // 15 cm in four blocks, and no plate is that narrow.
-                    if !(self.block + k as u64).is_multiple_of(every) {
+                    if !(self.block + touched.turn).is_multiple_of(every) {
                         continue;
                     }
                     for (i, local) in points.iter().enumerate() {
@@ -968,16 +1093,15 @@ impl Engine {
                         if let Some(surface) = onto {
                             // A wheel knocks harder the faster it goes: full at 50 km/h.
                             let strength = touch.strength * (speed.abs() / 14.0).clamp(0.15, 1.0);
-                            blows.push((surface, point, k, strength, BLOCK / 2));
+                            blow(&mut touched.made, surface, point, strength, BLOCK / 2);
                         }
                     }
                 }
                 _ => {}
             }
         }
-        for (surface, point, k, strength, at) in blows {
-            let (by, material) = (self.scene.touches[k].node, self.scene.touches[k].material.clone());
-            self.strike(surface, point, by, &material, strength, at, ears);
+        for blow in blows {
+            self.strike(blow, ears, faces);
         }
     }
 
@@ -1006,7 +1130,7 @@ impl Engine {
         }
         .turned(self.options.turn);
         let faces = self.faces();
-        self.touch(t1, seconds, head.at);
+        self.touch(t1, seconds, head.at, &faces);
         self.tally.touching += clock.elapsed().as_secs_f64();
 
         // Where each source is; one that moves leaves a trail, from which
@@ -1072,7 +1196,7 @@ impl Engine {
             // Its ways are found anew when its turn comes, and at once for a
             // contact; until then they go on to where they were going.
             let every = quality.every.max(1);
-            if !(source.struck || (self.block + i as u64).is_multiple_of(every)) {
+            if !(source.struck || (self.block + source.turn).is_multiple_of(every)) {
                 continue;
             }
             source.targets.fill(None);
@@ -1170,9 +1294,14 @@ impl Engine {
             }
         }
         // Only the loudest ways are rendered; one left out still feeds the
-        // space's answer what its face scatters.
+        // space's answer what its face scatters. Of two as loud, the one
+        // kept is told by what the ways are — never by where their faces
+        // are listed.
         if ranked.len() > quality.ways {
-            ranked.sort_by(|a, b| b.0.total_cmp(&a.0).then(a.1.cmp(&b.1)).then(a.2.cmp(&b.2)));
+            let aim = |&(_, i, k): &(f32, usize, usize)| self.sources[i].aims[k].unwrap_or_default();
+            ranked.sort_by(|a, b| {
+                b.0.total_cmp(&a.0).then_with(|| aim(a).before(&aim(b))).then(a.1.cmp(&b.1)).then(a.2.cmp(&b.2))
+            });
             for &(_, i, k) in &ranked[quality.ways..] {
                 let aim = &mut self.sources[i].aims[k];
                 *aim = aim.map(Aim::feeding).filter(|aim| k > 0 && aim.send > 0.0);

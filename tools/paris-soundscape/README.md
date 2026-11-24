@@ -37,7 +37,9 @@ bridge  at [0.00, 0.00, 0.00]
             ♪ tyres — metro-bogie at [0.00, 0.30, 0.00] +4.0 dB  → 13.0 m, +117° to the right, +32° up
 ```
 
-(An excerpt.) That emitter is named `bridge / upper-deck / track-to-passy / train / car-3 / bogie-5 : tyres`: the path of its node, then its own name. `--solo` and `--mute` take any part of such a name. A contact bears the names of the two that met — the surface struck, named as an emitter is, and the node that struck it: `bridge / road-deck : joint-plate : contact with bridge / road-deck / pavement-upstream / walker`. So `--solo walker` renders the steps, and `--mute road-deck` silences them with the road. A contact left out takes none of the voices kept for contacts; nor does one too far to be heard, and a contact takes a voice only from one that is heard less.
+(An excerpt.) That emitter is named `bridge / upper-deck / track-to-passy / train / car-3 / bogie-5 : tyres`: the path of its node, then its own name. `--solo` and `--mute` take any part of such a name. A contact bears the names of the two that met — the surface struck, named as an emitter is, and the node that struck it: `bridge / road-deck : joint-plate : contact with bridge / road-deck / pavement-upstream / walker`. So `--solo walker` renders the steps, and `--mute road-deck` silences them with the road. A contact left out takes none of the voices kept for contacts; nor does one that does not reach the ears — too far, or behind what stops it — and a contact takes a voice only from one that is heard less. Its strength and its grain are its own: the same whoever else walks or rolls in the scene.
+
+The order the file lists its nodes in, and each node its emitters, surfaces and touches, is no part of the scene: the same file in another order renders to the same samples.
 
 A file may hold several glTF scenes. Only the one its `scene` names is read: its roots and what is under them.
 
@@ -70,7 +72,7 @@ cargo run --release --manifest-path tools/paris-soundscape/Cargo.toml -- verify
 cargo test --manifest-path tools/paris-soundscape/Cargo.toml --workspace
 ```
 
-`verify` renders the scene several times and checks that the same seed gives the same bytes, that nothing clips (no sample held, true peak under −1 dBTP), that the file as written is as loud as the scene asks (within 0.3 LU, or held under it by its peaks, which are then at the ceiling), that turning the listener half round moves the river to the other ear (sample for sample: the river feeds no reverberation, which does not turn with the head), that the river stays on its side second by second to the very end of the render, and that the train comes, passes and goes. These are the brief's checks: on a scene without a river or a train, or a render too short to hold the train's passage, the check that cannot be made has failed, and says why. `measure FILE.wav` prints the same figures for any mono or stereo file, whatever made it.
+`verify` renders the scene several times and checks that the same seed gives the same bytes, that nothing clips (no sample held, true peak under −1 dBTP), that the file as written is as loud as the scene asks (within 0.3 LU, or held under it by its peaks, which are then at the ceiling), that turning the listener half round moves the river to the other ear (sample for sample: the river feeds no reverberation, which does not turn with the head), that the river stays on its side a second at a time and in the render's last second whatever its length (what it does for less than a second is in its second's mean), and that the train comes, passes and goes. These are the brief's checks: on a scene without a river or a train, or a render too short to hold the train's passage, the check that cannot be made has failed, and says why. `measure FILE.wav` prints the same figures for any mono or stereo file, whatever made it.
 
 ## More
 
@@ -80,8 +82,8 @@ cargo test --manifest-path tools/paris-soundscape/Cargo.toml --workspace
 The examples made on 2026-11-24 (x86-64 Linux, rustc 1.99, seed 6):
 
 ```
-bir-hakeim-headphones.wav  sha256 bd9bd84521bbda1350e5e9acdd769190b22b668672760ddd7c69f97cb78e7c93
-bir-hakeim-speakers.wav    sha256 ecb07d34cd09b2318c60e996d080e1b5b88e3a51640350f3cff1b4cf1e18ebc7
+bir-hakeim-headphones.wav  sha256 6d212ff6dc3fffdd52b2f1cf08d82c80d0b389cdfc96614723f291987039faf5
+bir-hakeim-speakers.wav    sha256 ae40a9a04f74a43240787bd7c4375d4165bb6169c3164a5cebc6321491ae1a33
 ```
 
 The digests hold for one machine and compiler: the voices use the platform's own sine and exponential.

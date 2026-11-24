@@ -666,18 +666,24 @@ fn a_contact_left_out_takes_no_voice_from_one_that_is_heard() {
                 heard.peak()
             );
         }
-        // The same steps on the same boards, each with its own grain: as loud within a few decibels.
-        let ratio = rms(&listed_first.left) / rms(&listed_last.left);
-        assert!((0.5..2.0).contains(&ratio), "walker-{who} listed first or last: {ratio}");
+        // A step has the grain of whose it is: the same samples, wherever the walker is listed.
+        assert!(listed_first.left == listed_last.left && listed_first.right == listed_last.right, "walker-{who}");
     }
 }
 
 /// People walking in step along X on the boards of a floor, each at its own distance in front of the ears.
 fn walkers(ahead: &[f64]) -> Scene {
-    let floor = r#"{"extras": {"osage": {"id": "floor"}, "osageSound": {"surfaces": [
-        {"id": "boards", "quadM": [[-900, 0, -900], [-900, 0, 900], [900, 0, 900], [900, 0, -900]], "collision": "ground"}]}}}"#;
+    walkers_among(ahead, "")
+}
+
+/// The same, the floor's node having `walls` too: surfaces, each followed by a comma.
+fn walkers_among(ahead: &[f64], walls: &str) -> Scene {
+    let floor = format!(
+        r#"{{"extras": {{"osage": {{"id": "floor"}}, "osageSound": {{"surfaces": [{walls}
+        {{"id": "boards", "quadM": [[-900, 0, -900], [-900, 0, 900], [900, 0, 900], [900, 0, -900]], "collision": "ground"}}]}}}}}}"#
+    );
     let ears = r#"{"translation": [0, 1.6, 0], "extras": {"osage": {"id": "ears"}}}"#;
-    let mut nodes = vec![world(ahead.len() + 2, ""), ears.to_owned(), floor.to_owned()];
+    let mut nodes = vec![world(ahead.len() + 2, ""), ears.to_owned(), floor];
     nodes.extend(ahead.iter().map(|metres| {
         format!(
             r#"{{"translation": [0, 0, {}], "extras": {{"osage": {{"id": "walker-at-{metres}"}}, "osageSound": {{
@@ -781,4 +787,99 @@ fn a_pane_that_lets_everything_through_changes_nothing_beside_a_screen() {
     assert!((ratio - 0.501).abs() < 0.002, "{ratio}");
     assert!(both.left == screened.left && both.right == screened.right);
     assert!(heard(false, true).left == open.left);
+}
+
+#[test]
+fn steps_behind_a_wall_take_no_voice_from_a_step_that_is_heard() {
+    // One person 20 m in front, in the open, and four 3 m behind the ears, behind a wall that stops
+    // everything and is too wide to be gone round within a step's reach: nearer as the crow flies, and not
+    // heard. With four voices for all their steps, what is heard is what is heard without the four —
+    // whichever is listed first, however much the device affords.
+    let wall = r#"{"id": "screen", "acoustic": "hard", "reflects": false,
+                   "quadM": [[-220, -220, 1], [-220, 220, 1], [220, 220, 1], [220, -220, 1]]},"#;
+    for quality in [Quality { contacts: 4, ..DRY }, Quality { contacts: 4, ..Quality::LOW }] {
+        let four_voices = |solo: &[&str], mute: &[&str]| Options {
+            quality,
+            listening: Listening::Speakers,
+            solo: solo.iter().map(|text| (*text).to_owned()).collect(),
+            mute: mute.iter().map(|text| (*text).to_owned()).collect(),
+            ..Options::default()
+        };
+        for ahead in [[20.0, -3.0, -3.5, -4.0, -4.5], [-3.0, -3.5, -4.0, -4.5, 20.0]] {
+            let scene = walkers_among(&ahead, wall);
+            let all = render(&scene, &four_voices(&[], &[]), 1.5);
+            let open = render(&scene, &four_voices(&[], &["walker-at--"]), 1.5);
+            let hidden = render(&scene, &four_voices(&["walker-at--"], &[]), 1.5);
+            assert!(open.tally.contacts >= 3 && open.peak() > 1e-5, "{} steps, {}", open.tally.contacts, open.peak());
+            assert_eq!((hidden.tally.contacts, hidden.peak()), (0, 0.0));
+            assert!(all.left == open.left && all.right == open.right, "{} {ahead:?}", quality.name);
+            assert_eq!(all.tally.contacts, open.tally.contacts);
+            // Without the wall the four are heard, and louder than the one.
+            let bare = render(&walkers(&ahead), &four_voices(&["walker-at--"], &[]), 1.5);
+            assert!(bare.peak() > 3.0 * open.peak(), "{} against {}", bare.peak(), open.peak());
+        }
+    }
+}
+
+#[test]
+fn who_else_walks_changes_nothing_of_a_step() {
+    // A person's steps are that person's: as strong and with the same grain whoever else is in the scene —
+    // people too far to be heard, or people left out of what is listened to — at any quality.
+    for quality in [Quality { contacts: 4, ..DRY }, Quality { contacts: 4, ..Quality::LOW }] {
+        let heard = |ahead: &[f64], solo: &[&str]| {
+            let options = Options {
+                quality,
+                listening: Listening::Speakers,
+                solo: solo.iter().map(|text| (*text).to_owned()).collect(),
+                ..Options::default()
+            };
+            render(&walkers(ahead), &options, 1.5)
+        };
+        let alone = heard(&[2.0], &[]);
+        assert!(alone.tally.contacts >= 3 && alone.peak() > 1e-4);
+        let far_off = heard(&[310.0, 320.0, 2.0, 330.0, 340.0, 350.0], &[]);
+        assert!(alone.left == far_off.left && alone.right == far_off.right, "{}: with people far off", quality.name);
+        let among = heard(&[1.0, 2.0, 3.0, 4.0, 5.0, 6.0], &["walker-at-2"]);
+        assert!(alone.left == among.left && alone.right == among.right, "{}: with people left out", quality.name);
+    }
+}
+
+#[test]
+fn of_two_echoes_as_loud_the_one_kept_is_not_told_by_where_its_wall_is_listed() {
+    // A tone straight ahead between two walls, one as far to the left as the other to the right, on a
+    // device that affords two ways: the straight one and one echo of the two, which are as loud. The same
+    // samples whichever wall is listed first and whatever the walls are called — and the echo kept is the
+    // one on the left.
+    let heard = |ids: [&str; 2], swapped: bool, ways: usize| {
+        let wall = |id: &str, x: f64| {
+            format!(
+                r#"{{"id": "{id}", "acoustic": "hard", "occludes": false,
+                     "quadM": [[{x}, -9, -12], [{x}, 9, -12], [{x}, 9, 5], [{x}, -9, 5]]}}"#
+            )
+        };
+        let mut walls = [wall(ids[0], -4.0), wall(ids[1], 4.0)];
+        if swapped {
+            walls.swap(0, 1);
+        }
+        let sound =
+            format!(r#", "osageSound": {{"surfaces": [{}]}}"#, if ways == 1 { String::new() } else { walls.join(",") });
+        let nodes = [world(2, &sound), EARS.to_owned(), emitter("tone", "tone", 1_000.0, [0.0, 0.0, -4.0])].join(",");
+        let quality = Quality { ways, ..DRY };
+        render(&scene(&nodes, 0.5), &Options { quality, listening: Listening::Speakers, ..Options::default() }, 0.5)
+    };
+    let one = heard(["a", "b"], false, 2);
+    assert_eq!(one.tally.most_ways, 2);
+    for (ids, swapped) in [(["a", "b"], true), (["b", "a"], false), (["b", "a"], true)] {
+        let other = heard(ids, swapped, 2);
+        assert!(one.left == other.left && one.right == other.right, "{ids:?} {swapped}");
+    }
+    // The echo alone: what the walls add to the straight way.
+    let straight = heard(["a", "b"], false, 1);
+    let echo = |ear: &[f32], bare: &[f32]| rms(&ear.iter().zip(bare).map(|(a, b)| a - b).collect::<Vec<f32>>());
+    let (left, right) = (echo(&one.left, &straight.left), echo(&one.right, &straight.right));
+    assert!(left > 5.0 * right && right > 0.0, "left {left}, right {right}");
+    // With a way more, both echoes: as much on each side.
+    let both = heard(["a", "b"], false, 3);
+    let (left, right) = (echo(&both.left, &straight.left), echo(&both.right, &straight.right));
+    assert!((left / right - 1.0).abs() < 1e-3, "left {left}, right {right}");
 }
