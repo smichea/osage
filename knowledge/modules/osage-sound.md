@@ -1,7 +1,7 @@
 ---
 type: Module
 title: osage-sound
-description: Sound placed in an object tree and carried to a listener's two ears — emitters, surfaces and touches on the tree's nodes, the ways each sound takes (straight, through, round an edge, mirrored), a delay line per emitter so that distance and Doppler need no rule, ears without a measured head, a reverberation tail — at four qualities a device can afford, rendered offline or played live on a thread of its own with its nodes placed by a game.
+description: Sound placed in an object tree and carried to a listener's two ears — emitters, surfaces and touches on the tree's nodes, the ways each sound takes (straight, through, round an edge, mirrored), a delay line per emitter so that distance and Doppler need no rule, ears without a measured head, a reverberation tail — at four qualities a device can afford, rendered offline or played live — on a thread of its own natively, in an AudioWorklet in a browser — with its nodes placed by a game.
 resource: https://github.com/smichea/osage/tree/main/crates/osage-sound
 licence: LicenseRef-osage-AGPL-3.0-or-later-with-exceptions
 status: draft
@@ -35,7 +35,7 @@ Hear a scene as the object tree has it: what each node sounds like, what sound m
 6. **Carry:** each way reads its ring as far back as its length takes, through four bands, the air and the ears, moving evenly from where the last block left it ([delay lines](/algorithms/sound-delay-lines.md)).
 7. **Tail:** what faces scatter feeds an eight-line feedback delay network ([feedback delay reverberation](/algorithms/feedback-delay-reverb.md)).
 
-**Live** (`live`), the engine runs on a thread of its own and keeps a set number of blocks made ahead of the audio output (the output's buffer in blocks, and one more), making the next as soon as the output takes one; the output never waits, and a block it finds missing is silence, counted. A game places nodes as it learns where they are (`Engine::drive`, a placement and a velocity): the node goes on at that velocity until it is told again, so that a pose told sixty times a second moves it evenly and what it carries is not heard to lurch. Poses recorded in advance (`Told`) are given at the same blocks live and offline: the same replay gives the same samples. With the `bevy` feature, `live::bevy::LiveSource` is the feed as a Bevy audio source.
+**Live** (`live`), the engine runs on a thread of its own and keeps a set number of blocks made ahead of the audio output (the output's buffer in blocks, and one more), making the next as soon as the output takes one; the output never waits, and a block it finds missing is silence, counted. A game places nodes as it learns where they are (`Engine::drive`, a placement and a velocity): the node goes on at that velocity until it is told again, so that a pose told sixty times a second moves it evenly and what it carries is not heard to lurch. Poses recorded in advance (`Told`) are given at the same blocks live and offline: the same replay gives the same samples. With the `bevy` feature, `live::bevy::LiveSource` is the feed as a Bevy audio source. In a browser, [osage-sound-web](/modules/osage-sound-web.md) plays the engine in an AudioWorklet, a block made in each render quantum.
 
 Offline (`render`), the engine starts three seconds before the first sample so that sound already on its way arrives, and the file is faded at both ends, brought to a loudness by one gain and dithered to 16 bits ([loudness mastering](/algorithms/loudness-mastering.md)).
 
@@ -84,7 +84,7 @@ The engine knows nothing of Paris: any tree of nodes with emitters, faces and to
 
 # Limits
 
-- One thread for the engine, at the system's ordinary priority: on a busy machine it can be late, and the output then hears silence (measured below). Played live natively; the browser's AudioWorklet is still to come (issue #16).
+- One thread for the engine, at the system's ordinary priority: on a busy machine it can be late, and the output then hears silence (measured below). In a browser, see [osage-sound-web](/modules/osage-sound-web.md).
 - Live, a pose is heard after the blocks kept ahead and the one made with it, plus the output's own buffer: on the bridge with a 10 ms output buffer, 13 ms on average from a pose to the output taking it, 23 ms to the ears. Rendering in the output's callback would save the blocks kept ahead, at the cost of making the output wait on the engine.
 - One reflection off each face and one edge per way: no reflection of a reflection, no way round two edges.
 - Ears without a measured head: height is weak and behind sounds like its mirror in front (issue #18).

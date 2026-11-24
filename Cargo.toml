@@ -47,6 +47,7 @@ osage-music = { path = "crates/osage-music" }
 osage-sound = { path = "crates/osage-sound" }
 osage-sound-voices = { path = "crates/osage-sound-voices" }
 osage-sound-analysis = { path = "crates/osage-sound-analysis" }
+osage-sound-web = { path = "crates/osage-sound-web" }
 osage-voice = { path = "crates/osage-voice" }
 osage-report = { path = "crates/osage-report" }
 anyhow = "1.0.104"
@@ -92,6 +93,9 @@ opt-level = 3
 opt-level = 3
 
 [profile.dev.package.osage-sound-analysis]
+opt-level = 3
+
+[profile.dev.package.osage-sound-web]
 opt-level = 3
 
 [profile.dev.package.paris-soundscape]

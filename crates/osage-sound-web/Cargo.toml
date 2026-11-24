@@ -1,0 +1,23 @@
+# SPDX-FileCopyrightText: The osage contributors
+# SPDX-License-Identifier: LicenseRef-osage-AGPL-3.0-or-later-with-exceptions
+
+# The engine for a browser's AudioWorklet: built for wasm32-unknown-unknown,
+# a handful of functions over plain numbers and memory, no bindings crate.
+#
+#     cargo build --release --target wasm32-unknown-unknown -p osage-sound-web
+
+[package]
+name = "osage-sound-web"
+description = "osage-sound for a browser: the engine as WebAssembly with a small C interface, played in an AudioWorklet whose render quantum is its block"
+license-file = "../../LICENSE-EXCEPTIONS.md"
+publish = false
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+osage-sound.workspace = true

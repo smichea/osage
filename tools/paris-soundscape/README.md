@@ -82,6 +82,16 @@ cargo run --release -p paris-soundscape -- live --quality medium
 
 plays the scene as it goes, as an audio output takes it (`--buffer-ms`, 10 by default, at a time on the clock) while a game walks the listener along the bridge with a pose sixty times a second; it prints what the output found missing and how late a pose was heard. Nothing is sent to a device: it measures. A client plays the same engine through `osage_sound::live` (with the `bevy` feature, as a Bevy audio source).
 
+In a browser, the engine is `crates/osage-sound-web`, played in an AudioWorklet:
+
+```sh
+cargo build --release --target wasm32-unknown-unknown -p osage-sound-web
+python3 tools/paris-soundscape/web/live.py check --quality medium   # the worklet's samples are the module's
+python3 tools/paris-soundscape/web/live.py play --quality low       # 45 s in Chromium: what each block costs
+```
+
+`web/live.html` is the page; `crates/osage-sound-web/web/` holds the worklet and its wrapper.
+
 ## More
 
 - [DESIGN.md](DESIGN.md): how it works, what an object carries for sound (what it emits, what it reflects, how it sounds when touched), what each quality costs, and what a second batch should do.

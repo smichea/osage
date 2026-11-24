@@ -102,7 +102,7 @@ On the bridge (41 emitters, 45 s), on one core of an Intel Core i5-1335U held at
 
 WebAssembly is the same program run in V8, as a browser client would pay. Heard by two ears, a source costs half of what it costs OpenAL Soft at `low` and `medium`, three quarters at `high`; panned to loudspeakers, twice. The engine keeps 21.8 MB of sound on its way; no part of it runs on a GPU. The prototype's DESIGN.md has the full measurements and what each baseline does and does not do.
 
-Whether a device holds its quality live — in a Bevy audio source and in a browser's AudioWorklet, whose render quantum is the engine's block — is issue #16.
+Played live (issue #16), on the same laptop while other work loaded it: natively, a thread kept a few blocks ahead of a 10 ms output held low and, in one run of two, medium for the bridge's 45 s with nothing missing; a pose is heard 13 ms after it is told, 23 ms with the output's buffer. In Chromium's AudioWorklet, where a block is made in each render quantum, low costs 13 % of the audio thread with no block over its budget, medium 28 % with 4 blocks of 17 132 over it; a pose is heard within one block plus the output's buffer.
 
 ## 5. Server and clients
 

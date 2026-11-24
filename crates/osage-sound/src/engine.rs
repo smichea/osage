@@ -671,6 +671,33 @@ pub struct Pose {
     pub velocity: Vec3,
 }
 
+/// The wall clock a tally reads the stages by. A browser's WebAssembly
+/// (`wasm32-unknown-unknown`) has none: there a tally counts no time.
+#[derive(Clone, Copy)]
+struct Clock(#[cfg(not(all(target_arch = "wasm32", target_os = "unknown")))] std::time::Instant);
+
+impl Clock {
+    #[cfg(not(all(target_arch = "wasm32", target_os = "unknown")))]
+    fn now() -> Clock {
+        Clock(std::time::Instant::now())
+    }
+
+    #[cfg(not(all(target_arch = "wasm32", target_os = "unknown")))]
+    fn seconds(self) -> f64 {
+        self.0.elapsed().as_secs_f64()
+    }
+
+    #[cfg(all(target_arch = "wasm32", target_os = "unknown"))]
+    fn now() -> Clock {
+        Clock()
+    }
+
+    #[cfg(all(target_arch = "wasm32", target_os = "unknown"))]
+    fn seconds(self) -> f64 {
+        0.0
+    }
+}
+
 /// The air's low-pass for a way on which it takes `loss` dB at 4 kHz: two
 /// one-poles, one after the other, set where the air has taken 3 dB from
 /// each — what the air takes, in decibels, grows as the square of the
@@ -1173,7 +1200,7 @@ impl Engine {
 
         // Where every node is at the end of this block: once for all that
         // is placed in them.
-        let clock = std::time::Instant::now();
+        let clock = Clock::now();
         let mut placed = std::mem::take(&mut self.placed);
         self.scene.tree.place_all(t1, &self.order, &mut placed);
         self.placed = placed;
@@ -1187,11 +1214,11 @@ impl Engine {
         .turned(self.options.turn);
         let faces = self.faces();
         self.touch(t1, seconds, head.at, &faces);
-        self.tally.touching += clock.elapsed().as_secs_f64();
+        self.tally.touching += clock.seconds();
 
         // Where each source is; one that moves leaves a trail, from which
         // where it was when a sound left it is read back.
-        let clock = std::time::Instant::now();
+        let clock = Clock::now();
         let (mut nows, mut scatters) = (std::mem::take(&mut self.nows), std::mem::take(&mut self.scatters));
         let block = self.block as usize;
         nows.clear();
@@ -1371,10 +1398,10 @@ impl Engine {
             }
         }
         (self.nows, self.scatters, self.ranked, self.found) = (nows, scatters, ranked, found);
-        self.tally.finding += clock.elapsed().as_secs_f64();
+        self.tally.finding += clock.seconds();
 
         // Every voice that is heard makes its block, into its own line.
-        let clock = std::time::Instant::now();
+        let clock = Clock::now();
         let base = self.block * BLOCK as u64;
         for source in &mut self.sources {
             let wanted = source.aims.iter().any(Option::is_some) || source.lines.iter().any(|line| line.live);
@@ -1428,10 +1455,10 @@ impl Engine {
                 }
             }
         }
-        self.tally.voicing += clock.elapsed().as_secs_f64();
+        self.tally.voicing += clock.seconds();
 
         // Every way carries its emitter's line to the ears.
-        let clock = std::time::Instant::now();
+        let clock = Clock::now();
         let (mut ways_now, parts) = (0usize, self.parts);
         for source in &mut self.sources {
             if source.reach != Reach::Positional || source.asleep {
@@ -1477,13 +1504,13 @@ impl Engine {
             source.struck = false;
             source.left = source.left.saturating_sub(1).max(1);
         }
-        self.tally.carrying += clock.elapsed().as_secs_f64();
+        self.tally.carrying += clock.seconds();
 
-        let clock = std::time::Instant::now();
+        let clock = Clock::now();
         if quality.reverb {
             self.tail.run(&self.send, left, right);
         }
-        self.tally.tailing += clock.elapsed().as_secs_f64();
+        self.tally.tailing += clock.seconds();
         // No ear is pushed one way for long: what stays under 8 Hz is taken off.
         for (ear, still) in [&mut *left, &mut *right].into_iter().zip(&mut self.still) {
             for sample in ear.iter_mut() {

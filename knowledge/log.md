@@ -1,6 +1,7 @@
 # Knowledge Update Log
 
 ## 2026-11-24
+* **Creation**: Added the module [osage-sound-web](/modules/osage-sound-web.md), the engine in a browser's AudioWorklet (issue #16). **Update**: [osage-sound](/modules/osage-sound.md) plays live, natively on a thread of its own and as a Bevy audio source, its nodes placed by a game.
 * **Creation**: Added the modules [osage-sound](/modules/osage-sound.md), [osage-sound-voices](/modules/osage-sound-voices.md) and [osage-sound-analysis](/modules/osage-sound-analysis.md) (D-180, issue #14); the algorithms [sound ways](/algorithms/sound-ways.md), [sound delay lines](/algorithms/sound-delay-lines.md), [contact voices](/algorithms/contact-voices.md), [feedback delay reverberation](/algorithms/feedback-delay-reverb.md) and [loudness mastering](/algorithms/loudness-mastering.md); and the oracle [soundscape verify](/oracles/soundscape-verify.md).
 
 ## 2026-11-22

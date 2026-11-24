@@ -5259,6 +5259,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "osage-sound-web"
+version = "0.1.0"
+dependencies = [
+ "osage-sound",
+]
+
+[[package]]
 name = "osage-update"
 version = "0.1.0"
 dependencies = [

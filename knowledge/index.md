@@ -46,6 +46,7 @@ What osage knows about its own modules: their architecture, the algorithms and t
 * [osage-sound](modules/osage-sound.md) - Sound placed in an object tree and carried to a listener's two ears — emitters, surfaces and touches on the tree's nodes, the ways each sound takes, a delay line per emitter so that distance and Doppler need no rule, ears without a measured head, a reverberation tail — at four qualities a device can afford, rendered offline today.
 * [osage-sound-voices](modules/osage-sound-voices.md) - The voices osage-sound places in a scene, each synthesised sample by sample from the state of what makes it — a river, cars, a scooter, a rubber-tyred metro and its viaduct, footsteps, the city far off, contacts — with no recording, deterministic.
 * [osage-sound-analysis](modules/osage-sound-analysis.md) - What a stereo recording tells of where its sounds are, measured the same way whatever made it — true peak, loudness by BS.1770-4, octaves, level and time differences between the ears, a tone's Doppler shift, a passage.
+* [osage-sound-web](modules/osage-sound-web.md) - osage-sound in a browser: the engine as WebAssembly with a small C interface, played in an AudioWorklet whose render quantum is its block, each block made when the output needs it with every pose told until then.
 * [osage-region-link](modules/region-link.md) - The message contract between the replication gateway and a region server, the same in one process and across machines.
 
 ## Rendering techniques

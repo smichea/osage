@@ -1,0 +1,116 @@
+<!doctype html>
+<!-- SPDX-FileCopyrightText: The osage contributors -->
+<!-- SPDX-License-Identifier: LicenseRef-osage-AGPL-3.0-or-later-with-exceptions -->
+<meta charset="utf-8">
+<title>osage-sound live</title>
+<!--
+  The bridge played by the engine in an AudioWorklet, served from the
+  repository's root (live.py does it). ?mode=check renders two seconds in an
+  OfflineAudioContext and compares them, sample for sample, with the same
+  module's blocks made directly; ?mode=play plays it in an AudioContext for
+  ?seconds=, a listener walked by a pose sixty times a second, and reports
+  what the browser says of the audio thread. ?quality= low (default),
+  medium, high or reference. Each result is one console line PARIS-LIVE {json}.
+-->
+<script type="module">
+import { Sound } from '/crates/osage-sound-web/web/osage-sound.js';
+
+const params = new URLSearchParams(location.search);
+const mode = params.get('mode') || 'check';
+const quality = params.get('quality') || 'low';
+const seconds = Number(params.get('seconds') || 45);
+const say = (what) => console.log('PARIS-LIVE ' + JSON.stringify(what));
+
+async function main() {
+  const module = await WebAssembly.compileStreaming(fetch('/target/wasm32-unknown-unknown/release/osage_sound_web.wasm'));
+  const scene = await (await fetch('/tools/paris-soundscape/scenes/bir-hakeim.json')).text();
+  const options = { module, scene, quality, headphones: true, start: 0 };
+  const worklet = (context) => context.audioWorklet.addModule('/crates/osage-sound-web/web/osage-sound-worklet.js').then(() => {
+    const node = new AudioWorkletNode(context, 'osage-sound', { numberOfInputs: 0, outputChannelCount: [2], processorOptions: options });
+    node.onprocessorerror = (e) => say({ mode, error: 'the processor failed: ' + (e.message || e) });
+    node.connect(context.destination);
+    return node;
+  });
+
+  if (mode === 'check') {
+    const frames = 2 * 48000;
+    const context = new OfflineAudioContext(2, frames, 48000);
+    await worklet(context);
+    const buffer = await context.startRendering();
+    const direct = new Sound(module, scene, options);
+    const [left, right] = [new Float32Array(128), new Float32Array(128)];
+    let differing = 0, loudest = 0;
+    for (let b = 0; b < frames / 128; b++) {
+      direct.render(left, right);
+      for (let i = 0; i < 128; i++) {
+        const [l, r] = [buffer.getChannelData(0)[b * 128 + i], buffer.getChannelData(1)[b * 128 + i]];
+        if (l !== left[i] || r !== right[i]) differing++;
+        loudest = Math.max(loudest, Math.abs(l), Math.abs(r));
+      }
+    }
+    say({ mode, quality, frames, differing, loudest });
+    return;
+  }
+
+  // Where the listener is at rest, from the scene: the path its listener names.
+  const gltf = JSON.parse(scene);
+  const path = gltf.scenes[0].extras.osageSound.listener.node;
+  let index = gltf.scenes[0].nodes.find((n) => gltf.nodes[n].extras.osage.id === path[0]);
+  for (const id of path.slice(1)) index = gltf.nodes[index].children.find((c) => gltf.nodes[c].extras.osage.id === id);
+  const rest = gltf.nodes[index].translation || [0, 0, 0];
+  const turn = gltf.nodes[index].rotation || [0, 0, 0, 1];
+
+  const context = new AudioContext({ sampleRate: 48000, latencyHint: 'interactive' });
+  await context.resume();
+  const node = await worklet(context);
+  const listener = await new Promise((done) => {
+    node.port.onmessage = ({ data }) => data.ready && done(data.listener);
+  });
+  const capacity = { updates: 0, worstUnderrun: 0, peakLoad: 0, loadSum: 0 };
+  if (context.renderCapacity) {
+    context.renderCapacity.addEventListener('update', (e) => {
+      capacity.updates++;
+      capacity.worstUnderrun = Math.max(capacity.worstUnderrun, e.underrunRatio);
+      capacity.peakLoad = Math.max(capacity.peakLoad, e.peakLoad);
+      capacity.loadSum += e.averageLoad;
+    });
+    context.renderCapacity.start({ updateInterval: 1 });
+  }
+  const before = context.playoutStats ? context.playoutStats.toJSON() : null;
+  const walk = 1.4, began = performance.now();
+  const timer = setInterval(() => {
+    const t = (performance.now() - began) / 1000;
+    node.port.postMessage({ drive: [listener, [rest[0] + walk * t, rest[1], rest[2]], turn, [walk, 0, 0]] });
+  }, 1000 / 60);
+  // From here on: what was spent making the lead is not the play's.
+  const start = await new Promise((done) => {
+    node.port.onmessage = ({ data }) => data.cost && done(data.cost);
+    node.port.postMessage({ cost: true });
+  });
+  const contextStart = context.currentTime, wallStart = performance.now();
+  await new Promise((done) => setTimeout(done, seconds * 1000));
+  clearInterval(timer);
+  const end = await new Promise((done) => {
+    node.port.onmessage = ({ data }) => data.cost && done(data.cost);
+    node.port.postMessage({ cost: true });
+  });
+  const blocks = end.blocks - start.blocks;
+  const cost = {
+    clock: end.clock, blocks, budgetMs: end.budget,
+    meanMs: (end.ms - start.ms) / Math.max(1, blocks),
+    load: (end.ms - start.ms) / Math.max(1, blocks) / end.budget,
+    over: end.over - start.over, worstMs: end.worst,
+    // The context's clock against the page's: a context that fell behind shows it here.
+    contextSeconds: context.currentTime - contextStart, wallSeconds: (performance.now() - wallStart) / 1000,
+  };
+  const after = context.playoutStats ? context.playoutStats.toJSON() : null;
+  say({
+    mode, quality, seconds,
+    baseLatency: context.baseLatency, outputLatency: context.outputLatency, cost,
+    renderCapacity: context.renderCapacity ? { ...capacity, averageLoad: capacity.loadSum / Math.max(1, capacity.updates) } : 'not in this browser',
+    playoutStats: before && after ? { before, after } : 'not in this browser',
+  });
+}
+
+main().catch((error) => say({ mode, error: String(error) }));
+</script>
