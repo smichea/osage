@@ -9,6 +9,8 @@
 //! - [`ways`]: the ways sound takes from an emitter to a head: straight,
 //!   round an edge, mirrored by a face; what the air takes;
 //! - [`ears`]: how a sound from a direction reaches each ear;
+//! - [`field`]: far sound as an ambisonic field at a cube's centre, and its
+//!   decoder to a head;
 //! - [`engine`]: a scene heard block by block, at what a device can afford;
 //! - [`render`]: a scene rendered to a file's samples, offline;
 //! - [`live`]: a scene played as it goes, a block ahead of the output, its
@@ -18,6 +20,7 @@
 pub mod bench;
 pub mod ears;
 pub mod engine;
+pub mod field;
 pub mod live;
 pub mod render;
 pub mod scene;

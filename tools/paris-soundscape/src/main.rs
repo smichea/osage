@@ -36,6 +36,24 @@ paris-soundscape: a scene's sound placed in its object tree and carried to two e
              --metro-at S        the instant the train's middle is level with the listener
              --metro-speed KMH   its speed over the bridge
              --metro-gain DB     louder or quieter than the scene has it
+             --far-beyond M      what is farther than M from the centre of the listener's cube, heard as an
+                                 ambisonic field made there (on render, verify and live)
+             --far-order N       the field's order, 1 (4 channels, default) or 2 (9)
+             --cube M            the cube's side (default 27; 0: the field made where the listener stands)
+  far      far sound as a field against every emitter by its own ways, at the first and second orders: the
+           differences in loudness, in each octave and in what the ears compare (level and time, by band,
+           second by second); and what it costs for 1, 4 and 16 listeners in one cube
+             --far-beyond M      the boundary (default 60 on a scene, half the radius on a sphere)
+             --sphere N          N noises on a sphere round the listener instead of the scene (--radius M,
+                                 default 150), the field made where the listener stands
+             takes --quality (default medium), --listening, --seconds (default 10)
+  compare A.wav B.wav
+           the same differences between two files of the same length (--json for a receipt)
+  field    the far part of a scene as its ambisonic field, a WAV file of 4 or 9 channels (ACN, SN3D)
+             --out FILE --gain-db DB   (takes --far-beyond, --far-order, --cube, --sphere, --radius, --seconds)
+  decode FIELD.wav
+           a field heard by a listener at its centre, looking ahead: a stereo WAV file
+             --out FILE --gain-db DB   (takes --listening and --quality)
   tree     the scene's nodes, emitters and surfaces
              --at S              where everything is at that instant, from the listener
   verify   the scene rendered several times and checked: the same seed gives the same bytes, nothing
@@ -131,7 +149,7 @@ fn scene(args: &Args) -> Result<Scene, String> {
     Ok(scene)
 }
 
-fn options(args: &Args) -> Result<Options, String> {
+fn options(args: &Args, scene: &Scene) -> Result<Options, String> {
     let quality = match args.value("--quality") {
         Some(name) => {
             Quality::named(name).ok_or_else(|| format!("--quality {name}: low, medium, high or reference"))?
@@ -150,12 +168,31 @@ fn options(args: &Args) -> Result<Options, String> {
         solo: args.all("--solo"),
         mute: args.all("--mute"),
         start: 0.0,
+        far: far(args, scene)?,
     })
+}
+
+/// Far sound as a field, if `--far-beyond` asks: made at the centre of the
+/// cube of `--cube` metres (27 by default) the listener stands in at the
+/// start, of every emitter beyond that many metres from it, at
+/// `--far-order` (1 or 2, 1 by default).
+fn far(args: &Args, scene: &Scene) -> Result<Option<osage_sound::field::Far>, String> {
+    let Some(beyond) = args.number("--far-beyond")? else { return Ok(None) };
+    let order = args.number("--far-order")?.unwrap_or(1.0) as usize;
+    if !(1..=2).contains(&order) {
+        return Err("--far-order: 1 or 2".to_owned());
+    }
+    let side = args.number("--cube")?.unwrap_or(27.0);
+    let at = scene.tree.placement(scene.listener, 0.0).point(scene.ears);
+    // A cube of no size: the field made where the listener stands.
+    let snap = |v: f64| if side > 0.0 { (v / side).floor() * side + side / 2.0 } else { v };
+    let centre = Vec3 { x: snap(at.x), y: snap(at.y), z: snap(at.z) };
+    Ok(Some(osage_sound::field::Far { centre, beyond, order }))
 }
 
 fn run_render(args: &Args) -> Result<(), String> {
     let scene = scene(args)?;
-    let options = options(args)?;
+    let options = options(args, &scene)?;
     let seconds = args.number("--seconds")?.unwrap_or(scene.seconds);
     let out = PathBuf::from(args.value("--out").unwrap_or("bir-hakeim.wav"));
     let started = Instant::now();
@@ -306,7 +343,7 @@ fn spans(seconds: f64, span: f64) -> Vec<(f64, f64)> {
 fn run_verify(args: &Args) -> Result<(), String> {
     use osage_sound_analysis::{Band, cue, envelope, measure};
     let scene = scene(args)?;
-    let options = options(args)?;
+    let options = options(args, &scene)?;
     let seconds = args.number("--seconds")?.unwrap_or(scene.seconds);
     let mut failed = 0;
     let mut check = |name: &str, passed: bool, found: String| {
@@ -395,12 +432,31 @@ fn run_verify(args: &Args) -> Result<(), String> {
             ahead.ild_db < -1.5 && behind.ild_db > 1.5 && (ahead.ild_db + behind.ild_db).abs() < 0.5,
             format!("right minus left {:+.1} dB ahead, {:+.1} dB turned", ahead.ild_db, behind.ild_db),
         );
-        // Sample for sample: what one ear heard, the other hears.
-        check(
-            "and each ear then hears what the other heard",
-            river.left == turned.right && river.right == turned.left,
-            "the two renders are each other's mirror, sample for sample".to_owned(),
-        );
+        // Sample for sample: what one ear heard, the other hears. With far sound as a field, the field
+        // stays with the world and only its decoder turns with the head: the two are each other's mirror
+        // to the rounding of the turned loudspeakers.
+        if options.far.is_none() {
+            check(
+                "and each ear then hears what the other heard",
+                river.left == turned.right && river.right == turned.left,
+                "the two renders are each other's mirror, sample for sample".to_owned(),
+            );
+        } else {
+            let off = |a: &[f32], b: &[f32]| {
+                let (mut d, mut s) = (0.0f64, 0.0f64);
+                for (x, y) in a.iter().zip(b) {
+                    d += f64::from(x - y).powi(2);
+                    s += f64::from(*x).powi(2);
+                }
+                10.0 * (d / s.max(1e-30)).log10()
+            };
+            let worst = off(&river.left, &turned.right).max(off(&river.right, &turned.left));
+            check(
+                "and each ear then hears what the other heard",
+                worst < -60.0,
+                format!("the two renders are each other's mirror within {worst:.0} dB (far sound as a field)"),
+            );
+        }
         // A second at a time, and the last second of the render whatever its length: a river that is on the
         // right for one of them has not stayed on the left. (What it does for less than a second is in its
         // second's mean.)
@@ -479,7 +535,7 @@ fn run_live(args: &Args) -> Result<(), String> {
         space::Placement,
     };
     let scene = scene(args)?;
-    let options = options(args)?;
+    let options = options(args, &scene)?;
     let seconds = args.number("--seconds")?.unwrap_or(scene.seconds);
     let buffer_ms = args.number("--buffer-ms")?.unwrap_or(10.0).max(1.0);
     let frames = (buffer_ms / 1000.0 * RATE as f64).round() as usize;
@@ -681,6 +737,250 @@ fn machine() -> String {
         .unwrap_or_else(|| "unknown".to_owned())
 }
 
+/// What two renders of the same length differ in, as instruments read them.
+struct Differences {
+    loudness: [Option<f64>; 2],
+    /// Octave centre, Hz, and B − A in dB.
+    octaves: Vec<(f64, f64)>,
+    /// For each band of the ears' cues: its centre, Hz; the mean of
+    /// |ΔILD|, dB, and of |ΔITD|, µs; over how many seconds.
+    cues: Vec<(f64, f64, f64, usize, usize)>,
+}
+
+fn differences(a: [&[f32]; 2], b: [&[f32]; 2], rate: u32) -> Differences {
+    use osage_sound_analysis::{band_levels, cue, cue_bands, loudness, octaves};
+    let seconds = a[0].len().min(b[0].len()) as f64 / f64::from(rate);
+    let mono = |x: [&[f32]; 2]| x[0].iter().zip(x[1]).map(|(l, r)| (l + r) / 2.0).collect::<Vec<f32>>();
+    let (ma, mb) = (mono(a), mono(b));
+    let bands = octaves();
+    let (la, lb) = (band_levels(&ma, rate, &bands), band_levels(&mb, rate, &bands));
+    let octaves =
+        bands.iter().zip(la.iter().zip(&lb)).map(|(band, (x, y))| ((band.low * band.high).sqrt(), y - x)).collect();
+    let spans: Vec<(f64, f64)> = (0..seconds.floor() as usize).map(|s| (s as f64, s as f64 + 1.0)).collect();
+    let cues = cue_bands()
+        .iter()
+        .map(|band| {
+            let pairs: Vec<_> = spans
+                .iter()
+                .map(|&(from, to)| (cue(a[0], a[1], rate, band, from, to), cue(b[0], b[1], rate, band, from, to)))
+                .collect();
+            // Only the seconds where there is something in this band to hear.
+            let loudest = pairs.iter().map(|(x, _)| x.level_db).fold(f64::NEG_INFINITY, f64::max);
+            let heard: Vec<_> = pairs.iter().filter(|(x, _)| x.level_db > loudest - 30.0).collect();
+            let ild = heard.iter().map(|(x, y)| (x.ild_db - y.ild_db).abs()).sum::<f64>() / heard.len().max(1) as f64;
+            let timed: Vec<_> = heard.iter().filter(|(x, y)| x.coherence > 0.3 && y.coherence > 0.3).collect();
+            let itd = timed.iter().map(|(x, y)| (x.itd_us - y.itd_us).abs()).sum::<f64>() / timed.len().max(1) as f64;
+            ((band.low * band.high).sqrt(), ild, itd, heard.len(), timed.len())
+        })
+        .collect();
+    Differences { loudness: [loudness(&a, rate), loudness(&b, rate)], octaves, cues }
+}
+
+fn print_differences(d: &Differences) {
+    let lufs = |x: Option<f64>| x.map_or("silent".to_owned(), |v| format!("{v:.2} LUFS"));
+    let delta = match d.loudness {
+        [Some(a), Some(b)] => format!("{:+.2} LU", b - a),
+        _ => "-".to_owned(),
+    };
+    println!("    loudness {} against {}: {delta}", lufs(d.loudness[1]), lufs(d.loudness[0]));
+    let octaves: Vec<String> = d.octaves.iter().map(|(hz, db)| format!("{}:{db:+.1}", hz.round())).collect();
+    println!("    octaves, dB: {}", octaves.join(" "));
+    for (hz, ild, itd, heard, timed) in &d.cues {
+        println!(
+            "    {:>5} Hz: level between the ears off by {ild:.2} dB ({heard} s), time by {itd:.0} µs ({timed} s coherent)",
+            hz.round()
+        );
+    }
+}
+
+fn run_compare(args: &Args) -> Result<(), String> {
+    let files: Vec<&String> = args.0.iter().filter(|a| !a.starts_with("--")).collect();
+    let [a, b] = files[..] else { return Err("compare two files: compare A.wav B.wav".to_owned()) };
+    let (x, y) = (wav::read(a).map_err(|e| format!("{a}: {e}"))?, wav::read(b).map_err(|e| format!("{b}: {e}"))?);
+    if x.rate != y.rate {
+        return Err(format!("{a} is at {} Hz, {b} at {}", x.rate, y.rate));
+    }
+    let two = |audio: &osage_sound_analysis::Audio| -> [Vec<f32>; 2] {
+        let left = audio.channels.first().cloned().unwrap_or_default();
+        let right = audio.channels.get(1).cloned().unwrap_or_else(|| left.clone());
+        [left, right]
+    };
+    let (x, y, rate) = (two(&x), two(&y), x.rate);
+    let d = differences([&x[0], &x[1]], [&y[0], &y[1]], rate);
+    if args.0.iter().any(|a| a == "--json") {
+        let octaves: Vec<String> = d.octaves.iter().map(|(hz, db)| format!("[{hz:.0}, {db:.3}]")).collect();
+        let cues: Vec<String> =
+            d.cues.iter().map(|(hz, ild, itd, ..)| format!("[{hz:.0}, {ild:.3}, {itd:.1}]")).collect();
+        let lufs = |v: Option<f64>| v.map_or("null".to_owned(), |v| format!("{v:.3}"));
+        println!(
+            "{{\"loudness\": [{}, {}], \"octaves_db\": [{}], \"cues_ild_db_itd_us\": [{}]}}",
+            lufs(d.loudness[0]),
+            lufs(d.loudness[1]),
+            octaves.join(", "),
+            cues.join(", ")
+        );
+    } else {
+        println!("{b} against {a}");
+        print_differences(&d);
+    }
+    Ok(())
+}
+
+/// The scene of `--sphere N` (and `--radius`), or the one asked.
+fn scene_or_sphere(args: &Args) -> Result<(Scene, bool), String> {
+    match args.number("--sphere")? {
+        Some(n) => Ok((osage_sound::bench::sphere(n as usize, args.number("--radius")?.unwrap_or(150.0)), true)),
+        None => Ok((scene(args)?, false)),
+    }
+}
+
+fn run_field(args: &Args) -> Result<(), String> {
+    use osage_sound::{
+        engine::{BLOCK, Engine},
+        field::{Far, MOST, channels},
+    };
+    let (scene, sphere) = scene_or_sphere(args)?;
+    let options = options(args, &scene)?;
+    let seconds = args.number("--seconds")?.unwrap_or(10.0);
+    let far = match options.far {
+        Some(far) => far,
+        None if sphere => Far {
+            centre: scene.tree.placement(scene.listener, 0.0).point(scene.ears),
+            beyond: args.number("--radius")?.unwrap_or(150.0) / 2.0,
+            order: args.number("--far-order")?.unwrap_or(1.0) as usize,
+        },
+        None => return Err("field: --far-beyond M, where the far part starts".to_owned()),
+    };
+    let order = far.order.clamp(1, 2);
+    let count = channels(order);
+    let gain = 10f64.powf(args.number("--gain-db")?.unwrap_or(0.0) / 20.0);
+    let mut engine = Engine::field(scene, Options { far: Some(far), start: -osage_sound::render::LEAD, ..options });
+    let mut block = [[0.0f32; BLOCK]; MOST];
+    for _ in 0..(osage_sound::render::LEAD * RATE as f64 / BLOCK as f64).round() as usize {
+        engine.render_field(&mut block);
+    }
+    let frames = (seconds * RATE as f64) as usize;
+    let mut samples = Vec::with_capacity(frames * count);
+    let (mut made, mut held) = (0, 0usize);
+    while made < frames {
+        engine.render_field(&mut block);
+        for n in 0..BLOCK.min(frames - made) {
+            for channel in block.iter().take(count) {
+                let value = (f64::from(channel[n]) * gain * 32_767.0).round();
+                held += usize::from(value.abs() > 32_767.0);
+                samples.push(value.clamp(-32_768.0, 32_767.0) as i16);
+            }
+        }
+        made += BLOCK;
+    }
+    let out = args.value("--out").unwrap_or("field.wav");
+    std::fs::write(out, wav::pcm16(RATE, count as u16, &samples)).map_err(|e| format!("{out}: {e}"))?;
+    println!("{out}: {count} channels (order {order}), {seconds} s, {held} samples held at the limits");
+    Ok(())
+}
+
+fn run_decode(args: &Args) -> Result<(), String> {
+    use osage_sound::{
+        engine::{BLOCK, FieldEars},
+        field::MOST,
+        scene::Head,
+    };
+    let Some(path) = args.0.iter().find(|a| !a.starts_with("--") && a.ends_with(".wav")) else {
+        return Err("decode which field?".to_owned());
+    };
+    let audio = wav::read(path).map_err(|e| format!("{path}: {e}"))?;
+    let order = match audio.channels.len() {
+        4 => 1,
+        9 => 2,
+        other => return Err(format!("{path}: {other} channels; a field has 4 or 9")),
+    };
+    let quality = match args.value("--quality") {
+        Some(name) => Quality::named(name).ok_or_else(|| format!("--quality {name}"))?,
+        None => Quality::MEDIUM,
+    };
+    let listening =
+        if args.value("--listening") == Some("speakers") { Listening::Speakers } else { Listening::Headphones };
+    let gain = 10f64.powf(args.number("--gain-db")?.unwrap_or(0.0) / 20.0);
+    let mut ears = FieldEars::new(order, quality, listening);
+    let head = Head { at: Vec3::ZERO, forward: Vec3 { x: 0.0, y: 0.0, z: -1.0 }, right: Vec3::X, up: Vec3::Y };
+    let frames = audio.frames();
+    let mut samples = Vec::with_capacity(frames * 2);
+    let mut at = 0;
+    while at < frames {
+        let mut field = [[0.0f32; BLOCK]; MOST];
+        let count = BLOCK.min(frames - at);
+        for (c, channel) in audio.channels.iter().enumerate() {
+            field[c][..count].copy_from_slice(&channel[at..at + count]);
+        }
+        let (mut l, mut r) = ([0.0f32; BLOCK], [0.0f32; BLOCK]);
+        ears.hear(&field, &head, &mut l, &mut r);
+        for n in 0..BLOCK.min(frames - at) {
+            for v in [l[n], r[n]] {
+                samples.push((f64::from(v) * gain * 32_767.0).round().clamp(-32_768.0, 32_767.0) as i16);
+            }
+        }
+        at += BLOCK;
+    }
+    let out = args.value("--out").unwrap_or("decoded.wav");
+    std::fs::write(out, wav::pcm16(RATE, 2, &samples)).map_err(|e| format!("{out}: {e}"))?;
+    println!(
+        "{out}: order {order} heard for {}",
+        if listening == Listening::Headphones { "headphones" } else { "speakers" }
+    );
+    Ok(())
+}
+
+/// Far sound as a field against every emitter by its own ways.
+fn run_far(args: &Args) -> Result<(), String> {
+    use osage_sound::{bench, field::Far};
+    let sphere = args.number("--sphere")?.map(|n| n as usize);
+    let radius = args.number("--radius")?.unwrap_or(150.0);
+    let scene = match sphere {
+        Some(n) => bench::sphere(n, radius),
+        None => scene(args)?,
+    };
+    let mut options = options(args, &scene)?;
+    if args.value("--quality").is_none() {
+        options.quality = Quality::MEDIUM;
+    }
+    let seconds = args.number("--seconds")?.unwrap_or(10.0);
+    let beyond = args.number("--far-beyond")?.unwrap_or(if sphere.is_some() { radius / 2.0 } else { 60.0 });
+    let side = args.number("--cube")?.unwrap_or(if sphere.is_some() { 0.0 } else { 27.0 });
+    let at = scene.tree.placement(scene.listener, 0.0).point(scene.ears);
+    let snap = |v: f64| if side > 0.0 { (v / side).floor() * side + side / 2.0 } else { v };
+    let centre = Vec3 { x: snap(at.x), y: snap(at.y), z: snap(at.z) };
+    println!(
+        "{} — {seconds} s at {} quality for {}; far beyond {beyond} m of {}",
+        scene.id,
+        options.quality.name,
+        if options.listening == Listening::Headphones { "headphones" } else { "speakers" },
+        place(centre)
+    );
+    let whole = render(&scene, &Options { far: None, ..options.clone() }, seconds);
+    for order in [1, 2] {
+        let far = Far { centre, beyond, order };
+        let heard = render(&scene, &Options { far: Some(far), ..options.clone() }, seconds);
+        println!(
+            "  a field of order {order} ({} channels), against every emitter by its own ways:",
+            (order + 1) * (order + 1)
+        );
+        print_differences(&differences([&whole.left, &whole.right], [&heard.left, &heard.right], RATE));
+        let (ways, making, hearing) =
+            osage_sound::bench::field_cost(&scene, &Options { far: Some(far), ..options.clone() }, seconds.min(4.0));
+        println!(
+            "    cost, ms a second: by ways {ways:.0} for each listener; the field {making:.0} once for the cube, {hearing:.1} for each listener to hear it"
+        );
+        for listeners in [1.0, 4.0, 16.0] {
+            println!(
+                "      {listeners:>2} listeners: by ways {:.0}, by a field {:.0}",
+                ways * listeners,
+                making + hearing * listeners
+            );
+        }
+    }
+    Ok(())
+}
+
 fn run_measure(args: &Args) -> Result<(), String> {
     let Some(path) = args.0.iter().find(|a| !a.starts_with("--")) else { return Err("measure which file?".to_owned()) };
     let audio = wav::read(path).map_err(|e| format!("{path}: {e}"))?;
@@ -709,6 +1009,10 @@ fn main() -> ExitCode {
         "verify" => run_verify(&args),
         "bench" => run_bench(&args),
         "live" => run_live(&args),
+        "far" => run_far(&args),
+        "field" => run_field(&args),
+        "decode" => run_decode(&args),
+        "compare" => run_compare(&args),
         _ => {
             print!("{HELP}");
             return if command.is_empty() || command == "help" || command == "--help" {

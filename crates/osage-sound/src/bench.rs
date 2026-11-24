@@ -80,6 +80,90 @@ pub fn ring(sources: usize, floor: bool) -> Scene {
     Scene::from_json(&text).expect("the ring reads")
 }
 
+/// Far sound for the field's measures: `sources` noises spread over a
+/// sphere of `radius` metres round a listener at its centre (a golden
+/// spiral, so that every direction has its share), the sphere turning
+/// slowly about the vertical. Nothing mirrors: what is measured is the
+/// field against the ways, not the faces.
+pub fn sphere(sources: usize, radius: f64) -> Scene {
+    let children: Vec<String> = (0..sources).map(|i| (i + 3).to_string()).collect();
+    let mut nodes = vec![
+        r#"{"children": [1, 2], "extras": {"osage": {"id": "world"}}}"#.to_owned(),
+        r#"{"extras": {"osage": {"id": "ears"}}}"#.to_owned(),
+        format!(
+            r#"{{"children": [{}], "extras": {{"osage": {{"id": "sphere"}}, "osageSound": {{"turning": {{"axisM": [0, 1, 0], "degreesPerSecond": 3}}}}}}}}"#,
+            children.join(", ")
+        ),
+    ];
+    let golden = std::f64::consts::PI * (3.0 - 5f64.sqrt());
+    for i in 0..sources {
+        // From near the top to near the bottom, a turn of the golden angle at each.
+        let y = 1.0 - 2.0 * (i as f64 + 0.5) / sources as f64;
+        let across = (1.0 - y * y).sqrt();
+        let angle = golden * i as f64;
+        nodes.push(format!(
+            r#"{{"translation": [{}, {}, {}], "extras": {{"osage": {{"id": "far-{i}"}}, "osageSound": {{"emitters": [{{"id": "noise", "voice": "noise", "maxDistanceM": {}}}]}}}}}}"#,
+            radius * across * angle.cos(),
+            radius * y,
+            radius * across * angle.sin(),
+            2.0 * radius
+        ));
+    }
+    let text = format!(
+        r#"{{
+      "asset": {{"version": "2.0", "extras": {{
+        "osageObject": {{"version": 1, "id": "sphere-of-{sources}", "collisionMaterials": {{}}, "acousticMaterials": {{}}}},
+        "osageSound": {{"version": 0, "contactSounds": {{}}}}}}}},
+      "scene": 0,
+      "scenes": [{{"nodes": [0], "extras": {{"osageSound": {{"seconds": 10, "seed": 6, "listener": {{"node": ["world", "ears"]}},
+        "reverb": {{"secondsT60": [0.6, 0.5, 0.3]}}, "air": {{"celsius": 15, "humidityPercent": 70}}}}}}}}],
+      "nodes": [{}]
+    }}"#,
+        nodes.join(",")
+    );
+    Scene::from_json(&text).expect("the sphere reads")
+}
+
+/// What far sound costs a processor, ms for a second of sound, for
+/// `listeners` listeners in one cube: every emitter heard by its own ways
+/// for each listener, against one field made for the cube and decoded for
+/// each listener. Returns (ways for one listener, making the field, hearing
+/// it for one listener).
+pub fn field_cost(scene: &Scene, options: &Options, seconds: f64) -> (f64, f64, f64) {
+    use crate::engine::{BLOCK, Engine, FieldEars};
+    let far = options.far.expect("a field to measure");
+    let blocks = (seconds * crate::engine::RATE as f64 / BLOCK as f64).ceil() as usize;
+    let per_second = |spent: f64| spent / seconds * 1000.0;
+    let (mut l, mut r) = ([0.0f32; BLOCK], [0.0f32; BLOCK]);
+    // Every emitter by its own ways, to one listener.
+    let mut whole = Engine::new(scene.clone(), Options { far: None, ..options.clone() });
+    let began = cpu_seconds();
+    for _ in 0..blocks {
+        whole.render(&mut l, &mut r);
+    }
+    let ways = per_second(cpu_seconds() - began);
+    // One field for the cube.
+    let mut field_engine = Engine::field(scene.clone(), options.clone());
+    let mut field = [[0.0f32; BLOCK]; crate::field::MOST];
+    let mut made = Vec::with_capacity(blocks);
+    let began = cpu_seconds();
+    for _ in 0..blocks {
+        field_engine.render_field(&mut field);
+        made.push(field);
+    }
+    let making = per_second(cpu_seconds() - began);
+    // Heard by one listener.
+    let mut ears = FieldEars::new(far.order, options.quality, options.listening);
+    let head = field_engine.head();
+    let began = cpu_seconds();
+    for block in &made {
+        ears.hear(block, &head, &mut l, &mut r);
+    }
+    let hearing = per_second(cpu_seconds() - began);
+    std::hint::black_box((&l, &r));
+    (ways, making, hearing)
+}
+
 /// What a render cost.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Cost {

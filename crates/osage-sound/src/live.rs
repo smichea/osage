@@ -42,8 +42,8 @@ use std::{
 use crossbeam_channel::{Receiver, Sender, TryRecvError, bounded, unbounded};
 
 use crate::{
-    engine::{BLOCK, Engine, Options, Pose},
-    render::{LEAD, Replay, Told},
+    engine::{BLOCK, Options, Pose},
+    render::{Hearing, LEAD, Replay, Told},
     scene::Scene,
 };
 
@@ -113,7 +113,7 @@ impl Live {
             .name("osage-sound".to_owned())
             .spawn(move || {
                 let start = options.start;
-                let mut engine = Engine::new(scene, Options { start: start - LEAD, ..options });
+                let mut engine = Hearing::new(scene, Options { start: start - LEAD, ..options });
                 let (mut l, mut r) = ([0.0f32; BLOCK], [0.0f32; BLOCK]);
                 // What left its emitters before the start is on its way.
                 let lead = (LEAD * RATE as f64 / BLOCK as f64).round() as usize;
@@ -153,7 +153,7 @@ impl Live {
     }
 
     /// Places `node` as the game now knows it, from the next block made
-    /// ([`Engine::drive`]).
+    /// ([`crate::engine::Engine::drive`]).
     pub fn drive(&self, node: usize, pose: Pose) {
         let _ = self.orders.send(Order::Pose { node, pose, sent: Instant::now() });
     }

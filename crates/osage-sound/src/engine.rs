@@ -29,8 +29,9 @@ use osage_sound_voices::{Drive, Hit, Voice, dsp::Noise, dsp::seed_for};
 
 use crate::{
     ears::{HEAD_RADIUS, Heard, Listening, PINNA, hear_for},
+    field::{Decoder, Far, MOST, far_share, harmonics},
     scene::{Head, Load, Material, Reach, Scene, Touching},
-    space::{Placement, Vec3},
+    space::{Placement, Vec3, vec3},
     tree::Motion,
     ways::{Face, SOUND, Scatter, Way, Ways, air_loss, direct, mirrored},
 };
@@ -176,6 +177,9 @@ pub struct Options {
     /// The instant of the first sample, s: before 0, to let sound that left
     /// earlier arrive.
     pub start: f64,
+    /// Far sound heard as a field made at a cube's centre ([`crate::field`]),
+    /// or every emitter heard by its own ways.
+    pub far: Option<Far>,
 }
 
 impl Options {
@@ -195,6 +199,7 @@ impl Default for Options {
             solo: Vec::new(),
             mute: Vec::new(),
             start: 0.0,
+            far: None,
         }
     }
 }
@@ -215,6 +220,8 @@ struct Aim {
     pan: [f32; 2],
     /// The outer ear's echoes, samples.
     pinna: [f32; 5],
+    /// For a field: what the way gives each channel.
+    field: [f32; MOST],
 }
 
 impl Aim {
@@ -230,6 +237,7 @@ impl Aim {
             shadow: heard.shadow.map(|alpha| alpha as f32),
             pan: heard.pan.map(|gain| gain as f32),
             pinna: heard.pinna.map(|seconds| (seconds * rate) as f32),
+            field: [0.0; MOST],
         }
     }
 
@@ -278,6 +286,7 @@ impl Aim {
             shadow: std::array::from_fn(|e| mix(self.shadow[e], to.shadow[e])),
             pan: std::array::from_fn(|e| mix(self.pan[e], to.pan[e])),
             pinna: std::array::from_fn(|e| mix(self.pinna[e], to.pinna[e])),
+            field: std::array::from_fn(|c| mix(self.field[c], to.field[c])),
         }
     }
 }
@@ -657,7 +666,156 @@ pub struct Engine {
     /// For each node, whether it is driven from outside ([`Engine::drive`]):
     /// what is placed in it then moves, whatever its pose says now.
     driven: Vec<bool>,
+    /// Which sound it makes: all of it, the near part, or the far part as a
+    /// field.
+    part: Part,
+    /// The far part's channels, this block.
+    field: [[f32; BLOCK]; MOST],
+    /// The listener's head as last placed.
+    head: Head,
     pub tally: Tally,
+}
+
+/// Which of a scene's sound an engine makes ([`Options::far`]).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Part {
+    /// Every emitter by its own ways.
+    Whole,
+    /// What is near the cube's centre, by its own ways, to the ears.
+    Near,
+    /// What is far from it, by its ways to the centre, as a field.
+    Far,
+}
+
+/// A field heard by one listener: decoded to virtual loudspeakers turned
+/// with the head, each heard through the engine's ears — for headphones its
+/// delay, shadow and outer ear, for loudspeakers its pan. What it costs
+/// depends on the field's order, not on how many emitters made the field.
+pub struct FieldEars {
+    decoder: Decoder,
+    quality: Quality,
+    listening: Listening,
+    lines: Vec<Line>,
+    aims: Vec<Aim>,
+    /// The decoder's gains of the last block, above and below the
+    /// crossover, to move evenly from.
+    before: Vec<[f32; MOST]>,
+    before_low: Vec<[f32; MOST]>,
+    /// Each channel's low-pass at the crossover.
+    parted: [f32; MOST],
+    pass: f32,
+    /// What the gains above the crossover are brought by, so that the
+    /// loudspeakers the ears cannot tell apart — the same time and shadow
+    /// at each ear — and so add in step, keep the energy of a sound on
+    /// average over every direction.
+    high: f32,
+}
+
+impl FieldEars {
+    pub fn new(order: usize, quality: Quality, listening: Listening) -> FieldEars {
+        let decoder = Decoder::new(order);
+        let head = Head { at: Vec3::ZERO, forward: vec3(0.0, 0.0, -1.0), right: Vec3::X, up: Vec3::Y };
+        let aims = decoder
+            .speakers
+            .iter()
+            .map(|s| {
+                let from = vec3(s[0], s[1], -s[2]) * 10.0;
+                Aim::new(0.0, [1.0; 4], 1.0, 0.0, &hear_for(from, &head, listening, quality.outer_ear))
+            })
+            .collect::<Vec<_>>();
+        let count = aims.len();
+        // The loudspeakers the ears hear alike, in groups.
+        let alike = |a: &Aim, b: &Aim| a.late == b.late && a.shadow == b.shadow && a.pinna == b.pinna && a.pan == b.pan;
+        let mut group = vec![usize::MAX; count];
+        for s in 0..count {
+            if group[s] == usize::MAX {
+                group[s] = s;
+                for o in s + 1..count {
+                    if group[o] == usize::MAX && alike(&aims[s], &aims[o]) {
+                        group[o] = s;
+                    }
+                }
+            }
+        }
+        // The energy the ears get of a sound, the groups adding in step, on
+        // average over directions spread on the sphere (a golden spiral).
+        let mut turned = decoder.clone();
+        turned.turn(&head);
+        let probes = 256;
+        let golden = std::f64::consts::PI * (3.0 - 5f64.sqrt());
+        let channels = crate::field::channels(turned.order);
+        let mut energy = 0.0;
+        for i in 0..probes {
+            let y = 1.0 - 2.0 * (i as f64 + 0.5) / probes as f64;
+            let r = (1.0 - y * y).sqrt();
+            let h = harmonics(vec3(r * (golden * i as f64).cos(), y, r * (golden * i as f64).sin()), turned.order);
+            let mut sums = vec![0.0f64; count];
+            for (s, g) in turned.gains().iter().enumerate() {
+                sums[group[s]] += (0..channels).map(|c| f64::from(g[c]) * h[c]).sum::<f64>();
+            }
+            energy += sums.iter().map(|x| x * x).sum::<f64>();
+        }
+        let high = (probes as f64 / energy).sqrt() as f32;
+        FieldEars {
+            decoder,
+            quality,
+            listening,
+            lines: (0..count).map(|_| Line::default()).collect(),
+            aims,
+            before: vec![[0.0; MOST]; count],
+            before_low: vec![[0.0; MOST]; count],
+            parted: [0.0; MOST],
+            pass: (1.0 - (-std::f64::consts::TAU * crate::field::CROSSOVER * DT).exp()) as f32,
+            high,
+        }
+    }
+
+    /// The field's block heard by `head`, added to `left` and `right`.
+    pub fn hear(
+        &mut self,
+        field: &[[f32; BLOCK]; MOST],
+        head: &Head,
+        left: &mut [f32; BLOCK],
+        right: &mut [f32; BLOCK],
+    ) {
+        self.decoder.turn(head);
+        let per = 1.0 / BLOCK as f32;
+        let channels = crate::field::channels(self.decoder.order);
+        // Each channel parted at the crossover: what is under it, and the rest.
+        let mut low = [[0.0f32; BLOCK]; MOST];
+        for c in 0..channels {
+            let mut state = self.parted[c];
+            for n in 0..BLOCK {
+                state += (field[c][n] - state) * self.pass;
+                low[c][n] = state;
+            }
+            self.parted[c] = if state.abs() < TINY { 0.0 } else { state };
+        }
+        for (s, (gains, low_gains)) in self.decoder.gains().iter().zip(self.decoder.low_gains()).enumerate() {
+            let mut x = [0.0f32; BLOCK];
+            let gains = gains.map(|g| g * self.high);
+            for c in 0..channels {
+                let (g, step) = (self.before[s][c], (gains[c] - self.before[s][c]) * per);
+                let (k, k_step) = (self.before_low[s][c], (low_gains[c] - self.before_low[s][c]) * per);
+                for (n, out) in x.iter_mut().enumerate() {
+                    let m = (n + 1) as f32;
+                    let under = low[c][n];
+                    *out += under * (k + k_step * m) + (field[c][n] - under) * (g + step * m);
+                }
+            }
+            self.before[s] = gains;
+            self.before_low[s] = *low_gains;
+            let aim = self.aims[s];
+            if self.listening == Listening::Speakers {
+                for n in 0..BLOCK {
+                    left[n] += x[n] * aim.pan[0];
+                    right[n] += x[n] * aim.pan[1];
+                }
+            } else {
+                ears(&mut self.lines[s], &aim, &aim, &x, self.quality, left, right);
+            }
+        }
+    }
 }
 
 /// Where a node is and how it goes, as a game or a server tells it
@@ -741,7 +899,26 @@ fn sinc_table() -> Vec<[f32; 8]> {
 }
 
 impl Engine {
-    pub fn new(mut scene: Scene, options: Options) -> Engine {
+    /// The engine on `scene`: all of its sound, or — when `options.far` is
+    /// given — the near part only, the far part being [`Engine::field`]'s.
+    pub fn new(scene: Scene, options: Options) -> Engine {
+        let part = if options.far.is_some() { Part::Near } else { Part::Whole };
+        Self::make(scene, options, part)
+    }
+
+    /// The far part of `scene` as a field at the centre `options.far` names,
+    /// whoever listens there: [`Engine::render_field`] makes it, and
+    /// [`FieldEars`] hears it. Without `options.far`, a field of the first
+    /// order at the listener's place at rest, of everything beyond 100 m.
+    pub fn field(scene: Scene, mut options: Options) -> Engine {
+        if options.far.is_none() {
+            let at = scene.tree.placement(scene.listener, options.start).point(scene.ears);
+            options.far = Some(Far { centre: at, beyond: 100.0, order: 1 });
+        }
+        Self::make(scene, options, Part::Far)
+    }
+
+    fn make(mut scene: Scene, options: Options, part: Part) -> Engine {
         settle(&mut scene);
         let facing: Vec<usize> = (0..scene.surfaces.len()).filter(|&i| scene.surfaces[i].acoustic.is_some()).collect();
         let lines = 1 + facing.len();
@@ -756,7 +933,8 @@ impl Engine {
             sources.push(Source {
                 voice: osage_sound_voices::make(&emitter.voice, seed, &emitter.params)
                     .expect("a scene names voices that exist"),
-                heard: options.hears(&name),
+                // What is heard from nowhere is near wherever it is.
+                heard: options.hears(&name) && !(part == Part::Far && emitter.reach != Reach::Positional),
                 turn: u64::from(seed),
                 name,
                 node: emitter.node,
@@ -888,6 +1066,9 @@ impl Engine {
             made: vec![0.0; BLOCK],
             still: [0.0; 2],
             driven: Vec::new(),
+            part,
+            field: [[0.0; BLOCK]; MOST],
+            head: Head { at: Vec3::ZERO, forward: vec3(0.0, 0.0, -1.0), right: Vec3::X, up: Vec3::Y },
             tally,
             scene,
             options,
@@ -910,6 +1091,26 @@ impl Engine {
             at = n.parent;
         }
         false
+    }
+
+    /// The next block of the far part's field ([`Engine::field`]): one
+    /// channel for each of the order's harmonics, ACN, SN3D, the rest
+    /// silent. An engine of another part leaves them silent.
+    pub fn render_field(&mut self, out: &mut [[f32; BLOCK]; MOST]) {
+        let (mut l, mut r) = ([0.0f32; BLOCK], [0.0f32; BLOCK]);
+        self.render(&mut l, &mut r);
+        *out = self.field;
+    }
+
+    /// Which part of the scene's sound this engine makes.
+    pub fn part(&self) -> Part {
+        self.part
+    }
+
+    /// The listener's head as the last block placed it (for the far part,
+    /// the cube's centre along the world's axes).
+    pub fn head(&self) -> Head {
+        self.head
     }
 
     /// The node at `path`, identifiers from a root.
@@ -1197,6 +1398,13 @@ impl Engine {
         let seconds = BLOCK as f64 * DT;
         let t1 = self.instant() + seconds;
         let quality = self.options.quality;
+        let (encoding, order) = match (self.part, self.options.far) {
+            (Part::Far, Some(far)) => (true, far.order.clamp(1, 2)),
+            _ => (false, 0),
+        };
+        for channel in &mut self.field {
+            channel.fill(0.0);
+        }
 
         // Where every node is at the end of this block: once for all that
         // is placed in them.
@@ -1205,13 +1413,20 @@ impl Engine {
         self.scene.tree.place_all(t1, &self.order, &mut placed);
         self.placed = placed;
         let ears = &self.placed[self.scene.listener];
-        let head = Head {
-            at: ears.point(self.scene.ears),
-            forward: ears.direction(-Vec3::Z),
-            right: ears.direction(Vec3::X),
-            up: ears.direction(Vec3::Y),
-        }
-        .turned(self.options.turn);
+        let head = match (self.part, self.options.far) {
+            // The field is made at the cube's centre, along the world's axes.
+            (Part::Far, Some(far)) => {
+                Head { at: far.centre, forward: vec3(0.0, 0.0, -1.0), right: Vec3::X, up: Vec3::Y }
+            }
+            _ => Head {
+                at: ears.point(self.scene.ears),
+                forward: ears.direction(-Vec3::Z),
+                right: ears.direction(Vec3::X),
+                up: ears.direction(Vec3::Y),
+            }
+            .turned(self.options.turn),
+        };
+        self.head = head;
         let faces = self.faces();
         self.touch(t1, seconds, head.at, &faces);
         self.tally.touching += clock.seconds();
@@ -1271,6 +1486,12 @@ impl Engine {
                 }
                 None => 1.0,
             };
+            // Near or far of the cube's centre: the same for every listener in the cube.
+            let cut = match (self.part, self.options.far) {
+                (Part::Near, Some(far)) => cut * (1.0 - far_share(now.distance(far.centre), far.beyond)).sqrt(),
+                (Part::Far, Some(far)) => cut * far_share(now.distance(far.centre), far.beyond).sqrt(),
+                _ => cut,
+            };
             let source = &mut self.sources[i];
             source.speed = near_speed.unwrap_or(speed.abs() as f32);
             source.accel = accel as f32;
@@ -1325,8 +1546,15 @@ impl Engine {
                 // takes from as far as it is heard, and more.
                 let delay = length / SOUND * RATE as f64;
                 debug_assert!(delay <= (source.ring.len() - 2 * BLOCK) as f64);
-                let heard = hear_for(way.from, &head, self.options.listening, quality.outer_ear);
-                Aim::new(delay, gains, air_pass(self.air * length), send, &heard)
+                if encoding {
+                    // For a field: no ears, the channels of where it comes from.
+                    let mut aim = Aim::new(delay, gains, air_pass(self.air * length), send, &Heard::nothing());
+                    aim.field = harmonics(way.from - head.at, order).map(|g| g as f32);
+                    aim
+                } else {
+                    let heard = hear_for(way.from, &head, self.options.listening, quality.outer_ear);
+                    Aim::new(delay, gains, air_pass(self.air * length), send, &heard)
+                }
             };
             source.lags[0] = found.direct.map_or(straight, |way| way.length) / SOUND;
             if let Some(way) = found.direct.filter(|way| way.length <= reach) {
@@ -1494,6 +1722,7 @@ impl Engine {
                         left,
                         right,
                         &mut self.send,
+                        if encoding { Some(&mut self.field) } else { None },
                     );
                     ways_now += 1;
                 } else {
@@ -1509,6 +1738,12 @@ impl Engine {
         let clock = Clock::now();
         if quality.reverb {
             self.tail.run(&self.send, left, right);
+            if encoding {
+                // The space's own answer comes from all round: into the field's W.
+                for (n, w) in self.field[0].iter_mut().enumerate() {
+                    *w += 0.5 * (left[n] + right[n]);
+                }
+            }
         }
         self.tally.tailing += clock.seconds();
         // No ear is pushed one way for long: what stays under 8 Hz is taken off.
@@ -1526,6 +1761,90 @@ impl Engine {
         self.tally.most_ways = self.tally.most_ways.max(ways_now);
         self.block += 1;
     }
+}
+
+/// The ears' stage of a way for headphones: `x`, what the way carries this
+/// block, through the outer ear's echoes, each ear's delay and the head's
+/// shadow, added to `left` and `right` — everything moving evenly from
+/// `from` to `goal`.
+#[allow(clippy::too_many_arguments)]
+fn ears(
+    line: &mut Line,
+    from: &Aim,
+    goal: &Aim,
+    x: &[f32; BLOCK],
+    quality: Quality,
+    left: &mut [f32; BLOCK],
+    right: &mut [f32; BLOCK],
+) {
+    let per = 1.0 / BLOCK as f32;
+    // What came before this block, then the block: the outer ear and
+    // the ears read a little back.
+    let mut dry = [0.0f32; SHORT + BLOCK];
+    dry[..SHORT].copy_from_slice(&line.dry);
+    dry[SHORT..].copy_from_slice(x);
+    let mut wet = [0.0f32; SHORT + BLOCK];
+    wet[..SHORT].copy_from_slice(&line.wet);
+    wet[SHORT..].copy_from_slice(x);
+    if quality.outer_ear {
+        // The outer ear: five echoes, each between two samples. An echo
+        // whose delay stays between the same two samples all through the
+        // block — nearly every one — is added a stretch at a time.
+        for (e, (share, ..)) in PINNA.iter().enumerate() {
+            let (late, step) = (from.pinna[e], (goal.pinna[e] - from.pinna[e]) * per);
+            let share = *share as f32;
+            let whole = late as usize;
+            if whole >= 1 && goal.pinna[e] as usize == whole {
+                let part = late - whole as f32;
+                let (newer, older) =
+                    (&dry[SHORT - whole..SHORT - whole + BLOCK], &dry[SHORT - whole - 1..SHORT - whole - 1 + BLOCK]);
+                for (n, to) in wet[SHORT..].iter_mut().enumerate() {
+                    let f = part + step * (n + 1) as f32;
+                    *to += share * (newer[n] + (older[n] - newer[n]) * f);
+                }
+            } else {
+                for (n, to) in wet[SHORT..].iter_mut().enumerate() {
+                    let late = late + step * (n + 1) as f32;
+                    let whole = late as usize;
+                    let f = late - whole as f32;
+                    let j = SHORT + n - whole;
+                    *to += share * (dry[j] + (dry[j - 1] - dry[j]) * f);
+                }
+            }
+        }
+    }
+    // The head's shadow, one pole and one zero: b0 = k0 + k1·α, b1 = k0 − k1·α.
+    let beta = 2.0 * SOUND / HEAD_RADIUS;
+    let k0 = (beta / (beta + 2.0 * RATE as f64)) as f32;
+    let k1 = (2.0 * RATE as f64 / (beta + 2.0 * RATE as f64)) as f32;
+    let a1 = ((beta - 2.0 * RATE as f64) / (beta + 2.0 * RATE as f64)) as f32;
+    // At its best the ears' delay is read as finely as the line.
+    let fine = quality.reading == Reading::Sinc;
+    for (ear, out) in [&mut *left, &mut *right].into_iter().enumerate() {
+        // This ear hears later by the way round the head, and through its shadow.
+        let (mut late, late_step) = (from.late[ear], (goal.late[ear] - from.late[ear]) * per);
+        let (mut alpha, alpha_step) = (from.shadow[ear], (goal.shadow[ear] - from.shadow[ear]) * per);
+        let (mut before, mut shaded) = (line.shadow_in[ear], line.shadow_out[ear]);
+        for (n, to) in out.iter_mut().enumerate() {
+            late += late_step;
+            alpha += alpha_step;
+            let whole = late as usize;
+            let f = late - whole as f32;
+            let j = SHORT + n - whole;
+            let v = if fine {
+                cubic(wet[j + 1], wet[j], wet[j - 1], wet[j - 2], f)
+            } else {
+                wet[j] + (wet[j - 1] - wet[j]) * f
+            };
+            shaded = (k0 + k1 * alpha) * v + (k0 - k1 * alpha) * before - a1 * shaded;
+            before = v;
+            *to += shaded;
+        }
+        line.shadow_in[ear] = before;
+        line.shadow_out[ear] = shaded;
+    }
+    line.dry.copy_from_slice(&dry[BLOCK..]);
+    line.wet.copy_from_slice(&wet[BLOCK..]);
 }
 
 /// A point between the middle two of four samples, `f` of the way from `q`
@@ -1582,6 +1901,7 @@ fn run(
     left: &mut [f32; BLOCK],
     right: &mut [f32; BLOCK],
     send: &mut [f32],
+    field: Option<&mut [[f32; BLOCK]; MOST]>,
 ) {
     let mask = ring.len() - 1;
     let per = 1.0 / BLOCK as f32;
@@ -1703,7 +2023,18 @@ fn run(
     }
     line.air = [first, second];
 
-    if listening == Listening::Speakers {
+    if let Some(field) = field {
+        // Into the field's channels, each as much as the way's direction asks.
+        for (channel, (g, to)) in field.iter_mut().zip(from.field.iter().zip(&goal.field)) {
+            let step = (to - g) * per;
+            if *g == 0.0 && step == 0.0 {
+                continue;
+            }
+            for (n, out) in channel.iter_mut().enumerate() {
+                *out += x[n] * (g + step * (n + 1) as f32);
+            }
+        }
+    } else if listening == Listening::Speakers {
         let (l, r) = (from.pan[0], from.pan[1]);
         let (l_step, r_step) = ((goal.pan[0] - l) * per, (goal.pan[1] - r) * per);
         for n in 0..BLOCK {
@@ -1712,75 +2043,7 @@ fn run(
             right[n] += x[n] * (r + r_step * k);
         }
     } else {
-        // What came before this block, then the block: the outer ear and
-        // the ears read a little back.
-        let mut dry = [0.0f32; SHORT + BLOCK];
-        dry[..SHORT].copy_from_slice(&line.dry);
-        dry[SHORT..].copy_from_slice(&x);
-        let mut wet = [0.0f32; SHORT + BLOCK];
-        wet[..SHORT].copy_from_slice(&line.wet);
-        wet[SHORT..].copy_from_slice(&x);
-        if quality.outer_ear {
-            // The outer ear: five echoes, each between two samples. An echo
-            // whose delay stays between the same two samples all through the
-            // block — nearly every one — is added a stretch at a time.
-            for (e, (share, ..)) in PINNA.iter().enumerate() {
-                let (late, step) = (from.pinna[e], (goal.pinna[e] - from.pinna[e]) * per);
-                let share = *share as f32;
-                let whole = late as usize;
-                if whole >= 1 && goal.pinna[e] as usize == whole {
-                    let part = late - whole as f32;
-                    let (newer, older) = (
-                        &dry[SHORT - whole..SHORT - whole + BLOCK],
-                        &dry[SHORT - whole - 1..SHORT - whole - 1 + BLOCK],
-                    );
-                    for (n, to) in wet[SHORT..].iter_mut().enumerate() {
-                        let f = part + step * (n + 1) as f32;
-                        *to += share * (newer[n] + (older[n] - newer[n]) * f);
-                    }
-                } else {
-                    for (n, to) in wet[SHORT..].iter_mut().enumerate() {
-                        let late = late + step * (n + 1) as f32;
-                        let whole = late as usize;
-                        let f = late - whole as f32;
-                        let j = SHORT + n - whole;
-                        *to += share * (dry[j] + (dry[j - 1] - dry[j]) * f);
-                    }
-                }
-            }
-        }
-        // The head's shadow, one pole and one zero: b0 = k0 + k1·α, b1 = k0 − k1·α.
-        let beta = 2.0 * SOUND / HEAD_RADIUS;
-        let k0 = (beta / (beta + 2.0 * RATE as f64)) as f32;
-        let k1 = (2.0 * RATE as f64 / (beta + 2.0 * RATE as f64)) as f32;
-        let a1 = ((beta - 2.0 * RATE as f64) / (beta + 2.0 * RATE as f64)) as f32;
-        // At its best the ears' delay is read as finely as the line.
-        let fine = quality.reading == Reading::Sinc;
-        for (ear, out) in [&mut *left, &mut *right].into_iter().enumerate() {
-            // This ear hears later by the way round the head, and through its shadow.
-            let (mut late, late_step) = (from.late[ear], (goal.late[ear] - from.late[ear]) * per);
-            let (mut alpha, alpha_step) = (from.shadow[ear], (goal.shadow[ear] - from.shadow[ear]) * per);
-            let (mut before, mut shaded) = (line.shadow_in[ear], line.shadow_out[ear]);
-            for (n, to) in out.iter_mut().enumerate() {
-                late += late_step;
-                alpha += alpha_step;
-                let whole = late as usize;
-                let f = late - whole as f32;
-                let j = SHORT + n - whole;
-                let v = if fine {
-                    cubic(wet[j + 1], wet[j], wet[j - 1], wet[j - 2], f)
-                } else {
-                    wet[j] + (wet[j - 1] - wet[j]) * f
-                };
-                shaded = (k0 + k1 * alpha) * v + (k0 - k1 * alpha) * before - a1 * shaded;
-                before = v;
-                *to += shaded;
-            }
-            line.shadow_in[ear] = before;
-            line.shadow_out[ear] = shaded;
-        }
-        line.dry.copy_from_slice(&dry[BLOCK..]);
-        line.wet.copy_from_slice(&wet[BLOCK..]);
+        ears(line, &from, goal, &x, quality, left, right);
     }
     // A way gone quiet is left at nothing, not at numbers almost nothing.
     for state in line.parts.iter_mut().chain(&mut line.air).chain(&mut line.shadow_in).chain(&mut line.shadow_out) {
@@ -1830,6 +2093,7 @@ pub fn way_cost(quality: Quality, listening: Listening, seconds: f64) -> f64 {
             &mut left,
             &mut right,
             &mut send,
+            None,
         );
     }
     std::hint::black_box((&left, &right, &send));

@@ -134,6 +134,6 @@ Not there, or weak:
 1. ~~Move the engine, its voices and the analyser into crates of the engine~~: done (#13): `crates/osage-sound`, `crates/osage-sound-voices` (the engine's licence keeps them out of `worlds/`), `crates/osage-sound-analysis`. Cards, a design note and a decision followed (#14: [design/09](../../design/09-sound.md), D-185). Still to do: emitters and contact sounds into the object format and its reader (#15).
 2. Read real objects: surfaces from `acoustic[]` meshes through `osage-objects`, contacts from `osage-dynamics`.
 3. ~~A Bevy audio source fed by the engine; the browser client through an AudioWorklet~~: done (#16). Natively, `osage_sound::live` plays the engine on a thread of its own a few blocks ahead of the output, its nodes placed by a game (`Engine::drive`), and `live::bevy::LiveSource` is a Bevy audio source; `paris-soundscape live` measures it. In a browser, `crates/osage-sound-web` is the engine as WebAssembly in an AudioWorklet, a block in each render quantum; `web/live.py` checks and measures it in Chromium.
-4. The sound field for what is far, and its stream.
+4. ~~The sound field for what is far, and its stream~~: built and measured (#17): `osage_sound::field`, `paris-soundscape far`, `field`, `decode` and `bench/field_opus.py`; see the card [far sound field](../../knowledge/algorithms/far-sound-field.md). Still to do: a crossfade between two cubes' fields, and the stream itself.
 5. Ears from measured responses, once the data is chosen.
 6. A listening test against the external reference, blind, as design/07 asks.

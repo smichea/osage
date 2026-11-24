@@ -12,9 +12,80 @@
 use osage_sound_voices::dsp::{Noise, seed_for};
 
 use crate::{
-    engine::{BLOCK, Engine, Options, Pose, RATE, Tally},
+    engine::{BLOCK, Engine, FieldEars, Options, Pose, RATE, Tally},
+    field::MOST,
     scene::Scene,
 };
+
+/// What makes a listener's blocks: one engine for all the scene's sound —
+/// or, when the options ask for far sound as a field, an engine for the
+/// near part, an engine that makes the far part's field at the cube's
+/// centre, and that field heard by the listener's head.
+pub struct Hearing {
+    near: Engine,
+    far: Option<FarPart>,
+}
+
+/// The engine that makes the far field, the listener's ears for it, and
+/// the field's block.
+type FarPart = (Engine, FieldEars, Box<[[f32; BLOCK]; MOST]>);
+
+impl Hearing {
+    pub fn new(scene: Scene, options: Options) -> Hearing {
+        let far = options.far.map(|far| {
+            let ears = FieldEars::new(far.order, options.quality, options.listening);
+            (Engine::field(scene.clone(), options.clone()), ears, Box::new([[0.0; BLOCK]; MOST]))
+        });
+        Hearing { near: Engine::new(scene, options), far }
+    }
+
+    /// The instant of the next sample, s.
+    pub fn instant(&self) -> f64 {
+        self.near.instant()
+    }
+
+    /// Places a node in both parts ([`Engine::drive_at`]).
+    pub fn drive_at(&mut self, node: usize, pose: Pose, at: f64) {
+        self.near.drive_at(node, pose, at);
+        if let Some((far, ..)) = &mut self.far {
+            far.drive_at(node, pose, at);
+        }
+    }
+
+    pub fn drive(&mut self, node: usize, pose: Pose) {
+        let at = self.instant();
+        self.drive_at(node, pose, at);
+    }
+
+    /// The next block for each ear: the near part, and the far field heard
+    /// by the head as the near part placed it.
+    pub fn render(&mut self, left: &mut [f32; BLOCK], right: &mut [f32; BLOCK]) {
+        self.near.render(left, right);
+        if let Some((far, ears, field)) = &mut self.far {
+            far.render_field(field);
+            ears.hear(field, &self.near.head(), left, right);
+        }
+    }
+
+    /// What the parts cost, summed.
+    pub fn tally(&self) -> Tally {
+        let mut tally = self.near.tally;
+        if let Some((far, ..)) = &self.far {
+            let f = far.tally;
+            tally.ways += f.ways;
+            tally.most_ways += f.most_ways;
+            tally.voices += f.voices;
+            tally.contacts += f.contacts;
+            tally.ring_bytes += f.ring_bytes;
+            tally.touching += f.touching;
+            tally.finding += f.finding;
+            tally.voicing += f.voicing;
+            tally.carrying += f.carrying;
+            tally.tailing += f.tailing;
+        }
+        tally
+    }
+}
 
 /// A pose told at an instant: a node placed from outside
 /// ([`Engine::drive`]), as a recorded replay holds it.
@@ -42,11 +113,11 @@ impl Replay {
         Replay { told, next: 0 }
     }
 
-    /// Gives `engine` every pose due by the instant of its next block.
-    pub fn tell(&mut self, engine: &mut Engine) {
-        let now = engine.instant() + 1e-9;
+    /// Gives `hearing` every pose due by the instant of its next block.
+    pub fn tell(&mut self, hearing: &mut Hearing) {
+        let now = hearing.instant() + 1e-9;
         while let Some(told) = self.told.get(self.next).filter(|told| told.at <= now) {
-            engine.drive_at(told.node, told.pose, told.at);
+            hearing.drive_at(told.node, told.pose, told.at);
             self.next += 1;
         }
     }
@@ -86,7 +157,7 @@ pub fn render(scene: &Scene, options: &Options, seconds: f64) -> Rendered {
 /// replay gives, and what [`crate::live`] makes of the same replay, block
 /// for block.
 pub fn render_told(scene: &Scene, options: &Options, seconds: f64, told: &[Told]) -> Rendered {
-    let mut engine = Engine::new(scene.clone(), Options { start: -LEAD, ..options.clone() });
+    let mut engine = Hearing::new(scene.clone(), Options { start: -LEAD, ..options.clone() });
     let mut replay = Replay::new(told);
     let lead = (LEAD * RATE as f64 / BLOCK as f64).round() as usize;
     let frames = (seconds * RATE as f64).round() as usize;
@@ -97,7 +168,7 @@ pub fn render_told(scene: &Scene, options: &Options, seconds: f64, told: &[Told]
         engine.render(&mut l, &mut r);
     }
     // What the lead cost is not the render's.
-    let before = engine.tally;
+    let before = engine.tally();
     while left.len() < frames {
         replay.tell(&mut engine);
         engine.render(&mut l, &mut r);
@@ -107,16 +178,16 @@ pub fn render_told(scene: &Scene, options: &Options, seconds: f64, told: &[Told]
     left.truncate(frames);
     right.truncate(frames);
     let tally = Tally {
-        blocks: engine.tally.blocks - before.blocks,
-        ways: engine.tally.ways - before.ways,
-        voices: engine.tally.voices - before.voices,
-        contacts: engine.tally.contacts - before.contacts,
-        touching: engine.tally.touching - before.touching,
-        finding: engine.tally.finding - before.finding,
-        voicing: engine.tally.voicing - before.voicing,
-        carrying: engine.tally.carrying - before.carrying,
-        tailing: engine.tally.tailing - before.tailing,
-        ..engine.tally
+        blocks: engine.tally().blocks - before.blocks,
+        ways: engine.tally().ways - before.ways,
+        voices: engine.tally().voices - before.voices,
+        contacts: engine.tally().contacts - before.contacts,
+        touching: engine.tally().touching - before.touching,
+        finding: engine.tally().finding - before.finding,
+        voicing: engine.tally().voicing - before.voicing,
+        carrying: engine.tally().carrying - before.carrying,
+        tailing: engine.tally().tailing - before.tailing,
+        ..engine.tally()
     };
     Rendered { left, right, tally }
 }

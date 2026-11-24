@@ -62,6 +62,13 @@ pub struct Heard {
     pub pinna: [f64; 5],
 }
 
+impl Heard {
+    /// Heard by no ear: what a way written into a field carries.
+    pub fn nothing() -> Heard {
+        Heard { delay: [0.0; 2], shadow: [1.0; 2], pan: [0.0; 2], pinna: [0.0; 5] }
+    }
+}
+
 /// How a sound reaching the head from the point `from` is heard.
 pub fn hear(from: Vec3, head: &Head) -> Heard {
     hear_for(from, head, Listening::Headphones, true)

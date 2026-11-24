@@ -35,6 +35,8 @@ Hear a scene as the object tree has it: what each node sounds like, what sound m
 6. **Carry:** each way reads its ring as far back as its length takes, through four bands, the air and the ears, moving evenly from where the last block left it ([delay lines](/algorithms/sound-delay-lines.md)).
 7. **Tail:** what faces scatter feeds an eight-line feedback delay network ([feedback delay reverberation](/algorithms/feedback-delay-reverb.md)).
 
+**Far sound as a field** (`field`, `Options::far`): what is beyond a distance from the centre of the listener's cube is made once at that centre as an ambisonic field (4 or 9 channels) by a second engine (`Engine::field`), and each listener hears it through virtual loudspeakers turned with the head (`FieldEars`); `render::Hearing` puts the near engine, the far engine and the listener's ears together for a render or for live playback ([far sound field](/algorithms/far-sound-field.md)).
+
 **Live** (`live`), the engine runs on a thread of its own and keeps a set number of blocks made ahead of the audio output (the output's buffer in blocks, and one more), making the next as soon as the output takes one; the output never waits, and a block it finds missing is silence, counted. A game places nodes as it learns where they are (`Engine::drive`, a placement and a velocity): the node goes on at that velocity until it is told again, so that a pose told sixty times a second moves it evenly and what it carries is not heard to lurch. Poses recorded in advance (`Told`) are given at the same blocks live and offline: the same replay gives the same samples. With the `bevy` feature, `live::bevy::LiveSource` is the feed as a Bevy audio source. In a browser, [osage-sound-web](/modules/osage-sound-web.md) plays the engine in an AudioWorklet, a block made in each render quantum.
 
 Offline (`render`), the engine starts three seconds before the first sample so that sound already on its way arrives, and the file is faded at both ends, brought to a loudness by one gain and dithered to 16 bits ([loudness mastering](/algorithms/loudness-mastering.md)).
@@ -56,6 +58,7 @@ Order: the engine sorts the scene's emitters, surfaces and touches by node path 
 - `engine::Engine::{new(scene, options), render(left, right)}`: the next block for each ear. `Options`: `quality`, `listening`, `turn` (the head turned), `solo` and `mute` (by name), `start`. `Quality::{LOW, MEDIUM, HIGH, REFERENCE}`. `Tally`: what a render cost, stage by stage.
 - `ways::{direct, mirrored, edge_loss, air_loss}`, `ears::hear_for`: usable alone.
 - `Engine::{drive, drive_at, node}`, `Pose`: a node placed from outside.
+- `field::{Far, Decoder, harmonics, far_share, channels}`, `Options::far`, `Engine::{field, render_field, head, part}`, `Part`, `FieldEars`, `render::Hearing`: far sound as a field, made and heard.
 - `render::{render, render_told, Told, Replay, fade, level, master}`: a scene to a file's samples, with or without poses told.
 - `live::{Live::{start, drive, feed, report}, Feed, Listening::{sample, next_block}, Report}`; `live::bevy::{LivePlugin, LiveSource}` with the `bevy` feature.
 - `bench::{cost, ring, peak_memory}`: processor time and memory, on the bridge and on a ring of noises.
@@ -68,12 +71,13 @@ Each is a test of `crates/osage-sound/tests/` or of the module, or a check of [s
 - Turning the head half round moves a side source to the other ear, sample for sample.
 - Distance, Doppler shift (of an echo too), the floor's reflection and its delay, what a pane lets through, an echo's time of arrival, the reverberation's decay in each band and a contact's place and time agree with the physics they stand for, within stated tolerances.
 - Nothing steps as an emitter goes behind a face, whatever the face lets through. A way never reads sound sooner than its length takes.
+- With nothing far, a field changes not a sample; a far noise keeps its side and its level through it; hearing a field costs a listener the same for 8 emitters or 256; the bridge with what is beyond 60 m as a field passes `verify`.
 - Played live with poses told in advance, it gives the samples of an offline render with the same poses, block for block (the bridge with a walking listener, at two qualities); a node told where it is sixty times a second sounds as one that moves by itself, within −60 dB.
 - A contact with no way to the ears takes no voice; a step is the same whoever else walks; of two echoes as loud, the one kept does not depend on which wall is listed first.
 
 # Knowledge
 
-- Algorithms: [sound ways](/algorithms/sound-ways.md), [sound delay lines](/algorithms/sound-delay-lines.md), [contact voices](/algorithms/contact-voices.md), [feedback delay reverberation](/algorithms/feedback-delay-reverb.md), [loudness mastering](/algorithms/loudness-mastering.md).
+- Algorithms: [far sound field](/algorithms/far-sound-field.md), [sound ways](/algorithms/sound-ways.md), [sound delay lines](/algorithms/sound-delay-lines.md), [contact voices](/algorithms/contact-voices.md), [feedback delay reverberation](/algorithms/feedback-delay-reverb.md), [loudness mastering](/algorithms/loudness-mastering.md).
 - Oracle: [soundscape verify](/oracles/soundscape-verify.md), and the crate's tests, which measure their claims with [osage-sound-analysis](/modules/osage-sound-analysis.md).
 - Voices: [osage-sound-voices](/modules/osage-sound-voices.md). The scooter is [osage-kart-sound](/modules/kart-sound.md)'s two-stroke.
 - Design: [design/09](https://github.com/smichea/osage/blob/main/design/09-sound.md) (what an object carries for sound, qualities by device, server and clients, far sound as a field; decision D-185) and the prototype's [DESIGN.md](https://github.com/smichea/osage/blob/main/tools/paris-soundscape/DESIGN.md) (its measurements and its limits).

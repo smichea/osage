@@ -92,6 +92,17 @@ python3 tools/paris-soundscape/web/live.py play --quality low       # 45 s in Ch
 
 `web/live.html` is the page; `crates/osage-sound-web/web/` holds the worklet and its wrapper.
 
+## Far sound as a field
+
+```sh
+cargo run --release -p paris-soundscape -- far --sphere 64          # a field against every emitter by its own ways, and the cost
+cargo run --release -p paris-soundscape -- far                      # the same on the bridge, beyond 60 m
+cargo run --release -p paris-soundscape -- verify --far-beyond 60 --far-order 2
+python3 tools/paris-soundscape/bench/field_opus.py                    # its bit rate in Opus
+```
+
+`--far-beyond M` on `render`, `verify` and `live` hears what is farther than M from the centre of the listener's cube (`--cube`, 27 m) as an ambisonic field of order `--far-order` (1 or 2) made there. `field` writes that field as a WAV file of 4 or 9 channels, and `decode` hears one; `compare A.wav B.wav` prints how two renders differ.
+
 ## More
 
 - [DESIGN.md](DESIGN.md): how it works, what an object carries for sound (what it emits, what it reflects, how it sounds when touched), what each quality costs, and what a second batch should do.
