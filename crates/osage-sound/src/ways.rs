@@ -243,6 +243,19 @@ pub fn edge_loss(detour: f64, frequency: f64) -> f64 {
     loss.min(20.0)
 }
 
+/// What two edges `between` metres apart take, dB, for a way longer by
+/// `detour` metres than the straight one, at `frequency`: ISO 9613-2's
+/// double diffraction, 10·lg(3 + 20·C₃·N) with N the Fresnel number and
+/// C₃ = (1 + (5λ/e)²) / (1/3 + (5λ/e)²) — one edge's when they are close —
+/// and 25 dB at most.
+pub fn edges_loss(detour: f64, between: f64, frequency: f64) -> f64 {
+    let wavelength = SOUND / frequency;
+    let n = 2.0 * detour.max(0.0) / wavelength;
+    let close = (5.0 * wavelength / between.max(1e-9)).powi(2);
+    let c3 = (1.0 + close) / (1.0 / 3.0 + close);
+    (10.0 * (3.0 + 20.0 * c3 * n).log10()).min(25.0)
+}
+
 /// The point of the side from `a` to `b` by which the way from `source` to
 /// `head` is shortest.
 fn apex(a: Vec3, b: Vec3, source: Vec3, head: Vec3) -> Vec3 {
@@ -465,6 +478,12 @@ pub fn direct(source: Vec3, head: Vec3, faces: &Faces) -> Option<Way> {
     // wavelength the other is added, all of it at the edge itself, so that
     // nothing steps as an emitter goes behind a face, whatever it lets
     // through.
+    // Round no single edge: over two, one after the other — down from a
+    // deck's underside and up past its top, round both sides of a wall that
+    // is thick — when the sheets gone through are not wholly closed.
+    if round.is_none() {
+        round = twice_round(source, head, straight, faces, &sheets);
+    }
     match round {
         Some(round) => {
             let together = BANDS.map(|hz| (1.0 - 2.0 * (round.length - straight) * hz / SOUND).clamp(0.0, 1.0));
@@ -478,6 +497,60 @@ pub fn direct(source: Vec3, head: Vec3, faces: &Faces) -> Option<Way> {
         None if heard(&passing.bands) => Some(passing),
         None => None,
     }
+}
+
+/// The way round two edges of the sheets `sheets`, from `source` to `head`
+/// (`straight` apart), by which it arrives loudest, with what the faces of
+/// both edges stop and what its three legs keep; `None` if every such way
+/// is hidden.
+fn twice_round(source: Vec3, head: Vec3, straight: f64, faces: &Faces, sheets: &[usize]) -> Option<Way> {
+    let edges: Vec<(Vec3, Vec3, usize)> = sheets.iter().flat_map(|&sheet| faces.edges(sheet)).collect();
+    let mut best: Option<Way> = None;
+    for (i, &(a1, b1, k1)) in edges.iter().enumerate() {
+        for (j, &(a2, b2, k2)) in edges.iter().enumerate() {
+            if i == j {
+                continue;
+            }
+            // The shortest way by the two: each turning point is where the
+            // way from the other end to the other point is shortest.
+            let mut second = apex(a2, b2, source, head);
+            let mut first = apex(a1, b1, source, second);
+            for _ in 0..6 {
+                second = apex(a2, b2, first, head);
+                first = apex(a1, b1, source, second);
+            }
+            let between = first.distance(second);
+            if between < 1e-6 {
+                // One point: a single edge's way, already looked at.
+                continue;
+            }
+            let length = source.distance(first) + between + second.distance(head);
+            let (passed1, passed2) = (faces[k1].material.passed(), faces[k2].material.passed());
+            let mut bands: [f64; 4] = std::array::from_fn(|b| {
+                10f64.powf(-edges_loss(length - straight, between, BANDS[b]) / 20.0)
+                    * (1.0 - passed1[b.min(2)])
+                    * (1.0 - passed2[b.min(2)])
+            });
+            if best.is_some_and(|best| !rather(&Way { length, from: second, bands }, &best)) {
+                continue;
+            }
+            // Each leg stops a hair short of its edges.
+            let near = |p: Vec3, to: Vec3| p + (to - p).unit_or(Vec3::Y) * 1e-4;
+            let legs = [
+                through(source, near(first, source), faces, None),
+                through(near(first, second), near(second, first), faces, None),
+                through(near(second, head), head, faces, None),
+            ];
+            for (b, band) in bands.iter_mut().enumerate() {
+                *band *= legs.iter().map(|leg| leg[b]).product::<f64>();
+            }
+            let way = Way { length, from: second, bands };
+            if heard(&bands) && best.is_none_or(|best| rather(&way, &best)) {
+                best = Some(way);
+            }
+        }
+    }
+    best
 }
 
 /// What a face scatters of an emitter's sound towards a head.
@@ -738,6 +811,55 @@ mod tests {
         assert!(found.mirrored.iter().all(Option::is_none));
         // A head above the deck's top sees the wheels.
         assert_eq!(ways(wheels, vec3(0.0, 18.0, -11.35), &deck, false, true).direct.unwrap().from, wheels);
+    }
+
+    #[test]
+    fn under_the_middle_of_a_thick_deck_the_sound_goes_round_two_edges() {
+        // A deck 20 m square and half a metre thick, a source 5 m under its middle and a head 5 m over it:
+        // no single edge leads from one to the other — the underside hides the top's edges, the top the
+        // underside's. Round two edges, the underside's then the top's at the nearest side.
+        let deck = [slab(0.0, [-10.0, 10.0], [-10.0, 10.0], HARD), slab(-0.5, [-10.0, 10.0], [-10.0, 10.0], HARD)];
+        let (source, head) = (vec3(0.0, -5.0, 0.0), vec3(0.0, 5.0, 0.0));
+        let way = ways(source, head, &deck, false, true).direct.expect("heard round two edges");
+        let length = (100.0f64 + 4.5 * 4.5).sqrt() + 0.5 + (100.0f64 + 25.0).sqrt();
+        assert!((way.length - length).abs() < 1e-6, "{} for {length}", way.length);
+        assert!((way.from.y - 0.0).abs() < 1e-9 && (way.from.x.abs() - 10.0).max(way.from.z.abs() - 10.0).abs() < 1e-9);
+        // So long a detour takes all that two edges take, at every band.
+        for band in way.bands {
+            assert!((band - 10f64.powf(-25.0 / 20.0)).abs() < 1e-9, "{band}");
+        }
+        // Closed at its sides, a solid slab: the same way, down its side from one edge to the other.
+        let side = |x: f64| {
+            Face::new(
+                [vec3(x, -0.5, -10.0), vec3(x, 0.0, -10.0), vec3(x, 0.0, 10.0), vec3(x, -0.5, 10.0)],
+                HARD,
+                true,
+                true,
+            )
+        };
+        let end = |z: f64| {
+            Face::new(
+                [vec3(-10.0, -0.5, z), vec3(-10.0, 0.0, z), vec3(10.0, 0.0, z), vec3(10.0, -0.5, z)],
+                HARD,
+                true,
+                true,
+            )
+        };
+        let mut closed = deck.to_vec();
+        closed.extend([side(-10.0), side(10.0), end(-10.0), end(10.0)]);
+        let solid = ways(source, head, &closed, false, true).direct.expect("heard round a solid slab");
+        assert!((solid.length - length).abs() < 1e-6 && solid.bands == way.bands, "{solid:?}");
+    }
+
+    #[test]
+    fn two_edges_take_what_the_standard_says() {
+        // ISO 9613-2: close together, one edge's 10·lg(3 + 20·N); far apart, C₃ → 3; never more than 25 dB.
+        let n = |detour: f64, hz: f64| 2.0 * detour * hz / SOUND;
+        let close = edges_loss(0.1, 1e-6, 1_000.0);
+        assert!((close - 10.0 * (3.0 + 20.0 * n(0.1, 1_000.0)).log10()).abs() < 1e-6, "{close}");
+        let apart = edges_loss(0.1, 1e6, 1_000.0);
+        assert!((apart - 10.0 * (3.0 + 60.0 * n(0.1, 1_000.0)).log10()).abs() < 1e-6, "{apart}");
+        assert_eq!(edges_loss(100.0, 1.0, 4_000.0), 25.0);
     }
 
     #[test]

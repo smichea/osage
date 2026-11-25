@@ -1161,3 +1161,28 @@ fn a_space_asked_to_ring_as_its_faces_say_rings_as_a_room_of_them_does() {
     let low = ringing(2.5);
     assert!(low[1] < 0.75 * tall[1], "{} s for 2.5 m, {} s for 5 m", low[1], tall[1]);
 }
+
+#[test]
+fn a_tone_under_the_middle_of_a_thick_deck_is_faint_not_silent() {
+    // A 250 Hz tone 5 m under the middle of a deck 20 m square and half a metre thick, the ears 5 m over
+    // it: heard round two edges, the underside's and the top's, 25 dB down and from 22.6 m instead of 10.
+    let heard = |deck: bool| {
+        let slabs = if deck {
+            r#", "osageSound": {"surfaces": [
+                {"id": "top", "acoustic": "hard", "reflects": false, "quadM": [[-10, 0, -10], [-10, 0, 10], [10, 0, 10], [10, 0, -10]]},
+                {"id": "under", "acoustic": "hard", "reflects": false, "quadM": [[-10, -0.5, -10], [-10, -0.5, 10], [10, -0.5, 10], [10, -0.5, -10]]}]}"#
+        } else {
+            ""
+        };
+        let ears = r#"{"translation": [0, 5, 0], "extras": {"osage": {"id": "ears"}}}"#;
+        let nodes = [world(2, slabs), ears.to_owned(), emitter("tone", "tone", 250.0, [0.0, -5.0, 0.0])].join(",");
+        render(&scene(&nodes, 1.0), &options(Listening::Speakers), 1.0)
+    };
+    let (open, under) = (heard(false), heard(true));
+    let length = (100.0f64 + 4.5 * 4.5).sqrt() + 0.5 + 125f64.sqrt();
+    let expected = 10f64.powf(-25.0 / 20.0) * 10.0 / length;
+    // Both ears: it comes from the deck's side, the open tone from straight below.
+    let power = |r: &Rendered| rms(part(&r.left, 0.2, 1.0)).hypot(rms(part(&r.right, 0.2, 1.0)));
+    let ratio = power(&under) / power(&open);
+    assert!((ratio / expected - 1.0).abs() < 0.02, "{ratio} for {expected}");
+}
