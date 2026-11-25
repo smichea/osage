@@ -27,6 +27,7 @@ osage-hologram-stream.workspace = true
 osage-render.workspace = true
 osage-content.workspace = true
 osage-humans.workspace = true
+osage-objects = { workspace = true, features = ["profile"] }
 osage-props.workspace = true
 osage-sdk.workspace = true
 anyhow.workspace = true

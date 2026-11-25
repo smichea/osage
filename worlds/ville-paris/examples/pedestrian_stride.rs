@@ -4,7 +4,7 @@
 //! Replay three cadence and stance settings on a flat +Z trajectory. Pass --woman for the second rig.
 //! Output world-space forefoot positions from Bevy after animation and transform propagation.
 
-#[path = "support/animated_app.rs"]
+#[path = "../../support/animated_app.rs"]
 mod animated_app;
 #[path = "pedestrian_stride/sole.rs"]
 mod sole;
@@ -38,7 +38,7 @@ fn pavement(point: Vec3) -> Option<f32> {
 fn main() -> Result<()> {
     let assets = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../assets");
     ensure!(osage_humans::installed(&assets), "install the Quaternius models listed in assets/manifest.toml");
-    let mut app = animated_app::animated_app(HumansPlugin)?;
+    let mut app = animated_app::animated_app(HumansPlugin, &assets)?;
     let mut body = Body::Man;
     let mut curb = false;
     let mut soles = false;

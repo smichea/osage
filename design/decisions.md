@@ -1657,3 +1657,7 @@ A pedestrian can request planned steps on its loaded human rig. Calibrate a walk
 ## D-230 — Resume a fading locomotion loop at its live time
 
 A replicated change of gait can reverse before an earlier walk, jog or idle has finished fading. Retain the still-active animation state when Bevy promotes that loop back to the foreground. A retired loop uses the actor’s configured entry phase on its next start. The transition manager keeps ownership of weights and clip expiry. The fox replay isolates the command at zero elapsed time and compares the four distal joints on eight entry phases. [Loop redirection](../knowledge/algorithms/reversible-loop-crossfade.md)
+
+## D-231 — Allocate pedestrian foot correction by its projected displacement
+
+The Paris client keeps the full gait and skeleton running on each remote walker. It switches the optional foot plan, terrain sampling and leg solve together. Project the installed body's working box through the same perspective calculation as the visible object levels. Enable the solve above two pixels and keep it above one. Paris uses a 0.20 m displacement allowance from its curb replays and keeps the four metres around the eye active through changes in heading. A missing camera or viewport selects the detailed path. This applies to visual walkers; authoritative movement and contacts keep their own clocks. [Camera projection](../knowledge/algorithms/projected-mesh-error.md) · [Crowd replay](../worlds/paris/native/examples/pedestrian_crowd.rs)

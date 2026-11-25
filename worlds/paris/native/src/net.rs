@@ -33,7 +33,7 @@ impl Plugin for NetPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<Replica>()
             .add_systems(Startup, start)
-            .add_systems(Update, (replicate, stroll, others).chain());
+            .add_systems(Update, (replicate, stroll, others.after(crate::walker::Walking)).chain());
     }
 }
 
@@ -200,11 +200,14 @@ fn advance_walker(place: &mut Transform, target: Transform, dt: f32) -> (osage_h
     (act, act.ground_speed_m_s().map_or(1.0, |unit_speed| speed / unit_speed))
 }
 
+type WalkerCamera = (With<osage_render::OsageCamera>, Without<osage_humans::Human>);
+
 /// The other walkers, as people walking where the server says.
 fn others(
     mut commands: Commands,
     mut replica: ResMut<Replica>,
-    mut places: Query<(&mut Transform, Option<&mut osage_humans::Human>)>,
+    mut places: Query<(&mut Transform, &mut osage_humans::Human, Has<osage_humans::PlannedHumanSteps>)>,
+    cameras: Query<(&Camera, &Projection, &Transform), WalkerCamera>,
     time: Res<Time>,
 ) {
     let Some(world) = replica.world.as_ref() else { return };
@@ -223,20 +226,30 @@ fn others(
             commands.entity(entity).despawn();
         }
     }
+    let view = cameras.single().ok().and_then(|(camera, projection, transform)| {
+        let Projection::Perspective(p) = projection else { return None };
+        let height = camera.physical_viewport_size()?.y;
+        osage_objects::DetailView::new(
+            transform.translation.as_dvec3(),
+            transform.forward().as_dvec3(),
+            p.fov.into(),
+            height,
+            p.near.into(),
+        )
+    });
     let dt = time.delta_secs();
     for (e, target, look) in walkers {
         match replica.people.get(&e) {
             Some(&entity) => {
-                if dt > 0.0
-                    && let Ok((mut place, human)) = places.get_mut(entity)
-                {
-                    let (act, pace) = advance_walker(&mut place, target, dt);
-                    if let Some(mut human) = human
-                        && (human.act != act || human.pace != pace)
-                    {
-                        human.act = act;
-                        human.pace = pace;
+                if let Ok((mut place, mut human, planned)) = places.get_mut(entity) {
+                    if dt > 0.0 {
+                        let (act, pace) = advance_walker(&mut place, target, dt);
+                        if human.act != act || human.pace != pace {
+                            human.act = act;
+                            human.pace = pace;
+                        }
                     }
+                    crate::foot_detail::update(&mut commands, entity, view, place.translation, planned);
                 }
             }
             None => {
@@ -264,7 +277,8 @@ fn others(
                 };
                 let place =
                     Transform { rotation: target.rotation * Quat::from_rotation_y(std::f32::consts::PI), ..target };
-                let entity = commands.spawn((human, place, osage_humans::PlannedHumanSteps::default())).id();
+                let entity = commands.spawn((human, place)).id();
+                crate::foot_detail::update(&mut commands, entity, view, place.translation, false);
                 replica.people.insert(e, entity);
             }
         }

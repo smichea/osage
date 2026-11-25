@@ -56,3 +56,6 @@ Two bridge spans under a rotated parent follow one camera toward and away from t
 Use the panel or drawable node's local mesh bound, its actual world transform and the physical height of the target being rendered. Maintain the last chosen level separately for each placement and view.
 
 [^object-design]: [Object format](https://github.com/smichea/osage/blob/main/design/08-object-format.md).
+
+
+The Paris client also projects a standing walker's box through `DetailView::pixels_per_metre`. Its 0.20 m foot displacement allowance comes from two installed bodies on a curb. This is an empirical budget for that locomotion controller. Its error varies with the gait and terrain. The [crowd replay](https://github.com/smichea/osage/blob/main/worlds/paris/native/examples/pedestrian_crowd.rs) compares the resulting foot positions with full correction on every actor. [Paris native client](/modules/paris-native.md)

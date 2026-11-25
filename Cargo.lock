@@ -5346,6 +5346,7 @@ dependencies = [
  "osage-content",
  "osage-hologram-stream",
  "osage-humans",
+ "osage-objects",
  "osage-props",
  "osage-render",
  "osage-sdk",

@@ -2,6 +2,8 @@
 
 ## 2026-11-25
 
+* The [Paris client](/modules/paris-native.md) selects pedestrian foot correction using the camera projection (D-231). A 24-actor replay checks the live clip clocks and both forefeet through a camera turn.
+
 * [Reversing a loop crossfade](/algorithms/reversible-loop-crossfade.md) preserves live playback state. The native fox replay isolates joint displacement at the command boundary (D-230).
 
 * [Human gait contacts](/modules/osage-humans.md) use the live player phase and the loaded body in the Paris client. The replay checks the shoes during idle, walk and jog transitions (D-229).

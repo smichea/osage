@@ -29,7 +29,20 @@ Walk in a street of Paris as real as its photographs, the client drawing in 3D o
 
 The program `paris` (`[ws://HOST:7878] [--tier T1..T4] [--street DIR] [--offline] [--fov DEGREES] [--at X,Y,Z] [--heading DEGREES] [--shot FILE] [--film DIR SECONDS] [--plain] [--whole] [--cube-probes N]`), built with `--features raytracing` to trace the block at T4. `look::TABLE`, the table of Blender's AgX it reads. The program `paris-update` and the launchers `worlds/paris/release/{windows/walk.bat, macos/walk.command}` (`paris --offline --ring --block-probes`), packed by the `release-paris` workflow for `paris-v…` releases; what they download is `osage-paris-street.zip` (the scene) and `osage-paris-light.zip` (the baked light), made by `tools/bistro/content-zip.sh` (D-143).
 
-Replicated walkers request `PlannedHumanSteps` after spawning their human model. The world still supplies heading, smoothed world travel and clip pace. The [human module](/modules/osage-humans.md) provides each body's sole geometry and reads the live animation player's phase.
+Replicated walkers request `PlannedHumanSteps` when the current camera resolves the difference at the feet. Paris uses the [object projection](/algorithms/projected-mesh-error.md) with an empirical 0.20 m displacement allowance, enabling correction above two pixels and keeping it down to one pixel. The four-metre neighbourhood around the eye keeps its contacts through a turn. When the view is unavailable Paris keeps full correction. The world still supplies heading, smoothed world travel and clip pace. The [human module](/modules/osage-humans.md) provides each body's sole geometry and reads the live animation player's phase.
+
+The headless crowd replay uses both Quaternius bodies in 24 instances, walks and jogs them across repeated raised strips, and turns the observer after 120 of 240 frames. From the repository root with the human assets installed, the following commands check ground work, phase, restoration and projected foot displacement. Timed runs omit the counters. Linux also reports process CPU time summed over the workers. The clock covers the animation update and the placement of the walkers; rendering and asset preparation are outside it.
+
+```sh
+cargo build --release -p osage-paris-native --example pedestrian_crowd
+out=bench/out/paris-crowd
+mkdir -p "$out"
+for mode in full view clip; do
+    target/release/examples/pedestrian_crowd "$mode" --count > "$out/$mode-count.csv"
+    target/release/examples/pedestrian_crowd "$mode" > "$out/$mode-time-1.csv"
+done
+python3 tools/animation/pedestrian-crowd.py "$out"
+```
 
 # Invariants
 

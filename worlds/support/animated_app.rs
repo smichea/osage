@@ -15,8 +15,8 @@ use bevy::{
     world_serialization::WorldSerializationPlugin,
 };
 
-pub(super) fn animated_app<P: Plugins<M>, M>(plugins: P) -> Result<App> {
-    let assets = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../assets").canonicalize()?;
+pub(super) fn animated_app<P: Plugins<M>, M>(plugins: P, assets: &Path) -> Result<App> {
+    let assets = assets.canonicalize()?;
     let mut app = App::new();
     app.add_plugins((
         MinimalPlugins,

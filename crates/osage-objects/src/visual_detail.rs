@@ -45,6 +45,22 @@ impl DetailView {
             near,
         })
     }
+
+    /// Maximum projected pixels per metre over a world-space axis-aligned box.
+    pub fn pixels_per_metre(self, center: DVec3, half_extents: DVec3) -> f64 {
+        let delta = center - self.eye;
+        let depth = delta.dot(self.forward);
+        let depth_extent = half_extents.dot(self.forward.abs());
+        if depth + depth_extent < self.near {
+            return 0.;
+        }
+        let near = depth - depth_extent;
+        if near <= self.near {
+            return f64::INFINITY;
+        }
+        let lateral = (delta - self.forward * depth).length() + half_extents.length();
+        self.focal_pixels * (1. + (lateral / near).powi(2)).sqrt() / near
+    }
 }
 
 /// Bounds the longest transformed unit vector, including nonuniform scale and shear.
@@ -64,21 +80,8 @@ impl VisualDetail {
         (center, extents)
     }
 
-    /// Perspective projection has a larger derivative near a screen edge.
-    /// Bound both the depth and off-axis displacement over the whole part.
     pub fn pixels_per_metre(&self, view: DetailView) -> f64 {
-        let delta = self.center - view.eye;
-        let depth = delta.dot(view.forward);
-        let depth_extent = self.half_extents.dot(view.forward.abs());
-        if depth + depth_extent < view.near {
-            return 0.;
-        }
-        let near = depth - depth_extent;
-        if near <= view.near {
-            return f64::INFINITY;
-        }
-        let lateral = (delta - view.forward * depth).length() + self.half_extents.length();
-        view.focal_pixels * (1. + (lateral / near).powi(2)).sqrt() / near
+        view.pixels_per_metre(self.center, self.half_extents)
     }
 
     /// Draw the cheapest eligible resident mesh. Retain an existing coarse

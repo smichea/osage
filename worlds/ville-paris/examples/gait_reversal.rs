@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 //! Replay walk/run requests from stdin against two real Bevy players on the Khronos Fox.
-#[path = "support/animated_app.rs"]
+#[path = "../../support/animated_app.rs"]
 mod animated_app;
 
 use anyhow::{Result, anyhow, ensure};
@@ -166,7 +166,8 @@ fn replay(app: &mut App, clips: &Clips, trial: &Trial) -> Result<Vec<Tick>> {
 
 fn main() -> Result<()> {
     let trials: Vec<Trial> = serde_json::from_reader(std::io::stdin().lock())?;
-    let mut app = animated_app::animated_app(())?;
+    let mut app =
+        animated_app::animated_app((), &std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../assets"))?;
     let handle: Handle<Gltf> = app.world().resource::<AssetServer>().load("khronos/Fox.glb");
     let deadline = Instant::now() + Duration::from_secs(60);
     while !app.world().resource::<AssetServer>().is_loaded_with_dependencies(&handle) {

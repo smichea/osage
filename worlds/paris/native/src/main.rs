@@ -27,6 +27,7 @@
 //! no light coming in, to tell the renderer's part from the light's.
 
 mod clip;
+mod foot_detail;
 mod hud;
 mod light;
 mod look;
