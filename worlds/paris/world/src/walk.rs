@@ -143,9 +143,12 @@ impl Walk {
         let right = Vec2::new(-ahead.y, ahead.x);
         let wish = (ahead * stride.forward + right * stride.right).clamp_length_max(1.0);
         let speed = if stride.run { RUN } else { WALK };
+        self.slide(at, wish * speed * dt)
+    }
+
+    pub(super) fn slide(&self, at: Vec3, movement: Vec2) -> Vec3 {
         let from = Vec2::new(at.x, at.z);
         let here = self.ground(from).unwrap_or(at.y);
-        let movement = wish * speed * dt;
         let fits = |p: Vec2| self.holds(p) && self.ground(p).is_some_and(|h| (h - here).abs() <= STEP);
         let to = [from + movement, from + Vec2::new(movement.x, 0.0), from + Vec2::new(0.0, movement.y)]
             .into_iter()

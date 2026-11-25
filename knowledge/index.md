@@ -78,6 +78,7 @@ What osage knows about its own modules: their architecture, the algorithms and t
 * [First impact of a freely translating rigid pair](algorithms/free-pair-impact.md) - Advances a translating capsule or joint tree to its first contact with a free box.
 * [Reusing contact geometry on a sleeping rig](algorithms/resting-contact-witnesses.md) - Preserves published witnesses while Rapier advances sleeping bodies.
 * [Settling a hanging ragdoll branch](algorithms/hanging-ragdoll-branches.md) - Follows a supported joint tree to damp the relative rotation of a freely hanging limb.
+* [Predicting encounters between walking pedestrians](algorithms/pedestrian-encounters.md) - Predicts when walkers meet and chooses an avoidance step on the Paris street.
 * [Planting the forefoot during an animated stride](algorithms/forefoot-plant.md) - Holds a low forefoot in place on level ground as the actor advances.
 * [Retaining clip time through a reversed crossfade](algorithms/reversible-loop-crossfade.md) - Reuses a live loop clock when the gait request changes again (D-230).
 * [Choosing a footprint over an entire stance interval](algorithms/cyclic-foot-contact.md) - Plans a contact from a sampled gait loop and its nominal root travel.

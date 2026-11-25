@@ -1661,3 +1661,7 @@ A replicated change of gait can reverse before an earlier walk, jog or idle has 
 ## D-231 — Allocate pedestrian foot correction by its projected displacement
 
 The Paris client keeps the full gait and skeleton running on each remote walker. It switches the optional foot plan, terrain sampling and leg solve together. Project the installed body's working box through the same perspective calculation as the visible object levels. Enable the solve above two pixels and keep it above one. Paris uses a 0.20 m displacement allowance from its curb replays and keeps the four metres around the eye active through changes in heading. A missing camera or viewport selects the detailed path. This applies to visual walkers; authoritative movement and contacts keep their own clocks. [Camera projection](../knowledge/algorithms/projected-mesh-error.md) · [Crowd replay](../worlds/paris/native/examples/pedestrian_crowd.rs)
+
+## D-232 — Predict pedestrian encounters on the server
+
+Paris moves its two autonomous passers after controlled walkers, in stable entity order. Use relative ground-plane velocity to check closest approach within both the current tick and a one-second forecast. This accounts for the arrival times of two walkers at a crossing. Choose among steps the existing grid can realise. Clients receive the resulting pose through the existing walker protocol. The replay checks continuous clearance and arrival at both ends. [Method and limits](../knowledge/algorithms/pedestrian-encounters.md)

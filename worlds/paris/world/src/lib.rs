@@ -13,6 +13,7 @@
 //! server beside the world sends as the walker's place and speed ask —
 //! [`Walkers`] tells it where each is.
 
+mod passers;
 pub mod tiles;
 pub mod walk;
 
@@ -103,8 +104,8 @@ impl Plugin for ParisWorld {
         app.insert_resource(Grid(self.walk.clone()))
             .insert_resource(self.walkers.clone())
             .insert_resource(Light { port: self.light_port, horizon: self.horizon })
-            .add_systems(Startup, ids)
-            .add_systems(Update, (arrive, stroll, step, tell).chain().in_set(RegionSet::World));
+            .add_systems(Startup, (ids, passers::spawn).chain())
+            .add_systems(Update, (arrive, stroll, step, passers::advance, tell).chain().in_set(RegionSet::World));
     }
 }
 
