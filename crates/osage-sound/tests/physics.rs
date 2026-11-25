@@ -1186,3 +1186,22 @@ fn a_tone_under_the_middle_of_a_thick_deck_is_faint_not_silent() {
     let ratio = power(&under) / power(&open);
     assert!((ratio / expected - 1.0).abs() < 0.02, "{ratio} for {expected}");
 }
+
+#[test]
+fn between_two_walls_an_echo_of_an_echo_arrives_when_its_way_says() {
+    // The noise and ears of the echo above, a wall 25 m to the left and another 5 m to the right. Off the
+    // left wall then the right the way is 59.5 m: sound takes 8 327 samples to go it, and nothing mirrored
+    // twice comes sooner. (Not checking what hides a way, the engine follows no way mirrored twice.)
+    let heard = |quality: Quality| {
+        let walls = r#", "osageSound": {"surfaces": [
+            {"id": "left", "acoustic": "hard", "occludes": false, "quadM": [[-25, -40, -40], [-25, -40, 40], [-25, 40, 40], [-25, 40, -40]]},
+            {"id": "right", "acoustic": "hard", "occludes": false, "quadM": [[5, -40, -40], [5, -40, 40], [5, 40, 40], [5, 40, -40]]}]}"#;
+        let ears = r#"{"translation": [0.5, 0, 0], "extras": {"osage": {"id": "ears"}}}"#;
+        let hiss = r#"{"extras": {"osage": {"id": "hiss"}, "osageSound": {
+             "emitters": [{"id": "sound", "voice": "noise", "maxDistanceM": 100}]}}}"#;
+        from_the_first_sample(scene(&[world(2, walls), ears.to_owned(), hiss.to_owned()].join(","), 1.0), quality, 0.25)
+    };
+    let (once, twice) = (heard(Quality { careful: false, ..DRY }), heard(DRY));
+    let first = once.iter().zip(&twice).position(|(a, b)| a != b).expect("an echo of an echo");
+    assert!((8_322..=8_328).contains(&first), "the echo of an echo starts at sample {first}");
+}

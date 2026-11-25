@@ -682,6 +682,87 @@ pub fn mirrored_then(
     scatter
 }
 
+/// How much of a sheet is under the point `p` of its plane: the sum of the
+/// fades of its faces near it, smooth at the rim of each, one at most.
+fn under(sheet: usize, p: Vec3, faces: &Faces) -> f64 {
+    let mut sum = 0.0;
+    faces.along(p, p, RIM, |k| {
+        let face = &faces[k];
+        if face.sheet == sheet && face.reflects {
+            let rim = face.rim(p);
+            if rim > 0.0 {
+                sum += rim * rim * (3.0 - 2.0 * rim);
+            }
+        }
+    });
+    sum.min(1.0)
+}
+
+/// The way mirrored by the sheet `first` and then by the sheet `second`:
+/// from the image of the emitter's image, by a point of each (J. Allen and
+/// D. Berkley's images of the second order), less what both materials take
+/// and faded at both rims. With `careful`, what stands on any of its three
+/// legs takes its share, or all of it.
+pub fn mirrored_twice(
+    first: usize,
+    second: usize,
+    source: Vec3,
+    head: Vec3,
+    faces: &Faces,
+    careful: bool,
+) -> Option<Way> {
+    let (a, b) = (&faces[first], &faces[second]);
+    if first == second || !a.reflects || !b.reflects {
+        return None;
+    }
+    // The emitter's image behind the first, and that image's behind the
+    // second, which the head must face.
+    let hs = a.height(source);
+    let near = |h: f64| h.abs() < 1e-3;
+    if near(hs) {
+        return None;
+    }
+    let image = source - a.normal * (2.0 * hs);
+    let (hi, hh) = (b.height(image), b.height(head));
+    if hi * hh <= 0.0 || near(hi) || near(hh) {
+        return None;
+    }
+    let twice = image - b.normal * (2.0 * hi);
+    // Where the way from the head to the second image meets the second
+    // sheet, and where the way from there to the first image meets the
+    // first: on the emitter's side of it, and on the head's side of the second.
+    let p2 = twice + (head - twice) * (hi.abs() / (hi.abs() + hh.abs()));
+    let h2 = a.height(p2);
+    if h2 * hs <= 0.0 || near(h2) {
+        return None;
+    }
+    let p1 = p2 + (image - p2) * (h2.abs() / (h2.abs() + hs.abs()));
+    if b.height(p1) * hh <= 0.0 {
+        return None;
+    }
+    let fade = under(first, p1, faces) * under(second, p2, faces);
+    if fade <= 0.0 {
+        return None;
+    }
+    let (one, other) = (a.material.mirrored(), b.material.mirrored());
+    let mut bands: [f64; 4] = std::array::from_fn(|band| one[band.min(2)] * other[band.min(2)] * fade);
+    if careful {
+        let legs = [
+            through(source, p1, faces, Some(first)),
+            through(p1, p2, faces, None),
+            through(p2, head, faces, Some(second)),
+        ];
+        let kept: [f64; 4] = std::array::from_fn(|band| legs.iter().map(|leg| leg[band]).product());
+        if !heard(&kept) {
+            return None;
+        }
+        for (band, share) in bands.iter_mut().enumerate() {
+            *share *= kept[band];
+        }
+    }
+    Some(Way { length: twice.distance(head), from: p2, bands })
+}
+
 /// What the air takes from a pure tone, dB a metre, at `celsius` degrees
 /// and `humidity` per cent of relative humidity, at sea-level pressure
 /// (ISO 9613-1).
@@ -849,6 +930,41 @@ mod tests {
         closed.extend([side(-10.0), side(10.0), end(-10.0), end(10.0)]);
         let solid = ways(source, head, &closed, false, true).direct.expect("heard round a solid slab");
         assert!((solid.length - length).abs() < 1e-6 && solid.bands == way.bands, "{solid:?}");
+    }
+
+    #[test]
+    fn between_two_walls_a_sound_is_mirrored_by_one_then_the_other() {
+        // Two walls 8 m apart, an emitter between them 4 m ahead of the head. Off the left wall then the
+        // right: from the image of its image, 16 m to the right and 4 m ahead.
+        let wall = |x: f64, material: Material| {
+            Face::new(
+                [vec3(x, -9.0, -20.0), vec3(x, 9.0, -20.0), vec3(x, 9.0, 20.0), vec3(x, -9.0, 20.0)],
+                material,
+                true,
+                true,
+            )
+        };
+        let felt = Material { absorption: [0.19, 0.51, 0.75], transmission: [0.0; 3], scattering: 0.0 };
+        let faces = indexed(&[wall(-4.0, HARD), wall(4.0, felt)]);
+        let (source, head) = (vec3(0.0, 0.0, -4.0), Vec3::ZERO);
+        let way = mirrored_twice(0, 1, source, head, &faces, true).expect("left then right");
+        assert!((way.length - (16.0f64 * 16.0 + 16.0).sqrt()).abs() < 1e-9, "{}", way.length);
+        assert!((way.from.x - 4.0).abs() < 1e-9 && (way.from.z + 1.0).abs() < 1e-9, "{:?}", way.from);
+        // Both materials take their share: the felt's alone here.
+        assert!((way.bands[1] - felt.mirrored()[1]).abs() < 1e-12 && (way.bands[0] - felt.mirrored()[0]).abs() < 1e-12);
+        let back = mirrored_twice(1, 0, source, head, &faces, true).expect("right then left");
+        assert!((back.length - way.length).abs() < 1e-9 && (back.from.x + 4.0).abs() < 1e-9);
+        // Nothing off one sheet twice; and a wall that stops everything between the walls on its way hides it.
+        assert!(mirrored_twice(0, 0, source, head, &faces, true).is_none());
+        let screen = Face::new(
+            [vec3(1.0, -9.0, -3.0), vec3(1.0, 9.0, -3.0), vec3(1.0, 9.0, 1.0), vec3(1.0, -9.0, 1.0)],
+            HARD,
+            false,
+            true,
+        );
+        let hidden = indexed(&[wall(-4.0, HARD), wall(4.0, felt), screen]);
+        assert!(mirrored_twice(0, 1, source, head, &hidden, true).is_none());
+        assert!(mirrored_twice(0, 1, source, head, &hidden, false).is_some());
     }
 
     #[test]

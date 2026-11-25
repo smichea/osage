@@ -36,7 +36,7 @@ use crate::{
     scene::{Head, Load, Material, Reach, Scene, Touching},
     space::{Placement, Vec3, vec3},
     tree::Motion,
-    ways::{Face, SOUND, Scatter, Way, Ways, air_loss, direct, mirrored, mirrored_then},
+    ways::{Face, SOUND, Scatter, Way, Ways, air_loss, direct, mirrored, mirrored_then, mirrored_twice},
 };
 
 pub use osage_sound_voices::RATE;
@@ -62,6 +62,10 @@ const WAKE: u32 = 960;
 /// at first, and in each block after.
 const DECAY_FIRST: usize = 1_024;
 const DECAY_RAYS: usize = 2;
+/// Ways mirrored twice an emitter may be heard by at once, and of how many
+/// of the sheets that mirror it loudest once they are looked for.
+const TWICE: usize = 8;
+const TWICE_FROM: usize = 6;
 
 /// How a line is read between two of its samples.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -385,6 +389,9 @@ struct Source {
     /// face to the ears when it was last found, s: when the face it met was
     /// where it mirrored it from.
     legs: Vec<f64>,
+    /// Which two sheets, one then the other, each of its ways mirrored twice
+    /// is by: those lines come after the straight one and the sheets'.
+    twice: [Option<(usize, usize)>; TWICE],
     /// Whether its node or anything above it moves or turns. Where it was
     /// at the end of each of the last blocks is then kept, for as long as
     /// its sound can take to arrive: the newest at the block's own number.
@@ -817,6 +824,11 @@ pub struct Engine {
     scatters: Vec<Option<Scatter>>,
     found: Ways,
     ranked: Vec<(f32, usize, usize)>,
+    /// The sheets that mirror the source looked at loudest, and its ways
+    /// mirrored twice by them.
+    loudest: Vec<(f64, usize)>,
+    twice_found: Vec<(f64, (usize, usize), Way)>,
+    twice_aimed: Vec<(usize, Way)>,
     /// What the air takes at 4 kHz, dB a metre.
     air: f64,
     /// The pass of the air's low-pass above which a way is left as it is.
@@ -1112,9 +1124,9 @@ impl Engine {
             sheets(&quads, &nodes, alike)
         };
         let (sheet, tread_sheet) = (sheet_of(&facing), sheet_of(&treading));
-        // The straight way, and one for each sheet: the faces of a sheet
-        // are alike, and what they mirror is one way.
-        let lines = 1 + (0..sheet.of.len()).filter(|&k| sheet.of[k] == k).count();
+        // The straight way, one for each sheet — the faces of a sheet are
+        // alike, and what they mirror is one way — and a few mirrored twice.
+        let lines = 1 + (0..sheet.of.len()).filter(|&k| sheet.of[k] == k).count() + TWICE;
         let air = air_loss(4_000.0, scene.air.celsius, scene.air.humidity);
         let mut sources = Vec::new();
         for (i, emitter) in scene.emitters.iter().enumerate() {
@@ -1144,6 +1156,7 @@ impl Engine {
                 aims: vec![None; lines],
                 lags: vec![0.0; lines],
                 legs: vec![0.0; lines],
+                twice: [None; TWICE],
                 asleep: false,
                 waking: 0,
                 moves,
@@ -1187,6 +1200,7 @@ impl Engine {
                 aims: vec![None; lines],
                 lags: vec![0.0; lines],
                 legs: vec![0.0; lines],
+                twice: [None; TWICE],
                 asleep: false,
                 waking: 0,
                 moves: false,
@@ -1270,6 +1284,9 @@ impl Engine {
             scatters: Vec::new(),
             found: Ways::default(),
             ranked: Vec::new(),
+            loudest: Vec::new(),
+            twice_found: Vec::new(),
+            twice_aimed: Vec::new(),
             air,
             touched,
             send: Box::new([[0.0; BLOCK]; 8]),
@@ -1610,6 +1627,7 @@ impl Engine {
             source.hit = Some(Hit { at: at.min(BLOCK - 1), strength: strength as f32 });
             source.lags.fill(0.0);
             source.legs.fill(0.0);
+            source.twice = [None; TWICE];
             source.moves = moves;
             source.trailed = 0;
             source.ring.fill(0.0);
@@ -1831,6 +1849,11 @@ impl Engine {
             nows.push(now);
         }
         let mut ranked = std::mem::take(&mut self.ranked);
+        let (mut loudest, mut twice_found, mut twice_aimed) = (
+            std::mem::take(&mut self.loudest),
+            std::mem::take(&mut self.twice_found),
+            std::mem::take(&mut self.twice_aimed),
+        );
         let mut found = std::mem::take(&mut self.found);
         ranked.clear();
         for i in 0..self.sources.len() {
@@ -1966,6 +1989,55 @@ impl Engine {
                         scatter.map(|(_, scatter)| scatter).filter(|scatter| feeds && scatter.length <= reach);
                 }
             }
+            // Mirrored twice, at the qualities that check what hides a way:
+            // by two of the sheets that mirror it loudest once, one then the
+            // other, the loudest of those ways. Each keeps its line while it
+            // is among them; a new one takes a line no way is fading out of.
+            let first_twice = 1 + faces.sheets().len();
+            twice_found.clear();
+            if mirrors && quality.mirrors && quality.careful {
+                loudest.clear();
+                for (slot, way) in found.mirrored.iter().enumerate() {
+                    if let Some(way) = way {
+                        loudest.push((way.bands[1] / way.length.max(NEAREST), faces.sheets()[slot]));
+                    }
+                }
+                loudest.sort_by(|a, b| b.0.total_cmp(&a.0).then(a.1.cmp(&b.1)));
+                loudest.truncate(TWICE_FROM);
+                for &(_, one) in loudest.iter() {
+                    for &(_, other) in loudest.iter() {
+                        if one == other {
+                            continue;
+                        }
+                        let kept = source.twice.iter().position(|pair| *pair == Some((one, other)));
+                        let lag = kept.map_or(source.lags[0], |slot| source.lags[first_twice + slot]);
+                        let from = source.was(now, block, lag / seconds);
+                        if let Some(way) =
+                            mirrored_twice(one, other, from, head.at, &faces, true).filter(|way| way.length <= reach)
+                        {
+                            twice_found.push((way.bands[1] / way.length.max(NEAREST), (one, other), way));
+                        }
+                    }
+                }
+                twice_found.sort_by(|a, b| b.0.total_cmp(&a.0).then(a.1.cmp(&b.1)));
+                twice_found.truncate(TWICE);
+            }
+            for pair in source.twice.iter_mut() {
+                if pair.is_some_and(|pair| !twice_found.iter().any(|found| found.1 == pair)) {
+                    *pair = None;
+                }
+            }
+            twice_aimed.clear();
+            for &(_, pair, way) in twice_found.iter() {
+                let slot = source.twice.iter().position(|kept| *kept == Some(pair)).or_else(|| {
+                    (0..TWICE).find(|&slot| source.twice[slot].is_none() && !source.lines[first_twice + slot].live)
+                });
+                if let Some(slot) = slot {
+                    source.twice[slot] = Some(pair);
+                    source.lags[first_twice + slot] = way.length / SOUND;
+                    twice_aimed.push((first_twice + slot, way));
+                }
+            }
             let aim = |way: &Way, send: f32| {
                 let into = spread(way.from - head.at);
                 let length = way.length.max(NEAREST);
@@ -2028,6 +2100,9 @@ impl Engine {
                     _ => None,
                 };
             }
+            for &(line, way) in twice_aimed.iter() {
+                source.targets[line] = Some(aim(&way, 0.0));
+            }
             if source.emitter.is_none() && source.worth <= 0.0 {
                 // A contact hidden when it was struck, heard now: worth what
                 // it arrives with, as one heard at once is.
@@ -2089,6 +2164,7 @@ impl Engine {
             }
         }
         (self.nows, self.scatters, self.ranked, self.found, self.near) = (nows, scatters, ranked, found, near);
+        (self.loudest, self.twice_found, self.twice_aimed) = (loudest, twice_found, twice_aimed);
         self.faces = faces;
         self.tally.finding += clock.seconds();
 
