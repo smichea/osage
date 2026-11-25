@@ -32,7 +32,10 @@ For centre offset **d** and relative velocity **v**, the time of closest approac
 
 The server first moves controlled walkers. In replicated ID order, each passer tries a step towards its endpoint, using the same ground-height and wall-sliding rules as player movement. If the resulting velocity clears both intervals, take that step. Otherwise try eleven headings at walking and half-walking speed, plus standing still. Maximise the current tick's clearance up to the combined radius. Break ties by desired velocity, change from the last velocity and a soft penalty for approaching within 0.65 m over the next second.
 
-Use already accepted velocities for earlier walkers. For each undecided walker, test its previous velocity over both intervals and also allow for it stopping this tick. By default Paris looks for two six-metre crossing routes near the entrance. Streets can also supply endpoint pairs for the [walk-grid route search](/algorithms/walk-grid-routing.md). A passer reverses within five centimetres of its endpoint.
+Use already accepted velocities for earlier walkers. For each undecided walker, test its previous velocity over both intervals and also allow for it stopping this tick.
+For more than eight participants, sort indices of the starting positions by each horizontal coordinate once per tick. Keep the greatest absolute velocity component on each axis, updating the bound after each passer decides. For the candidate velocity **v**, an upper bound on relative travel on an axis is (|v| + greatest neighbour speed on that axis) × max(tick duration, forecast duration). Binary-search each sorted axis to find neighbours whose axis separation minus that travel is at most 0.65 m. Scan the shorter span and check separation on the other axis. A neighbour outside either span cannot change the hard gap or the comfort penalty, even if it stops this tick. Each retained neighbour goes through the same two-body calculation. The default two-passer street uses a direct scan.
+
+By default Paris looks for two six-metre crossing routes near the entrance. Streets can also supply endpoint pairs for the [walk-grid route search](/algorithms/walk-grid-routing.md). A passer reverses within five centimetres of its endpoint.
 
 # Invariants
 
@@ -40,7 +43,7 @@ Swapping the two walkers leaves the predicted separation unchanged. Controlled p
 
 # Cost
 
-For P passers and U players, steering takes O(P × (P + U)) neighbour tests per tick with a bounded number of candidate velocities. A clear straight route needs one candidate. The server stores one motion record per nearby-world participant in the current implementation.
+For N participants, sorting the two arrays costs O(N log N) time and O(N) memory per tick. Each candidate costs O(log N + S), where S is the smaller of the horizontal coordinate spans. Only walkers inside both spans need a closest-approach calculation. A clear straight route needs one candidate. In a densely packed crowd, or when all participants can reach the same small area, S can still approach N.
 
 # Failure modes
 
@@ -52,7 +55,7 @@ ORCA divides avoidance responsibility between agents and solves velocity constra
 
 # Oracle
 
-Run `cargo test -p osage-world-paris passers`. Six pairs of straight trajectories cover head-on motion, simultaneous and staggered crossings, parallel travel and a lateral offset. Two route replays also measure continuous separation between server ticks and count visits to both endpoints. A stationary player and a grid too small to contain a crossing are separate controls. With the exported Bistro street installed, set `OSAGE_PARIS_WALK_DIR` to the directory containing `walk.json` and `walk.bin` and run `cargo test -p osage-world-paris two_passers_in_the_installed_street -- --ignored`.
+Run `cargo test -p osage-world-paris passers`. The indexed search is checked against every participant for a 60-person field, including later decisions after a faster velocity is accepted and a tick longer than the forecast. The check compares the collision gap and the distance range used by the comfort penalty. Six pairs of straight trajectories cover head-on motion, simultaneous and staggered crossings, parallel travel and a lateral offset. Two route replays also measure continuous separation between server ticks and count visits to both endpoints. A stationary player and a grid too small to contain a crossing are separate controls. With the exported Bistro street installed, set `OSAGE_PARIS_WALK_DIR` to the directory containing `walk.json` and `walk.bin` and run `cargo test -p osage-world-paris two_passers_in_the_installed_street -- --ignored`.
 
 For that street replay, set `OSAGE_ENCOUNTER_CSV` to a file path to record both centres, their current horizontal velocities in metres per second and the one-second overlap prediction for every tick. This records the velocities actually chosen. Each walker can change course on the following tick.
 

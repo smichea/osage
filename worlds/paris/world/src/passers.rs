@@ -3,11 +3,14 @@
 
 //! Server-owned walkers following street patrols. Each accepted velocity is visible
 //! to the next decision in the same fixed tick.
+mod neighbours;
+
 use super::{
     Grid, Ids, Striding, core, proto,
     walk::{DIAMETER_SQ, WALK, Walk},
 };
 use bevy::prelude::*;
+use neighbours::Neighbours;
 use osage_world_module_api::{Discrete, EntityIds, Replicated, builtin};
 
 #[derive(Component)]
@@ -144,6 +147,7 @@ fn separation_sq(delta: Vec2, relative_velocity: Vec2, horizon: f32) -> f32 {
 }
 
 const HORIZON: f32 = 1.;
+const COMFORT: f32 = 0.65;
 
 /// Measure the closest approach with simultaneous travel. The first distance
 /// protects the current tick, the second anticipates contact one second ahead.
@@ -165,17 +169,10 @@ fn clearance<'a>(at: Vec3, v: Vec2, others: impl Iterator<Item = &'a Motion>, dt
     (tick, forecast)
 }
 
-fn choose<'a>(
-    grid: &Walk,
-    at: Vec3,
-    goal: Vec3,
-    previous: Vec2,
-    others: impl Iterator<Item = &'a Motion> + Clone,
-    dt: f32,
-) -> Vec3 {
+fn choose(grid: &Walk, at: Vec3, goal: Vec3, previous: Vec2, measure: impl Fn(Vec2) -> (f32, f32), dt: f32) -> Vec3 {
     let wish = ((goal.xz() - at.xz()) / dt).clamp_length_max(WALK);
     let straight = grid.slide(at, wish * dt);
-    let (gap, forecast) = clearance(at, (straight.xz() - at.xz()) / dt, others.clone(), dt);
+    let (gap, forecast) = measure((straight.xz() - at.xz()) / dt);
     if gap >= DIAMETER_SQ && forecast >= DIAMETER_SQ {
         return straight;
     }
@@ -187,8 +184,8 @@ fn choose<'a>(
             let movement = Vec2::from_angle(angle.to_radians()).rotate(wish) * (speed * dt);
             let next = grid.slide(at, movement);
             let v = (next.xz() - at.xz()) / dt;
-            let (gap, forecast) = clearance(at, v, others.clone(), dt);
-            let comfort = (0.65 - forecast.sqrt()).max(0.);
+            let (gap, forecast) = measure(v);
+            let comfort = (COMFORT - forecast.sqrt()).max(0.);
             let cost = v.distance_squared(wish) + 0.15 * v.distance_squared(previous) + 24. * comfort * comfort;
             if gap > best_gap || (gap == best_gap && cost < best_cost) {
                 best = next;
@@ -226,14 +223,16 @@ pub(super) fn advance(
     order.sort_unstable_by_key(|r| r.0);
     let first = neighbours.len();
     neighbours.extend(order.iter().map(|r| r.2));
+    let mut search = Neighbours::new(&neighbours);
     for (i, (_, entity, _)) in order.into_iter().enumerate() {
         let (_, _, mut transform, mut patrol) = people.get_mut(entity).unwrap();
         let from = transform.translation;
         let destination = patrol.destination(&grid.0, from);
         let index = first + i;
-        let others = neighbours[..index].iter().chain(&neighbours[index + 1..]);
-        let to = choose(&grid.0, from, destination, patrol.velocity, others, dt);
+        let measure = |v| search.measure(&neighbours, index, v, dt);
+        let to = choose(&grid.0, from, destination, patrol.velocity, measure, dt);
         let velocity = (to.xz() - from.xz()) / dt;
+        search.accept(velocity);
         neighbours[index] = Motion { at: from, velocity, undecided: false };
         transform.translation = to;
         if velocity.length_squared() > 1e-6 {

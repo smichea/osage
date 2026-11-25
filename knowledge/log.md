@@ -2,6 +2,8 @@
 
 ## 2026-11-25
 
+* [Pedestrian encounters](/algorithms/pedestrian-encounters.md) bound relative travel on both axes to find which neighbours can affect a steering decision. The replay compares those distances with a full scan (D-237).
+
 * [Walk-grid routing](/algorithms/walk-grid-routing.md) now checks terrain intervals in crossing order and stops at the first blocked interval. A grazing test covers cells exactly one walker radius wide (D-236).
 
 * [Walk-grid routing](/algorithms/walk-grid-routing.md) now measures axial and diagonal steps separately when choosing between passages. A server replay checks the length travelled on both legs (D-235).

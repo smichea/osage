@@ -1681,3 +1681,7 @@ Paris searches eight neighbours per walk-grid cell. Axial and diagonal steps hav
 ## D-236 — Visit walk-grid crossings in travel order
 
 Merge the crossings of the two grid axes while testing the walker’s footprint. A blocked interval ends the query immediately. Terrain stays immutable, so the neighbourhood certificate used for a step can also serve each interval of a long shortcut when the full swept bounds fit inside the certificate. When rounding could extend the disc beyond a three-by-three neighbourhood, the grid uses the geometric check. Temporary storage per sweep is constant for both patrol planning and movement. [Algorithm and geometric checks](../knowledge/algorithms/walk-grid-routing.md)
+
+## D-237 — Bound pedestrian encounters by relative travel on each axis
+
+Paris keeps two sorted position arrays for a crowd, using the same starting positions throughout a tick. A candidate velocity and the greatest neighbour speed bound how far separation can close on each axis. Only people who can reach the comfort distance on both axes need a closest-approach calculation. Each accepted velocity updates the speed bound before the next person decides. The [steering oracle](../knowledge/algorithms/pedestrian-encounters.md) compares the indexed and exhaustive distances that affect movement.

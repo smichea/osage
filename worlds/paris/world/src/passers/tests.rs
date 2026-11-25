@@ -148,7 +148,8 @@ fn prediction_sees_both_velocities_and_ignores_parallel_and_late_encounters() {
                 detected.get_or_insert(frame);
             }
             if first.is_none() {
-                let next = choose(&grid, from, from + Vec3::X * 3., x * WALK, std::iter::once(&other), dt);
+                let measure = |v| clearance(from, v, std::iter::once(&other), dt);
+                let next = choose(&grid, from, from + Vec3::X * 3., x * WALK, measure, dt);
                 assert!(next.distance(from + Vec3::X * WALK * dt) < 1e-6, "unexpected avoidance on {label} at {frame}");
             }
         }
@@ -444,4 +445,32 @@ fn five_connected_squares_around_a_missing_room() {
     assert!(sealed.route(centres[3], centres[1]).is_none());
     assert!(sealed.route(ends[0], ends[1]).is_none());
     assert!(sealed.route(ends[1], ends[0]).is_none());
+}
+
+#[test]
+fn neighbourhood_search_preserves_every_distance_used_for_steering() {
+    let mut motions: Vec<_> = (0..60)
+        .map(|i| Motion {
+            at: Vec3::new((i % 10) as f32 * 1.5 - 8., (i % 3) as f32, (i / 10) as f32 * 2. - 7.),
+            velocity: Vec2::from_angle(i as f32) * WALK,
+            undecided: i % 2 == 0,
+        })
+        .collect();
+    let mut search = Neighbours::new(&motions);
+    for me in 0..motions.len() {
+        // Early decisions can introduce a speed absent when the tick began.
+        let v = Vec2::from_angle(me as f32 * 3.) * 9.;
+        motions[me].velocity = v;
+        motions[me].undecided = false;
+        search.accept(v);
+        for dt in [1. / 30., 1.5] {
+            for candidate in [Vec2::ZERO, Vec2::X * WALK, Vec2::NEG_Y * WALK, v] {
+                let (tick, forecast) = search.measure(&motions, me, candidate, dt);
+                let others = motions[..me].iter().chain(&motions[me + 1..]);
+                let (full_tick, full_forecast) = clearance(motions[me].at, candidate, others, dt);
+                assert_eq!(tick, full_tick);
+                assert_eq!(forecast.min(COMFORT * COMFORT), full_forecast.min(COMFORT * COMFORT));
+            }
+        }
+    }
 }
