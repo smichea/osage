@@ -57,7 +57,8 @@ Order: the engine sorts the scene's emitters, surfaces and touches by node path 
 - `objects::from_gltf(bytes)`: a scene from an object of the format with meshes (`.gltf` with inline buffers, or `.glb`), validated by `osage-objects`; its faces from `acoustic[]` and `collision[]`, their sound flags in `node.extras.osageSound.surfaceSound`. `objects::with_meshes(text)`: a hand-written scene as such an object.
 - `scene::Scene::from_json(text)`: a scene from the JSON of a glTF 2.0 asset without meshes. The object format's header and node identifiers are read where the format has them; what is new is in sibling `osageSound` keys (`asset.extras.osageSound.contactSounds`, `node.extras.osageSound.{emitters, surfaces, touches, motion, turning, proxyBeyondM}`, `scene.extras.osageSound.{seconds, seed, loudnessLufs, reverb}`).
 - `engine::Engine::{new(scene, options), render(left, right)}`: the next block for each ear. `Options`: `quality`, `listening`, `turn` (the head turned), `solo` and `mute` (by name), `start`. `Quality::{LOW, MEDIUM, HIGH, REFERENCE}`. `Tally`: what a render cost, stage by stage.
-- `ways::{direct, mirrored, edge_loss, air_loss}`, `ears::hear_for`: usable alone.
+- `ways::{direct, mirrored, mirrored_then, mirrored_twice, edge_loss, edges_loss, air_loss}`, `ears::hear_for`: usable alone.
+- `decay::Decay`, `Engine::ringing`, `Reverb::from_faces`: how long the space rings, found from its faces ([space decay from rays](/algorithms/space-decay-rays.md)).
 - `Engine::{drive, drive_at, node}`, `Pose`: a node placed from outside.
 - `Engine::strike_told(Struck)`, `engine::strength(impulse, mass)`, `Scene::collision_surface(path, id)`, `render::Hearing::strike_told`, `Live::strike`: contacts a solver reports.
 - `faces::{Faces, sheets, quads}`: the index and the sheets, usable alone.
@@ -78,11 +79,12 @@ Each is a test of `crates/osage-sound/tests/` or of the module, or a check of [s
 - With nothing far, a field changes not a sample; a far noise keeps its side and its level through it; hearing a field costs a listener the same for 8 emitters or 256; the bridge with what is beyond 60 m as a field passes `verify`.
 - Played live with poses told in advance, it gives the samples of an offline render with the same poses, block for block (the bridge with a walking listener, at two qualities); a node told where it is sixty times a second sounds as one that moves by itself, within −60 dB.
 - The bridge as an object with meshes sounds as the bridge written by hand (within −126 dB); a wall cut into triangles sounds as the whole wall; a contact the Rapier solver reports is heard where and when it was made.
-- A contact with no way to the ears takes no voice; a step is the same whoever else walks; of two echoes as loud, the one kept does not depend on which wall is listed first.
+- A contact with no way to the ears takes no voice from a heard one, and is heard once what hid it is gone. A step is the same whoever else walks. Two echoes as loud at the budget's edge are kept or left out together.
+- An echo of an echo, a way round two edges, a moving mirror's change and a decay found from a room's faces agree with the physics they stand for (Allen and Berkley, ISO 9613-2, Eyring with Kuttruff's correction).
 
 # Knowledge
 
-- Algorithms: [far sound field](/algorithms/far-sound-field.md), [sound ways](/algorithms/sound-ways.md), [sound faces from meshes](/algorithms/sound-faces.md), [measured ears](/algorithms/measured-ears.md), [sound delay lines](/algorithms/sound-delay-lines.md), [contact voices](/algorithms/contact-voices.md), [feedback delay reverberation](/algorithms/feedback-delay-reverb.md), [loudness mastering](/algorithms/loudness-mastering.md).
+- Algorithms: [far sound field](/algorithms/far-sound-field.md), [sound ways](/algorithms/sound-ways.md), [space decay from rays](/algorithms/space-decay-rays.md), [sound faces from meshes](/algorithms/sound-faces.md), [measured ears](/algorithms/measured-ears.md), [sound delay lines](/algorithms/sound-delay-lines.md), [contact voices](/algorithms/contact-voices.md), [feedback delay reverberation](/algorithms/feedback-delay-reverb.md), [loudness mastering](/algorithms/loudness-mastering.md).
 - Oracle: [soundscape verify](/oracles/soundscape-verify.md), and the crate's tests, which measure their claims with [osage-sound-analysis](/modules/osage-sound-analysis.md).
 - Voices: [osage-sound-voices](/modules/osage-sound-voices.md). The scooter is [osage-kart-sound](/modules/kart-sound.md)'s two-stroke.
 - Design: [design/09](https://github.com/smichea/osage/blob/main/design/09-sound.md) (what an object carries for sound, qualities by device, server and clients, far sound as a field; decision D-185) and the prototype's [DESIGN.md](https://github.com/smichea/osage/blob/main/tools/paris-soundscape/DESIGN.md) (its measurements and its limits).
@@ -95,9 +97,9 @@ The engine knows nothing of Paris: any tree of nodes with emitters, faces and to
 
 - One thread for the engine, at the system's ordinary priority: on a busy machine it can be late, and the output then hears silence (measured below). In a browser, see [osage-sound-web](/modules/osage-sound-web.md).
 - Live, a pose is heard after the blocks kept ahead and the one made with it, plus the output's own buffer: on the bridge with a 10 ms output buffer, 13 ms on average from a pose to the output taking it, 23 ms to the ears. Rendering in the output's callback would save the blocks kept ahead, at the cost of making the output wait on the engine.
-- One reflection off each face and one edge per way: no reflection of a reflection, no way round two edges.
+- Reflections to the second order and edges to two: no third reflection, no way round an edge and then off a face.
 - Without the measured responses (an asset a client may not have) and below high quality, the ears are the sphere model: height is weak and behind sounds like its mirror in front. With them, the top octave between virtual loudspeakers is off by up to 10 dB, and the far field is still heard through the sphere model.
 - Faces are flat: a curved mesh is many small sheets. Meshes are given whole; paging a district's in and out is not built into the engine. Each emitter keeps a line for every sheet, most idle.
 - Contacts from a solver are told as they are reported; feet and wheels remain for scenes without one.
-- The reverberation's decay is given by the scene, not found from its geometry.
+- The reverberation's decay, given by the scene or found from the faces round the listener, is one for the whole space.
 - See `tools/paris-soundscape/DESIGN.md` and issue #21 for the full list.

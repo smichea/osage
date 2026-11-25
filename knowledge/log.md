@@ -2,6 +2,8 @@
 
 ## 2026-11-25
 
+* **Creation**: Added the algorithm [space decay from rays](/algorithms/space-decay-rays.md). **Update**: [sound ways](/algorithms/sound-ways.md) now go round two edges, mirror twice, and take a moving face's mirror from where it was. [Feedback delay reverberation](/algorithms/feedback-delay-reverb.md) is fed by direction, and also by emitters that are hidden. In [sound delay lines](/algorithms/sound-delay-lines.md), ties at the budget's edge are kept or left out together. In [contact voices](/algorithms/contact-voices.md), a hidden contact rings out for when it is heard. Also updated: [osage-sound](/modules/osage-sound.md) (issue #21, D-244).
+
 * **Creation**: Added the oracle [sound against another engine](/oracles/sound-against-reference.md) (issue #19, D-243). On the controlled scenes osage is nearer what the geometry asks than reference A in every scene both played (research 11). The blind listening test is written down and its kit made; it has not run.
 
 * [Walk-grid routing](/algorithms/walk-grid-routing.md) retries at half-cell spacing on connected floor when a bend cannot be reached through cell centres. Two opposing pedestrians complete a 50 cm bend (D-241).

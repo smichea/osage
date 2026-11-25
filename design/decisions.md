@@ -1719,3 +1719,15 @@ Every claim about osage's sound was a measurement of osage alone. Set it beside 
 
 What either part finds worse in osage becomes a ticket of its own.
 
+## D-244 — The sound engine's documented limits taken in (#21)
+
+The reviews of the prototype left seven limits written down rather than fixed. Six are fixed in the engine, each with a test against the physics it stands for:
+
+- **A face that moves.** It mirrors from where it was when the sound met it: its node keeps a trail, as an emitter does. The faces that hide are still looked at where they are now.
+- **A hidden contact.** A contact that does not reach the ears when it is struck takes a voice no other contact holds, and rings out there. A listener who comes round what hid it hears what it still makes. It is worth nothing against a heard contact until it is heard itself.
+- **More orders.** Ways are mirrored twice, by the six sheets that mirror an emitter loudest once, at the qualities that check what hides a way (eight ways at most for each emitter). Where no single edge leads to the head, the way goes round two edges, with ISO 9613-2's double diffraction.
+- **What faces scatter.** It feeds the reverberation's eight lines by the direction it comes from, each line standing for a corner of a cube round the head, with as much power as before. Two walls' copies of a tone then neither add nor cancel as one. An emitter none of whose ways reaches the ears, hidden or left out by the budget, still feeds the reverberation: the loudest, as many as a quarter of the budget.
+- **How long the space rings.** A scene may ask for this to be found from the faces round the listener (`"secondsT60": "fromFaces"`). Rays from the head are followed from face to face until they leave for the sky, and the energy still in flight gives each band's decay. The estimate is kept up to date a few rays a block. A scene that gives its decays keeps them, and the bridge does: its seven faces do not stand for the city round it.
+- **Ties at the budget's edge.** Ways as loud as one another at the edge of the budget are kept or left out together, so that a scene mirrored about the listener is heard alike on both sides. They are all kept if that oversteps the budget by an eighth of it at most.
+
+The seventh limit, one thread, is left for a ticket of its own. Sharing emitters between cores asks how many cores a game gives its sound, how the live thread and WebAssembly take part, and how the samples stay the same whatever the number of threads.

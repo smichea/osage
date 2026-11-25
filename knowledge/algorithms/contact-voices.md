@@ -34,16 +34,17 @@ A **contact** (a `Blow`) carries the surface struck, the point, the toucher, a s
 3. For the struck thing, and for the striker if it rings by itself (a clog, a hammer's head), find the least-worth voice of the pool: a free voice (past its 2.5 s) is worth 0; a busy one `worth · last/top`, where `worth` is how loud its contact arrived, `top` the largest sample its voice has made and `last` the largest of its last block. Ties go to the voice that frees soonest.
 4. If that voice is worth `most` or more, stop: nothing in the way can make the contact louder.
 5. Otherwise compute `loud = gain · strength · arriving(point)`, where `arriving` is the loudest of the straight way (or through, or round an edge) and, at qualities that follow reflections, every mirrored way, each counted only if no longer than the reach, as `max(band)/max(length, 0.3)`. Once per contact.
-6. If `loud` is nil (no way to the ears within reach) or no more than the voice's worth, stop.
-7. Take the voice: a new impact voice seeded `hash(contact seed, "voice {which}")`, with the struck matter's parameters and the hardness of the softer of the two; placed at the contact point on the struck surface's node; `worth = loud`; its first block rendered at once with its ways found in the same block.
+6. If `loud` is nil (no way to the ears within reach), take the voice only if it is free, with a worth of 0. The contact rings out in its line, and a listener who comes round what hid it hears what it still makes. Its worth becomes its arrival level once it is heard. If `loud` is no more than the voice's worth, stop.
+7. Take the voice: a new impact voice seeded `hash(contact seed, "voice {which}")`, with the struck matter's parameters and the hardness of the softer of the two; placed at the contact point on the struck surface's node; `worth = loud`; its first block rendered at once with its ways found in the same block. The blocks its ways are found in afterwards are told by that seed, not by which voice of the pool it took.
 
-A voice of the pool is free again 2.5 s after it was struck; one whose ways no longer reach the ears sleeps and is worth nothing.
+A voice of the pool is free again 2.5 s after it was struck. Until then its voice is made whether or not its ways reach the ears.
 
 # Invariants
 
 Tests of `crates/osage-sound/tests/physics.rs`:
 
 - Steps too far to be heard, behind a wall, or heard less take no voice from a step that is heard (at two qualities).
+- A contact struck in a closed box is heard once the box's door slides away while it still rings, as it would have been heard with no box (tested).
 - A step is the same, sample for sample, whoever else walks: alone, among people too far to be heard, among people muted.
 - A contact left out by solo or mute takes no voice from one that is heard.
 - The scene's file in another order renders to the same samples.
@@ -54,7 +55,7 @@ Step 2 is a distance; step 5 is the way search of one point, and is skipped for 
 
 # Failure modes
 
-- A contact that does not reach the ears when it is made is never heard: if the listener comes round the wall that hid it while it would still ring, it is not there.
+- A contact that does not reach the ears when it is made takes only a free voice. When every voice is busy it is not heard, even if the listener comes round what hid it while it would still ring.
 - A voice's worth is its arrival level when it was struck; if the listener moves, the comparison is with a stale level until the contact frees.
 
 # Alternatives

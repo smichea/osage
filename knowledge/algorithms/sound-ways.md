@@ -1,7 +1,7 @@
 ---
 type: Algorithm
 title: Sound ways
-description: The ways a sound takes from an emitter to a head among flat faces — straight, through what lets sound through, round the edge by which it arrives loudest (Maekawa's screen loss read from the Fresnel number, continued into the lit side), mirrored from an image source — chosen by what the ways are, never by the order the faces are listed in, so that nothing steps as an emitter goes behind a face.
+description: The ways a sound takes from an emitter to a head among flat faces — straight, through what lets sound through, round the edge by which it arrives loudest (Maekawa's screen loss read from the Fresnel number, continued into the lit side) or round two where no single edge leads, mirrored from an image source and from the image of an image — chosen by what the ways are, never by the order the faces are listed in, so that nothing steps as an emitter goes behind a face.
 resource: https://github.com/smichea/osage/blob/main/crates/osage-sound/src/ways.rs
 licence: LicenseRef-osage-AGPL-3.0-or-later-with-exceptions
 status: draft
@@ -28,7 +28,7 @@ A sound in a city reaches a listener straight, through glass, over the edge of a
 
 # Idea
 
-Find at most one way that is not mirrored and one per reflecting face. The way that is not mirrored is the straight one, multiplied by what every face it crosses lets through, or — if it is louder — the way round the edge that lengthens it least, quieter and duller by how many half wavelengths longer it is[^maekawa]. The screen loss is continued into the lit side, so a straight way that only grazes an edge already loses a little, and just behind an edge the two ways are added: there is nothing to switch. Mirrored ways come from the emitter's image behind each face[^allen-berkley]. Every choice between ways is made from the ways themselves.
+Find at most one way that is not mirrored, one per reflecting face, and a few mirrored twice. The way that is not mirrored is the straight one, multiplied by what every face it crosses lets through, or — if it is louder — the way round the edge that lengthens it least, quieter and duller by how many half wavelengths longer it is[^maekawa]. The screen loss is continued into the lit side, so a straight way that only grazes an edge already loses a little, and just behind an edge the two ways are added: there is nothing to switch. Mirrored ways come from the emitter's image behind each face[^allen-berkley]. Every choice between ways is made from the ways themselves.
 
 # Method
 
@@ -53,8 +53,9 @@ A negative `δ` is a straight way passing that close to an edge without being hi
 2. Three faces crossed or more: their shares are multiplied in the order the segment meets them (sorted by distance), so the product is the same to the last bit whatever the faces' order.
 3. If no face was crossed, that is the way.
 4. Otherwise, for each crossed face and each of its edges: the way round is `|s − p| + |p − h|`; its bands are `10^(−loss(δ, f)/20)·(1 − passed)`, times what stands on each of its two legs (each stopped 0.1 mm short of the edge, so the faces meeting there do not count). Keep the one that arrives loudest at 1 kHz (`bands[1]/length`); of two as loud the shorter; of two as long, the one whose point is first by x, then y, then z; then by its bands. Skip early an edge that is longer and stops no more than the one kept.
-5. Of the way through and the way round, keep the louder at 1 kHz, and add the other with the weight `clamp(1 − 2·(L_round − L_straight)·f/c, 0, 1)` per band: at the edge itself the two are one sound; half a wavelength beyond, only the louder remains.
-6. A way under 10⁻³ of its pressure in every band (−60 dB) is no way.
+5. **Round two edges**, when every way round one edge is hidden (the underside of a thick deck hides the top's edges, the top the underside's). For each ordered pair of edges of the crossed faces, find the shortest way by both. Start each turning point at the apex for the far end, then make each in turn the apex for the other point, six times. The bands are `10^(−D/20)·(1 − passed₁)·(1 − passed₂)` times what stands on each of the three legs. `D` is ISO 9613-2's double diffraction[^iso9613], `10·lg(3 + 20·C₃·N)` capped at 25 dB, with `N` the Fresnel number of the whole detour, `e` the distance between the two points and `C₃ = (1 + (5λ/e)²)/(1/3 + (5λ/e)²)`. Close edges give one edge's loss. Keep the loudest, chosen as in step 4.
+6. Of the way through and the way round, keep the louder at 1 kHz, and add the other with the weight `clamp(1 − 2·(L_round − L_straight)·f/c, 0, 1)` per band: at the edge itself the two are one sound; half a wavelength beyond, only the louder remains.
+7. A way under 10⁻³ of its pressure in every band (−60 dB) is no way.
 
 **A mirrored way**, by a reflecting face with unit normal `n`:
 
@@ -62,7 +63,18 @@ A negative `δ` is a straight way passing that close to an edge without being hi
 2. Fade the reflection over the last 0.5 m before the face's rim, with a smoothstep of how far inside `p` is: an emitter moving along a wall does not switch its echo on and off.
 3. Its bands are the material's mirrored shares times the fade; at the qualities that check (`careful`), times what stands on each leg, and no way if the legs are stopped.
 4. Its length is `|image − h|` and it arrives from `p`.
-5. **Scatter**: what the face scatters goes to the reverberation, from the face's point nearest `p` (the mirror point may be off the face), with energy `mean(scattered)/L²` times what its legs let through squared, at the time that way takes.
+5. **A face that moves** mirrors from where it was when the sound met it. Its node keeps where it was at the end of each recent block, as an emitter does. The image, the mirror point and the legs are found where the face was as long before as its sound takes from it to the ears: the time found by that way last time. The faces' rims are checked where they are now, at the point that was the mirror point then.
+6. **Scatter**: what the face scatters goes to the reverberation, from the face's point nearest `p` (the mirror point may be off the face), with energy `mean(scattered)/L²` times what its legs let through squared, at the time that way takes.
+
+**Mirrored twice**, at the qualities that check (`careful`), by two of the six sheets that mirror the emitter loudest once, first one then the other[^allen-berkley]:
+
+1. Take the emitter's image `I₁` behind the first sheet. Its image `I₂` behind the second must be on the side away from the head.
+2. The second point `p₂` is where the line from `I₂` to the head crosses the second plane. It must be on the emitter's side of the first plane.
+3. The first point `p₁` is where the line from `p₂` to `I₁` crosses the first plane. It must be on the head's side of the second plane.
+4. The bands are both materials' mirrored shares, times each sheet's rim fade at its point, times what stands on the three legs.
+5. The length is `|I₂ − h|`, and the way arrives from `p₂`.
+
+The engine keeps the eight loudest of these for each emitter. Each keeps its line while it stays among them. A new one takes a line that holds no other way and that no way is fading out of, so that a line never glides from one pair of sheets to another.
 
 **Air**, per metre at the scene's temperature and humidity (15 °C and 70 % unless it says otherwise), from ISO 9613-1[^iso9613]; the engine turns it into two one-pole low-passes per way ([sound delay lines](/algorithms/sound-delay-lines.md)).
 
@@ -72,6 +84,9 @@ A negative `δ` is a straight way passing that close to an edge without being hi
 - Nothing steps as an emitter goes behind a face, whatever the face lets through (tested by sweeping an emitter behind a pane and a wall).
 - A pane gone through leaves a screen beside it its edge; a wall hides wherever it is listed.
 - Distance, the floor's reflection and its delay, what a pane lets through and an echo's time of arrival match the physics within the tests' tolerances.
+- Under the middle of a thick deck, or of a solid slab, an emitter is heard round two edges: 25 dB down, from the length of that way (tested). Two edges take what ISO 9613-2 says (tested).
+- Between two walls, an echo of an echo arrives when its way says, and not before. A wall between the two walls on its way hides it (tested).
+- A mirror that sets off is heard to change when its change arrives, not before (tested).
 
 # Cost
 
@@ -79,10 +94,10 @@ Per emitter and per look: one segment test per face for the straight way, four e
 
 # Failure modes
 
-- One edge per way: an emitter under the middle of a deck, which only a way round two edges would reach, is silent rather than faint.
-- One reflection per face: no reflection of a reflection.
+- No way goes round three edges, or round an edge and then off a face. Ways mirrored twice come only from the six sheets that mirror the emitter loudest once. None is mirrored three times.
+- The faces that hide are looked at where they are now. A door that opens lets sound through as soon as it moves, a few milliseconds early.
+- Where several faces meet at a seam, sound can go round the seam as round an edge. A closed box made of separate faces whose sides only touch is not closed to a way round one edge.
 - The loss of a thin screen, applied to thick objects, is a little too high for some angles.
-- A face that moves mirrors from where it is now, not from where it was when the sound met it.
 
 # Alternatives
 

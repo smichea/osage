@@ -129,11 +129,11 @@ python3 tools/paris-soundscape/bench/field_opus.py                    # its bit 
 - [DESIGN.md](DESIGN.md): how it works, what an object carries for sound (what it emits, what it reflects, how it sounds when touched), what each quality costs, and what a second batch should do.
 - [bench/README.md](bench/README.md): the same machine's cost for OpenAL Soft and for Chromium's Web Audio.
 
-The examples made on 2026-11-24 (x86-64 Linux, rustc 1.99, seed 6):
+The examples made on 2026-11-25 (x86-64 Linux, rustc 1.99, seed 6), after issue #21:
 
 ```
-bir-hakeim-headphones.wav  sha256 93f25c24e78c9cbfa2cb618e059ef76826d3dc722c1e9042499f426c1b077b32
-bir-hakeim-speakers.wav    sha256 a3104801ea90e5943a3e161e007d39991d25004d37e355808702c570e9a98b58
+bir-hakeim-headphones.wav  sha256 82d3ba7e769ce339737c50a3fa9105c27fe207db102a8c2de59c6ca30c084909
+bir-hakeim-speakers.wav    sha256 1dafbcc1e53788c653ebe5d8963ef275a63b0039c8f3ba78d0cb25512ce6fa5b
 ```
 
 The digests hold for one machine and compiler: the voices use the platform's own sine and exponential.

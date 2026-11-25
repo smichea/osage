@@ -65,8 +65,8 @@ Two things the format should decide before these move in. A thing's **modes belo
 Every 128 samples (2.7 ms, a Web Audio render quantum) the engine places the tree and finds, for each emitter, the ways its sound takes to the listener's head ([sound ways](../knowledge/algorithms/sound-ways.md)):
 
 - **straight**, when nothing hides it — or through what hides it, with what its material lets through, when that is louder than round its edge;
-- **round an edge**, over the edge by which it arrives loudest, quieter and duller by how much longer the way is in wavelengths (Maekawa, continued into the lit side so that nothing switches behind an edge);
-- **mirrored** by each face that reflects, from the emitter's image behind it. What a face scatters feeds a small reverberation instead ([feedback delay reverberation](../knowledge/algorithms/feedback-delay-reverb.md)).
+- **round an edge**, over the edge by which it arrives loudest, quieter and duller by how much longer the way is in wavelengths (Maekawa, continued into the lit side so that nothing switches behind an edge); round two edges where no single one leads (ISO 9613-2);
+- **mirrored** by each face that reflects, from the emitter's image behind it, and from where a moving face was when the sound met it; at high and reference, also by two faces one after the other. What a face scatters feeds a small reverberation instead, into its lines of the directions it comes from ([feedback delay reverberation](../knowledge/algorithms/feedback-delay-reverb.md)). How long that rings is given by the scene or found from the faces round the listener ([space decay from rays](../knowledge/algorithms/space-decay-rays.md), D-244).
 
 Each emitter's voice writes into a delay line of its own, and each way reads it as far back as the way is long ([sound delay lines](../knowledge/algorithms/sound-delay-lines.md)): a far sound is late, an approaching one higher, and an echo has its own delay and shift, with no rule for any of it. A moving emitter leaves a trail, and each way is found from where the emitter was when the sound now arriving by it left.
 
@@ -90,7 +90,12 @@ The engine has four qualities. The scene is the same; what changes is how much i
 | Contact voices | 4 | 6 | 8 | 16 |
 | Voices far off | less detail | less detail | less detail | full |
 
-What is too quiet to matter is not made: the ways are ranked by how loud they arrive and only the loudest are rendered; a voice none of whose ways is rendered sleeps; a contact that does not reach the ears takes no voice; from afar a node stands for its branch.
+What is too quiet to matter is not made:
+
+- the ways are ranked by how loud they arrive, and only the loudest are rendered; ways as loud as one another at the edge are kept or left out together;
+- a voice none of whose ways is rendered sleeps, unless it is among those that still feed the reverberation;
+- a contact that does not reach the ears takes only a free voice;
+- from afar, a node stands for its branch.
 
 On the bridge (41 emitters, 45 s), on one core of an Intel Core i5-1335U held at 1.3 GHz, 2026-11-24, in milliseconds of processor for a second of sound (under 1 000 keeps up with the clock):
 
