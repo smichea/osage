@@ -34,6 +34,10 @@
 
 * [Foot planting](/algorithms/forefoot-plant.md) checks rigid sole points at the curb edge (D-226). The fox replay measures both authored gaits using deformed paw vertices, with four initial phases.
 
+## 2026-11-25
+
+* **Creation**: Added the algorithm [measured ears](/algorithms/measured-ears.md) to [osage-sound](/modules/osage-sound.md) (issue #18, D-242): SADIE II's KEMAR through 54 virtual loudspeakers, each way keeping its measured time between the ears.
+
 ## 2026-11-24
 
 * **Creation**: Added the algorithm [sound faces from meshes](/algorithms/sound-faces.md) to [osage-sound](/modules/osage-sound.md) (issue #15): faces from an object's meshes through [osage-objects](/modules/osage-objects.md), sheets, a tree of boxes over the faces, and contacts as [osage-dynamics](/modules/osage-dynamics.md) reports them.

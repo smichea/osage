@@ -13,6 +13,8 @@
 //! - [`ways`]: the ways sound takes from an emitter to a head: straight,
 //!   round an edge, mirrored by a face; what the air takes;
 //! - [`ears`]: how a sound from a direction reaches each ear;
+//! - [`hrir`]: measured head responses for headphones, through virtual
+//!   loudspeakers;
 //! - [`field`]: far sound as an ambisonic field at a cube's centre, and its
 //!   decoder to a head;
 //! - [`engine`]: a scene heard block by block, at what a device can afford;
@@ -26,6 +28,7 @@ pub mod ears;
 pub mod engine;
 pub mod faces;
 pub mod field;
+pub mod hrir;
 pub mod live;
 pub mod objects;
 pub mod render;

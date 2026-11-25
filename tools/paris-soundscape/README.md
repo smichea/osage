@@ -74,6 +74,19 @@ cargo test -p osage-sound -p osage-sound-voices -p osage-sound-analysis -p paris
 
 `verify` renders the scene several times and checks that the same seed gives the same bytes, that nothing clips (no sample held, true peak under −1 dBTP), that the file as written is as loud as the scene asks (within 0.3 LU, or held under it by its peaks, which are then at the ceiling), that turning the listener half round moves the river to the other ear (sample for sample: the river feeds no reverberation, which does not turn with the head), that the river stays on its side a second at a time and in the render's last second whatever its length (what it does for less than a second is in its second's mean), and that the train comes, passes and goes. These are the brief's checks: on a scene without a river or a train, or a render too short to hold the train's passage, the check that cannot be made has failed, and says why. `measure FILE.wav` prints the same figures for any mono or stereo file, whatever made it.
 
+## Measured ears
+
+For headphones the engine hears with a model of a head unless it is given measured responses. Those are SADIE II's KEMAR (University of York, Apache-2.0), fetched and derived on this machine (D-242):
+
+```sh
+python3 tools/fetch-assets.py          # assets/sadie/D2_HRIR_SOFA.zip, among the others
+python3 tools/make-hrir.py             # assets/sadie/d2-48k.hrir (needs h5dump, from HDF5)
+python3 tools/make-hrir.py --check     # a noise round the head, against the measured set
+cargo run --release -p paris-soundscape -- render --hrir assets/sadie/d2-48k.hrir
+```
+
+`--hrir` is taken by `render`, `verify`, `bench`, `live` and `ears`, at high and reference quality.
+
 ## Live
 
 ```sh

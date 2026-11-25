@@ -31,6 +31,7 @@ use crate::{
     ears::{HEAD_RADIUS, Heard, Listening, PINNA, hear_for},
     faces::{Faces, Sheets, sheets},
     field::{Decoder, Far, MOST, far_share, harmonics},
+    hrir::{Hrir, Share, Speakers},
     scene::{Head, Load, Material, Reach, Scene, Touching},
     space::{Placement, Vec3, vec3},
     tree::Motion,
@@ -181,6 +182,10 @@ pub struct Options {
     /// Far sound heard as a field made at a cube's centre ([`crate::field`]),
     /// or every emitter heard by its own ways.
     pub far: Option<Far>,
+    /// Measured head responses ([`crate::hrir`]): with headphones, at the
+    /// qualities that make the outer ear, every way is heard through them
+    /// instead of the sphere's model.
+    pub measured: Option<std::sync::Arc<Hrir>>,
 }
 
 impl Options {
@@ -201,6 +206,7 @@ impl Default for Options {
             mute: Vec::new(),
             start: 0.0,
             far: None,
+            measured: None,
         }
     }
 }
@@ -223,6 +229,8 @@ struct Aim {
     pinna: [f32; 5],
     /// For a field: what the way gives each channel.
     field: [f32; MOST],
+    /// With measured responses: the loudspeakers the way is shared among.
+    share: Share,
 }
 
 impl Aim {
@@ -239,6 +247,7 @@ impl Aim {
             pan: heard.pan.map(|gain| gain as f32),
             pinna: heard.pinna.map(|seconds| (seconds * rate) as f32),
             field: [0.0; MOST],
+            share: [(0, 0.0); 3],
         }
     }
 
@@ -288,6 +297,9 @@ impl Aim {
             pan: std::array::from_fn(|e| mix(self.pan[e], to.pan[e])),
             pinna: std::array::from_fn(|e| mix(self.pinna[e], to.pinna[e])),
             field: std::array::from_fn(|c| mix(self.field[c], to.field[c])),
+            // Three loudspeakers are not mixed with three others: the way goes
+            // to where it is going at once, crossing over within the block.
+            share: to.share,
         }
     }
 }
@@ -734,6 +746,8 @@ pub struct Engine {
     field: [[f32; BLOCK]; MOST],
     /// The listener's head as last placed.
     head: Head,
+    /// With measured responses, the loudspeakers the ways are heard through.
+    speakers: Option<Speakers>,
     pub tally: Tally,
 }
 
@@ -873,7 +887,7 @@ impl FieldEars {
                     right[n] += x[n] * aim.pan[1];
                 }
             } else {
-                ears(&mut self.lines[s], &aim, &aim, &x, self.quality, left, right);
+                ears(&mut self.lines[s], &aim, &aim, &x, self.quality, left, right, None);
             }
         }
     }
@@ -1156,6 +1170,14 @@ impl Engine {
             part,
             field: [[0.0; BLOCK]; MOST],
             head: Head { at: Vec3::ZERO, forward: vec3(0.0, 0.0, -1.0), right: Vec3::X, up: Vec3::Y },
+            speakers: match &options.measured {
+                Some(hrir)
+                    if part != Part::Far && options.listening == Listening::Headphones && options.quality.outer_ear =>
+                {
+                    Some(Speakers::new(hrir.clone()))
+                }
+                _ => None,
+            },
             tally,
             scene,
             options,
@@ -1624,6 +1646,7 @@ impl Engine {
         let (mut nows, mut scatters) = (std::mem::take(&mut self.nows), std::mem::take(&mut self.scatters));
         let mut near = std::mem::take(&mut self.near);
         let mut mirroring: Vec<(usize, Way)> = Vec::new();
+        let measured = self.speakers.as_ref().map(|speakers| speakers.hrir.clone());
         let block = self.block as usize;
         nows.clear();
         for source in &mut self.sources {
@@ -1771,6 +1794,15 @@ impl Engine {
                     // For a field: no ears, the channels of where it comes from.
                     let mut aim = Aim::new(delay, gains, air_pass(self.air * length), send, &Heard::nothing());
                     aim.field = harmonics(way.from - head.at, order).map(|g| g as f32);
+                    aim
+                } else if let Some(hrir) = &measured {
+                    // Its own time between the ears, and the loudspeakers round where it comes from.
+                    let towards = Hrir::towards(way.from, &head);
+                    let itd = hrir.itd(towards);
+                    let late = if itd > 0.0 { [itd, 0.0] } else { [0.0, -itd] };
+                    let heard = Heard { delay: late, shadow: [1.0; 2], pan: [0.0; 2], pinna: [0.0; 5] };
+                    let mut aim = Aim::new(delay, gains, air_pass(self.air * length), send, &heard);
+                    aim.share = hrir.share(towards);
                     aim
                 } else {
                     let heard = hear_for(way.from, &head, self.options.listening, quality.outer_ear);
@@ -1944,6 +1976,7 @@ impl Engine {
                         right,
                         &mut self.send,
                         if encoding { Some(&mut self.field) } else { None },
+                        self.speakers.as_mut(),
                     );
                     ways_now += 1;
                 } else {
@@ -1953,6 +1986,10 @@ impl Engine {
             }
             source.struck = false;
             source.left = source.left.saturating_sub(1).max(1);
+        }
+        if let Some(speakers) = &mut self.speakers {
+            // The loudspeakers the ways were shared among, through their responses.
+            speakers.hear(left, right);
         }
         self.tally.carrying += clock.seconds();
 
@@ -1997,8 +2034,13 @@ fn ears(
     quality: Quality,
     left: &mut [f32; BLOCK],
     right: &mut [f32; BLOCK],
+    speakers: Option<&mut Speakers>,
 ) {
     let per = 1.0 / BLOCK as f32;
+    if let Some(speakers) = speakers {
+        measured_ears(line, from, goal, x, quality, speakers);
+        return;
+    }
     // What came before this block, then the block: the outer ear and
     // the ears read a little back.
     let mut dry = [0.0f32; SHORT + BLOCK];
@@ -2068,6 +2110,49 @@ fn ears(
     line.wet.copy_from_slice(&wet[BLOCK..]);
 }
 
+/// [`ears`] with measured responses: each ear hears the way later by its own
+/// time between the ears (no shadow and no echoes of the outer ear: the
+/// responses have them), into the loudspeakers it is shared among — those
+/// it was shared among at the block's start fading out as those at its end
+/// fade in.
+fn measured_ears(line: &mut Line, from: &Aim, goal: &Aim, x: &[f32; BLOCK], quality: Quality, speakers: &mut Speakers) {
+    let per = 1.0 / BLOCK as f32;
+    let mut dry = [0.0f32; SHORT + BLOCK];
+    dry[..SHORT].copy_from_slice(&line.dry);
+    dry[SHORT..].copy_from_slice(x);
+    let fine = quality.reading == Reading::Sinc;
+    for ear in 0..2 {
+        let (mut late, late_step) = (from.late[ear], (goal.late[ear] - from.late[ear]) * per);
+        let mut v = [0.0f32; BLOCK];
+        for (n, to) in v.iter_mut().enumerate() {
+            late += late_step;
+            let whole = late as usize;
+            let f = late - whole as f32;
+            let j = SHORT + n - whole;
+            *to = if fine {
+                cubic(dry[j + 1], dry[j], dry[j - 1], dry[j - 2], f)
+            } else {
+                dry[j] + (dry[j - 1] - dry[j]) * f
+            };
+        }
+        for (shares, fading_in) in [(&from.share, false), (&goal.share, true)] {
+            for &(s, w) in shares {
+                if w == 0.0 {
+                    continue;
+                }
+                let s = s as usize;
+                speakers.fed[s] = true;
+                let feed = &mut speakers.feed[s][ear];
+                for (n, out) in feed.iter_mut().enumerate() {
+                    let t = (n + 1) as f32 * per;
+                    *out += v[n] * w * if fading_in { t } else { 1.0 - t };
+                }
+            }
+        }
+    }
+    line.dry.copy_from_slice(&dry[BLOCK..]);
+}
+
 /// A point between the middle two of four samples, `f` of the way from `q`
 /// to `r`: Lagrange's curve through the four.
 #[inline(always)]
@@ -2122,6 +2207,7 @@ fn run(
     right: &mut [f32; BLOCK],
     send: &mut [f32],
     field: Option<&mut [[f32; BLOCK]; MOST]>,
+    speakers: Option<&mut Speakers>,
 ) {
     let mask = ring.len() - 1;
     let per = 1.0 / BLOCK as f32;
@@ -2263,7 +2349,7 @@ fn run(
             right[n] += x[n] * (r + r_step * k);
         }
     } else {
-        ears(line, &from, goal, &x, quality, left, right);
+        ears(line, &from, goal, &x, quality, left, right, speakers);
     }
     // A way gone quiet is left at nothing, not at numbers almost nothing.
     for state in line.parts.iter_mut().chain(&mut line.air).chain(&mut line.shadow_in).chain(&mut line.shadow_out) {
@@ -2311,6 +2397,7 @@ pub fn way_cost(quality: Quality, listening: Listening, seconds: f64) -> f64 {
             &mut left,
             &mut right,
             &mut send,
+            None,
             None,
         );
     }

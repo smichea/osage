@@ -41,7 +41,7 @@ Hear a scene as the object tree has it: what each node sounds like, what sound m
 
 Offline (`render`), the engine starts three seconds before the first sample so that sound already on its way arrives, and the file is faded at both ends, brought to a loudness by one gain and dithered to 16 bits ([loudness mastering](/algorithms/loudness-mastering.md)).
 
-Ears: the structural model of Brown and Duda (1998) — the far ear later by up to 0.66 ms (a sphere of 8.75 cm), the head's shadow as one pole and one zero per ear, five short echoes of the outer ear for height. For loudspeakers, an equal-power pan.
+Ears: the structural model of Brown and Duda (1998) — the far ear later by up to 0.66 ms (a sphere of 8.75 cm), the head's shadow as one pole and one zero per ear, five short echoes of the outer ear for height. For loudspeakers, an equal-power pan. With measured responses given (`Options::measured`, the file `tools/make-hrir.py` derives from SADIE II's KEMAR), headphones at high and reference hear every way through 54 virtual loudspeakers instead, each way keeping its own measured time between the ears ([measured ears](/algorithms/measured-ears.md)).
 
 Order: the engine sorts the scene's emitters, surfaces and touches by node path and content before it starts (`settle`), and every choice between two equal things is made by what they are, never by their index. The same scene written in another order renders to the same samples.
 
@@ -61,6 +61,7 @@ Order: the engine sorts the scene's emitters, surfaces and touches by node path 
 - `Engine::{drive, drive_at, node}`, `Pose`: a node placed from outside.
 - `Engine::strike_told(Struck)`, `engine::strength(impulse, mass)`, `Scene::collision_surface(path, id)`, `render::Hearing::strike_told`, `Live::strike`: contacts a solver reports.
 - `faces::{Faces, sheets, quads}`: the index and the sheets, usable alone.
+- `hrir::{Hrir, derive, rings, sofa_direction, Speakers}`, `Options::measured`: measured head responses through virtual loudspeakers.
 - `field::{Far, Decoder, harmonics, far_share, channels}`, `Options::far`, `Engine::{field, render_field, head, part}`, `Part`, `FieldEars`, `render::Hearing`: far sound as a field, made and heard.
 - `render::{render, render_told, Told, Replay, fade, level, master}`: a scene to a file's samples, with or without poses told.
 - `live::{Live::{start, drive, feed, report}, Feed, Listening::{sample, next_block}, Report}`; `live::bevy::{LivePlugin, LiveSource}` with the `bevy` feature.
@@ -81,7 +82,7 @@ Each is a test of `crates/osage-sound/tests/` or of the module, or a check of [s
 
 # Knowledge
 
-- Algorithms: [far sound field](/algorithms/far-sound-field.md), [sound ways](/algorithms/sound-ways.md), [sound faces from meshes](/algorithms/sound-faces.md), [sound delay lines](/algorithms/sound-delay-lines.md), [contact voices](/algorithms/contact-voices.md), [feedback delay reverberation](/algorithms/feedback-delay-reverb.md), [loudness mastering](/algorithms/loudness-mastering.md).
+- Algorithms: [far sound field](/algorithms/far-sound-field.md), [sound ways](/algorithms/sound-ways.md), [sound faces from meshes](/algorithms/sound-faces.md), [measured ears](/algorithms/measured-ears.md), [sound delay lines](/algorithms/sound-delay-lines.md), [contact voices](/algorithms/contact-voices.md), [feedback delay reverberation](/algorithms/feedback-delay-reverb.md), [loudness mastering](/algorithms/loudness-mastering.md).
 - Oracle: [soundscape verify](/oracles/soundscape-verify.md), and the crate's tests, which measure their claims with [osage-sound-analysis](/modules/osage-sound-analysis.md).
 - Voices: [osage-sound-voices](/modules/osage-sound-voices.md). The scooter is [osage-kart-sound](/modules/kart-sound.md)'s two-stroke.
 - Design: [design/09](https://github.com/smichea/osage/blob/main/design/09-sound.md) (what an object carries for sound, qualities by device, server and clients, far sound as a field; decision D-185) and the prototype's [DESIGN.md](https://github.com/smichea/osage/blob/main/tools/paris-soundscape/DESIGN.md) (its measurements and its limits).
@@ -95,7 +96,7 @@ The engine knows nothing of Paris: any tree of nodes with emitters, faces and to
 - One thread for the engine, at the system's ordinary priority: on a busy machine it can be late, and the output then hears silence (measured below). In a browser, see [osage-sound-web](/modules/osage-sound-web.md).
 - Live, a pose is heard after the blocks kept ahead and the one made with it, plus the output's own buffer: on the bridge with a 10 ms output buffer, 13 ms on average from a pose to the output taking it, 23 ms to the ears. Rendering in the output's callback would save the blocks kept ahead, at the cost of making the output wait on the engine.
 - One reflection off each face and one edge per way: no reflection of a reflection, no way round two edges.
-- Ears without a measured head: height is weak and behind sounds like its mirror in front (issue #18).
+- Without the measured responses (an asset a client may not have) and below high quality, the ears are the sphere model: height is weak and behind sounds like its mirror in front. With them, the top octave between virtual loudspeakers is off by up to 10 dB, and the far field is still heard through the sphere model.
 - Faces are flat: a curved mesh is many small sheets. Meshes are given whole; paging a district's in and out is not built into the engine. Each emitter keeps a line for every sheet, most idle.
 - Contacts from a solver are told as they are reported; feet and wheels remain for scenes without one.
 - The reverberation's decay is given by the scene, not found from its geometry.

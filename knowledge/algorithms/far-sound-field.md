@@ -79,7 +79,7 @@ Measured against every emitter by its own ways (`paris-soundscape far`, medium, 
 
 # Alternatives
 
-Higher orders (16 channels at order 3) sharpen a lone source at the cost of more channels and loudspeakers; binaural decoding with measured head responses (issue #18) would give height and front and back, which the sphere model cannot. A per-cube mix of far sources to a stereo bed would be cheaper but would not turn with the head. Clustering far sources into a few virtual ones keeps them as ways at a cost that grows with the clusters.
+Higher orders (16 channels at order 3) sharpen a lone source at the cost of more channels and loudspeakers; hearing the virtual loudspeakers through the measured head responses the near ways now use ([measured ears](/algorithms/measured-ears.md)) would give height and front and back, which the sphere model cannot. A per-cube mix of far sources to a stereo bed would be cheaper but would not turn with the head. Clustering far sources into a few virtual ones keeps them as ways at a cost that grows with the clusters.
 
 # Oracle
 

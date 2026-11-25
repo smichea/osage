@@ -70,7 +70,7 @@ Every 128 samples (2.7 ms, a Web Audio render quantum) the engine places the tre
 
 Each emitter's voice writes into a delay line of its own, and each way reads it as far back as the way is long ([sound delay lines](../knowledge/algorithms/sound-delay-lines.md)): a far sound is late, an approaching one higher, and an echo has its own delay and shift, with no rule for any of it. A moving emitter leaves a trail, and each way is found from where the emitter was when the sound now arriving by it left.
 
-For headphones, the ears are a model (Brown and Duda, 1998): the far ear later and in the head's shadow, five short echoes of the outer ear for height. For loudspeakers, the level is shared between the two channels. Measured responses of a head would do better for height and for front and back; they are data to choose and download (issue #18).
+For headphones, the ears are a model (Brown and Duda, 1998): the far ear later and in the head's shadow, five short echoes of the outer ear for height. Where a client has the measured responses of a head (SADIE II's KEMAR, D-242), high and reference hear every way through 54 virtual loudspeakers filtered by them, each way keeping its own measured time between the ears ([measured ears](../knowledge/algorithms/measured-ears.md)). For loudspeakers, the level is shared between the two channels.
 
 The order a scene is written in is no part of it: the engine takes emitters, surfaces and touches in an order of its own, and every choice between equals is made by what they are. What a thing does by itself does not depend on who else is there.
 
@@ -133,6 +133,5 @@ A voice heard from far needs less of itself, as a texture seen from far needs fe
 
 - Where the modes of a contact are set: on the object (from its size and shape) or on the material, and how a collision material names its sound (§2).
 - When emitters and contact sounds move into the object format, and in which version of it (issue #15).
-- Which measured head responses to use, and under what licence (issue #18).
 - How the engine is compared with the city programme's external reference: like-for-like measurements and a blind listening test (issue #19).
 - The engine's limits, each documented with what removing it would cost (issue #21).

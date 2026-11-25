@@ -40,6 +40,9 @@ paris-soundscape: a scene's sound placed in its object tree and carried to two e
                                  ambisonic field made there (on render, verify and live)
              --far-order N       the field's order, 1 (4 channels, default) or 2 (9)
              --cube M            the cube's side (default 27; 0: the field made where the listener stands)
+             --hrir FILE         measured head responses for headphones at high and reference
+                                 (assets/sadie/d2-48k.hrir, made by tools/make-hrir.py; on render, verify,
+                                 bench, live and ears)
   far      far sound as a field against every emitter by its own ways, at the first and second orders: the
            differences in loudness, in each octave and in what the ears compare (level and time, by band,
            second by second); and what it costs for 1, 4 and 16 listeners in one cube
@@ -65,6 +68,11 @@ paris-soundscape: a scene's sound placed in its object tree and carried to two e
              --json FILE         a receipt
              --quick             fewer and shorter runs
              --part NAME         only the bridge, the faces (cut 10, 100 and 1 000 times), the ring or the way
+  hrir     a measured set's file for the engine, from the arrays tools/make-hrir.py takes out of SOFA
+             --ir FILE --positions FILE --out FILE   (--taps 256, --rate 48000, --keep 64; 54 loudspeakers in rings)
+  ears     a source going round the listener, then from below to above, heard by the sphere model and
+           by the measured responses: the time and level between the ears by band, against the set
+             --hrir FILE (needed)
   measure FILE.wav
            what any stereo file tells of where its sounds are: peaks, loudness, octaves, and second
            by second the level and time differences between the ears (--json for a receipt)
@@ -169,7 +177,190 @@ fn options(args: &Args, scene: &Scene) -> Result<Options, String> {
         mute: args.all("--mute"),
         start: 0.0,
         far: far(args, scene)?,
+        measured: measured(args)?,
     })
+}
+
+/// Measured head responses, if `--hrir FILE` names a file made by
+/// `tools/make-hrir.py` (assets/sadie/d2-48k.hrir).
+fn measured(args: &Args) -> Result<Option<std::sync::Arc<osage_sound::hrir::Hrir>>, String> {
+    let Some(path) = args.value("--hrir") else { return Ok(None) };
+    let bytes = std::fs::read(path).map_err(|e| format!("--hrir {path}: {e}"))?;
+    let set = osage_sound::hrir::Hrir::from_bytes(&bytes).map_err(|e| format!("--hrir {path}: {e}"))?;
+    if set.rate != osage_sound::engine::RATE {
+        return Err(format!(
+            "--hrir {path}: measured at {} Hz, the engine runs at {}",
+            set.rate,
+            osage_sound::engine::RATE
+        ));
+    }
+    Ok(Some(std::sync::Arc::new(set)))
+}
+
+/// A scene of one noise 3 m away in `direction` (head frame: x right, y up, z ahead) and nothing else.
+fn alone(direction: Vec3) -> Result<Scene, String> {
+    let at = direction.unit_or(Vec3::Z) * 3.0;
+    // The listener looks along its −Z: ahead is −z in the scene.
+    let text = format!(
+        r#"{{"asset": {{"version": "2.0", "extras": {{
+          "osageObject": {{"version": 1, "id": "alone", "collisionMaterials": {{}}, "acousticMaterials": {{}}}},
+          "osageSound": {{"version": 0, "contactSounds": {{}}}}}}}},
+        "scene": 0,
+        "scenes": [{{"nodes": [0], "extras": {{"osageSound": {{"seconds": 2, "seed": 2,
+          "listener": {{"node": ["world", "ears"]}}, "reverb": {{"secondsT60": [0.3, 0.3, 0.3]}},
+          "air": {{"celsius": 20, "humidityPercent": 50}}}}}}}}],
+        "nodes": [
+          {{"children": [1, 2], "extras": {{"osage": {{"id": "world"}}}}}},
+          {{"extras": {{"osage": {{"id": "ears"}}}}}},
+          {{"translation": [{}, {}, {}], "extras": {{"osage": {{"id": "source"}}, "osageSound": {{
+            "emitters": [{{"id": "noise", "voice": "noise", "reflections": false}}]}}}}}}
+        ]}}"#,
+        at.x, at.y, -at.z
+    );
+    Scene::from_json(&text)
+}
+
+/// `ears`: what the measured responses make of a source round the head,
+/// against the measured set itself and against the sphere model.
+fn run_ears(args: &Args) -> Result<(), String> {
+    use osage_sound::hrir::sofa_direction;
+    use osage_sound_analysis::cues::{FINE_STRUCTURE, cue, cue_bands};
+    let mut options = options(args, &alone(Vec3::Z)?)?;
+    let Some(set) = options.measured.clone() else { return Err("--hrir FILE".to_owned()) };
+    options.listening = Listening::Headphones;
+    let model = Options { measured: None, ..options.clone() };
+    // The measured set itself, for the truth: its raw responses, if given.
+    let raw = match (args.value("--ir"), args.value("--positions")) {
+        (Some(ir), Some(positions)) => {
+            let read = |path: &str| -> Result<Vec<f64>, String> {
+                let bytes = std::fs::read(path).map_err(|e| format!("{path}: {e}"))?;
+                Ok(bytes.as_chunks::<8>().0.iter().map(|b| f64::from_le_bytes(*b)).collect())
+            };
+            Some((read(ir)?, read(positions)?))
+        }
+        _ => None,
+    };
+    let taps = 256;
+    let bands = cue_bands();
+    let seconds = 1.0;
+    // The noise every way is made from, for the truth.
+    let mut noise = osage_sound_voices::dsp::Noise::new(5);
+    let source: Vec<f32> = (0..(seconds * RATE as f64) as usize).map(|_| noise.next() * 0.1).collect();
+    let mut directions: Vec<(String, f64, f64)> =
+        (0..12).map(|i| (format!("round {:>3}°", i * 30), f64::from(i * 30), 0.0)).collect();
+    for e in [-45.0, -20.0, 0.0, 20.0, 45.0, 70.0, 90.0] {
+        directions.push((format!("ahead, up {e:>3}°"), 0.0, e));
+    }
+    for e in [70.0, 45.0, 20.0, 0.0, -20.0, -45.0] {
+        directions.push((format!("behind, up {e:>3}°"), 180.0, e));
+    }
+    println!(
+        "A noise 3 m away, heard by {}: the time between the ears (µs, the right leading) and the level",
+        options.quality.name
+    );
+    println!(
+        "between them (dB, the right louder) at 250 Hz, 1, 4 and 8 kHz — measured set / its virtual loudspeakers / sphere model."
+    );
+    let cues_of = |l: &[f32], r: &[f32]| {
+        let itd = cue(l, r, RATE, &FINE_STRUCTURE, 0.2, seconds).itd_us;
+        let ild: Vec<f64> =
+            [1usize, 3, 5, 6].iter().map(|&b| cue(l, r, RATE, &bands[b], 0.2, seconds).ild_db).collect();
+        let level: Vec<f64> = bands.iter().map(|b| cue(l, r, RATE, b, 0.2, seconds).level_db).collect();
+        (itd, ild, level)
+    };
+    let (mut worst_itd, mut worst_ild) = (0.0f64, [0.0f64; 4]);
+    let mut levels = Vec::new();
+    for (name, azimuth, elevation) in &directions {
+        let d = sofa_direction(*azimuth, *elevation);
+        let scene = alone(d)?;
+        let ours = render(&scene, &options, seconds);
+        let theirs = render(&scene, &model, seconds);
+        let (a, b) = (cues_of(&ours.left, &ours.right), cues_of(&theirs.left, &theirs.right));
+        let truth = raw.as_ref().map(|(ir, positions)| {
+            let count = positions.len() / 3;
+            let m = (0..count)
+                .max_by(|&i, &j| {
+                    sofa_direction(positions[3 * i], positions[3 * i + 1])
+                        .dot(d)
+                        .total_cmp(&sofa_direction(positions[3 * j], positions[3 * j + 1]).dot(d))
+                })
+                .expect("a direction");
+            let convolve = |ear: usize| -> Vec<f32> {
+                let h = &ir[(2 * m + ear) * taps..(2 * m + ear + 1) * taps];
+                (0..source.len())
+                    .map(|n| (0..taps.min(n + 1)).map(|k| f64::from(source[n - k]) * h[k]).sum::<f64>() as f32)
+                    .collect()
+            };
+            cues_of(&convolve(0), &convolve(1))
+        });
+        let show = |x: Option<f64>| x.map_or("    –".to_owned(), |x| format!("{x:>5.0}"));
+        print!("  {name:<18} {} / {:>5.0} / {:>5.0} µs  ", show(truth.as_ref().map(|t| t.0)), a.0, b.0);
+        for (k, worst) in worst_ild.iter_mut().enumerate() {
+            let t = truth.as_ref().map(|t| t.1[k]);
+            print!(" {}/{:>5.1}/{:>5.1}", t.map_or("   –".to_owned(), |t| format!("{t:>5.1}")), a.1[k], b.1[k]);
+            if let Some(t) = t {
+                *worst = worst.max((a.1[k] - t).abs());
+            }
+        }
+        println!();
+        if let Some(t) = &truth {
+            worst_itd = worst_itd.max((a.0 - t.0).abs());
+        }
+        levels.push((name.clone(), a.2.clone(), b.2.clone(), truth.map(|t| t.2)));
+    }
+    if raw.is_some() {
+        println!(
+            "Against the measured set, the loudspeakers differ by at most {worst_itd:.0} µs in time and {:.1}, {:.1}, {:.1} and {:.1} dB in level.",
+            worst_ild[0], worst_ild[1], worst_ild[2], worst_ild[3]
+        );
+    }
+    // Ahead and behind: the same angle from the line through the ears, told apart by the spectrum.
+    println!("Ahead against behind (the octaves' levels, both ears, behind minus ahead, dB, 125 Hz to 8 kHz):");
+    for (front, back) in [(0usize, 6usize), (1, 5), (11, 7), (2, 4)] {
+        let (f, b) = (&levels[front], &levels[back]);
+        let row = |x: &[f64], y: &[f64]| {
+            x.iter().zip(y).map(|(p, q)| format!("{:>5.1}", q - p)).collect::<Vec<_>>().join(" ")
+        };
+        println!("  {} → {}", f.0.trim(), b.0.trim());
+        if let (Some(tf), Some(tb)) = (&f.3, &b.3) {
+            println!("    measured set        {}", row(tf, tb));
+        }
+        println!("    virtual speakers    {}", row(&f.1, &b.1));
+        println!("    sphere model        {}", row(&f.2, &b.2));
+    }
+    drop(set);
+    Ok(())
+}
+
+/// `hrir`: a measured set's file for the engine, from the raw arrays
+/// `tools/make-hrir.py` takes out of a SOFA file.
+fn run_hrir(args: &Args) -> Result<(), String> {
+    let floats = |flag: &str| -> Result<Vec<f64>, String> {
+        let path = args.value(flag).ok_or_else(|| format!("{flag} FILE"))?;
+        let bytes = std::fs::read(path).map_err(|e| format!("{flag} {path}: {e}"))?;
+        Ok(bytes.as_chunks::<8>().0.iter().map(|b| f64::from_le_bytes(*b)).collect())
+    };
+    let (ir, positions) = (floats("--ir")?, floats("--positions")?);
+    let number = |flag: &str, default: f64| -> Result<f64, String> { Ok(args.number(flag)?.unwrap_or(default)) };
+    let set = osage_sound::hrir::derive(
+        &ir,
+        &positions,
+        number("--taps", 256.0)? as usize,
+        number("--rate", 48_000.0)? as u32,
+        &osage_sound::hrir::rings(),
+        number("--keep", 64.0)? as usize,
+    )?;
+    let out = args.value("--out").ok_or("--out FILE")?;
+    std::fs::write(out, set.to_bytes()).map_err(|e| format!("{out}: {e}"))?;
+    let most = set.itd.iter().fold(0.0f32, |m, x| m.max(x.abs()));
+    println!(
+        "{out}: {} loudspeakers, {} triangles, {} taps; the time between the ears up to {:.0} µs",
+        set.speakers.len(),
+        set.triangles.len(),
+        set.taps,
+        most * 1e6
+    );
+    Ok(())
 }
 
 /// Far sound as a field, if `--far-beyond` asks: made at the centre of the
@@ -435,7 +626,23 @@ fn run_verify(args: &Args) -> Result<(), String> {
         // Sample for sample: what one ear heard, the other hears. With far sound as a field, the field
         // stays with the world and only its decoder turns with the head: the two are each other's mirror
         // to the rounding of the turned loudspeakers.
-        if options.far.is_none() {
+        if options.measured.is_some() && options.listening == Listening::Headphones && options.quality.outer_ear {
+            // A measured head is not quite its own mirror: each ear hears what the other heard as loud,
+            // octave by octave, within what the two sides of the head differ by.
+            let octaves: Vec<Band> = [250.0, 500.0, 1_000.0, 2_000.0, 4_000.0].map(Band::octave).to_vec();
+            let levels = |x: &[f32]| osage_sound_analysis::bands::band_levels(x, RATE, &octaves);
+            let differ = |a: &[f32], b: &[f32]| {
+                levels(a).iter().zip(levels(b)).map(|(p, q)| (p - q).abs()).fold(0.0f64, f64::max)
+            };
+            let worst = differ(&river.left, &turned.right).max(differ(&river.right, &turned.left));
+            check(
+                "and each ear then hears what the other heard",
+                worst < 2.0,
+                format!(
+                    "octave by octave within {worst:.1} dB, 250 Hz to 4 kHz (a measured head is not its own mirror)"
+                ),
+            );
+        } else if options.far.is_none() {
             check(
                 "and each ear then hears what the other heard",
                 river.left == turned.right && river.right == turned.left,
@@ -615,6 +822,7 @@ fn run_bench(args: &Args) -> Result<(), String> {
     let part = |name: &str| args.value("--part").is_none_or(|only| only == name);
 
     let scene = scene(args)?;
+    let measured = measured(args)?;
     if part("bridge") {
         println!(
             "{} — {} s, {} emitters. Milliseconds of one processor for a second of sound:",
@@ -631,7 +839,7 @@ fn run_bench(args: &Args) -> Result<(), String> {
             for (name, listening) in both {
                 let found = cost(
                     &scene,
-                    &Options { quality, listening, ..Options::default() },
+                    &Options { quality, listening, measured: measured.clone(), ..Options::default() },
                     if quick { 15.0 } else { scene.seconds },
                     runs,
                 );
@@ -1040,6 +1248,8 @@ fn main() -> ExitCode {
         "measure" => run_measure(&args),
         "verify" => run_verify(&args),
         "bench" => run_bench(&args),
+        "hrir" => run_hrir(&args),
+        "ears" => run_ears(&args),
         "live" => run_live(&args),
         "far" => run_far(&args),
         "field" => run_field(&args),

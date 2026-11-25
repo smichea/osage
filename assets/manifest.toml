@@ -15932,3 +15932,33 @@ licence = "CC0-1.0 AND CC-BY-4.0"
 author = "PixelMannen (model, CC0), tomkranis (rig and animation, CC BY 4.0), AsoboStudio and scurest (glTF conversion, CC BY 4.0)"
 source = "https://github.com/KhronosGroup/glTF-Sample-Assets/blob/e124e8d8d7330a5372bc2b4d00d39a4a9d7997ea/Models/Fox/README.md"
 used_by = "ville-paris: animated quadruped foot contact replay"
+
+# SADIE II, the head-related impulse responses of the University of York's
+# SADIE project: subject D2, a KEMAR mannequin, 8 802 directions (D-242).
+# Licensed under the Apache License, Version 2.0; "This product includes data
+# developed at The Audio Lab, University of York, UK (Cal Armstrong, Lewis
+# Thresh, Gavin Kearney) as part of the SADIE Project." Reference: C.
+# Armstrong, L. Thresh, D. Murphy and G. Kearney, "A Perceptual Evaluation of
+# Individual and Non-Individual HRTFs: A Case Study of the SADIE II
+# Database", Applied Sciences 8(11), 2029, 2018,
+# https://doi.org/10.3390/app8112029. The engine hears headphones through
+# the derived file when a client gives it, and through its sphere model
+# otherwise.
+
+[[asset]]
+path = "assets/sadie/D2_HRIR_SOFA.zip"
+url = "https://zenodo.org/records/12092466/files/D2_HRIR_SOFA.zip?download=1"
+sha256 = "2561af2c09688c95f3909303cd2ac51cb8c15abb574903f17f635e1376cbce94"
+licence = "Apache-2.0"
+author = "University of York, The Audio Lab (Cal Armstrong, Lewis Thresh, Gavin Kearney), SADIE project"
+source = "https://www.york.ac.uk/sadie-project/database.html"
+used_by = "crates/osage-sound: measured head responses (tools/make-hrir.py)"
+
+[[asset]]
+path = "assets/sadie/d2-48k.hrir"
+made_by = "tools/make-hrir.py"
+made_from = "assets/sadie/D2_HRIR_SOFA.zip"
+licence = "Apache-2.0"
+author = "University of York, The Audio Lab (Cal Armstrong, Lewis Thresh, Gavin Kearney), SADIE project; derived by the osage contributors"
+source = "https://www.york.ac.uk/sadie-project/database.html"
+used_by = "crates/osage-sound: 54 virtual loudspeakers for headphones at high and reference (--hrir)"
