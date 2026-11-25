@@ -47,14 +47,21 @@ fn replay(mut grid: Walk, ends: [Vec2; 2], limit: u32) -> ([usize; 2], [bool; 2]
 #[test]
 fn walkers_use_a_passing_place_on_a_straight_or_bent_route() {
     let straight = street(56, 24, |x, z| !(16..40).contains(&x) || (11..13).contains(&z));
-    let bend = street(64, 64, |x, z| {
-        (x < 16 && z < 24)
-            || ((16..35).contains(&x) && (11..14).contains(&z))
-            || ((32..35).contains(&x) && (11..40).contains(&z))
-            || ((20..48).contains(&x) && (40..60).contains(&z))
-    });
+    let bend = |width: usize| {
+        street(64, 64, |x, z| {
+            (x < 16 && z < 24)
+                || ((16..32 + width).contains(&x) && (11..11 + width).contains(&z))
+                || ((32..32 + width).contains(&x) && (11..40).contains(&z))
+                || ((20..48).contains(&x) && (40..60).contains(&z))
+        })
+    };
+    let ends = |offset: f32| [Vec2::new(2., 2.75 + offset), Vec2::new(8. + offset, 12.)];
+    let too_narrow = bend(1);
+    let [a, b] = ends(0.125);
+    assert!(too_narrow.route(a, b).is_none() && too_narrow.route(b, a).is_none());
+    // At 50 cm the centreline falls on a grid edge. At 75 cm it falls on cell centres.
     for (grid, ends) in
-        [(straight, [Vec2::new(2., 3.), Vec2::new(12., 3.)]), (bend, [Vec2::new(2., 3.125), Vec2::new(8.375, 12.)])]
+        [(straight, [Vec2::new(2., 3.), Vec2::new(12., 3.)]), (bend(2), ends(0.25)), (bend(3), ends(0.375))]
     {
         let (visits, yielded) = replay(grid, ends, 1800);
         assert!(visits.iter().all(|n| *n >= 2), "{visits:?}");

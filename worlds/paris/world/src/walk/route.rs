@@ -5,7 +5,7 @@ use super::{RADIUS, STEP, Walk};
 use bevy::math::{Vec2, Vec3};
 use std::{
     cmp::Reverse,
-    collections::{BinaryHeap, HashMap},
+    collections::{BinaryHeap, HashMap, VecDeque},
 };
 
 type Cell = (usize, usize);
@@ -23,11 +23,39 @@ const NEIGHBOURS: [(isize, isize, u64); 8] = [
     (1, 1, DIAGONAL),
 ];
 
-impl Walk {
-    fn centre(&self, (x, z): Cell) -> Vec2 {
-        self.origin + (Vec2::new(x as f32, z as f32) + 0.5) * self.cell
+/// Search positions on the height field. Refinement only changes the positions
+/// tried by the planner; terrain and the swept-disc test use the original grid.
+#[derive(Clone, Copy)]
+struct Lattice {
+    origin: Vec2,
+    spacing: f32,
+    offset: f32,
+    columns: usize,
+    rows: usize,
+}
+
+impl Lattice {
+    fn point(self, (x, z): Cell) -> Vec2 {
+        self.origin + (Vec2::new(x as f32, z as f32) + self.offset) * self.spacing
     }
 
+    fn nearest(self, p: Vec2) -> Cell {
+        let index = (p - self.origin) / self.spacing + (0.5 - self.offset);
+        ((index.x as usize).min(self.columns - 1), (index.y as usize).min(self.rows - 1))
+    }
+
+    fn refined(self) -> Option<Self> {
+        Some(Self {
+            spacing: self.spacing * 0.5,
+            offset: 1.,
+            columns: self.columns.checked_mul(2)?.checked_sub(1)?,
+            rows: self.rows.checked_mul(2)?.checked_sub(1)?,
+            ..self
+        })
+    }
+}
+
+impl Walk {
     /// Test the entire swept footprint on each interval of constant centre-cell height.
     pub(crate) fn clear_segment(&self, from: Vec2, to: Vec2) -> bool {
         if !from.is_finite() || !to.is_finite() {
@@ -125,9 +153,9 @@ impl Walk {
         true
     }
 
-    fn route_cell(&self, p: Vec2) -> Option<Cell> {
-        let home = self.index(p)?;
-        if self.clear_segment(p, self.centre(home)) {
+    fn route_cell(&self, lattice: Lattice, p: Vec2) -> Option<Cell> {
+        let home = lattice.nearest(p);
+        if self.clear_segment(p, lattice.point(home)) {
             return Some(home);
         }
         // An off-centre position can support the full disc even when the centre
@@ -138,13 +166,13 @@ impl Walk {
                 let (Some(x), Some(z)) = (home.0.checked_add_signed(dx), home.1.checked_add_signed(dz)) else {
                     continue;
                 };
-                if (x, z) != home && x < self.columns && z < self.rows {
+                if (x, z) != home && x < lattice.columns && z < lattice.rows {
                     nearby.push((x, z));
                 }
             }
         }
-        nearby.sort_by(|&a, &b| p.distance_squared(self.centre(a)).total_cmp(&p.distance_squared(self.centre(b))));
-        nearby.into_iter().find(|&c| self.clear_segment(p, self.centre(c)))
+        nearby.sort_by(|&a, &b| p.distance_squared(lattice.point(a)).total_cmp(&p.distance_squared(lattice.point(b))));
+        nearby.into_iter().find(|&c| self.clear_segment(p, lattice.point(c)))
     }
 
     /// A route between exact horizontal endpoints, including both. Uses the
@@ -160,8 +188,53 @@ impl Walk {
         if self.clear_segment(from, to) {
             return Some(vec![on_ground(from)?, on_ground(to)?]);
         }
-        let source = self.route_cell(from)?;
-        let target = self.route_cell(to)?;
+        let lattice =
+            Lattice { origin: self.origin, spacing: self.cell, offset: 0.5, columns: self.columns, rows: self.rows };
+        self.search(lattice, from, to).or_else(|| {
+            if !self.connected_floor(self.index(from)?, self.index(to)?) {
+                return None;
+            }
+            self.search(lattice.refined()?, from, to)
+        })
+    }
+
+    /// Every successful sweep visits a chain of touching ground cells within
+    /// stepping height. If even a point cannot connect these cells, refining
+    /// the disc's search positions cannot open a route.
+    fn connected_floor(&self, source: Cell, target: Cell) -> bool {
+        let mut seen = vec![0_u64; self.heights.len().div_ceil(64)];
+        let mark = |seen: &mut [u64], (x, z): Cell| {
+            let i = z * self.columns + x;
+            let bit = 1 << (i % 64);
+            let fresh = seen[i / 64] & bit == 0;
+            seen[i / 64] |= bit;
+            fresh
+        };
+        mark(&mut seen, source);
+        let mut open = VecDeque::from([source]);
+        while let Some((x, z)) = open.pop_front() {
+            if (x, z) == target {
+                return true;
+            }
+            let h = self.heights[z * self.columns + x];
+            for (dx, dz, _) in NEIGHBOURS {
+                let (Some(nx), Some(nz)) = (x.checked_add_signed(dx), z.checked_add_signed(dz)) else { continue };
+                if nx < self.columns
+                    && nz < self.rows
+                    && (self.heights[nz * self.columns + nx] - h).abs() <= STEP
+                    && mark(&mut seen, (nx, nz))
+                {
+                    open.push_back((nx, nz));
+                }
+            }
+        }
+        false
+    }
+
+    fn search(&self, lattice: Lattice, from: Vec2, to: Vec2) -> Option<Vec<Vec3>> {
+        let on_ground = |p: Vec2| Some(Vec3::new(p.x, self.ground(p)?, p.y));
+        let source = self.route_cell(lattice, from)?;
+        let target = self.route_cell(lattice, to)?;
         let estimate = |p: Cell| {
             let dx = p.0.abs_diff(target.0) as u64;
             let dz = p.1.abs_diff(target.1) as u64;
@@ -176,11 +249,11 @@ impl Walk {
                 continue;
             }
             if at == target {
-                let mut path = vec![to, self.centre(at)];
+                let mut path = vec![to, lattice.point(at)];
                 let mut cursor = at;
                 while cursor != source {
                     cursor = seen[&cursor].1;
-                    path.push(self.centre(cursor));
+                    path.push(lattice.point(cursor));
                 }
                 path.push(from);
                 path.reverse();
@@ -201,10 +274,13 @@ impl Walk {
                 let (Some(x), Some(z)) = (at.0.checked_add_signed(dx), at.1.checked_add_signed(dz)) else { continue };
                 let next = (x, z);
                 let next_cost = cost + length;
-                if x >= self.columns || z >= self.rows || seen.get(&next).is_some_and(|&(old, _)| old <= next_cost) {
+                if x >= lattice.columns
+                    || z >= lattice.rows
+                    || seen.get(&next).is_some_and(|&(old, _)| old <= next_cost)
+                {
                     continue;
                 }
-                if self.clear_segment(self.centre(at), self.centre(next)) {
+                if self.clear_segment(lattice.point(at), lattice.point(next)) {
                     seen.insert(next, (next_cost, at));
                     let h = estimate(next);
                     open.push(Reverse((next_cost + h, h, next)));

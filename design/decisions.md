@@ -1697,3 +1697,7 @@ When a passer remains almost stationary for three quarters of a second, offer a 
 ## D-240 — Let an opposing patrol retreat to a supported passing place
 
 A pedestrian stalled in single-file traffic can follow the walk grid back to a place where its body fits beside the lane. It waits for the oncoming resident and then resumes the same patrol. Give priority to the resident that has yielded more often, using replicated IDs to resolve ties. Terrain support and simultaneous body clearance constrain the retreat and the return. [Algorithm and limits](../knowledge/algorithms/pedestrian-encounters.md) · [Street replays](../worlds/paris/world/src/passers/tests/single_file.rs)
+
+## D-241 — Refine pedestrian search positions at narrow bends
+
+A 40 cm body can follow a 50 cm passage even when the centres of its 25 cm floor cells lie too close to the walls. Paris first tries the direct path and the existing cell-centre route. If both fail, check whether the endpoint cells have a chain of touching floor cells within stepping height. On connected floor, retry A* once at half the cell spacing. Check every candidate and shortcut against the original floor with the same swept body. The [street replay](../worlds/paris/world/src/passers/tests/single_file.rs) sends two residents around 50 cm and 75 cm bends in both directions and rejects the 25 cm bend. [Walk-grid routing](../knowledge/algorithms/walk-grid-routing.md)

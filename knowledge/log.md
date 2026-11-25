@@ -2,6 +2,8 @@
 
 ## 2026-11-25
 
+* [Walk-grid routing](/algorithms/walk-grid-routing.md) retries at half-cell spacing on connected floor when a bend cannot be reached through cell centres. Two opposing pedestrians complete a 50 cm bend (D-241).
+
 * [Pedestrian encounters](/algorithms/pedestrian-encounters.md) find a supported waiting place when opposing patrols meet in single-file traffic. Straight, bent and no-bay streets exercise the full trajectory (D-240).
 
 * A [blocked pedestrian](/algorithms/pedestrian-encounters.md) can step aside and try a retreat before resuming its route. An offset-destination plaza checks all 64 return trips (D-239).
