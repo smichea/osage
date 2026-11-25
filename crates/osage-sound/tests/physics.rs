@@ -414,14 +414,21 @@ fn the_same_scene_twice_is_the_same_samples() {
 
 /// What an engine started at the instant 0 makes of `scene` in `seconds`: nothing sounded before.
 fn from_the_first_sample(scene: Scene, quality: Quality, seconds: f64) -> Vec<f32> {
+    let (left, right) = ears_from_the_first_sample(scene, quality, seconds);
+    left.iter().zip(&right).map(|(l, r)| l + r).collect()
+}
+
+/// The same, each ear by itself.
+fn ears_from_the_first_sample(scene: Scene, quality: Quality, seconds: f64) -> (Vec<f32>, Vec<f32>) {
     let mut engine = Engine::new(scene, Options { quality, listening: Listening::Speakers, ..Options::default() });
     let (mut left, mut right) = ([0.0f32; BLOCK], [0.0f32; BLOCK]);
-    let mut heard = Vec::new();
-    while heard.len() < (seconds * RATE as f64) as usize {
+    let (mut heard_left, mut heard_right) = (Vec::new(), Vec::new());
+    while heard_left.len() < (seconds * RATE as f64) as usize {
         engine.render(&mut left, &mut right);
-        heard.extend(left.iter().zip(&right).map(|(l, r)| l + r));
+        heard_left.extend(left);
+        heard_right.extend(right);
     }
-    heard
+    (heard_left, heard_right)
 }
 
 #[test]
@@ -579,7 +586,8 @@ fn the_space_answers_each_band_for_as_long_as_it_is_asked() {
 fn what_a_wall_scatters_is_answered_when_its_way_says_or_not_at_all() {
     // The same noise, ears and wall 25 m away as for the echo, but the wall mirrors nothing and scatters
     // everything: what it sends goes to the space's own answer, 50.5 m late like the echo — then through the
-    // shortest of the answer's own lines, 631 samples more.
+    // shortest of the answer's lines it feeds. Coming from −X, it feeds the four of the corners on that side,
+    // the shortest of which is the second, 809 samples.
     let heard = |reach: f64, wall: bool| {
         let surfaces = if wall {
             r#", "osageSound": {"surfaces": [{"id": "wall", "acoustic": "matte", "occludes": false,
@@ -593,11 +601,12 @@ fn what_a_wall_scatters_is_answered_when_its_way_says_or_not_at_all() {
                  "emitters": [{{"id": "sound", "voice": "noise", "maxDistanceM": {reach}}}]}}}}}}"#
         );
         let scene = scene(&[world(2, surfaces), ears.to_owned(), hiss].join(","), 1.0);
-        from_the_first_sample(scene, Quality::REFERENCE, 0.25)
+        // One ear: the line it comes by first reaches the two in opposite signs.
+        ears_from_the_first_sample(scene, Quality::REFERENCE, 0.25).0
     };
     let (alone, scattered) = (heard(60.0, false), heard(60.0, true));
     let first = alone.iter().zip(&scattered).position(|(a, b)| a != b).expect("the wall is answered");
-    assert!((7_067 + 631 - 3..=7_067 + 631 + 2).contains(&first), "the answer starts at sample {first}");
+    assert!((7_067 + 809 - 3..=7_067 + 809 + 2).contains(&first), "the answer starts at sample {first}");
     // An emitter heard from a metre at most is not answered by a wall 25 m away.
     assert_eq!(heard(1.0, true), heard(1.0, false));
 }
@@ -1014,4 +1023,96 @@ fn a_mirror_that_sets_off_is_heard_to_when_its_change_arrives() {
     let faster = (343.0 + 50.0) / (343.0 - 50.0) * 1_000.0;
     assert!((before - 1_000.0).abs() < 0.3, "by the mirror before 1.408 s: {before} Hz");
     assert!((after - faster).abs() < 0.5, "by the mirror after: {after} Hz for {faster}");
+}
+
+#[test]
+fn what_two_walls_scatter_of_a_tone_neither_adds_nor_cancels_as_one() {
+    // A 500 Hz tone between two walls that scatter everything, 25 m to the left and to the right, going
+    // 0.25 m/s towards one: the two copies' ways part by half a metre a second, a wavelength in 1.4 s. Fed
+    // to the space's answer as one, they would add and cancel in turn, slower than the answer forgets
+    // (20 dB apart, as they were). Fed to lines of their own, the answer to both is the answers to each,
+    // their powers added, and it swings far less.
+    let heard = |west: bool, east: bool, reverb: bool| {
+        let wall = |id: &str, x: f64| {
+            format!(
+                r#"{{"id": "{id}", "acoustic": "matte", "occludes": false,
+                     "quadM": [[{x}, -40, -40], [{x}, -40, 40], [{x}, 40, 40], [{x}, 40, -40]]}}"#
+            )
+        };
+        let walls: Vec<String> = [(west, wall("west", -25.0)), (east, wall("east", 25.0))]
+            .into_iter()
+            .filter_map(|(there, wall)| there.then_some(wall))
+            .collect();
+        let walls = format!(r#", "osageSound": {{"surfaces": [{}]}}"#, walls.join(","));
+        let ears = r#"{"translation": [0, 0, 3], "extras": {"osage": {"id": "ears"}}}"#;
+        let tone = r#"{"extras": {"osage": {"id": "tone"}, "osageSound": {
+             "motion": {"alongM": [1, 0, 0], "atS": 0, "speedKmh": 0.9},
+             "emitters": [{"id": "sound", "voice": "tone", "params": {"hz": 500}}]}}}"#;
+        let quality = Quality { reverb, ..Quality::REFERENCE };
+        let options = Options { quality, listening: Listening::Speakers, ..Options::default() };
+        render(&scene(&[world(2, &walls), ears.to_owned(), tone.to_owned()].join(","), 6.0), &options, 6.0)
+    };
+    // The answer's power, both ears, a tenth of a second at a time, once it has built up.
+    let answer = |west: bool, east: bool| {
+        let (wet, dry) = (heard(west, east, true), heard(west, east, false));
+        let less = |ear: &[f32], bare: &[f32]| ear.iter().zip(bare).map(|(a, b)| a - b).collect::<Vec<f32>>();
+        let (left, right) = (less(&wet.left, &dry.left), less(&wet.right, &dry.right));
+        (10..60)
+            .map(|k| {
+                let (from, to) = (f64::from(k) * 0.1, f64::from(k + 1) * 0.1);
+                rms(part(&left, from, to)).powi(2) + rms(part(&right, from, to)).powi(2)
+            })
+            .collect::<Vec<f64>>()
+    };
+    let both = answer(true, true);
+    let db = |power: f64| 10.0 * power.log10();
+    let (low, high) = both.iter().fold((f64::MAX, f64::MIN), |(lo, hi), &p| (lo.min(db(p)), hi.max(db(p))));
+    assert!(high - low < 10.0, "the answer swings by {:.1} dB", high - low);
+    let mean = |powers: &[f64]| powers.iter().sum::<f64>() / powers.len() as f64;
+    let (one, other) = (mean(&answer(true, false)), mean(&answer(false, true)));
+    let added = db(mean(&both)) - db(one + other);
+    assert!(added.abs() < 1.0, "{added:.2} dB against the two powers added");
+}
+
+#[test]
+fn a_wall_that_sees_what_is_hidden_scatters_it_as_if_nothing_hid_it() {
+    // A noise in a box 2 m wide open on one side only, its back to the ears 14 m off; a wall 6 m beyond the
+    // open side scatters everything, and sees both the noise and the ears. Nothing of the noise reaches the
+    // ears but by that wall: the space answers it as it would were the box not there.
+    let heard = |boxed: bool, reverb: bool| {
+        let quad = |id: &str, corners: [[f64; 3]; 4]| {
+            let corners: Vec<String> = corners.iter().map(|c| format!("[{}, {}, {}]", c[0], c[1], c[2])).collect();
+            format!(r#"{{"id": "{id}", "acoustic": "hard", "reflects": false, "quadM": [{}]}}"#, corners.join(", "))
+        };
+        let mut surfaces = vec![
+            r#"{"id": "wall", "acoustic": "matte", "occludes": false,
+                "quadM": [[6, -40, -40], [6, -40, 40], [6, 40, 40], [6, 40, -40]]}"#
+                .to_owned(),
+        ];
+        if boxed {
+            surfaces.extend([
+                // The back, larger than the box: no edge of it meets another face's.
+                quad("back", [[-1.0, -2.0, -13.0], [-1.0, 2.0, -13.0], [-1.0, 2.0, -7.0], [-1.0, -2.0, -7.0]]),
+                quad("north", [[-1.0, -1.0, -8.0], [1.0, -1.0, -8.0], [1.0, 1.0, -8.0], [-1.0, 1.0, -8.0]]),
+                quad("south", [[-1.0, -1.0, -12.0], [1.0, -1.0, -12.0], [1.0, 1.0, -12.0], [-1.0, 1.0, -12.0]]),
+                quad("top", [[-1.0, 1.0, -12.0], [1.0, 1.0, -12.0], [1.0, 1.0, -8.0], [-1.0, 1.0, -8.0]]),
+                quad("bottom", [[-1.0, -1.0, -12.0], [1.0, -1.0, -12.0], [1.0, -1.0, -8.0], [-1.0, -1.0, -8.0]]),
+            ]);
+        }
+        let surfaces = format!(r#", "osageSound": {{"surfaces": [{}]}}"#, surfaces.join(","));
+        let ears = r#"{"translation": [-10, 0, 0], "extras": {"osage": {"id": "ears"}}}"#;
+        let hiss = r#"{"translation": [0, 0, -10], "extras": {"osage": {"id": "hiss"}, "osageSound": {
+             "emitters": [{"id": "sound", "voice": "noise"}]}}}"#;
+        let quality = Quality { reverb, ..Quality::REFERENCE };
+        let options = Options { quality, listening: Listening::Speakers, ..Options::default() };
+        render(&scene(&[world(2, &surfaces), ears.to_owned(), hiss.to_owned()].join(","), 1.0), &options, 1.0)
+    };
+    let hidden = heard(true, false);
+    assert_eq!(hidden.peak(), 0.0, "the box hides the noise");
+    let answer = |boxed: bool| {
+        let (wet, dry) = (heard(boxed, true), heard(boxed, false));
+        rms(&wet.left.iter().zip(&dry.left).map(|(a, b)| a - b).collect::<Vec<f32>>())
+    };
+    let (boxed, open) = (answer(true), answer(false));
+    assert!(open > 1e-4 && (boxed / open - 1.0).abs() < 1e-3, "{boxed} against {open}");
 }
