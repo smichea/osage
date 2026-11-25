@@ -4,6 +4,7 @@
 //! Server-owned walkers following street patrols. Each accepted velocity is visible
 //! to the next decision in the same fixed tick.
 mod neighbours;
+mod refuge;
 
 use super::{
     Grid, Ids, Striding, core, proto,
@@ -12,6 +13,7 @@ use super::{
 use bevy::prelude::*;
 use neighbours::Neighbours;
 use osage_world_module_api::{Discrete, EntityIds, Replicated, builtin};
+use refuge::Refuge;
 
 #[derive(Component)]
 pub(super) struct Patrol {
@@ -22,11 +24,23 @@ pub(super) struct Patrol {
     velocity: Vec2,
     still_seconds: f32,
     yield_remaining: f32,
+    refuge: Option<Refuge>,
+    passages_yielded: u64,
 }
 
 impl Patrol {
     fn new(points: Vec<Vec3>, ends: [Vec2; 2]) -> Self {
-        Self { points, ends, next: 1, forward: true, velocity: Vec2::ZERO, still_seconds: 0., yield_remaining: 0. }
+        Self {
+            points,
+            ends,
+            next: 1,
+            forward: true,
+            velocity: Vec2::ZERO,
+            still_seconds: 0.,
+            yield_remaining: 0.,
+            refuge: None,
+            passages_yielded: 0,
+        }
     }
 
     fn record_step(&mut self, velocity: Vec2, dt: f32) {
@@ -36,7 +50,7 @@ impl Patrol {
         } else if velocity.length_squared() < 0.01 {
             self.still_seconds += dt;
             if self.still_seconds >= 0.75 {
-                self.yield_remaining = 0.6;
+                self.yield_remaining = YIELD_SECONDS;
                 self.still_seconds = 0.;
             }
         } else {
@@ -94,6 +108,7 @@ fn crossing(walk: &Walk) -> Option<[[Vec3; 2]; 2]> {
 }
 
 const ARRIVAL: f32 = 0.05;
+const YIELD_SECONDS: f32 = 0.6;
 
 /// If a corner clips the body at the requested endpoint, find a standing
 /// position on that same cell within the existing patrol arrival tolerance.
@@ -249,6 +264,15 @@ fn choose(
     best
 }
 
+struct Resident {
+    id: u64,
+    entity: Entity,
+    motion: Motion,
+    towards: Vec2,
+    passages_yielded: u64,
+    in_refuge: bool,
+}
+
 type Walkers<'a> = (Entity, &'a Replicated, &'a mut Transform, &'a mut Patrol);
 
 pub(super) fn advance(
@@ -267,16 +291,23 @@ pub(super) fn advance(
         .collect();
     let mut order: Vec<_> = people
         .iter()
-        .map(|(e, id, p, route)| (id.0, e, Motion { at: p.translation, velocity: route.velocity, undecided: true }))
+        .map(|(entity, id, p, route)| Resident {
+            id: id.0,
+            entity,
+            motion: Motion { at: p.translation, velocity: route.velocity, undecided: true },
+            towards: route.points[route.next].xz() - p.translation.xz(),
+            passages_yielded: route.passages_yielded,
+            in_refuge: route.refuge.is_some(),
+        })
         .collect();
-    order.sort_unstable_by_key(|r| r.0);
+    order.sort_unstable_by_key(|r| r.id);
     let first = neighbours.len();
-    neighbours.extend(order.iter().map(|r| r.2));
+    neighbours.extend(order.iter().map(|r| r.motion));
     let mut search = Neighbours::new(&neighbours);
-    for (i, (_, entity, _)) in order.into_iter().enumerate() {
-        let (_, _, mut transform, mut patrol) = people.get_mut(entity).unwrap();
+    for (i, resident) in order.iter().enumerate() {
+        let (_, _, mut transform, mut patrol) = people.get_mut(resident.entity).unwrap();
         let from = transform.translation;
-        let destination = patrol.destination(&grid.0, from);
+        let destination = patrol.traffic_goal(&grid.0, from, &order, i);
         let index = first + i;
         let measure = |v| search.measure(&neighbours, index, v, dt);
         let to = choose(&grid.0, from, destination, patrol.velocity, measure, dt, patrol.yield_remaining > 0.);

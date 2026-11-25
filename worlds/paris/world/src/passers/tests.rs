@@ -542,3 +542,5 @@ fn cross_plaza(ends: Vec<[Vec2; 2]>) {
     }
     panic!("incomplete plaza crossings: {visits:?}");
 }
+
+mod single_file;

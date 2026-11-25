@@ -1693,3 +1693,7 @@ Score the path already committed by each earlier walker and the standing positio
 ## D-239 — Let a blocked pedestrian yield space at a busy destination
 
 When a passer remains almost stationary for three quarters of a second, offer a sideways or retreating step for up to six tenths of a second. Use the same ground and body clearance checks as a normal step. Take the direct step whenever it clears. The offset-destination plaza checks that walkers sharing a small arrival area can finish both legs of their routes. [Movement and oracle](../knowledge/algorithms/pedestrian-encounters.md)
+
+## D-240 — Let an opposing patrol retreat to a supported passing place
+
+A pedestrian stalled in single-file traffic can follow the walk grid back to a place where its body fits beside the lane. It waits for the oncoming resident and then resumes the same patrol. Give priority to the resident that has yielded more often, using replicated IDs to resolve ties. Terrain support and simultaneous body clearance constrain the retreat and the return. [Algorithm and limits](../knowledge/algorithms/pedestrian-encounters.md) · [Street replays](../worlds/paris/world/src/passers/tests/single_file.rs)
