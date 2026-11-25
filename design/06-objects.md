@@ -1,8 +1,10 @@
-# 06 — Objects: one tree, two geometries
+# 06 — Objects and their common model tree
 
-Date: 2026-11-22 · Status: **proposal** — nothing of it is built · From: the maintainer, after the Paris world's trials of probes and of the street's meshes round the walker ([research 10](../research/10-incoming-light.md), [05 — regions](05-regions-and-light.md))
+Date: 2026-11-22 · Status: **in use in the city object profile**, with wider adoption proposed · From: the maintainer, after the Paris world's trials of probes and of the street's meshes round the walker ([research 10](../research/10-incoming-light.md), [05 — regions](05-regions-and-light.md))
 
-Today nothing in osage is an object. The Paris street is one model for the eye and a grid of heights for the feet; the kart world has shapes of its own to collide with. This note says what an object would be, so that the same thing can be stood on, knocked over, broken, drawn near and drawn far, and handed from one server to another.
+The city object profile has one tree for physical, visual and acoustic geometry. The Paris street also has an older height grid and the kart world has its own collision shapes. Breaking an object and handing it between servers remain design work.
+
+The static file profile now adds independently authored acoustic surfaces to the same tree. It connects the three channels to the native city reader and tests conversion on an original slab. [Object file format](08-object-format.md)
 
 ## 1. The two geometries
 
@@ -27,6 +29,10 @@ The tree is then the levels of detail, on both sides:
 - **From near**, go down: each window, each sill.
 
 A node's own geometry stands for all that is under it. Drawing or colliding takes a cut through the tree — for each branch, the node where one stops — and the cut may differ for the eye and for the physics, and from one player to another.
+
+### Identity in the implementation
+
+A node is a placed part. Its parent, children and local transform define its place in the model. Two nodes can use the same mesh. At run time each drawn instance, physical surface and sound binding points back to the owning node. A ray or first contact can therefore return the exact path as a sequence of IDs, including IDs which themselves contain a slash. A visible detail switch preserves the identities of the other channels. A tile or a spatial search tree may split the geometry for fast queries. Each fragment still belongs to its source node. A parent which has no geometry remains in the model and in the city's Bevy entity hierarchy. A parent with an explicitly authored `subtreeProxy` can substitute for its entire branch at a chosen level independently for the eye, contact and sound. [Decision D-149](decisions.md#d-149--keep-the-model-tree-through-runtime-queries) · [File format](08-object-format.md)
 
 ## 3. What a coarse node carries
 

@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- SPDX-FileCopyrightText: The osage contributors -->
+<!-- SPDX-License-Identifier: LicenseRef-osage-AGPL-3.0-or-later-with-exceptions -->
+<Drawable>
+  <Name>signal_panel</Name>
+  <BoundingSphereCenter x="0" y="0" z="1"/><BoundingSphereRadius value="1.42"/>
+  <BoundingBoxMin x="-1" y="0" z="0"/><BoundingBoxMax x="1" y="0" z="2"/>
+  <LodDistHigh value="25"/><LodDistMed value="50"/><LodDistLow value="50"/><LodDistVlow value="50"/>
+  <ShaderGroup><Shaders>
+    <Item><Name>panel_near</Name><FileName>panel_near.sps</FileName><RenderBucket value="0"/><Parameters>
+      <Item name="DiffuseSampler" type="Texture"><Name>Panel_Stripes</Name></Item>
+      <Item name="SignalPulse" type="Vector" x="1" y="0" z="0" w="0"/>
+    </Parameters></Item>
+    <Item><Name>panel_far</Name><FileName>panel_far.sps</FileName><RenderBucket value="0"/><Parameters>
+      <Item name="DiffuseSampler" type="Texture"><Name>PANEL_STRIPES</Name></Item>
+    </Parameters></Item>
+  </Shaders></ShaderGroup>
+  <DrawableModelsHigh><Item><BoneIndex value="0"/><HasSkin value="0"/><Geometries><Item>
+    <ShaderIndex value="0"/><BoundingBoxMin x="-1" y="0" z="0"/><BoundingBoxMax x="1" y="0" z="2"/>
+    <VertexBuffer><Flags value="0"/><Layout type="GTAV1"><Position/><Normal/><Colour0/><Colour1/><TexCoord0/></Layout><Data>
+      -1 0 0   0 -1 0   192 255 224 0    11 12 13 14   0 1
+       1 0 0   0 -1 0   208 255 224 32   21 22 23 24   1 1
+       1 0 2   0 -1 0   224 255 224 64   31 32 33 34   1 0
+      -1 0 2   0 -1 0   240 255 224 96   41 42 43 44   0 0
+    </Data></VertexBuffer><IndexBuffer><Data>0 1 2 0 2 3</Data></IndexBuffer>
+  </Item></Geometries></Item></DrawableModelsHigh>
+  <DrawableModelsMedium><Item><BoneIndex value="0"/><HasSkin value="0"/><Geometries><Item>
+    <ShaderIndex value="1"/><BoundingBoxMin x="-1" y="0" z="0"/><BoundingBoxMax x="1" y="0" z="2"/>
+    <VertexBuffer><Flags value="0"/><Layout type="GTAV1"><Position/><Normal/><Colour0/><Colour1/><TexCoord0/></Layout><Data>
+      -1 0 0   0 -1 0   192 255 224 255    51 52 53 54   0 1
+       1 0 0   0 -1 0   208 255 224 255    61 62 63 64   1 1
+       0 0 2   0 -1 0   224 255 224 255    71 72 73 74   0.5 0
+    </Data></VertexBuffer><IndexBuffer><Data>0 1 2</Data></IndexBuffer>
+  </Item></Geometries></Item></DrawableModelsMedium>
+</Drawable>

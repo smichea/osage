@@ -49,3 +49,10 @@ path = ["tools/crash-relay/Procfile"]
 precedence = "aggregate"
 SPDX-FileCopyrightText = "The osage contributors"
 SPDX-License-Identifier = "MIT OR Apache-2.0"
+
+# Self-contained geometry and the replay authored for the city experiment.
+[[annotations]]
+path = ["worlds/ville-paris/fixtures/bir-hakeim.glb", "worlds/ville-paris/fixtures/descent.json", "worlds/ville-paris/fixtures/deck-edge.json", "worlds/ville-paris/fixtures/bonnet.json", "worlds/ville-paris/fixtures/lift.json"]
+precedence = "aggregate"
+SPDX-FileCopyrightText = "The osage contributors"
+SPDX-License-Identifier = "MIT OR Apache-2.0"

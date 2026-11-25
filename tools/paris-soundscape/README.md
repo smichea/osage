@@ -111,8 +111,8 @@ python3 tools/paris-soundscape/bench/field_opus.py                    # its bit 
 The examples made on 2026-11-24 (x86-64 Linux, rustc 1.99, seed 6):
 
 ```
-bir-hakeim-headphones.wav  sha256 6d212ff6dc3fffdd52b2f1cf08d82c80d0b389cdfc96614723f291987039faf5
-bir-hakeim-speakers.wav    sha256 ae40a9a04f74a43240787bd7c4375d4165bb6169c3164a5cebc6321491ae1a33
+bir-hakeim-headphones.wav  sha256 93f25c24e78c9cbfa2cb618e059ef76826d3dc722c1e9042499f426c1b077b32
+bir-hakeim-speakers.wav    sha256 a3104801ea90e5943a3e161e007d39991d25004d37e355808702c570e9a98b58
 ```
 
 The digests hold for one machine and compiler: the voices use the platform's own sine and exponential.

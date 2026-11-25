@@ -15914,3 +15914,21 @@ licence = "CC-BY-4.0"
 author = "Amazon Lumberyard (NVIDIA ORCA), derived by the osage contributors"
 source = "https://developer.nvidia.com/orca/amazon-lumberyard-bistro"
 used_by = "worlds/paris: the light coming into the walkers' blocks (D-136)"
+
+[[asset]]
+path = "worlds/ville-paris/fixtures/bir-hakeim.glb"
+made_by = "python3 worlds/ville-paris/fixtures/make_sector.py"
+sha256 = "248bd55a89a30311a5aa023b807ea83e83d4f38add94d785c6b0202371135d0a"
+licence = "MIT OR Apache-2.0"
+author = "The osage contributors"
+source = "worlds/ville-paris/fixtures/make_sector.py"
+used_by = "ville-paris city replay, native picture and landing surfaces"
+
+[[asset]]
+path = "assets/khronos/Fox.glb"
+url = "https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Assets/e124e8d8d7330a5372bc2b4d00d39a4a9d7997ea/Models/Fox/glTF-Binary/Fox.glb"
+sha256 = "d97044e701822bac5a62696459b27d7b375aada5de8574ed4362edbba94771f7"
+licence = "CC0-1.0 AND CC-BY-4.0"
+author = "PixelMannen (model, CC0), tomkranis (rig and animation, CC BY 4.0), AsoboStudio and scurest (glTF conversion, CC BY 4.0)"
+source = "https://github.com/KhronosGroup/glTF-Sample-Assets/blob/e124e8d8d7330a5372bc2b4d00d39a4a9d7997ea/Models/Fox/README.md"
+used_by = "ville-paris: animated quadruped foot contact replay"

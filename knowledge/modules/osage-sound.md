@@ -50,7 +50,7 @@ Order: the engine sorts the scene's emitters, surfaces and touches by node path 
 | low | 2 samples (linear) | folded into the straight way's level | no | no | 16 | every 4 blocks | 4 |
 | medium | 4 samples (Lagrange) | followed | no | yes | 48 | every 2 | 6 |
 | high | 4 samples | followed, checked for what hides them | yes | yes | 128 | every block | 8 |
-| reference | 8 samples, windowed sinc | the same | yes | yes | all | every block | 16 |
+| reference | [8 samples, seventh-order Lagrange](/algorithms/moving-sound-delay.md) | the same | yes | yes | all | every block | 16 |
 
 # Interfaces
 

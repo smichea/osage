@@ -2,6 +2,7 @@
 node_modules/
 dist/
 bench/out/
+/studies/
 assets/*
 !assets/manifest.toml
 

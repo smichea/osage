@@ -1,0 +1,257 @@
+{
+  "SPDX-FileCopyrightText": "The osage contributors",
+  "SPDX-License-Identifier": "CC-BY-SA-4.0",
+  "format": "ville-paris/road-contact-flags/1",
+  "source_sha256": "248bd55a89a30311a5aa023b807ea83e83d4f38add94d785c6b0202371135d0a",
+  "diagnostic_binary_sha256": "7a3a3cd9443ab13047789d73c42d105a95f9afdadec7bccf3dced08d08114c8f",
+  "full_trace_sha256": "1b4b55e834a2d9831350fcf9736bab0bd021b2cd89ac288d47d822911aa42624",
+  "instrumentation_sha256": "7281ac6e7412ee20fd63131a8a85f6ae3d562898bca35f995aa4759e0c839a30",
+  "rapier": "0.36.1",
+  "tick_hz": 60,
+  "settings": {
+    "plain": "ColliderBuilder::trimesh",
+    "fixed": "TriMeshFlags::FIX_INTERNAL_EDGES (also merges duplicate vertices)",
+    "original-face": "controlled copy of the paging index with only the central road collider replaced by its original unsplit geometry, outside the safety catalogue; explicit unprotected world"
+  },
+  "definitions": {
+    "tracked": "pre-solver narrow-phase distance from Rapier manifold.points. A positive value means a separated candidate.",
+    "solver": "solver contacts, with post-step world anchor gap and actual stored normal impulse",
+    "crossing": "first sampled capsule bottom <= face y at the end of a step, using orientation and true segment dimensions. Continuous crossing within steps is not measured."
+  },
+  "first_contacts": {
+    "plain__plain": {
+      "native_tick": 65,
+      "tiled_tick": 65,
+      "point_distance_m": 3.889674568650034e-06,
+      "impulse_difference_N_s": -0.008739999999988868
+    },
+    "plain__fixed": {
+      "native_tick": 65,
+      "tiled_tick": 66,
+      "point_distance_m": 0.10947450336487556,
+      "impulse_difference_N_s": 78.45392000000004
+    },
+    "fixed__plain": {
+      "native_tick": 66,
+      "tiled_tick": 65,
+      "point_distance_m": 0.10947764573083514,
+      "impulse_difference_N_s": -78.46266000000003
+    },
+    "fixed__fixed": {
+      "native_tick": 66,
+      "tiled_tick": 66,
+      "point_distance_m": 0.0,
+      "impulse_difference_N_s": 0.0
+    }
+  },
+  "first_sampled_crossings": {
+    "native-plain": {
+      "first_solver_contact_with_positive_impulse_tick": 65,
+      "first_sampled_capsule_bottom_at_or_below_face_tick": 83,
+      "previous_gap_m": 0.004596793246998132,
+      "crossing_gap_m": -0.0020610547731960693,
+      "support_face_y_m": 8.0
+    },
+    "native-fixed": {
+      "first_solver_contact_with_positive_impulse_tick": 66,
+      "first_sampled_capsule_bottom_at_or_below_face_tick": 77,
+      "previous_gap_m": 0.07727728170291215,
+      "crossing_gap_m": -0.0004429238711507466,
+      "support_face_y_m": 8.0
+    },
+    "tiled-plain": {
+      "first_solver_contact_with_positive_impulse_tick": 65,
+      "first_sampled_capsule_bottom_at_or_below_face_tick": 83,
+      "previous_gap_m": 0.004534721374511719,
+      "crossing_gap_m": -0.0021352767944335938,
+      "support_face_y_m": 8.0
+    },
+    "tiled-fixed": {
+      "first_solver_contact_with_positive_impulse_tick": 66,
+      "first_sampled_capsule_bottom_at_or_below_face_tick": 77,
+      "previous_gap_m": 0.07727813720703125,
+      "crossing_gap_m": -0.0004420280456542969,
+      "support_face_y_m": 8.0
+    }
+  },
+  "road_fixed_steps": {
+    "native-fixed": [
+      {
+        "tick": 64,
+        "capsule_bottom_gap_m": 0.1974000000000018,
+        "vertical_velocity_m_s": -10.46402,
+        "minimum_narrow_phase_gap_m": null,
+        "normal_impulse_N_s": 0,
+        "solver": []
+      },
+      {
+        "tick": 65,
+        "capsule_bottom_gap_m": 0.021297000000000565,
+        "vertical_velocity_m_s": -10.6275215,
+        "minimum_narrow_phase_gap_m": 0.19739982,
+        "normal_impulse_N_s": 0,
+        "solver": []
+      },
+      {
+        "tick": 66,
+        "capsule_bottom_gap_m": 0.011292929564659104,
+        "vertical_velocity_m_s": -0.12262595,
+        "minimum_narrow_phase_gap_m": 0.021296233,
+        "normal_impulse_N_s": 800.12976,
+        "solver": [
+          {
+            "surface": "road",
+            "subshape1": 3,
+            "subshape2": 0,
+            "contact": 0,
+            "point": [
+              0.029741198,
+              8.0,
+              -0.051030964
+            ],
+            "normal": [
+              0.0,
+              1.0,
+              0.0
+            ],
+            "postsolve_anchor_gap_m": 0.016962051,
+            "normal_impulse_N_s": 800.12976
+          }
+        ]
+      },
+      {
+        "tick": 67,
+        "capsule_bottom_gap_m": 0.04351575492734305,
+        "vertical_velocity_m_s": -0.28612596,
+        "minimum_narrow_phase_gap_m": 0.011292189,
+        "normal_impulse_N_s": 0.0,
+        "solver": [
+          {
+            "surface": "road",
+            "subshape1": 3,
+            "subshape2": 0,
+            "contact": 0,
+            "point": [
+              0.05972191,
+              8.0,
+              -0.10242647
+            ],
+            "normal": [
+              0.0,
+              1.0,
+              0.0
+            ],
+            "postsolve_anchor_gap_m": 0.049188614,
+            "normal_impulse_N_s": 0.0
+          }
+        ]
+      }
+    ],
+    "tiled-fixed": [
+      {
+        "tick": 64,
+        "capsule_bottom_gap_m": 0.19740009307861328,
+        "vertical_velocity_m_s": -10.46402,
+        "minimum_narrow_phase_gap_m": null,
+        "normal_impulse_N_s": 0,
+        "solver": []
+      },
+      {
+        "tick": 65,
+        "capsule_bottom_gap_m": 0.02129650115966797,
+        "vertical_velocity_m_s": -10.6275215,
+        "minimum_narrow_phase_gap_m": 0.19740018,
+        "normal_impulse_N_s": 0,
+        "solver": []
+      },
+      {
+        "tick": 66,
+        "capsule_bottom_gap_m": 0.011292457580566406,
+        "vertical_velocity_m_s": -0.12262595,
+        "minimum_narrow_phase_gap_m": 0.02129659,
+        "normal_impulse_N_s": 800.12976,
+        "solver": [
+          {
+            "surface": "local collider",
+            "subshape1": 0,
+            "subshape2": 7,
+            "contact": 0,
+            "point": [
+              0.029741198,
+              8.0,
+              -0.051030964
+            ],
+            "normal": [
+              -0.0,
+              1.0,
+              -0.0
+            ],
+            "postsolve_anchor_gap_m": 0.016962051,
+            "normal_impulse_N_s": 800.12976
+          }
+        ]
+      },
+      {
+        "tick": 67,
+        "capsule_bottom_gap_m": 0.04351520538330078,
+        "vertical_velocity_m_s": -0.28612596,
+        "minimum_narrow_phase_gap_m": 0.01129058,
+        "normal_impulse_N_s": 0.0,
+        "solver": [
+          {
+            "surface": "local collider",
+            "subshape1": 0,
+            "subshape2": 7,
+            "contact": 0,
+            "point": [
+              0.059721828,
+              7.9999995,
+              -0.10242641
+            ],
+            "normal": [
+              -0.0,
+              0.9999999,
+              1.4901161e-08
+            ],
+            "postsolve_anchor_gap_m": 0.049187176,
+            "normal_impulse_N_s": 0.0
+          }
+        ]
+      }
+    ]
+  },
+  "normal_on_horizontal_face": {
+    "native-plain": {
+      "xyz": [
+        -0.032393374,
+        0.94984764,
+        0.31103104
+      ],
+      "angle_from_up_degrees": 18.22280866552189
+    },
+    "native-fixed": {
+      "xyz": [
+        0.0,
+        1.0,
+        0.0
+      ],
+      "angle_from_up_degrees": 0.0
+    },
+    "tiled-plain": {
+      "xyz": [
+        -0.03239334,
+        0.94984734,
+        0.31103164
+      ],
+      "angle_from_up_degrees": 18.222863631913615
+    },
+    "tiled-fixed": {
+      "xyz": [
+        -0.0,
+        1.0,
+        -0.0
+      ],
+      "angle_from_up_degrees": 0.0
+    }
+  }
+}

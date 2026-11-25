@@ -1,0 +1,144 @@
+{
+ "asset": {
+  "version": "2.0",
+  "generator": "osage paris-soundscape: scenes/make_controlled.py",
+  "extras": {
+   "osageObject": {
+    "version": 1,
+    "id": "controlled-far",
+    "collisionMaterials": {
+     "ground": {
+      "friction": 0.8,
+      "restitution": 0.0
+     },
+     "plate": {
+      "friction": 0.5,
+      "restitution": 0.0
+     },
+     "wheel": {
+      "friction": 1.0,
+      "restitution": 0.0
+     }
+    },
+    "acousticMaterials": {
+     "hard": {
+      "absorption": [
+       0.0,
+       0.0,
+       0.0
+      ],
+      "transmission": [
+       0.0,
+       0.0,
+       0.0
+      ],
+      "scattering": 0.0
+     }
+    }
+   },
+   "osageSound": {
+    "version": 0,
+    "contactSounds": {
+     "ground": {
+      "hardness": 0.5
+     },
+     "plate": {
+      "params": {
+       "tone": 400.0,
+       "ring": 0.3,
+       "shape": 1,
+       "scuff": 0.0
+      },
+      "hardness": 1.0
+     },
+     "wheel": {
+      "hardness": 1.0
+     }
+    }
+   }
+  }
+ },
+ "scene": 0,
+ "scenes": [
+  {
+   "nodes": [
+    0
+   ],
+   "extras": {
+    "osageSound": {
+     "seconds": 6.0,
+     "seed": 6,
+     "loudnessLufs": -23.0,
+     "listener": {
+      "node": [
+       "world",
+       "ears"
+      ]
+     },
+     "reverb": {
+      "secondsT60": [
+       0.5,
+       0.4,
+       0.3
+      ],
+      "gainDb": 0.0
+     },
+     "air": {
+      "celsius": 20.0,
+      "humidityPercent": 50.0
+     }
+    }
+   }
+  }
+ ],
+ "nodes": [
+  {
+   "children": [
+    1,
+    2
+   ],
+   "extras": {
+    "osage": {
+     "id": "world"
+    }
+   }
+  },
+  {
+   "translation": [
+    0,
+    1.6,
+    0
+   ],
+   "extras": {
+    "osage": {
+     "id": "ears"
+    }
+   }
+  },
+  {
+   "translation": [
+    0,
+    1.6,
+    -300
+   ],
+   "extras": {
+    "osage": {
+     "id": "beacon"
+    },
+    "osageSound": {
+     "emitters": [
+      {
+       "id": "sound",
+       "voice": "tone",
+       "maxDistanceM": 600,
+       "reflections": true,
+       "params": {
+        "hz": 1000.0
+       }
+      }
+     ]
+    }
+   }
+  }
+ ]
+}

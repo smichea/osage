@@ -164,6 +164,7 @@ pub struct ObjectHeader {
 }
 
 pub struct ObjectProfile {
+    pub foot_rig: Option<super::ObjectFootRig>,
     pub header: ObjectHeader,
     pub roots: Vec<usize>,
     pub nodes: Vec<ObjectNode>,
@@ -351,7 +352,10 @@ impl ObjectProfile {
             rig.validate(&ids, &header.collision_materials)?;
             rig.resolve(&nodes)?;
         }
-        Ok(Some(Self { header, roots, nodes }))
+        let foot_rig = metadata::<super::foot_rig::FootBinding>(&doc.as_json().asset.extras, "osageFootRig")?
+            .map(|binding| binding.resolve(&nodes))
+            .transpose()?;
+        Ok(Some(Self { header, roots, nodes, foot_rig }))
     }
 }
 

@@ -523,6 +523,26 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2af50177e190e07a26ab74f8b1efbfe2ef87da2116221318cb1c2e82baf7de06"
 
 [[package]]
+name = "basis-universal"
+version = "0.3.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "555fb05709f4e12fa2f6b93a480facf167eb0ecb2558ba41f610f588e77cbd14"
+dependencies = [
+ "basis-universal-sys",
+ "bitflags 1.3.2",
+ "lazy_static",
+]
+
+[[package]]
+name = "basis-universal-sys"
+version = "0.3.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fd9bde5e9547958fb0e77d79fc7879edcf91d5e0c8e372ef8959916cf35e8506"
+dependencies = [
+ "cc",
+]
+
+[[package]]
 name = "bevy"
 version = "0.20.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5480,6 +5500,37 @@ dependencies = [
 ]
 
 [[package]]
+name = "osage-ville-paris"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "base64 0.22.1",
+ "basis-universal",
+ "bevy",
+ "flate2",
+ "gltf",
+ "image",
+ "ktx2",
+ "osage-dynamics",
+ "osage-humans",
+ "osage-objects",
+ "osage-render",
+ "osage-sound",
+ "osage-sound-analysis",
+ "osage-sound-voices",
+ "paris-soundscape",
+ "rapier3d",
+ "rodio",
+ "ruzstd",
+ "serde",
+ "serde_json",
+ "sha2 0.11.1",
+ "tempfile",
+ "ureq",
+ "zstd",
+]
+
+[[package]]
 name = "osage-voice"
 version = "0.1.0"
 dependencies = [
@@ -7227,6 +7278,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "32497e9a4c7b38532efcdebeef879707aa9f794296a4f0244f6f69e9bc8574bd"
 dependencies = [
  "fastrand",
+ "getrandom 0.4.3",
  "once_cell",
  "rustix 1.1.6",
  "windows-sys 0.61.2",
@@ -8910,6 +8962,34 @@ name = "zmij"
 version = "1.0.23"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "29666d0abbfad1e3dc4dcf6144730dd3a3ab225bbbdac83319345b1b44ccfc1b"
+
+[[package]]
+name = "zstd"
+version = "0.13.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "50adf04cf3ec914b0b9905c9dde90c80fe74bfd701e331fc80a39c512c525278"
+dependencies = [
+ "zstd-safe",
+]
+
+[[package]]
+name = "zstd-safe"
+version = "7.4.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "498d94ad68720c89b4fbe41b9090850651e68cb2dd9210ce7ffbff3a94653819"
+dependencies = [
+ "zstd-sys",
+]
+
+[[package]]
+name = "zstd-sys"
+version = "2.1.3+zstd.1.5.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f729a06d0257428fd9d997ac8db7e1407bd0262ab016b085b36bc52957c0052d"
+dependencies = [
+ "cc",
+ "pkg-config",
+]
 
 [[package]]
 name = "zune-core"

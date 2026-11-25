@@ -16,7 +16,7 @@ sources:
   - id: iso9613
     resource: https://sengpielaudio.com/AirdampingFormula.htm
     title: ISO 9613-1:1993, the air's absorption, as reproduced
-generated: { by: "claude-code/claude-opus-5-5", at: "2026-11-24T09:00:00Z" }
+generated: { by: "OpenAI/Codex", at: "2026-11-24T07:10:31Z" }
 ---
 
 # Problem
@@ -39,7 +39,7 @@ At 48 kHz, in blocks of 128 samples.
 
 **Staggering.** Which block an emitter's ways are found in is `(block + turn) mod every = 0`, where `turn` is a hash of the scene's seed and the emitter's name (its node path and identifier): the searches spread over the blocks, and an emitter's schedule does not depend on which other emitters exist.
 
-**Reading.** The read point is held as a fixed-point number of 32 integer and 32 fraction bits, advanced by `(1 − slope)·2³²` per sample, with `slope = (delay_goal − delay_now)/128`: no rounding piles up along a block. It is interpolated from 2 samples (linear), 4 (Lagrange cubic) or 8 (a windowed sinc in 256 phases, Blackman-Harris window), by quality.
+**Reading.** The read point has 32 integer and 32 fractional bits. It advances by `(1 − slope)·2³²` per sample, with `slope = (delay_goal − delay_now)/128`. Low quality uses two-point linear interpolation. Medium and high use four-point cubic Lagrange interpolation. Reference uses eight-point Lagrange interpolation to reduce spectral images during motion (D-186). [Reference reader and moving-tone test](/algorithms/moving-sound-delay.md)
 
 **Shaping.** What is read is split by three one-pole low-passes at 500 Hz, 2 kHz and 6 kHz into four bands, each with its gain; when the four gains are equal (most short ways) one gain is used. Then the air: two one-pole low-passes set where the air has taken 3 dB, `corner = 4 kHz·√(6/loss₄ₖ)` where `loss₄ₖ` is the way's air loss at 4 kHz in dB[^iso9613]; a way on which the air takes less than the quality's threshold is left alone. Then the outer ear's echoes and each ear's delay and shadow, into the mix.
 

@@ -31,6 +31,7 @@ What osage knows about its own modules: their architecture, the algorithms and t
 * [osage-cubes](modules/osage-cubes.md) - Nested cubes of 81, 27, 9 and 3 m around a viewer — its own 3 m cube in 3D, every other a hologram, each level centred on the cube the viewer is in — and which views of those holograms it needs before long.
 * [osage-world-paris](modules/paris-world.md) - The Paris world — a walk on foot in Amazon Lumberyard's Bistro — its walk grid and walkers, the tiles of light coming into each walker's block, and the server that sends them as each walker's place and speed ask.
 * [osage-paris-native](modules/paris-native.md) - The native client of the Paris world — a walk on foot in Bistro, seen from the walker's eyes — drawing the 9 cubes of 3 m around the walker and, beyond them, the light coming into its block, streamed and decoded as it walks.
+* [Ville-Paris](modules/ville-paris.md) - An independent city experiment with a portable scene, fixed-tick descents and measured landings on both levels of Pont de Bir-Hakeim.
 * [osage-humans](modules/osage-humans.md) - People from rigged models of the asset manifest, dressed by the joints that move each part of the body, animated from a library on the same skeleton.
 * [osage-props](modules/osage-props.md) - Models of the asset manifest placed many times, drawn in batches, each set seen up to its own distance.
 * [osage-kart-land](modules/kart-land.md) - The land around the kart circuit as geometry — flat where karts drive, hills beyond, a knoll and a lake inside the loop — for whoever draws, dresses or plants it.
@@ -68,11 +69,51 @@ What osage knows about its own modules: their architecture, the algorithms and t
 
 ## Algorithms
 
-* [Articulated swing envelope](algorithms/articulated-swing-envelope.md)
-* [Continuous approach to a moving lift](algorithms/lift-contact-clock.md)
-* [Load transfer at first contact with a lift](algorithms/lift-contact-response.md)
-* [Horizontal support footprint of an articulated body](algorithms/articulated-support.md)
-* [First impact of a freely translating rigid pair](algorithms/free-pair-impact.md)
+* [Articulated bodies on streamed terrain](algorithms/paged-ragdolls.md) - Reserves terrain for limbs and preserves their solved contacts and poses across page changes.
+* [Loading impact sound geometry](algorithms/paged-impact-sound.md) - Predicts the landing and preserves the receiver clock when acoustic meshes arrive late.
+
+* [Mipmaps for masked surfaces](algorithms/cutout-mipmaps.md) - Keeps the occupied fraction of a texture close to its full-resolution value at smaller levels.
+* [Visible mesh selection by projected error](algorithms/projected-mesh-error.md) - Chooses a mesh for each placed part with a geometric error bound in pixels.
+* [First impact of an articulated body on a supported box](algorithms/supported-box-impact.md) - Predicts the incoming contact with a supported box and refines the solve while the joint tree transfers its load.
+* [First impact of a freely translating rigid pair](algorithms/free-pair-impact.md) - Advances a translating capsule or joint tree to its first contact with a free box.
+* [Reusing contact geometry on a sleeping rig](algorithms/resting-contact-witnesses.md) - Preserves published witnesses while Rapier advances sleeping bodies.
+* [Settling a hanging ragdoll branch](algorithms/hanging-ragdoll-branches.md) - Follows a supported joint tree to damp the relative rotation of a freely hanging limb.
+* [Planting the forefoot during an animated stride](algorithms/forefoot-plant.md) - Holds a low forefoot in place on level ground as the actor advances.
+* [Retaining clip time through a reversed crossfade](algorithms/reversible-loop-crossfade.md) - Reuses a live loop clock when the gait request changes again (D-230).
+* [Choosing a footprint over an entire stance interval](algorithms/cyclic-foot-contact.md) - Plans a contact from a sampled gait loop and its nominal root travel.
+* [Ground clearance of a skinned sole](algorithms/skinned-sole-clearance.md) - Follows foot skin weights and checks overlapping terrain triangles (D-227).
+* [Activating a ragdoll from animation](algorithms/animated-ragdoll.md) - Starts each rigid body with its sampled pose and a velocity consistent with its joint anchors.
+* [Attributing solved contact impulses](algorithms/contact-impulses.md) - Identifies the actor part and surface for a measured reaction and retains ambiguous contact balances.
+* [First contact on a ballistic arc](algorithms/ballistic-impact.md) - Predicts the instant and owner of a capsule contact on fixed geometry.
+
+* [Requesting district LODs from a moving camera](algorithms/paged-lod-requests.md) - Reuses cell visibility and requests the levels of individual source owners.
+* [Publishing district LODs when their data becomes available](algorithms/publishing-paged-lods.md) - Updates affected source owners as the reader verifies and releases models and textures.
+* [Keeping render entities when neighbouring objects change detail](algorithms/stable-lod-placements.md) - Preserves unaffected placements and measures GPU geometry during movement.
+* [Updating the district camera index on page publication](algorithms/resident-visibility-index.md) - Repairs the render lookup only for cells whose geometry changes.
+* [Conservative camera visibility during a district descent](algorithms/district-camera-visibility.md) - Filters the main camera at street level and tracks the GPU work saved.
+* [Sharing district collision pages between observers](algorithms/physical-page-reservations.md) - Protects current readers when a physical reservation is reused.
+* [Sound around a closed convex object](algorithms/exterior-acoustic-edges.md) - Checks both incident surfaces where a sound path follows an exterior corner.
+* [Hearing an impact around city obstacles](algorithms/diffracted-city-contacts.md) - Follows the sound through one or two openings to a moving listener.
+* [Selecting and releasing acoustic meshes for district rays](algorithms/paged-acoustic-rays.md) - Loads acoustic geometry only for candidate bindings and shares it across ordered queries.
+* [Building acoustic triangle indexes on first use](algorithms/acoustic-surface-index.md) - Avoids preparing distant triangles until a resident sound path reaches their surface.
+* [Preparing closed acoustic solids near a sound path](algorithms/acoustic-solid-regions.md) - Finds the neighbouring walls needed to certify a crossed obstacle.
+* [Acoustic paths through authored rooms](algorithms/acoustic-room-portals.md) - Finds a feasible polyline through named apertures and bounds its geometric error.
+* [Direct sound through city surfaces](algorithms/direct-sound-transmission.md) - Connects acoustic geometry, material energy fractions and the actual received waveform.
+* [Reading a moving sound at a fractional delay](algorithms/moving-sound-delay.md) - Measures Doppler pitch and interpolation images in the rendered wave.
+* [Sound from city contacts](algorithms/city-contact-sound.md) - Times an impact at a moving listener and shares the same samples between live and recorded playback.
+* [Lossless storage of the first district scene](algorithms/coarse-district-storage.md) - Reduces coarse geometry transfer while preserving every byte of the initial GLB.
+* [Lossless storage of district collision meshes](algorithms/packed-collision-pages.md) - Preserves ordered positions and triangles with compact corner and indexed records.
+* [Continuous approach to a moving lift](algorithms/lift-contact-clock.md) - Forecasts the first rig contacts and refines native sampling around their arrival.
+* [Articulated joint frame conversion](algorithms/articulated-joint-frames.md) - Resolves endpoint orientation, signed hinge motion and principal swing ranges in a portable frame.
+* [Articulated swing envelope](algorithms/articulated-swing-envelope.md) - Bounds diagonal swing and tests the response against a free joint.
+* [Load transfer at first contact with a lift](algorithms/lift-contact-response.md) - Samples the loading of a rig for one tick after the first measured impact.
+* [Articulated support footprint](algorithms/articulated-support.md) - Measures where the centre of mass projects relative to upward contacts.
+* [Finite segment intersections and missing physical coverage](algorithms/scene-ray-coverage.md) - Reports source faces across object channels and identifies unobserved static terrain.
+* [Sharing triangle indexes across object placements](algorithms/instanced-object-rays.md) - Preserves exact world-space crossings and source owners while reusing a model’s triangle tree.
+* [Sharing fixed collision shapes away from a moving body](algorithms/native-static-instances.md) - Preserves source contacts while reusing distant native triangle meshes.
+* [Planning district collision reads](algorithms/collision-read-planning.md) - Anticipates physical page arrival along the actor trajectory.
+* [District content over HTTP](algorithms/district-http.md) - Streams verified files on demand and reuses them across visits.
+* [District paging](algorithms/district-paging.md) - Loads urban geometry by distance and verifies support during a descent.
 
 * [Exact client-side prediction](algorithms/exact-client-prediction.md) - A client predicts its own vehicle with no visible correction, because the server applies exactly the steps the client sent and never makes one up.
 * [Arcade kart physics](algorithms/arcade-kart-physics.md) - A small kart model with drifting, three mini-turbo levels, crests and tricks, starts and slipstreams, made of a forward speed, a sideways slide, a heading and a height.
@@ -95,6 +136,7 @@ What osage knows about its own modules: their architecture, the algorithms and t
 ## Oracles
 
 * [The render bench](oracles/render-bench.md) - Proves that a fidelity tier holds its frame-time budget on a machine, and records what was drawn.
+* [Pedestrian impact](oracles/pedestrian-impact.md) - Measures contact time, penetration and rebound on a moving or stationary bonnet.
 * [Physics golden file](oracles/physics-golden.md) - Proves that the kart physics gives the same bits natively and in WebAssembly, which exact prediction relies on.
 * [Soundscape verify](oracles/soundscape-verify.md) - Proves that a render of a scene is reproducible, does not clip, is as loud as asked, keeps a side source on its side and swaps it when the head turns, and hears the train come, pass on the right and go.
 

@@ -22,6 +22,14 @@
 //!
 //! The model faces +Z, its feet at the origin, 1.8 m tall.
 
+mod loop_transition;
+pub use loop_transition::crossfade_loop;
+mod stance;
+pub use stance::{
+    ContactHeight, FootChain, FootCycle, FootCyclePhase, FootGround, FootPlantPlugin, FootRig, PlannedHumanSteps,
+    PlantFeet, SolePoints, SoleSkin, solve_two_bone, triangle_support_lift,
+};
+
 use std::{collections::HashMap, path::Path, time::Duration};
 
 use bevy::{
@@ -113,6 +121,16 @@ impl Move {
     pub const INTERACT: Move = Move("Interact");
     pub const PUSH: Move = Move("Push_Loop");
     pub const DRIVING: Move = Move("Driving_Loop");
+
+    /// Forward ground speed in m/s at unit playback speed. Calibrated from the two
+    /// forefeet during stance in the installed Quaternius clips, for a unit-scale actor.
+    pub fn ground_speed_m_s(self) -> Option<f32> {
+        match self {
+            Self::WALK => Some(0.979),
+            Self::JOG => Some(5.919),
+            _ => None,
+        }
+    }
 }
 
 /// A person. Changing `act` crossfades to the new move.
@@ -135,6 +153,7 @@ pub struct Human {
 /// (`hand_r`, `Head`, …).
 #[derive(Component, Debug)]
 pub struct Skeleton {
+    body: Body,
     pub armature: Entity,
     pub bones: HashMap<String, Entity>,
     playing: Option<Move>,
@@ -160,7 +179,10 @@ pub struct HumansPlugin;
 
 impl Plugin for HumansPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(Startup, load).add_systems(Update, (prepare, build, act).chain());
+        stance::install(app);
+        app.add_systems(Startup, load)
+            .add_systems(Update, (prepare, build).chain())
+            .add_systems(PostUpdate, act.before(bevy::app::AnimationSystems));
     }
 }
 
@@ -804,7 +826,8 @@ fn build(
             }
         }
         debug!(?entity, body = ?human.body, act = human.act.0, "osage-humans: built");
-        commands.entity(entity).insert(Skeleton { armature, bones, playing: None });
+        stance::bind_human(&mut commands, entity, armature, &bones);
+        commands.entity(entity).insert(Skeleton { body: human.body, armature, bones, playing: None });
     }
 }
 
@@ -827,7 +850,7 @@ fn tinted(
 /// Plays each human's move, crossfading when it changes.
 fn act(
     library: Res<Library>,
-    mut humans: Query<(&Human, &mut Skeleton)>,
+    mut humans: Query<(Ref<Human>, &mut Skeleton)>,
     mut players: Query<(&mut AnimationPlayer, &mut AnimationTransitions)>,
     clips: Res<Assets<AnimationClip>>,
     graphs: Res<Assets<AnimationGraph>>,
@@ -835,6 +858,13 @@ fn act(
     let Some(ready) = library.ready.as_ref() else { return };
     for (human, mut skeleton) in &mut humans {
         if skeleton.playing == Some(human.act) {
+            if human.is_changed()
+                && let Some(&node) = ready.nodes.get(human.act.0)
+                && let Ok((mut player, _)) = players.get_mut(skeleton.armature)
+                && let Some(active) = player.animation_mut(node)
+            {
+                active.set_speed(human.pace);
+            }
             continue;
         }
         let Some(&node) = ready.nodes.get(human.act.0) else {
@@ -852,7 +882,11 @@ fn act(
                 _ => None,
             })
             .map_or(1.0, |clip| clip.duration());
-        transitions.play(&mut player, node, fade).repeat().set_speed(human.pace).seek_to(human.phase * length);
+        if matches!(human.act, Move::WALK | Move::JOG | Move::IDLE) {
+            crossfade_loop(&mut player, &mut transitions, node, fade, human.phase * length).set_speed(human.pace);
+        } else {
+            transitions.play(&mut player, node, fade).repeat().set_speed(human.pace).seek_to(human.phase * length);
+        }
         skeleton.playing = Some(human.act);
     }
 }
@@ -860,6 +894,55 @@ fn act(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn changing_the_walk_pace_preserves_the_current_stride() {
+        let mut app = App::new();
+        let node = AnimationNodeIndex::new(1);
+        app.init_resource::<Assets<AnimationClip>>().init_resource::<Assets<AnimationGraph>>();
+        app.insert_resource(Library {
+            bodies: Default::default(),
+            light: Default::default(),
+            hair: vec![],
+            moves: Default::default(),
+            failed: false,
+            ready: Some(Ready {
+                graph: Default::default(),
+                nodes: [(Move::WALK.0.to_owned(), node)].into(),
+                dressed: Default::default(),
+                zones: Default::default(),
+                clothed: Default::default(),
+                outfits: Default::default(),
+                hair_materials: Default::default(),
+            }),
+        })
+        .add_systems(Update, act);
+        let armature = app.world_mut().spawn((AnimationPlayer::default(), AnimationTransitions::default())).id();
+        let person = app
+            .world_mut()
+            .spawn((
+                Human {
+                    body: Body::Man,
+                    tone: Tone::Light,
+                    hair: None,
+                    hair_colour: Color::BLACK,
+                    outfit: Outfit { top: Color::WHITE, bottom: Color::WHITE, shoes: Color::BLACK },
+                    act: Move::WALK,
+                    pace: 1.,
+                    phase: 0.,
+                },
+                Skeleton { body: Body::Man, armature, bones: Default::default(), playing: None },
+            ))
+            .id();
+        app.update();
+        app.world_mut().get_mut::<AnimationPlayer>(armature).unwrap().animation_mut(node).unwrap().seek_to(0.42);
+        for pace in [1.5, 0., 0.75] {
+            app.world_mut().get_mut::<Human>(person).unwrap().pace = pace;
+            app.update();
+            let active = app.world().get::<AnimationPlayer>(armature).unwrap().animation(node).unwrap();
+            assert_eq!((active.speed(), active.seek_time()), (pace, 0.42));
+        }
+    }
 
     #[test]
     fn bones_wear_what_covers_them() {

@@ -1,0 +1,308 @@
+{
+  "asset": {
+    "version": "2.0",
+    "extras": {
+      "osageObject": {
+        "version": 1,
+        "id": "four-foot-replay",
+        "collisionMaterials": {},
+        "acousticMaterials": {}
+      },
+      "osageFootRig": {
+        "armature": "frame",
+        "contacts": [
+          "fore-left/pad",
+          "hind-right/pad",
+          "hind-left/pad",
+          "fore-right/pad"
+        ]
+      }
+    }
+  },
+  "scene": 0,
+  "scenes": [
+    {
+      "nodes": [
+        0
+      ]
+    }
+  ],
+  "nodes": [
+    {
+      "extras": {
+        "osage": {
+          "id": "frame"
+        }
+      },
+      "translation": [
+        0,
+        0,
+        0
+      ],
+      "children": [
+        1,
+        2
+      ]
+    },
+    {
+      "extras": {
+        "osage": {
+          "id": "shoulder-bar"
+        }
+      },
+      "translation": [
+        0,
+        0,
+        0.26
+      ],
+      "children": [
+        3,
+        11
+      ]
+    },
+    {
+      "extras": {
+        "osage": {
+          "id": "hip-bar"
+        }
+      },
+      "translation": [
+        0,
+        0,
+        -0.26
+      ],
+      "children": [
+        7,
+        15
+      ]
+    },
+    {
+      "extras": {
+        "osage": {
+          "id": "fore-left/upper"
+        }
+      },
+      "translation": [
+        -0.13,
+        0.54,
+        0
+      ],
+      "children": [
+        4
+      ]
+    },
+    {
+      "extras": {
+        "osage": {
+          "id": "fore-left/lower"
+        }
+      },
+      "translation": [
+        0,
+        -0.26,
+        0.1
+      ],
+      "children": [
+        5
+      ]
+    },
+    {
+      "extras": {
+        "osage": {
+          "id": "fore-left/distal"
+        }
+      },
+      "translation": [
+        0,
+        -0.26,
+        -0.1
+      ],
+      "children": [
+        6
+      ]
+    },
+    {
+      "extras": {
+        "osage": {
+          "id": "fore-left/pad"
+        }
+      },
+      "translation": [
+        0,
+        -0.008,
+        0.012
+      ]
+    },
+    {
+      "extras": {
+        "osage": {
+          "id": "hind-left/upper"
+        }
+      },
+      "translation": [
+        -0.13,
+        0.54,
+        0
+      ],
+      "children": [
+        8
+      ]
+    },
+    {
+      "extras": {
+        "osage": {
+          "id": "hind-left/lower"
+        }
+      },
+      "translation": [
+        0,
+        -0.26,
+        -0.1
+      ],
+      "children": [
+        9
+      ]
+    },
+    {
+      "extras": {
+        "osage": {
+          "id": "hind-left/distal"
+        }
+      },
+      "translation": [
+        0,
+        -0.26,
+        0.1
+      ],
+      "children": [
+        10
+      ]
+    },
+    {
+      "extras": {
+        "osage": {
+          "id": "hind-left/pad"
+        }
+      },
+      "translation": [
+        0,
+        -0.008,
+        0.012
+      ]
+    },
+    {
+      "extras": {
+        "osage": {
+          "id": "fore-right/upper"
+        }
+      },
+      "translation": [
+        0.13,
+        0.54,
+        0
+      ],
+      "children": [
+        12
+      ]
+    },
+    {
+      "extras": {
+        "osage": {
+          "id": "fore-right/lower"
+        }
+      },
+      "translation": [
+        0,
+        -0.26,
+        0.1
+      ],
+      "children": [
+        13
+      ]
+    },
+    {
+      "extras": {
+        "osage": {
+          "id": "fore-right/distal"
+        }
+      },
+      "translation": [
+        0,
+        -0.26,
+        -0.1
+      ],
+      "children": [
+        14
+      ]
+    },
+    {
+      "extras": {
+        "osage": {
+          "id": "fore-right/pad"
+        }
+      },
+      "translation": [
+        0,
+        -0.008,
+        0.012
+      ]
+    },
+    {
+      "extras": {
+        "osage": {
+          "id": "hind-right/upper"
+        }
+      },
+      "translation": [
+        0.13,
+        0.54,
+        0
+      ],
+      "children": [
+        16
+      ]
+    },
+    {
+      "extras": {
+        "osage": {
+          "id": "hind-right/lower"
+        }
+      },
+      "translation": [
+        0,
+        -0.26,
+        -0.1
+      ],
+      "children": [
+        17
+      ]
+    },
+    {
+      "extras": {
+        "osage": {
+          "id": "hind-right/distal"
+        }
+      },
+      "translation": [
+        0,
+        -0.26,
+        0.1
+      ],
+      "children": [
+        18
+      ]
+    },
+    {
+      "extras": {
+        "osage": {
+          "id": "hind-right/pad"
+        }
+      },
+      "translation": [
+        0,
+        -0.008,
+        0.012
+      ]
+    }
+  ]
+}

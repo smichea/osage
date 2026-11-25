@@ -11,7 +11,7 @@ A first batch of sound for osage: an engine that hears a scene offline, and what
 
 ## What it does
 
-A scene is an object tree, as the object format has it (the city programme's design note 08): nodes, each placed relative to its parent. Sound adds three things to a node, and a listener.
+A scene is an object tree, as the object format has it (the city programme's [design note 08](../../design/08-object-format.md)): nodes, each placed relative to its parent. Sound adds three things to a node, and a listener.
 
 1. **Emitters**: what the node sounds like by itself. A voice (a generator, not a recording) placed at a position local to the node.
 2. **Surfaces**: what sound meets. Flat faces with an acoustic material; they reflect and they hide.
@@ -33,7 +33,7 @@ The voices are synthesised sample by sample from the state of what makes them (`
 
 ## What an object carries for sound
 
-What an object carries for sound — its acoustic material, its emitters, the sound it makes when touched — the four contacts the `impact` voice makes, and the fields proposed for the object format are in [design/09 §2](../../design/09-sound.md#2-what-an-object-carries-for-sound). In the scene the walker's steps change as the ground does (asphalt, then a steel plate over an expansion joint), the cars knock on the same plate, and each axle of the train knocks on the viaduct's joint; here feet and wheels stand for the physics.
+What an object carries for sound — its acoustic material, its emitters, the sound it makes when touched — the four contacts the `impact` voice makes, and the fields proposed for the [object format](../../design/08-object-format.md#fields) are in [design/09 §2](../../design/09-sound.md#2-what-an-object-carries-for-sound). In the scene the walker's steps change as the ground does (asphalt, then a steel plate over an expansion joint), the cars knock on the same plate, and each axle of the train knocks on the viaduct's joint; here feet and wheels stand for the [physics](../../knowledge/modules/osage-dynamics.md).
 
 ## What it costs, and for whom
 
@@ -41,7 +41,7 @@ The engine has four qualities. Each is what a class of device can afford; the sc
 
 | | low | medium | high | reference |
 |---|---|---|---|---|
-| Reading the line | 2 samples | 4 | 4 | 8, windowed |
+| Reading the line | 2 samples | 4 | 4 | 8, seventh-order Lagrange |
 | Reflections | folded into the straight way's level | followed | followed, checked for what hides them | the same |
 | Edges | yes | yes | yes | yes |
 | Outer ear | no | no | yes | yes |
@@ -50,6 +50,8 @@ The engine has four qualities. Each is what a class of device can afford; the sc
 | The scene looked at | 94 times a second | 188 | 375 | 375 |
 | Air on a short way | left out under 1 dB | under 0.5 dB | always | always |
 | Voices far off | less detail | less detail | less detail | full |
+
+The reference reader shares 257 sets of interpolation weights across listeners (D-186). A moving sine test measures the received pitch and the level of its first folded sampling image. [Sound delay lines](../../knowledge/algorithms/sound-delay-lines.md) · [Fractional-delay reader](../../knowledge/algorithms/moving-sound-delay.md)
 
 What is too quiet to matter is not made: a contact that does not reach the ears takes no voice — too far, or with no way to them within its reach among the faces, however near it is as the crow flies — and one takes a voice only from a contact heard less than it (as loud as it arrives by the loudest of its ways, by what its voice still makes of its loudest); the ways are ranked by how loud they arrive and only the loudest are rendered — of two as loud, the one that arrives sooner, then the one more to the left, never the one whose face is listed first; a voice none of whose ways is rendered sleeps, and swells in over 20 ms when it wakes; from afar a node stands for its branch. Between two looks at the scene every delay and gain goes on evenly to where it was last found to be going, so a lower rate costs 8 ms of lateness and no step.
 
@@ -109,7 +111,7 @@ How a server and its clients could share the work, and how what is far could be 
 
 **Open-source engines, on this machine.** `bench/` plays the same ring of noises in OpenAL Soft 1.25 through its loopback device and in Chromium's Web Audio through an offline context; the tables above set the prototype beside them. They do not do the same work, and [bench/README.md](bench/README.md) says exactly what each does. OpenAL Soft and Web Audio convolve with measured responses of a head, which give height and front-back cues that a sphere cannot. The prototype carries each sound over its way, with its delay, its Doppler shift, its air and its reflections, which neither does. So the fair reading is by function: a panned source, a source heard by two ears, a source with its reflections.
 
-**The external reference** of the city programme (its design note 07) was not opened by the author of this code. Its behaviour was asked for as measurements and answered by the evaluation track; the questions, the answers and two 45-second captures are in the evaluator's private notes, with a side-by-side reading of them. `measure` reads those captures as it reads this prototype's renders: every sample of a file counts alike, its last tenth of a second as any other, and a mono capture's one channel counts once.
+**The external reference** of the city programme (its [design note 07](../../design/07-city-scale-quality.md)) was not opened by the author of this code. Its behaviour was asked for as measurements and answered by the evaluation track; the questions, the answers and two 45-second captures are in the evaluator's private notes, with a side-by-side reading of them. `measure` reads those captures as it reads this prototype's renders: every sample of a file counts alike, its last tenth of a second as any other, and a mono capture's one channel counts once.
 
 ## Where it stands, and what is not there
 
@@ -143,8 +145,8 @@ Not there, or weak:
 ## Second batch
 
 1. ~~Move the engine, its voices and the analyser into crates of the engine~~: done (#13): `crates/osage-sound`, `crates/osage-sound-voices` (the engine's licence keeps them out of `worlds/`), `crates/osage-sound-analysis`. Cards, a design note and a decision followed (#14: [design/09](../../design/09-sound.md), D-185). Still to do: emitters and contact sounds into the object format's own keys and its reader, with a decision entry.
-2. ~~Read real objects~~: done (#15). Faces from the triangles of `acoustic[]` and `collision[]` meshes, read through `osage-objects` (`osage_sound::objects`), joined into sheets and indexed by a tree of boxes; contacts as `osage-dynamics` reports them (`Engine::strike_told`). The bridge built with meshes sounds as the bridge written by hand.
+2. ~~Read real objects~~: done (#15). Faces from the triangles of `acoustic[]` and `collision[]` meshes, read through `osage-objects` (`osage_sound::objects`), joined into sheets and indexed by a tree of boxes; contacts as [osage-dynamics](../../knowledge/modules/osage-dynamics.md) reports them (`Engine::strike_told`). The bridge built with meshes sounds as the bridge written by hand.
 3. ~~A Bevy audio source fed by the engine; the browser client through an AudioWorklet~~: done (#16). Natively, `osage_sound::live` plays the engine on a thread of its own a few blocks ahead of the output, its nodes placed by a game (`Engine::drive`), and `live::bevy::LiveSource` is a Bevy audio source; `paris-soundscape live` measures it. In a browser, `crates/osage-sound-web` is the engine as WebAssembly in an AudioWorklet, a block in each render quantum; `web/live.py` checks and measures it in Chromium.
 4. ~~The sound field for what is far, and its stream~~: built and measured (#17): `osage_sound::field`, `paris-soundscape far`, `field`, `decode` and `bench/field_opus.py`; see the card [far sound field](../../knowledge/algorithms/far-sound-field.md). Still to do: a crossfade between two cubes' fields, and the stream itself.
 5. Ears from measured responses, once the data is chosen.
-6. A listening test against the external reference, blind, as design/07 asks.
+6. A listening test against the external reference, blind, as [design/07](../../design/07-city-scale-quality.md) asks.

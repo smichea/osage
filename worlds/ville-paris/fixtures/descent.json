@@ -1,0 +1,48 @@
+{
+  "SPDX-FileCopyrightText": "The osage contributors",
+  "SPDX-License-Identifier": "MIT OR Apache-2.0",
+  "version": 1,
+  "tick_hz": 60,
+  "gravity_m_s2": 9.81,
+  "terminal_m_s": 55.0,
+  "viewport": [1280, 720],
+  "vertical_fov_deg": 58.0,
+  "routes": [
+    {
+      "id": "rail",
+      "ticks": 840,
+      "start_m": [-53.6526, 600.0, -26.8263],
+      "velocity_m_s": [4.0, 0.0, 2.0],
+      "expected_support": "rail",
+      "camera": [
+        {"tick": 0, "eye": [-234, 634, 330], "aim": [63, 80, -159]},
+        {"tick": 380, "eye": [-159, 400, 222], "aim": [49, 23, -115]},
+        {"tick": 700, "eye": [-82, 120, 100], "aim": [31, 16, -81]},
+        {"tick": 840, "eye": [-29, 28, 34], "aim": [19, 17, -23]}
+      ]
+    },
+    {
+      "id": "road",
+      "ticks": 160,
+      "start_m": [-7.5536, 13.8, 12.949],
+      "velocity_m_s": [7.0, 0.0, -12.0],
+      "expected_support": "road",
+      "camera": [
+        {"tick": 0, "eye": [-29, 12.8, 26], "aim": [-9, 11.0, 4]},
+        {"tick": 160, "eye": [-19, 10.3, 9], "aim": [4, 9.8, -3]}
+      ]
+    },
+    {
+      "id": "roof",
+      "ticks": 840,
+      "start_m": [159.0, 600.0, -57.5],
+      "velocity_m_s": [2.0, 0.0, -1.0],
+      "expected_support": "roof-grenelle",
+      "camera": [
+        {"tick": 0, "eye": [340, 632, 190], "aim": [105, 28, -160]},
+        {"tick": 500, "eye": [296, 303, 89], "aim": [123, 23, -125]},
+        {"tick": 840, "eye": [209, 48, -47], "aim": [179, 30, -86]}
+      ]
+    }
+  ]
+}

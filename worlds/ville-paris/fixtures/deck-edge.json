@@ -1,0 +1,101 @@
+{
+  "SPDX-FileCopyrightText": "The osage contributors",
+  "SPDX-License-Identifier": "MIT OR Apache-2.0",
+  "version": 1,
+  "tick_hz": 60,
+  "gravity_m_s2": 9.81,
+  "terminal_m_s": 55.0,
+  "viewport": [
+    1280,
+    720
+  ],
+  "vertical_fov_deg": 58.0,
+  "routes": [
+    {
+      "id": "inside",
+      "ticks": 160,
+      "start_m": [
+        0,
+        20,
+        3.7
+      ],
+      "velocity_m_s": [
+        0,
+        0,
+        0
+      ],
+      "expected_support": "rail",
+      "camera": [
+        {
+          "tick": 0,
+          "eye": [
+            -29,
+            12.8,
+            26
+          ],
+          "aim": [
+            -9,
+            11.0,
+            4
+          ]
+        },
+        {
+          "tick": 160,
+          "eye": [
+            -19,
+            10.3,
+            9
+          ],
+          "aim": [
+            4,
+            9.8,
+            -3
+          ]
+        }
+      ]
+    },
+    {
+      "id": "outside",
+      "ticks": 160,
+      "start_m": [
+        0,
+        20,
+        3.9
+      ],
+      "velocity_m_s": [
+        0,
+        0,
+        0
+      ],
+      "expected_support": "road",
+      "camera": [
+        {
+          "tick": 0,
+          "eye": [
+            -29,
+            12.8,
+            26
+          ],
+          "aim": [
+            -9,
+            11.0,
+            4
+          ]
+        },
+        {
+          "tick": 160,
+          "eye": [
+            -19,
+            10.3,
+            9
+          ],
+          "aim": [
+            4,
+            9.8,
+            -3
+          ]
+        }
+      ]
+    }
+  ]
+}

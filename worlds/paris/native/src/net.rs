@@ -181,6 +181,25 @@ fn stroll(time: Res<Time>, link: Option<Res<Link>>, me: Res<Me>, mut replica: Re
     let _ = link.outbox.send(intent(replica.sequence, mine, type_id, &value));
 }
 
+/// Move the replica towards its latest target, then match the feet to the horizontal
+/// distance it actually travelled during this frame. Turning and height corrections
+/// alone leave a walker idle.
+fn advance_walker(place: &mut Transform, target: Transform, dt: f32) -> (osage_humans::Move, f32) {
+    use osage_humans::Move;
+    let previous = place.translation;
+    place.translation = previous.lerp(target.translation, (dt * 10.0).min(1.0));
+    place.rotation = target.rotation * Quat::from_rotation_y(std::f32::consts::PI);
+    let speed = (place.translation - previous).xz().length() / dt;
+    let act = if speed > 2.5 {
+        Move::JOG
+    } else if speed > 0.2 {
+        Move::WALK
+    } else {
+        Move::IDLE
+    };
+    (act, act.ground_speed_m_s().map_or(1.0, |unit_speed| speed / unit_speed))
+}
+
 /// The other walkers, as people walking where the server says.
 fn others(
     mut commands: Commands,
@@ -204,26 +223,19 @@ fn others(
             commands.entity(entity).despawn();
         }
     }
-    let dt = time.delta_secs().max(1e-3);
+    let dt = time.delta_secs();
     for (e, target, look) in walkers {
         match replica.people.get(&e) {
             Some(&entity) => {
-                if let Ok((mut place, human)) = places.get_mut(entity) {
-                    let speed = place.translation.distance(target.translation) / dt;
-                    // Eased to the server's place, turned the way it faces.
-                    place.translation = place.translation.lerp(target.translation, (dt * 10.0).min(1.0));
-                    place.rotation = target.rotation * Quat::from_rotation_y(std::f32::consts::PI);
-                    if let Some(mut human) = human {
-                        let act = if speed > 2.5 {
-                            osage_humans::Move::JOG
-                        } else if speed > 0.2 {
-                            osage_humans::Move::WALK
-                        } else {
-                            osage_humans::Move::IDLE
-                        };
-                        if human.act != act {
-                            human.act = act;
-                        }
+                if dt > 0.0
+                    && let Ok((mut place, human)) = places.get_mut(entity)
+                {
+                    let (act, pace) = advance_walker(&mut place, target, dt);
+                    if let Some(mut human) = human
+                        && (human.act != act || human.pace != pace)
+                    {
+                        human.act = act;
+                        human.pace = pace;
                     }
                 }
             }
@@ -252,9 +264,47 @@ fn others(
                 };
                 let place =
                     Transform { rotation: target.rotation * Quat::from_rotation_y(std::f32::consts::PI), ..target };
-                let entity = commands.spawn((human, place)).id();
+                let entity = commands.spawn((human, place, osage_humans::PlannedHumanSteps::default())).id();
                 replica.people.insert(e, entity);
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use osage_humans::Move;
+
+    #[test]
+    fn remote_steps_follow_the_distance_displayed_between_snapshots() {
+        for hz in [30, 60, 120] {
+            for packet_hz in [15, 30] {
+                for (speed, expected) in [(1.4, Move::WALK), (4.0, Move::JOG)] {
+                    let dt = 1.0 / hz as f32;
+                    let mut place = Transform::IDENTITY;
+                    for frame in 1..=3 * hz {
+                        let packet = frame * packet_hz / hz;
+                        let target = Transform::from_xyz(0., 0., speed * packet as f32 / packet_hz as f32);
+                        let before = place.translation;
+                        let (act, pace) = advance_walker(&mut place, target, dt);
+                        if frame > hz {
+                            assert_eq!(act, expected);
+                            let stride = act.ground_speed_m_s().unwrap() * pace * dt;
+                            assert!((stride - before.distance(place.translation)).abs() < 1e-6);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn a_pure_height_or_heading_change_keeps_the_idle_clip_at_its_own_pace() {
+        let target = Transform::from_xyz(0., 0.3, 0.).with_rotation(Quat::from_rotation_y(0.5));
+        let mut place = Transform::IDENTITY;
+        assert_eq!(advance_walker(&mut place, target, 1. / 60.), (Move::IDLE, 1.));
+        assert!(place.translation.y > 0.);
+        assert_ne!(place.rotation, Quat::IDENTITY);
     }
 }

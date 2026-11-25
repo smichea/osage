@@ -50,6 +50,12 @@ Drive with WASD or the arrows, drift with Space or Shift (hold it through a bend
 
 **An AI agent can race.** Start the server with `--trust-dev-issuer`, give the agent a delegation (below), and let it call `world_info`. It finds `kart.autopilot/1` with its description and drives through `send_intent`, e.g. `{"type": "kart.autopilot/1", "value": {"pace": 0.9, "line": 0.2, "drift": true}}`.
 
+## Ville-Paris
+
+Launch the independent Bir-Hakeim city experiment with `cargo run --release -p osage-ville-paris`. Its scene runs offline. The viewer defaults to a 15-part human simulated with Rapier. To see an articulated pedestrian strike a moving bonnet, append `-- --physics jolt --actor human --replay worlds/ville-paris/fixtures/bonnet.json --route moving`. Press 1 to descend from 600 m onto the metro deck, 2 to approach the road deck from the side, or 3 to land on a Grenelle roof. R restarts a drop and Space pauses it. [City experiment and benchmarks](knowledge/modules/ville-paris.md) · [Static object format and converter](design/08-object-format.md)
+
+The camera hears physical impacts through the acoustic surfaces of the object or the bundled bridge. Use `--listening headphones` for the bridge prototype’s head and outer-ear cues, or keep the default speaker mix. Append `--impact-wav drop.wav` to a replay command to save its stereo signal and print the contact times, or `--mute` to silence the window. A screened contact can also reach the listener through one or two openings. Use `--direct-only` to isolate the transmitted wave. [Sound around obstacles](knowledge/algorithms/diffracted-city-contacts.md) [How the contact sound is timed](knowledge/algorithms/city-contact-sound.md)
+
 ## The engine's core
 
 A world replicated by the osage protocol v0 to every kind of client — here the engine's own demo world, a server-driven cube:
@@ -122,6 +128,8 @@ To **open** a function to the world, the owner says so explicitly: `--open-led t
 | [04 — Kart programme](design/04-kart-programme.md) | The kart world to the play of the best arcade racers and a GTA 5–class look | Under way: play milestones M1–M4 done, M5–M6 in progress |
 | [05 — Regions and the light between them](design/05-regions-and-light.md) | A world held by several servers: probes near the player, a light field on the borders of fixed, overlapping regions, the light going a region a turn | Proposal: nothing built; the single-server probes it starts from are measured in research 10 |
 | [06 — Objects: one tree, two geometries](design/06-objects.md) | An object as a tree of objects, each node with a physical geometry (collisions, strength, friction) and a visual one (surfaces, textures), coarser than its children's and carrying their aggregate | Proposal: nothing built |
+| [07 — Paris at city scale](design/07-city-scale-quality.md) | City streaming, fixed-step collisions and replay benchmarks at Bir-Hakeim | The native Ville-Paris experiment exercises both bridge decks and a roof |
+| [08 — Object geometry](design/08-object-format.md) | Visual, physical and acoustic surfaces in one glTF object tree | Revision 1 has a reader, a converter and district paging |
 | [09 — Sound](design/09-sound.md) | Sound synthesised from the state of what makes it and placed in the object tree: what an object carries for sound, how a sound reaches the ears, what each quality costs and for which device, server and clients, far sound as a field | In part: the engine renders offline and plays live, natively and in a browser, hearing objects' meshes and the solver's contacts ([osage-sound](knowledge/modules/osage-sound.md)); the format's own fields for sound are to come |
 
 **Research.** The dated surveys (2026-11-09 to 11-10) that chose the direction, with their sources; claims that could not be verified are marked as such.

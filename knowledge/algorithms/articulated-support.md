@@ -7,9 +7,9 @@ licence: LicenseRef-osage-AGPL-3.0-or-later-with-exceptions
 status: draft
 tags: [physics, collision, geometry, replay]
 sources:
-  - id: implementation
-    title: Support area and signed stability margin
-    resource: https://github.com/smichea/osage/blob/main/crates/osage-dynamics/src/support_footprint.rs
+  - id: experiment
+    title: Independent geometric check on a passive articulated quadruped
+    resource: https://github.com/smichea/osage/blob/main/worlds/ville-paris/check-quadruped-support.py
 generated: { by: "OpenAI/Codex", at: "2026-11-24T16:28:00Z" }
 ---
 <!-- SPDX-FileCopyrightText: The osage contributors -->
@@ -47,10 +47,10 @@ A Boolean support flag answers whether any contact qualifies. Measuring force di
 
 # Oracle
 
-The geometry tests cover interior and exterior points, degenerate outlines and the distance beyond a corner. The projection test transports witnesses on fixed and moving surfaces separately.[^implementation]
+The core unit test covers interior points, exterior corners and degenerate hulls. The Ville-Paris oracle independently walks the hull by gift wrapping. It recomputes the centre, area and margin from raw poses and witnesses on eight 120-tick routes, checks streamed and preloaded terrain and reads the final Rapier and Jolt receipts. Four cross-paw segment queries verify the posed sphere diameters. The lateral runs start at 0 through 4 m/s. A separate core test mixes fixed and rotating surface witnesses.[^experiment]
 
 # Reuse
 
-Supply ordered rig masses, poses, contacts and a separation tolerance to the support footprint query.
+Call the dynamics measurement with the ordered rig, the matching poses, the reported contacts, a numbered substep and the allowed separation in metres. The result is an observation suitable for a replay, a debug overlay or comparison between solvers.
 
-[^implementation]: [Implementation and unit tests](https://github.com/smichea/osage/blob/main/crates/osage-dynamics/src/support_footprint.rs).
+[^experiment]: [Quadruped oracle](https://github.com/smichea/osage/blob/main/worlds/ville-paris/check-quadruped-support.py).

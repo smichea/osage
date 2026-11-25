@@ -202,13 +202,17 @@ fn main() -> anyhow::Result<()> {
     // ambient occlusion: the light coming in is already shaded by the
     // street, and over it SSAO darkened the block's cobbles by a quarter
     // against Cycles (research 10).
+    let walk = std::sync::Arc::new(walk);
     let without = vec![Technique::Sky, Technique::SkyLight, Technique::AmbientOcclusion];
     app.add_plugins(OsageRenderPlugin { tier, without })
         .insert_resource(options)
-        .insert_resource(walker::Grid(std::sync::Arc::new(walk)))
+        .insert_resource(walker::Grid(walk.clone()))
         .add_plugins((street::StreetPlugin, light::LightPlugin, walker::WalkerPlugin, hud::HudPlugin));
     if osage_humans::installed(&root) {
-        app.add_plugins(osage_humans::HumansPlugin);
+        app.add_plugins(osage_humans::HumansPlugin)
+            .insert_resource(osage_humans::FootGround::new(osage_world_paris::walk::STEP, move |point| {
+                walk.height(point.xz())
+            }));
     }
     if online {
         app.add_plugins(net::NetPlugin);

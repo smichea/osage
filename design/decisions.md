@@ -1286,6 +1286,149 @@ Date: 2026-11-22
 
 `ville-paris` owns the city-scale scenarios and starts with the two decks of Pont de Bir-Hakeim. Its native viewer, CPU replay and render bench consume one self-contained glTF scene and a separate fixed-tick input file. The files can be supplied to another implementation. Each measurement identifies both by SHA-256. The existing Bistro walk supplies the S0 lighting control. The first fixture has authored city geometry and fixed deck heights. Geographic acceptance requires a survey. [World module](../knowledge/modules/ville-paris.md) · [City programme](07-city-scale-quality.md)
 
+
+## D-145 — Compare rigid solvers on portable city inputs
+
+On 2026-11-22 the city pilot gained a shared CPU interface to Rapier and Jolt. One solver owns each replay. The default interactive choice is Rapier. The original point sweep supplies the flat-surface control. Both rigid backends use the same mesh triangles, skeleton, masses, collision clock and scene units. The viewer draws the poses each solver produces. Receipts include per-part rotations, contact points and the motion of the box struck by the actor. A claim about another engine needs comparable observations from it. [Dynamics module](../knowledge/modules/osage-dynamics.md) · [City experiment](../knowledge/modules/ville-paris.md)
+
+## D-146 — Three geometry channels for a static object
+
+On 2026-11-22 the city pilot adopted a versioned glTF object profile. A node may expose a visible mesh, separate physical surfaces and independently authored acoustic surfaces. A sound proxy can explicitly reuse the collision mesh. Each channel has stable identities. Unknown sound coefficients are preserved. The static-world converter records source digests and losses. A slab with a visible top, a lower collision plane and a separate sound surface checks the convention in the native reader. [Object format](08-object-format.md) · [Module](../knowledge/modules/osage-objects.md)
+
+## D-147 — Compare impacts with a shared articulated object
+
+On 2026-11-23 the city pilot added a parent-first articulated rig to its GLB object profile. Both physics backends receive the same masses, principal moments, joint anchors and angular limits. The comparison measures contact time from solver events and penetration and rebound from the sampled geometry of the moving bodies. This keeps contact margins and reporting latency visible in the results. [Object format](08-object-format.md) · [Impact oracle](../knowledge/oracles/pedestrian-impact.md)
+
+## D-148 — Independent district pages for the city descent
+
+On 2026-11-23 the city experiment gained independently readable visual and collision tiles. The coarse parent provides the distant picture and loaded collision files create real solver surfaces. The request clocks have separate bandwidth and radius settings. The radius sweep measures the time available before the first supporting contact on both bridge decks and a roof, alongside a deliberately late tile in each channel. [District paging](../knowledge/algorithms/district-paging.md)
+
+## D-149 — Keep the model tree through runtime queries
+
+On 2026-11-23 the city adopted the model node as the owner of a placed part across drawing, physical contact and acoustic queries. Each node retains its local transform and child list. Mesh instances can share bytes while a query identifies the particular part. The static viewer preserves the entity hierarchy, and jointed objects can express their shapes and joints in local frames. District pages retain the source owner across splits and fallback. [Object model](06-objects.md) · [File format](08-object-format.md) · [Nested fixture](../tools/object-convert/test_hierarchy.py)
+
+## D-150 — Measure the first physical instant on a ballistic arc
+
+On 2026-11-23 the city added a continuous query for the first contact of an upright capsule on a fixed triangle mesh. It returns the instant, surface, source triangle, point, normal and owning node where one exists. This gives the fixed-step physical replay an independently testable geometric prediction on the same inputs. A falling actor may request exact support triangles from the district catalogue while the full physical tile travels. [Ballistic query](../knowledge/algorithms/ballistic-impact.md) · [District paging](../knowledge/algorithms/district-paging.md)
+
+## D-151 — Bind automatic visual detail to projected geometric error
+
+On 2026-11-23 the object viewer adopted independent selection per model node with an optional bound on local surface deviation. The viewport, lens, node transform and camera pose determine its projected error. The two thresholds allow distinct outward and inward transitions. Existing files can keep their fixed mesh choices. [Format and compatibility](08-object-format.md) · [Method and oracle](../knowledge/algorithms/projected-mesh-error.md)
+
+## D-152 — Certify the open space between missing collision faces
+
+On 2026-11-23 the Paris district cooker added bounds for collision faces outside its temporary support mesh. A client may advance through a verified opening while the full page is in transit. A threatened static surface keeps the capsule at its preceding simulated pose until that page is ready. Earlier support catalogues use the page bounds when any faces are absent. [District paging](../knowledge/algorithms/district-paging.md) · [Doorway oracle](../worlds/ville-paris/check-clearance.py)
+
+## D-153 — Trigger the city impact voice from the physical replay
+
+On 2026-11-23 Ville-Paris connected the bridge sound prototype to its point and rigid-body drops. The collision binding identifies the physical surface in the object tree. The renderer schedules the direct wave at the moving observer on the same sample clock for the window and for recorded output. This makes the first audible frame reproducible across both software endpoints. [Method and controls](../knowledge/algorithms/city-contact-sound.md)
+
+## D-154 — Apply acoustic surface transmission to physical impacts
+
+On 2026-11-23 Ville-Paris connected the direct impact wave to the acoustic bindings selected by the object tree and to the companion sound scene of the bundled bridge. The physical contact supplies the origin and the observer supplies the endpoint at reception. The receipt lists the intervening bindings and their combined transmitted energy. The window and stereo exporter use the same filters. [Method and controls](../knowledge/algorithms/direct-sound-transmission.md)
+
+## D-155 — Follow city impacts around the edges of obstacles
+
+On 2026-11-23 the city contact player gained an indirect arrival from the acoustic geometry of the object tree. A direct ray identifies potential obstacles. A second search follows exposed edges, including a second wall encountered on a bent leg. The path to the camera at reception determines time, band response and apparent direction. Each receipt retains the ordered nodes and all segment lengths. The same material voice and ear model feed the live and recorded mixes. [Geometry and oracle](../knowledge/algorithms/diffracted-city-contacts.md)
+
+## D-156 — Drive articulated impact sound from measured contact impulses
+
+On 2026-11-23 Ville-Paris began dating a ragdoll impact at the end of the native interval in which the actor receives its measured reaction. The recording keeps the physical evidence, including the limb and the owning collision surface where both can be identified. Several simultaneous feet can excite a single material voice. An unresolved balance on the same support retains all candidate limbs and their geometric witnesses. The renderer applies the same sound propagation and stereo processing to these events as to the other city impacts. [Contact impulse API and oracle](../knowledge/algorithms/contact-impulses.md) · [City material voice](../knowledge/algorithms/city-contact-sound.md)
+
+## D-157 — Distinguish exterior diffraction from escape through a closed room
+
+On 2026-11-23 the city added an exterior-wedge index for closed convex acoustic components. Each junction retains both incident surfaces across the object tree and both outward normals. The two legs of a bend must remain outside the solid or on its boundary. A path along a face uses the tolerance of that specific component to handle single-precision geometry. [Exterior edge algorithm and checks](../knowledge/algorithms/exterior-acoustic-edges.md)
+
+
+## D-158 — Scale an articulated impact by its measured reaction
+
+On 2026-11-23 the city connected the level of its articulated impact voice to the positive impulse on its participating limbs and surface. The source accumulates 4 ms of measured reactions. Incoming closing speed and accumulated impulse set a bounded gain using a documented work proxy. Each increment acts at its own simulation time. The receiver applies it after the corresponding propagation delay. The first reacting interval starts the sound even if later measurements arrive on the next public tick. A shared balance across two feet contributes once and retains both candidates. [Acoustic excitation and limits](../knowledge/algorithms/city-contact-sound.md) · [Source and causality test](../worlds/ville-paris/src/impact/excitation.rs)
+
+## D-159 — Read acoustic geometry for finite district segments
+
+On 2026-11-23 Ville-Paris began indexing the world-space bounds of source acoustic bindings before requesting their geometry. An ordered series shares each verified mesh until its last candidate binding, while every hit retains its original owner and material. The 100-by-100 metre diagonal control went from 66 file reads totalling 10,676 bytes to one 108-byte mesh. [Method and limits](../knowledge/algorithms/paged-acoustic-rays.md) · [Disk and HTTP oracle](../worlds/ville-paris/check-acoustic-reads.py)
+
+## D-160 — Preload audible geometry before a district landing
+
+On 2026-11-23 the district capsule began reserving acoustic mesh files along the predicted source-to-listener path. A solved contact starts the material voice. Direct and diffracted paths can become available on different ticks. Each retains its original emission and arrival times, including when the wavefront has passed before the required file arrives. [Scheduling, shared playback and checks](../knowledge/algorithms/paged-impact-sound.md)
+
+
+## D-161 — Preserve the orientation and bounds of transformed district geometry
+
+On 2026-11-23 the district cooker began composing a shared world transform per source node. A reflected collision placement reverses its local triangle indices once when producing world-space faces. A pair of reflections preserves the original order. This lets the full collider and the temporary support beneath a falling actor agree with the resident object. Districts cooked with the old reversed physical faces need a fresh cook from their source. Acoustic bounds now enclose the actual placed vertices, including points where cancellation moves an edge outside a previous directory's double-precision estimate. The reader accounts for earlier bounds during a query. [Object format](08-object-format.md) · [Collision checks](../worlds/ville-paris/check-mirrored-collision.py) · [Acoustic checks](../knowledge/algorithms/paged-acoustic-rays.md)
+
+## D-162 — Keep the articulated actor alive across district terrain changes
+
+On 2026-11-23 Ville-Paris began running the same Rapier rig and joint solver on streamed and resident terrain. The district requests physical pages for individual limbs, carries the authored owner through terrain replacement and displays the solved part poses. The acoustic channel measures the reacting limbs at their actual solver substep. [Algorithm, scope and controls](../knowledge/algorithms/paged-ragdolls.md)
+
+## D-163 — Give static terrain and the articulated actor a consistent creation order
+
+On 2026-11-23 the resident Rapier scene with a multi-body rig and exclusively static terrain began creating the rig before adding the terrain. This matches the district, where the player can already exist when the ground arrives. A four-way control varying terrain insertion and the page edge registry independently reproduced both earlier trajectories. This changes historical resident poses after impact in that configuration. Holding an actor pose fixed also provides an independent control for the renderer. [Dynamics implementation](../crates/osage-dynamics/src/rapier.rs) · [Terrain controls](../worlds/ville-paris/check-paged-ragdoll.py) · [Two supporting pages and arrival order](../worlds/ville-paris/check-ragdoll-contact-order.py)
+
+## D-164 — Retain active contacts on identical certified terrain
+
+When the detailed collision page arrives, validate the complete page. At each original shape slot, compare the owner, surface ID, material, ordered indices and every vertex component with the installed certified geometry. An exact match keeps its Rapier collider and current contacts. Build genuinely different colliders before publishing the page, then remove the obsolete handles. On two adjacent supports a post-impact replacement previously moved a limb by up to 18.85 cm relative to the fully resident path. Keeping the identical colliders made all 79 states of both rigs match. A mixed page keeps one floor, installs its neighbour's new side wall and can later be evicted. [Terrain publication](../worlds/ville-paris/src/paging/support.rs) · [Collider handoff oracle](../worlds/ville-paris/check-collider-handoff.py)
+
+## D-165 — Preserve simultaneous impact voices across terrain delivery orders
+
+On 2026-11-23 the district began reserving the acoustic paths of all limb samples tied at the next predicted contact tick. The shared impact measurement processes simultaneous surfaces in authored order before selecting each material excitation seed. This preserves distinct, independently arriving sounds when two feet strike two different materials. [Method and cost](../knowledge/algorithms/paged-impact-sound.md) · [Two-panel comparison](../worlds/ville-paris/check-simultaneous-impacts.py)
+
+## D-166 — Keep the struck moving support in the district simulation
+
+On 2026-11-23 Ville-Paris began stepping an actor and a movable solid together on paged terrain. Both bodies contribute to collision reads and to the decision to advance a tick. The renderer uses the solved transform of the solid. Sound measures the relative normal velocity at the contact, including rotation, and reserves geometry for the path from a possible moving impact to the listener. [Physical comparison](../worlds/ville-paris/check-paged-bonnet.py) · [Moving contact and stereo recording](../worlds/ville-paris/check-paged-bonnet-audio.py)
+
+## D-167 — Store original collision triangles independently of visual tile borders
+
+On 2026-11-23 Ville-Paris began placing compact source colliders in a single physical page. Larger meshes can assign complete triangles to the cell containing each triangle's centroid. Bounds cover the full geometry in the page. The source node, material, winding and each ordered triangle survive the cook. The renderer still clips visible geometry at tile borders. Existing districts can be read as originally cooked. [Collision geometry oracle](../worlds/ville-paris/check-collision-topology.py) · [Object geometry](08-object-format.md)
+
+## D-168 — Preserve the complete indexed collider of repeated box-shaped supports
+
+On 2026-11-23 the safety catalogue gained an optional corner pattern for repeated small solids. Each instance reconstructs its exact source vertices, indices, winding and duplicate vertices from the original corner order and coordinates. The reader checks the reconstructed upper faces and residual triangle bounds. It checks the complete physical page against the ordered collider before promotion. Older catalogues still publish their available upper faces. Identical support holds keep their native manifold while a person and a moving object settle. [Geometry and replay checks](../worlds/ville-paris/check-corner-support.py)
+
+## D-169 — Encode streamed collision pages with exact indexed geometry
+
+On 2026-11-23 the district cooker adopted a binary collision page. Each shape takes its owner and material from the same ordered slot in the tile directory. General meshes store float32 positions and triangle indices. A mesh matching the repeated block topology can store its eight corners, two horizontal rectangles or six box coordinates when reconstruction preserves every source bit, index and winding. The ordinary paging path reads the packed pages and earlier JSON districts. Across the 226 physical pages of Bir-Hakeim the payload falls from 566,789 to 19,777 bytes for the same 5,292 triangles. The directory, fallback catalogue and visual resources have separate byte counts. [Writer](../worlds/ville-paris/paging_collision_codec.py) · [Reader](../worlds/ville-paris/src/paging/tiles/collision.rs) · [Replay and compatibility oracle](../worlds/ville-paris/check-packed-collision-reader.py)
+
+## D-170 — Preserve the original triangle identity of solved mesh contacts
+
+The identity of a physical face consists of its source tree node, its named collision surface and the zero-based triangle ordinal on that surface. The cooker assigns the ordinal before partitioning the mesh. Fragmented shapes carry increasing ranges of original faces. The subset installed for certified support has an additional mapping to the full shape. In a Rapier contact the manifold identifies the touched triangle on the mesh side. Both the full and paged readers report its original ordinal. Unsupported historical mappings and analytic shapes leave the field absent. Version 3 resident traces record the new field and the verifier can reproduce the earlier trace layouts. [Source order and validation](../worlds/ville-paris/src/paging/tiles/faces.rs) · [Reflected terrace and ramp replay](../worlds/ville-paris/check-source-faces.py) · [Catalogue validation and recovery](../worlds/ville-paris/check-source-face-validation.py)
+
+## D-171 — Reduce the district's first transfer while preserving the initial scene
+
+The district reader negotiates gzip for its JSON directory over HTTP. A static origin may return identity. A verified cache entry stores the decoded bytes with the validator of the origin's chosen representation. The coarse visual scene also has a lossless representation that groups repeated glTF fields and binary buffer views. The cooker compares its size with the existing parent representation. This keeps primitive attributes, material assignments, placements and source owners available on the first frame. The old representation remains readable. [Directory and cold route check](../worlds/ville-paris/check-index-transfer.py) · [Coarse scene writer](../worlds/ville-paris/paging_coarse.py) · [First-frame comparisons](../worlds/ville-paris/check-bootstrap-frames.py)
+
+## D-172 — Test the swept bounds against certified residual triangles
+
+An omitted collision face can occupy half its bounding rectangle. A falling capsule above the other half used to wait for a missing physical page. When the three vertices of a single omitted face lie on corners of its bounding box, the support catalogue can store their corner indices. The reader tests the swept bounds against that triangle after the bounding-box filter. Overlap and tangency keep the hold. An unrepresented or multi-face group retains its original conservative bound. The full page validates the certified vertices when it arrives. The 441-shape Paris district needs no extra records. [Triangle clearance and validation](../worlds/ville-paris/src/paging/support/clearance.rs) · [Ten measured approaches](../worlds/ville-paris/check-residual-triangle-paths.py) · [Corruption tests](../worlds/ville-paris/check-residual-triangle-certificates.py)
+
+## D-173 — Report the original triangles and the coverage of a finite segment
+
+A resident object's visual, physical and acoustic surfaces can each yield several crossings, including two authored triangles sharing an edge or occupying the same position. Keep the original surface binding and report each crossed face with its ordinal, world position and distance. A district query examines the installed static collision state at the chosen tick. It reports which missing pages or residual regions could still add hits. Queries reuse the current geometry without scheduling a page load or advancing the simulation. [Finite segments and coverage](../knowledge/algorithms/scene-ray-coverage.md) · [Resident object checks](../worlds/ville-paris/check-object-rays.py) · [Paged district checks](../worlds/ville-paris/check-paged-collision-rays.py)
+
+## D-174 — Share resident object triangle indexes across placements
+
+Each source visual mesh supplies one local triangle hierarchy. An outer hierarchy selects its placements, preserving each source owner, transform and surface binding. A collision or authored acoustic surface stored in world space shares a placement only when the ordered triangles and transformed vertex bits agree. A divergent surface keeps its own index. The inspector creates results only for bindings crossed by the segment. Across 1,024 placements of an 81-face model, triangle and placement BVHs occupied 88,272 bytes, down from 16,588,736. The differential checks include a one-ULP height difference, a changed face order, oblique and reflected placements and repeated owners under the district tree. [Method and measurements](../knowledge/algorithms/instanced-object-rays.md) · [Scaling check](../worlds/ville-paris/check-object-ray-scaling.py) · [Transform controls](../worlds/ville-paris/check-instanced-ray-affines.py)
+
+## D-175 — Build resident acoustic triangle trees when a path reaches their surface
+
+The listener's direct path and the edge search for diffraction first test the world bounds of the placed acoustic surfaces. Only a candidate surface builds its triangle tree. The source binding owns that tree, allowing separate streamed impact paths to reuse an already prepared placement and release it with the underlying geometry. The stereo recording reports which geometry its search trees retained. In the 1,024-screen replay the sound touches one screen. The reader indexes 130 triangles across that screen and one other acoustic binding. [Technique and costs](../knowledge/algorithms/acoustic-surface-index.md) · [Direct and diffracted stereo comparison](../worlds/ville-paris/check-acoustic-surface-index.py)
+
+## D-176 — Account for native speculative contacts when certifying an upright capsule step
+
+When a missing page would hold an isolated upright Rapier capsule, compare its swept capsule and the native speculative contact distance with attributed missing triangles. Preview contested motion against the installed terrain. A centred new support must also persist into the next step. A coupled body, uncertain geometry or a failed preview keeps the hold. On an oblique approach the page can become necessary two ticks earlier than the old swept box indicated. [Native geometry and preview](../crates/osage-dynamics/src/streamed/clearance.rs) · [District reservation](../worlds/ville-paris/src/paging/support.rs) · [Drop and oblique trajectory comparison](../worlds/ville-paris/check-capsule-residual-clearance.py)
+
+## D-177 — Certify the closed acoustic surfaces reached by a sound path
+
+An actual crossing of a blocking surface selects the neighbouring surfaces that may complete its volume. The resident hierarchy finds the transitive closure of overlapping world bounds. Certification of convex closed shells remains exact within that group. Silent frames and clear paths can finish without certifying a room. Each checked placement reuses the result for later contacts in the same snapshot. [Algorithm and limits](../knowledge/algorithms/acoustic-solid-regions.md) · [Silent, audible and two-obstacle replay](../worlds/ville-paris/check-acoustic-solid-regions.py)
+
+## D-178 — Share distant native terrain shapes and keep the original contact frame
+
+An independently placed fixed surface keeps its native collider, material and source face ordering. When an isolated body is far enough away, an exactly translated copy can share the source native triangle shape. Before its original bounds enter the next substep’s reach, restore the original world-space triangle array on the same handle. Directly using the translated native frame at contact changed oblique trajectories even though all world vertices had the same bits. Jointed rigs and moving-box scenes can share shapes at the identical world position. In the 1,024-placement high drop, both engines began with one shape and restored two neighbouring copies. [Method and measurements](../knowledge/algorithms/native-static-instances.md) · [Native storage oracle](../worlds/ville-paris/check-native-shape-storage.py) · [Pose, material and source-face oracle](../worlds/ville-paris/check-native-mesh-instances.py)
+
+## D-179 — Route a sound path through finite openings in authored rooms
+
+Attach room bounds and ordered portal quadrilaterals to nodes of the object forest. The district directory carries the same bindings and transforms as the resident model. For a geometric query, locate both endpoints in the room hierarchy and search their open connections. Optimize every crossing on its finite aperture in world metres. Return the feasible polyline, a lower bound, the ordered owners and whether the search finished. A dense cyclic graph retains a feasible route when the search reaches its work limit. Full closure disconnects its two sides through that opening. The first implementation supplies geometry to the resident and paged inspectors. [Object format](08-object-format.md) · [Algorithm and oracle](../knowledge/algorithms/acoustic-room-portals.md)
+
 ## D-180 — Sound becomes crates of the engine: osage-sound, its voices, its analyser
 
 Date: 2026-11-24
@@ -1302,6 +1445,22 @@ The prototype of the Pont de Bir-Hakeim had its own Cargo workspace under `tools
 - **Kept:** the renders do not change. Built in the root workspace, without the prototype's own release profile (one codegen unit, thin LTO), the command gives the same bytes: the two digests of its README.
 - **For the code that used the prototype by path:** the packages are renamed: `osage-paris-soundscape` becomes `osage-sound`, `osage-paris-voices` becomes `osage-sound-voices`, `osage-sound-analysis` keeps its name. Renaming them in a manifest keeps its code as it is: `osage-paris-soundscape = { package = "osage-sound", path = "../../crates/osage-sound" }`. `Scene::bundled()` is gone with the bridge's scene; code that used it depends on `paris-soundscape = { path = "../../tools/paris-soundscape" }` and calls `paris_soundscape::bridge()`, which returns the same `Scene`. [Prototype](../tools/paris-soundscape/DESIGN.md)
 
+## D-181 — Drive a vertical support on the fixed physics clock
+
+A resident city replay can prescribe one horizontal lift by its bottom centre, half-extents, vertical travel, period and friction. A native kinematic rigid body follows the cosine stroke in metres at each solver substep. Both adapters expose its pose and its contact surface through the existing rigid trace. The standing capsule is free under gravity. The lift check replays the trip with each solver, reconstructs the foot and the contact in the local platform frame and measures the largest excursion from the starting point. [Fixed-step contacts](07-city-scale-quality.md#q10--fixed-step-contacts-and-a-multilayer-character-controller) · [Physics interface](../knowledge/modules/osage-dynamics.md) · [Lift oracle](../worlds/ville-paris/check-lift.py)
+
+## D-182 — Retain a kinematic support while the district replaces terrain
+
+The district holds the lift in the same Rapier world as the passenger. A stable route surface identifies its contacts across the addition, replacement and removal of cell colliders. Native collider order is established before the first solver step. Each subsequent step uses the same prescribed motion as the resident replay. A passenger moving with the support can be grounded at a nonzero world velocity. The replay exposes the poses, contact point, normal and stable surface so that the streamed trip can be checked against the fully loaded city. [Streamed terrain contacts](../knowledge/algorithms/paged-ragdolls.md) · [Lift replay comparison](../worlds/ville-paris/check-paged-lift.py)
+
+## D-183 — Limit sustained limb penetration into a box supported by terrain
+
+On 2026-11-24 the Rapier adapter began distinguishing the transient compression of a limb against a supported dynamic box from a resting contact. A terrain impulse opposite to gravity establishes support. The collision solver can use its stiffer terrain coefficients when a limb approaches the deep-overlap range. The box retains its mass, inertia and full dynamic response. Shallow resting contacts retain their ordinary stiffness. The city checks both the number of consecutive deep samples at 240 Hz and the time to settle. [Solver](../crates/osage-dynamics/src/rapier.rs) · [Supported-foot regression](../crates/osage-dynamics/tests/contacts.rs) · [Pedestrian impact measurements](../knowledge/oracles/pedestrian-impact.md)
+
+## D-184 — Damp the relative swing of a free limb on a supported branch
+
+A passive Rapier rig uses its parent–child tree to find a terminal segment that has carried no contact impulse for the native sleep interval. When its parent is quiet and carries a reaction against gravity, the free joint axes dissipate relative angular velocity at a rate set by gravity and the size of the segment. The city’s drop oracle checks motion in flight, co-rotation, the onset and duration of rest, and the depth and timing of impact. [Solver](../crates/osage-dynamics/src/rapier.rs) · [Measurements](../knowledge/oracles/pedestrian-impact.md)
+
 ## D-185 — Sound is synthesised from state and placed in the object tree
 
 Date: 2026-11-24
@@ -1317,9 +1476,99 @@ How osage makes and places sound, as the prototype of the Pont de Bir-Hakeim bui
 - **Why:** a server already sends where things are; with sound made from state and placed by node, it sends nothing more for sound, and the same scene is heard on every device at what that device affords. Placing by node path gives sound the tree's cut for free: from afar a node's own emitters stand for its branch, as `subtreeProxy` does for the eye.
 - **Not decided here:** where a contact's modes are set (object or material), when the fields move into the object format and in which version, how far sound is carried as a field (design/09 §6). [Design note](09-sound.md)
 
+## D-186 — Reconstruct a moving sound from eight samples with a shared phase table
+
+The reference tier of the sound engine reads each direct or reflected path at the fractional position supplied by its delay line. Seventh-order Lagrange weights replace the previous Blackman–Harris window to reduce the dominant spectral image of a moving source. Both readers span the same eight samples. A shared compile-time table holds 257 sets of weights. The end-to-end test checks the pitch and image level on the rendered loudspeaker signal. [Delay lines and Doppler](../knowledge/algorithms/sound-delay-lines.md) · [Reader, measurements and trade-offs](../knowledge/algorithms/moving-sound-delay.md) · [Physics tests](../crates/osage-sound/tests/physics.rs)
+
+## D-187 — Use the inertia of a hanging branch to settle a supported ragdoll
+
+On the parked bonnet a supported chest can leave the upper arm, forearm and hand hanging together. D-184 covered a free end attached directly to a supported segment. The Rapier adapter now propagates a quiet supporting contact down an unloaded branch, including through fixed joints. Each movable joint carrying descendants uses their combined bind-pose mass and inertia to set a viscous angular torque. The existing terminal-joint rate still applies at a free end. A load on any descendant withholds damping at its upstream joint. The three-part pendulum test checks that a compound limb swings under gravity and settles below the edge. [Branch damping](../knowledge/algorithms/hanging-ragdoll-branches.md) · [City impact oracle](../knowledge/oracles/pedestrian-impact.md)
+
+## D-188 — Resolve the first inward crossing of an articulated body and a supported box
+
+A passive joint tree falling onto a dynamic box can travel several centimetres per solver step. For an inelastic impact, the Rapier adapter estimates the time of the first inward crossing, checks the capsule against the oriented box, and advances the native solver on both sides of that instant. It spends extra stabilization iterations during the remaining fraction. To qualify again, the unloaded rig must clear the entire box along the previous impact normal. This distinguishes a second flight from a body sliding over an edge. The public replay records the first reported contact and the first geometric overlap separately, with the velocity of each surface at its closest point. [Supported impact algorithm](../knowledge/algorithms/supported-box-impact.md) · [Contact measurements](../knowledge/oracles/pedestrian-impact.md) · [Oblique, elastic and second-flight tests](../crates/osage-dynamics/tests/supported_impact.rs)
+
+## D-189 — Reuse contact geometry across sleeping articulated steps
+
+Continue advancing the native Rapier world at every substep. When all limbs and dynamic supports sleep through a complete substep, retain its geometric witnesses and reuse the supported-contact stiffness at the same step duration. A change of terrain or impulse observation invalidates the stored state. A waking rig reads fresh geometry on the step that wakes it. A kinematic lift takes the ordinary moving-contact path. [Algorithm](../knowledge/algorithms/resting-contact-witnesses.md) · [Wake regression](../crates/osage-dynamics/tests/resting_contacts.rs) · [City measurements](../knowledge/oracles/pedestrian-impact.md)
+
+## D-190 — Refine supported contact while the articulated load is still approaching
+
+After the first resolved inelastic crossing, use the box’s fixed support reaction and an inward load on its impacted face to identify compression. Measure projected travel from the relative normal momentum of the entire rig. If one interval would exceed the native linear error, bisect it within the articulated CCD budget and solve the joints and contacts together at each boundary. Once the load slows within tolerance on the face, end refinement for that impact. The 60 Hz replay and its 240 Hz pose observations keep their clocks. This reduces the largest foot overlap across the two tested rigs. Some landing postures take longer to settle. [Supported-box impact](../knowledge/algorithms/supported-box-impact.md) · [Offset landing and rest measurements](../knowledge/oracles/pedestrian-impact.md)
+
+## D-191 — Index physical page bounds for trajectory and proximity requests
+
+The district reader builds a hierarchy over the actual collision bounds of each physical page. A trajectory visits branches within the largest possible service horizon, then computes the deadline from each candidate’s own bytes. An actor leaving a page can still cancel a queued read or release a reservation because the reader includes the previous interests in the update. The exhaustive calculation serves as the test oracle. [Planning and measurements](../knowledge/algorithms/collision-read-planning.md) · [Reservations](../knowledge/algorithms/physical-page-reservations.md)
+
+## D-192 — Search local physical pages before testing missing support
+
+Query the district’s physical hierarchy separately for each swept body part. Only intersecting pages need the existing checks on their omitted faces. For support installation, visit the pages intersecting the wider sweep together with the previously active pages, in the original tile order. This preserves the retention margin, collider lifetimes and source identities when an actor leaves a region. [District paging and doorway controls](../knowledge/algorithms/district-paging.md) · [Support guard](../worlds/ville-paris/src/paging/support.rs)
+
+## D-193 — Choose the smaller lossless encoding for the collision support catalogue
+
+Measure the compressed bytes of the completed support JSON. Emit the shorter of zlib and a sized Zstandard frame when both encoders are available. Keep zlib as the portable writer fallback and explicit compatibility option. The native reader uses the reference Zstandard implementation through its safe Rust interface. It checks the declared size and frame boundary, decodes directly into the output buffer, and verifies the catalogue-to-directory binding before installing support. [Sizes, transport and replay](../knowledge/algorithms/district-paging.md) · [Writer checks](../worlds/ville-paris/test_paging_support_storage.py)
+
+## D-194 — Let a headless simulation stream only the channels it consumes
+
+A Ville-Paris replay started with `--no-visuals` reads the common district index, the support catalogue and the requested collision pages. The same solver, page planner, support handoff and source tree serve interactive and headless clients. The headless client skips the coarse drawing, visual page queue, model bank and image resources. Collision queries and explicitly requested acoustics keep their own data paths. A rendering client still verifies the coarse parent and resolves visual detail after choosing its texture format. [District HTTP measurements](../knowledge/algorithms/district-http.md) · [Channel and trajectory checks](../worlds/ville-paris/check-headless-collision.py)
+
+## D-195 — Select an immutable district directory by digest and byte length
+
+A district publisher can run `cook-pages.py --pin-index` and distribute the resulting digest and length with a world version. A client given `--index-pin SHA256:BYTES` reads the corresponding compressed directory through the same verified cache as the physical pages. This lets a static host serve a compact directory and lets a returning client start offline when all its requested files are cached. The cooker also publishes the ordinary JSON directory for clients that follow updates at the district URL. Both paths decode the same JSON and run the same district validation. [Transfer and replay measurements](../knowledge/algorithms/district-http.md) · [Snapshot oracle](../worlds/ville-paris/check-pinned-directory.py)
+
+## D-196 — Load collision support from the live actor’s swept region
+
+Allow a publisher to partition the certified support catalogue into immutable groups of physical tiles. Keep the whole catalogue available for consumers that require district-wide geometry. The native reader establishes support at spawn, can start reads ahead of an approaching body and waits for verified geometry before solving a threatened step. An optional physics-only pin carries physical page metadata and the object tree, including its acoustic bindings. [Selection, storage and limits](../knowledge/algorithms/district-http.md) · [Native HTTP oracle](../worlds/ville-paris/check-support-regions.py)
+
+
+## D-197 — Keep the replay clock running while regional collision data is in flight
+
+After spawn, the district client polls regional support reads on each wall-clock tick. It treats each unknown physical page as potentially solid throughout its declared bounds. The actor can advance through proven clear space. When unknown terrain reaches the conservative movement or speculative-contact bounds, the solver holds the pose and velocity until the required data validates. A completed detail read can wait for its region while the other lanes progress. The receipt records that wait separately from network service time. [Regional HTTP and contact tests](../worlds/ville-paris/check-support-regions.py)
+
+
+## D-198 — Store physics-directory addresses and bounds in columns
+
+For a headless district pin, the cooker measures two complete lossless encodings and publishes the smaller one. The ODP2 layout groups full SHA-256 digests and exact binary32 coordinates into columns while preserving the object tree, properties and order of the physical rows. The native reader restores those rows before the usual district validation and paging decisions. Wider source coordinates retain the JSON encoding. [Directory format and transfer measurements](../knowledge/algorithms/district-http.md) · [Native replay and malformed directory tests](../worlds/ville-paris/check-support-regions.py)
+
+## D-199 — Deliver detailed collision addresses with regional support
+
+A publisher can choose `--pin-regional-physics` for headless consumers. The pinned root carries the object tree, lengths and spatial bounds needed for selection. Each authenticated regional support file carries the full SHA-256 addresses of its detail pages. Nearby consumers resolve those addresses before admitting detail reads. A consumer that needs complete addresses, including a district-wide simulation, can fetch a separately pinned table. The ordinary index and previous immutable pins still open their original content. The default group width for this option is four tiles, based on the measured cold transfers for four Bir-Hakeim routes. [Format, timing and grouping trade-off](../knowledge/algorithms/district-http.md) · [HTTP qualification](../worlds/ville-paris/check-regional-addresses.py)
+
+## D-200 — Carry exact collision pages when they cost less than their regional certificate
+
+A headless publisher can use `--pin-bundled-physics` to choose the representation independently for each region. Pack the complete OCP1 tile payloads when they take fewer transfer bytes and fit within the previous decoded catalogue length. The client verifies the coordinate and page digest binding, decodes the shapes against the root's object and triangle metadata, and publishes them through the existing physics interest and support paths. Keep the sparse certificate when it wins or the page format requires it. [District transfer measurements](../knowledge/algorithms/district-http.md) · [Native HTTP oracle](../worlds/ville-paris/check-bundled-regions.py)
+
+## D-201 — Let rendered districts open with regional collision data
+
+A publisher can select `--pin-visual-district` when the camera needs all visual selection metadata and the actor needs only nearby terrain. The ODI2 root retains the source object tree, object profiles, visual row order, model variants, material and texture references. It carries visual tile digests in one binary column and uses the same regional certificates or full collision pages as the headless pin. The coarse parent and fine assets keep their immutable addresses across releases. A district without physical regions can publish the ordinary full snapshot. [Transfer and frame measurements](../knowledge/algorithms/district-http.md) · [Visual and contact oracle](../worlds/ville-paris/check-visual-district.py)
+
+## D-202 — Package a district's first frame with its visual directory
+
+A publisher can use `--pin-first-frame` to place the directory and coarse parent in one authenticated launch file. A known starting tile can contribute its collision region via `--first-frame-cell X Z`. Keep fine assets separately addressable. When the parent uses OVC2, measure both its existing bytes and its original lossless columns inside the outer compression frame. Preserve the full model and source ownership in both representations. The returned reference can be shared by multiple cameras or starting points. [Storage and cache trade-offs](../knowledge/algorithms/district-http.md) · [Native rendering and transport checks](../worlds/ville-paris/check-first-frame.py)
+
+## D-203 — Use a cached first-frame package as the dictionary for a district update
+
+A publisher can offer an optional patch alongside the complete ODI3 file. Use the previous decoded package as the compression dictionary so a small edit can reuse identical geometry across different wire encodings. Give the encoded file and the decoded result their own authenticated addresses. A cold client reads the complete file in one request. A returning client verifies the patch and the reconstructed payload, and stores the latter atomically for later releases. A failed update falls back to the complete current file. [Protocol and cost](../knowledge/algorithms/district-http.md) · [Release-chain oracle](../worlds/ville-paris/check-launch-updates.py)
+
+## D-204 — Query moving supports at their current physics pose
+
+A physical segment in a streamed district can cross a kinematic lift or a freely moving bonnet. Include these owners in the spatial index at the solver pose for that tick. Preserve local box face identities through translation and rotation. Return every transverse crossing and the clipped interval for travel along a face. Terrain gaps continue to describe the uncertainty from missing pages even when a moving support is known. [Segment coverage](../knowledge/algorithms/scene-ray-coverage.md) · [Lift and bonnet oracle](../worlds/ville-paris/check-moving-surface-rays.py)
+
+## D-205 — Return occupied intervals on the posed physical actor
+
+Callers can opt into the actor on a district segment query. A posed sphere or capsule contributes its whole occupied interval, its boundary points and their outward normals. Keep the slot and parent of each body even where several joint neighbours overlap. Bind imported slots to the node and material of the identified actor GLB. Keep the environment-only default for terrain and support queries. [Segment coverage](../knowledge/algorithms/scene-ray-coverage.md) · [Actor oracle](../worlds/ville-paris/check-actor-rays.py)
+
 ## D-206 — Measure the extent of support from the reported contact points
 
 Project the mass centre and the upward witnesses of one numbered substep onto the horizontal plane. Keep the body slots in the support set and report a signed Euclidean margin. Two rear paws on a ledge can then give a negative margin while contact persists. With no witnesses the distance is undefined. Solvers supply the contacts and the measurement has no feedback into the dynamics. [Support footprint](../knowledge/algorithms/articulated-support.md)
+
+## D-207 — Project the current support points with the solids that own them
+
+Sum the momentum of every rigid body in the actor. Over an explicit interval, extrapolate the centre of mass and carry each current contact point with its supporting solid. Report the resulting horizontal margin alongside the measured one. This lets a world observe the change during a slide without applying a balance controller. [Support geometry](../knowledge/algorithms/articulated-support.md)
+
+## D-208 — Keep the choice of contact radius explicit on sphere import
+
+An articulated source sphere can carry a declared extent and a different contact margin. Preserve the established declared-radius import by default. Allow an explicit selection of either field and record the original values, selected radius and bone. A zero contact radius cannot instantiate a sphere in the object profile. [Conversion options](../tools/object-convert/README.md)
 
 ## D-209 — Spend a finer solver clock around the predicted first lift contact
 
@@ -1328,6 +1577,10 @@ Use the actual swept capsule and moving box to predict the first inward encounte
 ## D-210 — Bound local load-transfer sampling after the first lift impact
 
 A route can request a travel target for the tick following first contact. Choose native subdivisions from both closing velocity at the witness and incoming momentum of the rig. Bound the response window to one replay tick so a later slide off an edge cannot consume an open-ended number of extra solves. Record the intervals and measure their effect from the posed geometry. [Method and oracle](../knowledge/algorithms/lift-contact-response.md)
+
+## D-211 — Preserve the direction and twist axis of imported joint frames
+
+Accept explicit body-to-joint matrices with twist on source Z. Keep the established joint-to-body convention as the default. Resolve parent and child orientations individually, retain their local anchors, and map the signed hinge and both principal swing extents to the portable frame. Record the selected convention and the original fields. [Frame conversion](../knowledge/algorithms/articulated-joint-frames.md)
 
 ## D-212 — Carry the swing boundary in the joint definition
 
@@ -1364,3 +1617,43 @@ Use the derivative of squared distance to the solid box along the capsule spine 
 ## D-220 — Refine simultaneous twist and swing stops under load
 
 A circular swing cone can press against its rim while the joint twists past a signed stop. After a measured external normal impulse, request additional impulse passes when the tilt has reached fifteen sixteenths of the permitted cone angle and twist has crossed its authored limit. Use three extra passes for the circular cone. Keeping the request fixed bounds the cost of sustained pressure at the rim. The ordinary angular error band applies again when either condition clears. A full-turn swing has no rim. Solving both constraints uses the existing native timestep. The regression drops a sixteen-part quadruped on a frictionless moving platform and checks angular error and penetration after touchdown at two local sampling rates.
+
+## D-221 — Preserve stride phase when a person changes pace
+
+Apply a changed human playback speed to the active clip at its current time. Starting another move still chooses its authored start phase and crossfades. Zero pace holds the current pose. The animation-system regression accelerates, pauses and resumes a single walking clip and checks its position each time.
+
+## D-222 — Match a replicated walker's gait to its displayed travel
+
+Measure horizontal distance in metres between the rendered root before and after interpolation. Divide by the elapsed frame time to choose the gait and divide that speed by the clip's nominal forward speed to set playback. At unit actor scale the installed walking and jogging clips give 0.979 and 5.919 m/s respectively, measured from the forefeet within two centimetres of the lowest point in the cycle. The world owns the walk and jog thresholds. Vertical correction and rotation in place contribute no ground travel. A frame with no elapsed time leaves the actor in place.
+
+## D-223 — Plant each forefoot with a two-link leg correction on level ground
+
+A walking or jogging world actor may keep each low forefoot at its touchdown position in the horizontal plane. Apply the correction after sampling the clip, within the reach of the hip and knee, preserving the shoe orientation. Fade out the offset as the foot rises. Restore the source rotations before evaluating the next frame. The world supplies the root path and opts in per actor. The flat-ground pedestrian replay compares both feet on the same input frames and exercises removing the component.
+
+## D-224 — Adapt animated feet to the world's collision surface
+
+A world may supply a stationary support height beneath each forefoot and the maximum step it considers traversable. Place the foot relative to its own support. When a lower ankle target exceeds the available leg span, lower the visual armature enough to recover reach and solve both legs from that pose. Leave the controller trajectory and animation clock intact. Missing support releases the affected foot. The city replay samples the same collision triangles under the actor and both feet while crossing both edges of a 15 cm raised pavement.
+
+## D-225 — Bind ground contacts to paths in the model tree
+
+Let the model identify an armature and any number of independent limb contacts. For each contact, its three direct ancestors provide the ankle and two driven links. Shared attachment nodes can move with the body. Each limb solves in its own parent's coordinates after the clip is sampled. The gait supplies a contact height and can release all contacts during flight. The human adapter binds the installed walking models by name. A four-legged fixture uses the persistent object IDs and separate fore and hind attachment nodes. A folded equal-length limb keeps its current knee direction when the target reaches its hip.
+
+## D-226 — Sample a planted foot across its rigid sole
+
+A foot may carry several points in the ankle frame. The horizontal anchor follows the authored contact. For vertical clearance, sample the ground at the translated position of each sole point and use the greatest required lift. A supported corner still contributes when the central marker is over a hole. The animation keeps its ankle orientation. In a replay of an animated fox, the skin above a curb can intersect its top while the central marker already clears the edge. The replay measures the deformed vertices of each paw at their own positions and reports stance gaps and sliding alongside penetration.
+
+## D-227 — Check the deformed sole over the ground it covers
+
+A nearby actor can use the drawn limb’s skin weights and triangle indices for ground clearance. Apply the weights after evaluating the leg correction. Where terrain changes height within a face, compare the overlapping sole and terrain surfaces. Bound the number of extra vertical corrections and retain the reachable pose with the least penetration. The original glTF positions, skin palette, inverse bind poses and mesh indices are sufficient to bind the samples. The fox replay measures the deformed vertices and crossings of the curb edge separately, and checks the visible gap and horizontal slip.
+
+## D-228 — Choose a footprint from the whole stance of a looping gait
+
+A model can supply a contact trajectory sampled from its clip and the root travel per cycle. Store horizontal corrections relative to the centre of each low interval’s swept bounds, then interpolate through swing. During playback the live foot anchor corrects residual motion. A planned low contact can require a visual body drop even on level ground. Keep the actor trajectory and both segment lengths. Allow up to eight post-solve skin refinements when a foot face approaches a ledge slowly. The fox replay tracks the rig marker and the same point of skin from one frame to the next. [Cyclic foot contact](../knowledge/algorithms/cyclic-foot-contact.md)
+
+## D-229 — Drive pedestrian contacts from the playing clip and its model tree
+
+A pedestrian can request planned steps on its loaded human rig. Calibrate a walk or jog from the body’s actual armature-to-contact paths, its nominal travel, and the installed animation curves. Reuse the sampled tables across actors of that body and gait. While one clip owns the pose, use its live seek time and duration. During a mixture of grounded clips, check the shoes against terrain using the mixed pose and suspend the single-clip plan. Keep the sole bindings when a walker stands idle. The Paris native replica opts in. [Cyclic contacts](../knowledge/algorithms/cyclic-foot-contact.md)
+
+## D-230 — Resume a fading locomotion loop at its live time
+
+A replicated change of gait can reverse before an earlier walk, jog or idle has finished fading. Retain the still-active animation state when Bevy promotes that loop back to the foreground. A retired loop uses the actor’s configured entry phase on its next start. The transition manager keeps ownership of weights and clip expiry. The fox replay isolates the command at zero elapsed time and compares the four distal joints on eight entry phases. [Loop redirection](../knowledge/algorithms/reversible-loop-crossfade.md)

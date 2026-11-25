@@ -8,7 +8,11 @@ mod articulation;
 #[cfg(feature = "profile")]
 pub use articulation::*;
 #[cfg(feature = "profile")]
+mod foot_rig;
+#[cfg(feature = "profile")]
 mod profile;
+#[cfg(feature = "profile")]
+pub use foot_rig::ObjectFootRig;
 #[cfg(feature = "profile")]
 pub use profile::*;
 #[cfg(feature = "profile")]

@@ -29,12 +29,17 @@ Walk in a street of Paris as real as its photographs, the client drawing in 3D o
 
 The program `paris` (`[ws://HOST:7878] [--tier T1..T4] [--street DIR] [--offline] [--fov DEGREES] [--at X,Y,Z] [--heading DEGREES] [--shot FILE] [--film DIR SECONDS] [--plain] [--whole] [--cube-probes N]`), built with `--features raytracing` to trace the block at T4. `look::TABLE`, the table of Blender's AgX it reads. The program `paris-update` and the launchers `worlds/paris/release/{windows/walk.bat, macos/walk.command}` (`paris --offline --ring --block-probes`), packed by the `release-paris` workflow for `paris-v…` releases; what they download is `osage-paris-street.zip` (the scene) and `osage-paris-light.zip` (the baked light), made by `tools/bistro/content-zip.sh` (D-143).
 
+Replicated walkers request `PlannedHumanSteps` after spawning their human model. The world still supplies heading, smoothed world travel and clip pace. The [human module](/modules/osage-humans.md) provides each body's sole geometry and reads the live animation player's phase.
+
 # Invariants
 
+- Remote walkers choose between idle, walk and jog from the horizontal distance actually advanced on the rendered frame. Walk and jog scale their playback by the nominal speed of the clip supplied by [osage-humans](/modules/osage-humans.md). Snapshot spacing and vertical corrections do not directly set the cadence (D-222).
 - Nothing beyond the walker's block is drawn from the model: a mesh is shown only while its box reaches into the block, and the faces hide the rest. Traced, nothing beyond it is in the rays' scene either: what reaches out is cut at its surface, and the dome shines in its place.
 - Measured (research 10), from the scene camera's place against Cycles through the same AgX: with the 384 px tiles, 22.4 dB over the picture (19.6 before the exact march, Blender's AgX and SSAO left out); with 2048 px tiles, 26.2 dB; with five probes inside the cube, 28.4 dB, the part of the picture no probe sees down from 3.8 % to 0.04 %. Every region within 10 % of Cycles' brightness; 12–25 ms a frame at T3 1280 × 720 on an Iris Xe, 5–10 ms at T4 on an L4. Traced under the dome and cut to the block (L4): 28.1 dB, the block's floor at 0.88 of Cycles (27.3 and 0.71 with the faces as lamps; T3 28.5 and 0.99). The whole street drawn from its model at T3 instead: 13.7 dB.
 
 # Knowledge
+
+- Replicated walkers use [forefoot planting](/algorithms/forefoot-plant.md) with the raw cell height from the same walk grid used by the movement controller (D-223, D-224).
 
 - Decisions: D-136, D-143 (the release). World and server: [osage-world-paris](/modules/paris-world.md); transport and decoding: [osage-hologram-stream](/modules/osage-hologram-stream.md); rendering by tier: [osage-render](/modules/osage-render.md).
 

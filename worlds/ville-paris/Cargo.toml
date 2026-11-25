@@ -1,0 +1,49 @@
+# SPDX-FileCopyrightText: The osage contributors
+# SPDX-License-Identifier: MIT OR Apache-2.0
+
+[package]
+name = "osage-ville-paris"
+description = "A native city experiment with portable inputs and a fixed-tick descent at Pont de Bir-Hakeim"
+license = "MIT OR Apache-2.0"
+publish = false
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+
+[[bin]]
+name = "ville-paris"
+path = "src/main.rs"
+
+[features]
+default = ["sound"]
+sound = ["dep:rodio"]
+
+[dependencies]
+anyhow.workspace = true
+base64 = "0.22.1"
+basis-universal = "0.3.1"
+bevy = { workspace = true, features = ["3d", "ui", "hdr"] }
+image = { version = "0.25.10", default-features = false, features = ["png", "jpeg"] }
+flate2 = "1.1.10"
+ktx2 = "0.5.0"
+gltf = { version = "1.4.1", default-features = false, features = ["utils", "names", "extensions"] }
+osage-paris-soundscape = { package = "osage-sound", path = "../../crates/osage-sound" }
+osage-paris-voices = { package = "osage-sound-voices", path = "../../crates/osage-sound-voices" }
+osage-sound-analysis = { path = "../../crates/osage-sound-analysis" }
+paris-soundscape = { path = "../../tools/paris-soundscape" }
+rodio = { optional = true, version = "0.22.2", default-features = false, features = ["playback"] }
+osage-render.workspace = true
+osage-dynamics.workspace = true
+rapier3d = "0.36.1"
+ruzstd = "0.9.1"
+zstd = { version = "0.13.5", default-features = false }
+osage-objects = { workspace = true, features = ["profile"] }
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+tempfile = "3.27"
+ureq = "3.5.2"
+
+[dev-dependencies]
+osage-humans.workspace = true

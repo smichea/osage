@@ -7,9 +7,12 @@ licence: LicenseRef-osage-AGPL-3.0-or-later-with-exceptions
 status: draft
 tags: [geometry, physics, replay]
 sources:
-  - id: implementation
-    title: Joint stops under simultaneous twist and tilt
-    resource: https://github.com/smichea/osage/blob/main/crates/osage-dynamics/src/rapier/swing.rs
+  - id: loaded
+    title: Loaded twist and tilt on a passive quadruped
+    resource: https://github.com/smichea/osage/blob/main/worlds/ville-paris/check-loaded-twist.py
+  - id: oracle
+    title: Two-body compound pose replay
+    resource: https://github.com/smichea/osage/blob/main/worlds/ville-paris/check-swing-envelope.py
 generated: { by: "OpenAI/Codex", at: "2026-11-24T18:00:00Z" }
 ---
 <!-- SPDX-FileCopyrightText: The osage contributors -->
@@ -57,10 +60,14 @@ The independent-axis mode accepts signed asymmetric intervals. A hinge needs onl
 
 # Oracle
 
-The native tests exercise projection bounds, the twist gradient and release of the extra passes. A sixteen-part mechanical quadruped lands on a frictionless rising platform at 480 and 960 Hz near first contact. The integration test checks the frame of first touch, the worst angular error across all fifteen joints and maximum vertical penetration across all sixteen shapes over fifteen frames.[^implementation] [Loaded landing test](https://github.com/smichea/osage/blob/main/crates/osage-dynamics/tests/loaded_landing.rs).
+The replay starts two bodies sharing a pivot from rest in 300 poses, with variable tilt amplitude, direction and signed twist. It compares first-frame orientations against a free-joint run on the same backend and measures the remaining angular error after 200 ms. It verifies deterministic repeats, checks for external contacts, and requires less than 0.05° residual excess after 200 ms on both marked backends.[^oracle]
+
+A second replay drops a sixteen-part actor with 30° stops onto a broad platform and a rear-paw ledge, slides it off a platform, and runs a free fall. It checks the maximum excess among all fifteen joints at each of 120 frames. The two-second mean and peak catch a twist drift that can arise after the last external contact. Repeating the test with narrow stops and with pads under only the left or right rear paw exercises impulse propagation under asymmetric load. A third rig keeps ±45° twist and gives the two tilt axes ±20° and ±5°. The replay checks the converted limits on every joint, samples five sliding speeds, and bounds the mean and peak across all fifteen joints. A paired near miss checks for spurious impulses. The zero-speed drop checks a peak below 2.4° both at the centre of the small pad and five centimetres to one side. The ledge departure checks the same threshold. A 4 m/s slide with 2° stops repeats with zero deck friction. For both drops the oracle records the peak joint excess, deepest sampled overlap and maximum signed vertical centre-of-mass velocity relative to the deck. The latter two use a quarter-second window from the first touching or penetrating deck witness. A negative maximum means that the centre of mass was still descending at every sampled instant in that window.[^loaded]
 
 # Reuse
 
-Set the joint definition to `SwingEnvelope::AngularEllipse` with symmetric, positive transverse half-widths. The default profile uses independent stops.
+Use `--swing-envelope angular-ellipse` when converting a fragment that uses this convention. Inspect the portable joint's `swingEnvelope` and its three intervals before consuming the rig.
 
-[^implementation]: [Implementation and unit tests](https://github.com/smichea/osage/blob/main/crates/osage-dynamics/src/rapier/swing.rs).
+[^oracle]: [Two-body compound pose replay](https://github.com/smichea/osage/blob/main/worlds/ville-paris/check-swing-envelope.py).
+
+[^loaded]: [Loaded twist replay](https://github.com/smichea/osage/blob/main/worlds/ville-paris/check-loaded-twist.py).

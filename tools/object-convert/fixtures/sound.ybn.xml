@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- SPDX-FileCopyrightText: The osage contributors -->
+<!-- SPDX-License-Identifier: LicenseRef-osage-AGPL-3.0-or-later-with-exceptions -->
+<BoundsFile>
+  <Bounds type="Geometry">
+    <BoxMin x="-0.75" y="-0.75" z="0.75"/><BoxMax x="0.75" y="0.75" z="0.75"/>
+    <GeometryCenter x="0" y="0" z="0.75"/>
+    <Materials><Item><Type value="7"/></Item></Materials>
+    <Vertices>
+      -0.75, -0.75, 0
+       0.75, -0.75, 0
+       0.75,  0.75, 0
+      -0.75,  0.75, 0
+    </Vertices>
+    <Polygons><Triangle m="0" v1="0" v2="1" v3="2"/><Triangle m="0" v1="0" v2="2" v3="3"/></Polygons>
+  </Bounds>
+</BoundsFile>

@@ -1,5 +1,17 @@
 # Knowledge Update Log
 
+## 2026-11-25
+
+* [Reversing a loop crossfade](/algorithms/reversible-loop-crossfade.md) preserves live playback state. The native fox replay isolates joint displacement at the command boundary (D-230).
+
+* [Human gait contacts](/modules/osage-humans.md) use the live player phase and the loaded body in the Paris client. The replay checks the shoes during idle, walk and jog transitions (D-229).
+
+* [Cyclic foot contact](/algorithms/cyclic-foot-contact.md) measures the footprint over a whole low interval. The fox replay follows motion of both the pad and the closest material point (D-228).
+
+* [Skinned sole clearance](/algorithms/skinned-sole-clearance.md) measures the skin and terrain across the contact area (D-227). The authored fox replay measures crossings between the visible triangle vertices.
+
+* [Foot planting](/algorithms/forefoot-plant.md) checks rigid sole points at the curb edge (D-226). The fox replay measures both authored gaits using deformed paw vertices, with four initial phases.
+
 ## 2026-11-24
 
 * **Creation**: Added the algorithm [sound faces from meshes](/algorithms/sound-faces.md) to [osage-sound](/modules/osage-sound.md) (issue #15): faces from an object's meshes through [osage-objects](/modules/osage-objects.md), sheets, a tree of boxes over the faces, and contacts as [osage-dynamics](/modules/osage-dynamics.md) reports them.
@@ -7,9 +19,148 @@
 * Added [osage-objects](/modules/osage-objects.md) for the glTF object tree and [osage-dynamics](/modules/osage-dynamics.md) for fixed-step contacts and articulated bodies.
 * **Creation**: Added the algorithm [far sound field](/algorithms/far-sound-field.md) to [osage-sound](/modules/osage-sound.md) (issue #17): far sound as an ambisonic field per cube, its cost, what it loses against ways, and its bit rate in Opus.
 * **Creation**: Added the module [osage-sound-web](/modules/osage-sound-web.md), the engine in a browser's AudioWorklet (issue #16). **Update**: [osage-sound](/modules/osage-sound.md) plays live, natively on a thread of its own and as a Bevy audio source, its nodes placed by a game.
+* An [object](/modules/osage-objects.md) can declare its limb contacts in the model tree. [Foot planting](/algorithms/forefoot-plant.md) follows each limb’s own attachment. A four-legged trot crosses a raised strip (D-225).
+
+* [Forefoot planting](/algorithms/forefoot-plant.md) samples a stationary surface independently for each leg. A curb replay measures both shoe clearances under the same root motion (D-224).
+
+* [Forefoot planting](/algorithms/forefoot-plant.md) corrects the support leg after the gait is sampled. Ville-Paris replays both feet through travel, a hold and resumption (D-223).
+
+* The [Paris client](/modules/paris-native.md) matches replicated pedestrians to the calibrated walking and jogging speeds of [osage-humans](/modules/osage-humans.md) using travel after interpolation (D-222).
+
+* A change of pace on a playing [human animation](/modules/osage-humans.md) preserves the stride phase (D-221).
+
+* [Articulated swing stops](/algorithms/articulated-swing-envelope.md) refine simultaneous twist and tilt under measured contact (D-220). The dynamics crate includes the sixteen-part frictionless landing regression.
+
+* [Free rigid pair impacts](/algorithms/free-pair-impact.md) and [lift approaches](/algorithms/lift-contact-clock.md) share a convexity test that resolves endpoint witnesses before partitioning a capsule spine at box faces (D-219).
+
+* The [loaded joint replay](/algorithms/articulated-swing-envelope.md) pairs a sliding impact with a frictionless control and records angular error, penetration and signed vertical speed relative to the platform.
+
+* The [articulated swing envelope](/algorithms/articulated-swing-envelope.md) aligns the oblique projection normals with the transverse ellipse after contact and keeps them as the actor leaves a support. The loaded replay covers the shifted landing and ledge departure (D-218).
+
+* The [articulated swing envelope](/algorithms/articulated-swing-envelope.md) gives a joint more impulse passes when a stop remains exceeded under measured external contact. The small-pad landing checks the resulting peak (D-217).
+
+* The [articulated swing envelope](/algorithms/articulated-swing-envelope.md) bounds lateral projections during each Rapier solve. A quadruped with unequal tilt widths exercises oblique contacts and a certified near miss (D-216).
+
+* [Lift contact response](/algorithms/lift-contact-response.md) refreshes Rapier witnesses near finite platform edges. A certified near miss checks that the platform imparts no momentum (D-215).
+
+* The [articulated swing envelope](/algorithms/articulated-swing-envelope.md) requests extra native impulse passes when a stop exceeds its error band. Two-paw and one-paw landings check the result at the same timestep (D-214).
+
+* The [articulated swing envelope](/algorithms/articulated-swing-envelope.md) transports the Rapier twist axis with the moving limbs. A passive quadruped tests the loaded stop through contact and subsequent free fall (D-213).
+
+* [Articulated swing envelope](/algorithms/articulated-swing-envelope.md) adds an explicit diagonal tilt boundary and a 300-pose replay (D-212).
+
+* [Joint frame conversion](/algorithms/articulated-joint-frames.md) supports a body-to-joint matrix with a Z hinge or twist axis in XML and loose binary fragments (D-211).
+
+* [Load transfer on a moving lift](/algorithms/lift-contact-response.md) uses rig momentum and material-point velocity to refine one tick after impact (D-210).
+
+* [First contact on a moving lift](/algorithms/lift-contact-clock.md) has a continuous prediction and a measured native contact window in both resident and paged replays (D-209).
+
+* [Articulated support](/algorithms/articulated-support.md) projects body momentum against the current material points on rigid supports. The [object importer](/modules/osage-objects.md) can preserve a distinct sphere contact radius (D-207 and D-208).
+
+* [Articulated support](/algorithms/articulated-support.md) measures the extent of upward contacts and the signed margin around the projected centre of mass (D-206).
+
+* [Physical segment queries](/algorithms/scene-ray-coverage.md) can include articulated bodies at their solver poses. Occupied spans retain the physical parent, and imported body slots identify the original bone and material (D-205).
+
+* [Physical segment queries](/algorithms/scene-ray-coverage.md) now report both sides of a moving lift or bonnet at its current solver pose, including clipped distances along a face (D-204).
+
+* [District launch updates](/algorithms/district-http.md) use the cached decoded package as a compression dictionary. A three-release test measures HTTP transfers, checks the first GPU image and queries a raised quay (D-203).
+
+* The [district launch package](/algorithms/district-http.md) can deliver the first rendered image from one immutable file, including a known spawn region. GPU frames, successive launches and an authoring-only version change qualify its cache trade-off (D-202).
+
+* The [visual district directory](/algorithms/district-http.md) retains every visual tile address while requesting collision data by region. Three falls check the first GPU frame and the publication of the first detailed tile (D-201).
+
+* A [regional collision file](/algorithms/district-http.md) can carry the original detail pages. The cooker compares sizes and the native solver can install a verified page without a second HTTP request (D-200).
+
+* A [regional physics pin](/algorithms/district-http.md) resolves detail addresses from the same immutable files as collision support. Four native HTTP trajectories qualify the local and district-wide readers (D-199).
+
+* The [headless district pin](/algorithms/district-http.md) can carry SHA-256 addresses and spatial bounds in columns. The regional replay compares both encodings against the full directory (D-198).
+
+* A delayed [regional collision read](/algorithms/district-http.md) now allows the replay clock to keep running. Two HTTP falls check uninterrupted road motion and an actor held above missing landing geometry (D-197).
+
+* Ville-Paris reads [collision support by region](/algorithms/district-http.md) from the live actor trajectory. A physics-only district pin preserves the source tree and acoustic bindings (D-196).
+
+* Ville-Paris can start from an immutable, compressed [district directory](/algorithms/district-http.md). The HTTP replay checks byte counts, cache repair and an offline restart on the same geometry (D-195).
+
+* A [headless Ville-Paris replay](/algorithms/district-http.md) can stream the district’s collision data independently of its graphics. The HTTP and disk controls check resident queries and three delayed landings (D-194).
+
+* [The district support catalogue](/algorithms/district-paging.md) can use Zstandard or zlib. The cooker chooses by file length, and the reader checks the same collision data in either representation (D-193).
+
+* [District collision support](/algorithms/district-paging.md) now uses the physical page index to select missing faces and retain nearby support. Doorway replays check three publication times against the resident trajectory (D-192).
+
+* [Collision read planning](/algorithms/collision-read-planning.md) now queries physical page bounds for each actor and checks deadlines against an exhaustive search. The comparison includes a 4,745-tile district and a 15-part pedestrian (D-191).
+
+* [Supported-box impact](/algorithms/supported-box-impact.md) now follows the normal momentum of the full rig during compression. The [city impact oracle](/oracles/pedestrian-impact.md) checks foot penetration on offset landings and the subsequent rest (D-190).
+
+* [Reusing contact geometry on a sleeping rig](/algorithms/resting-contact-witnesses.md) reduces the cost of reporting a settled articulated actor and tests waking it after its supporting page is replaced (D-189).
+
+* [First impact on a supported box](/algorithms/supported-box-impact.md) splits an approaching joint tree’s collision step. The [pedestrian oracle](/oracles/pedestrian-impact.md) now measures the native contact geometry and the speed of its surfaces.
+
+* [Settling a hanging ragdoll branch](/algorithms/hanging-ragdoll-branches.md) uses the mass and inertia of a supported limb and checks its equilibrium over a deck edge (D-187).
+
 * **Creation**: Added the modules [osage-sound](/modules/osage-sound.md), [osage-sound-voices](/modules/osage-sound-voices.md) and [osage-sound-analysis](/modules/osage-sound-analysis.md) (D-180, issue #14); the algorithms [sound ways](/algorithms/sound-ways.md), [sound delay lines](/algorithms/sound-delay-lines.md), [contact voices](/algorithms/contact-voices.md), [feedback delay reverberation](/algorithms/feedback-delay-reverb.md) and [loudness mastering](/algorithms/loudness-mastering.md); and the oracle [soundscape verify](/oracles/soundscape-verify.md).
 
+* The reference reader in [sound delay lines](/algorithms/sound-delay-lines.md) shares eight-sample interpolation weights between listeners. [Fractional-delay reconstruction](/algorithms/moving-sound-delay.md) gives the coefficients and the moving-tone regression (D-186).
+
+* [Ville-Paris](/modules/ville-paris.md) renders its impacts with the workspace sound and voice crates. The bridge tool supplies its bundled sound scene.
+
+* [Pedestrian impact on a movable bonnet](/oracles/pedestrian-impact.md) measures relative wrist motion in flight and on a supported branch, including the time to lasting rest.
+
+* [Pedestrian impact on a movable bonnet](/oracles/pedestrian-impact.md) measures deep limb overlap across native substeps and checks how the joint tree settles after impact.
+
+* [First impact of a freely translating pair](/algorithms/free-pair-impact.md) now reports an inward collision at time zero when the moving capsule starts exactly on the box.
+
+* [Streamed terrain contacts](/algorithms/paged-ragdolls.md) now retain the vertical lift and its standing passenger across physical page loads and evictions in [Ville-Paris](/modules/ville-paris.md).
+
+* [Ville-Paris](/modules/ville-paris.md) measures how closely a standing capsule and its contact point follow a moving lift through one full cycle in both [rigid-body solvers](/modules/osage-dynamics.md).
+
+## 2026-11-23
+
+* [Streamed terrain contacts](/algorithms/paged-ragdolls.md) can reconstruct the complete original topology of repeated box-shaped supports before their physical pages arrive.
+
+* [Streamed terrain contacts](/algorithms/paged-ragdolls.md) retain complete source triangles across visual tile edges.
+
+* [District impact sound](/algorithms/paged-impact-sound.md) now measures relative point velocity on a moving support and reserves its acoustic path before contact.
+
+* **Update**: [District impact sound](/algorithms/paged-impact-sound.md) reserves independent receiver paths for simultaneous foot contacts and assigns the material voices in authored surface order.
+
+* **Update**: [Articulated terrain contacts](/algorithms/paged-ragdolls.md) now use the same actor-first creation order in static Rapier scenes.
+
+* **Creation**: [Articulated bodies on streamed terrain](/algorithms/paged-ragdolls.md) covers limb-based requests, solved poses and contact identity in the district.
+
+* [Acoustic mesh selection](/algorithms/paged-acoustic-rays.md) keeps a transformed vertex on the boundary of its district query, including when an older directory rounded the bound inward.
+
+* [Selecting acoustic meshes for a ray](/algorithms/paged-acoustic-rays.md) reuses verified district geometry across a series of finite segments.
+
+* [Loading impact sound geometry](/algorithms/paged-impact-sound.md) connects the district solver and streamed object surfaces to the existing material voices.
+
+* [Sound around a closed convex object](/algorithms/exterior-acoustic-edges.md) distinguishes an exterior path along a solid from an impact inside a sealed room.
+
+* [Hearing an impact around city obstacles](/algorithms/diffracted-city-contacts.md) connects the exposed borders of city meshes to delayed directional impact sound.
+
+* [Activating a ragdoll from animation](/algorithms/animated-ragdoll.md) carries walking, running and landing poses into the passive [rigid dynamics](/modules/osage-dynamics.md).
+
+* [Direct sound through city surfaces](/algorithms/direct-sound-transmission.md) follows a wave through the bridge deck or a panel in an imported object.
+* [Sound from city contacts](/algorithms/city-contact-sound.md) follows the falling body into the material voice and checks the stereo signal at the camera in speaker and headphone modes.
+
+* [District paging](/algorithms/district-paging.md) gives omitted collision faces conservative bounds and tests passage through a doorway while its full page is delayed.
+
+* [District content over HTTP](/algorithms/district-http.md) records the network reader, shared disk cache and late-page replay.
+
+* [Mipmaps for masked surfaces](/algorithms/cutout-mipmaps.md) records the alpha test, mip construction and measurement used by Ville-Paris.
+
+* [Projected mesh error](/algorithms/projected-mesh-error.md) relates the visual detail of a part to the current camera and viewport.
+
+* The [object profile](/modules/osage-objects.md) keeps node identity through drawing, contact and sound. The [ballistic query](/algorithms/ballistic-impact.md) measures the first physical instant on a fixed mesh.
+
+* [District paging](/algorithms/district-paging.md) qualifies visual and collision request distances during the three approaches to Bir-Hakeim.
+
+* [Ville-Paris](/modules/ville-paris.md) runs the same [pedestrian impact](/oracles/pedestrian-impact.md) in both physics solvers with a rig read from the [object format](/modules/osage-objects.md).
+
 ## 2026-11-22
+* [osage-objects](/modules/osage-objects.md) defines a static object and its three geometry channels. [Ville-Paris](/modules/ville-paris.md) imports them and compares intersections and rigid contact on an original slab.
+
+* [osage-dynamics](/modules/osage-dynamics.md) supplies two native solvers to [Ville-Paris](/modules/ville-paris.md). Replays include a 15-part human, bridge edges and a movable bonnet.
+* [Ville-Paris](/modules/ville-paris.md) adds a portable city fixture, three repeatable landings and separate CPU and rendering measurements.
 * **Update**: the Paris walk released as the kart is (D-143): [osage-update](/modules/osage-update.md) gains `folder`, the policy `kart-update` and the new `paris-update` share; [osage-paris-native](/modules/paris-native.md) gains its launchers and its content zip.
 * **Update**: the light ahead made ready (D-142): [osage-paris-native](/modules/paris-native.md) makes the probes' texture arrays once, lends their layers and writes the light of the cubes the walker goes to before it gets there, its light threads fetching what presses most; [osage-world-paris](/modules/paris-world.md) tells what is on a walker's way from what is beside it; a film's measure is paced as a window's and counts every frame.
 

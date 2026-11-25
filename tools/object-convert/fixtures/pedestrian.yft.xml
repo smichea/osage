@@ -1,0 +1,1393 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- SPDX-FileCopyrightText: The osage contributors -->
+<!-- SPDX-License-Identifier: MIT OR Apache-2.0 -->
+<Fragment>
+  <Name>osage_pedestrian</Name>
+  <BoundingSphereCenter x="0" y="0" z="0.9" />
+  <BoundingSphereRadius value="1.2" />
+  <Drawable>
+    <Name>osage_pedestrian</Name>
+    <Matrix>
+1 0 0 0
+0 1 0 0
+0 0 1 0
+0 0 0 1
+</Matrix>
+    <BoundingSphereCenter x="0" y="0" z="0.9" />
+    <BoundingSphereRadius value="1.2" />
+    <BoundingBoxMin x="-0.86" y="-0.16" z="0" />
+    <BoundingBoxMax x="0.86" y="0.16" z="1.8" />
+    <LodDistHigh value="80" />
+    <LodDistMed value="120" />
+    <LodDistLow value="150" />
+    <LodDistVlow value="200" />
+    <ShaderGroup>
+      <Shaders>
+        <Item>
+          <Name>default</Name>
+          <FileName>default.sps</FileName>
+          <RenderBucket value="0" />
+          <Parameters />
+        </Item>
+      </Shaders>
+    </ShaderGroup>
+    <Skeleton>
+      <Bones>
+        <Item>
+          <Name>pelvis</Name>
+          <Tag value="1000" />
+          <Index value="0" />
+          <ParentIndex value="-1" />
+          <SiblingIndex value="-1" />
+          <Translation x="0" y="0.04" z="0.84" />
+          <Rotation x="0" y="0" z="0" w="1" />
+          <Scale x="1" y="1" z="1" />
+          <Flags>RotX, RotY, RotZ</Flags>
+        </Item>
+        <Item>
+          <Name>spine_01</Name>
+          <Tag value="1001" />
+          <Index value="1" />
+          <ParentIndex value="0" />
+          <SiblingIndex value="6" />
+          <Translation x="0" y="-0.03" z="0.24" />
+          <Rotation x="0" y="0" z="0" w="1" />
+          <Scale x="1" y="1" z="1" />
+          <Flags>RotX, RotY, RotZ</Flags>
+        </Item>
+        <Item>
+          <Name>Head</Name>
+          <Tag value="1002" />
+          <Index value="2" />
+          <ParentIndex value="1" />
+          <SiblingIndex value="3" />
+          <Translation x="0" y="0.03" z="0.44" />
+          <Rotation x="0" y="0" z="0" w="1" />
+          <Scale x="1" y="1" z="1" />
+          <Flags>RotX, RotY, RotZ</Flags>
+        </Item>
+        <Item>
+          <Name>upperarm_l</Name>
+          <Tag value="1003" />
+          <Index value="3" />
+          <ParentIndex value="1" />
+          <SiblingIndex value="9" />
+          <Translation x="0.21" y="0.05" z="0.38" />
+          <Rotation x="0" y="0" z="0" w="1" />
+          <Scale x="1" y="1" z="1" />
+          <Flags>RotX, RotY, RotZ</Flags>
+        </Item>
+        <Item>
+          <Name>lowerarm_l</Name>
+          <Tag value="1004" />
+          <Index value="4" />
+          <ParentIndex value="3" />
+          <SiblingIndex value="-1" />
+          <Translation x="0.25" y="0.015" z="0" />
+          <Rotation x="0" y="0" z="0" w="1" />
+          <Scale x="1" y="1" z="1" />
+          <Flags>RotX, RotY, RotZ</Flags>
+        </Item>
+        <Item>
+          <Name>hand_l</Name>
+          <Tag value="1005" />
+          <Index value="5" />
+          <ParentIndex value="4" />
+          <SiblingIndex value="-1" />
+          <Translation x="0.24" y="-0.01" z="0" />
+          <Rotation x="0" y="0" z="0" w="1" />
+          <Scale x="1" y="1" z="1" />
+          <Flags>RotX, RotY, RotZ</Flags>
+        </Item>
+        <Item>
+          <Name>thigh_l</Name>
+          <Tag value="1006" />
+          <Index value="6" />
+          <ParentIndex value="0" />
+          <SiblingIndex value="12" />
+          <Translation x="0.114" y="-0.004" z="0.13" />
+          <Rotation x="0" y="0" z="0" w="1" />
+          <Scale x="1" y="1" z="1" />
+          <Flags>RotX, RotY, RotZ</Flags>
+        </Item>
+        <Item>
+          <Name>calf_l</Name>
+          <Tag value="1007" />
+          <Index value="7" />
+          <ParentIndex value="6" />
+          <SiblingIndex value="-1" />
+          <Translation x="0" y="0" z="-0.428" />
+          <Rotation x="0" y="0" z="0" w="1" />
+          <Scale x="1" y="1" z="1" />
+          <Flags>RotX, RotY, RotZ</Flags>
+        </Item>
+        <Item>
+          <Name>foot_l</Name>
+          <Tag value="1008" />
+          <Index value="8" />
+          <ParentIndex value="7" />
+          <SiblingIndex value="-1" />
+          <Translation x="0" y="0.052" z="-0.456" />
+          <Rotation x="0" y="0" z="0" w="1" />
+          <Scale x="1" y="1" z="1" />
+          <Flags>RotX, RotY, RotZ</Flags>
+        </Item>
+        <Item>
+          <Name>upperarm_r</Name>
+          <Tag value="1009" />
+          <Index value="9" />
+          <ParentIndex value="1" />
+          <SiblingIndex value="-1" />
+          <Translation x="-0.21" y="0.05" z="0.38" />
+          <Rotation x="0" y="0" z="0" w="1" />
+          <Scale x="1" y="1" z="1" />
+          <Flags>RotX, RotY, RotZ</Flags>
+        </Item>
+        <Item>
+          <Name>lowerarm_r</Name>
+          <Tag value="1010" />
+          <Index value="10" />
+          <ParentIndex value="9" />
+          <SiblingIndex value="-1" />
+          <Translation x="-0.25" y="0.015" z="0" />
+          <Rotation x="0" y="0" z="0" w="1" />
+          <Scale x="1" y="1" z="1" />
+          <Flags>RotX, RotY, RotZ</Flags>
+        </Item>
+        <Item>
+          <Name>hand_r</Name>
+          <Tag value="1011" />
+          <Index value="11" />
+          <ParentIndex value="10" />
+          <SiblingIndex value="-1" />
+          <Translation x="-0.24" y="-0.01" z="0" />
+          <Rotation x="0" y="0" z="0" w="1" />
+          <Scale x="1" y="1" z="1" />
+          <Flags>RotX, RotY, RotZ</Flags>
+        </Item>
+        <Item>
+          <Name>thigh_r</Name>
+          <Tag value="1012" />
+          <Index value="12" />
+          <ParentIndex value="0" />
+          <SiblingIndex value="-1" />
+          <Translation x="-0.114" y="-0.004" z="0.13" />
+          <Rotation x="0" y="0" z="0" w="1" />
+          <Scale x="1" y="1" z="1" />
+          <Flags>RotX, RotY, RotZ</Flags>
+        </Item>
+        <Item>
+          <Name>calf_r</Name>
+          <Tag value="1013" />
+          <Index value="13" />
+          <ParentIndex value="12" />
+          <SiblingIndex value="-1" />
+          <Translation x="0" y="0" z="-0.428" />
+          <Rotation x="0" y="0" z="0" w="1" />
+          <Scale x="1" y="1" z="1" />
+          <Flags>RotX, RotY, RotZ</Flags>
+        </Item>
+        <Item>
+          <Name>foot_r</Name>
+          <Tag value="1014" />
+          <Index value="14" />
+          <ParentIndex value="13" />
+          <SiblingIndex value="-1" />
+          <Translation x="0" y="0.052" z="-0.456" />
+          <Rotation x="0" y="0" z="0" w="1" />
+          <Scale x="1" y="1" z="1" />
+          <Flags>RotX, RotY, RotZ</Flags>
+        </Item>
+      </Bones>
+    </Skeleton>
+    <DrawableModelsHigh>
+      <Item>
+        <HasSkin value="0" />
+        <BoneIndex value="0" />
+        <Geometries>
+          <Item>
+            <ShaderIndex value="0" />
+            <BoundingBoxMin x="-0.128" y="-0.142011568" z="-0.00701156822" />
+            <BoundingBoxMax x="0.128" y="0.112011568" z="0.247011568" />
+            <VertexBuffer>
+              <Layout type="GTAV1">
+                <Position />
+              </Layout>
+              <Data>
+0.128 -0.015 0.12
+-0.128 -0.015 0.12
+0 -0.030876446 0.247011568
+0 0.000876446027 -0.00701156822
+0 -0.142011568 0.104123554
+0 0.112011568 0.135876446
+</Data>
+            </VertexBuffer>
+            <IndexBuffer>
+              <Data>2 4 0 2 1 4 2 5 1 2 0 5 3 0 4 3 4 1 3 1 5 3 5 0</Data>
+            </IndexBuffer>
+          </Item>
+        </Geometries>
+      </Item>
+      <Item>
+        <HasSkin value="0" />
+        <BoneIndex value="1" />
+        <Geometries>
+          <Item>
+            <ShaderIndex value="0" />
+            <BoundingBoxMin x="-0.145" y="-0.129664135" z="0" />
+            <BoundingBoxMax x="0.145" y="0.159664135" z="0.44" />
+            <VertexBuffer>
+              <Layout type="GTAV1">
+                <Position />
+              </Layout>
+              <Data>
+0.145 0.015 0.22
+-0.145 0.015 0.22
+0 0.03 0.44
+0 1.73472348e-18 0
+0 -0.129664135 0.229863464
+0 0.159664135 0.210136536
+</Data>
+            </VertexBuffer>
+            <IndexBuffer>
+              <Data>2 4 0 2 1 4 2 5 1 2 0 5 3 0 4 3 4 1 3 1 5 3 5 0</Data>
+            </IndexBuffer>
+          </Item>
+        </Geometries>
+      </Item>
+      <Item>
+        <HasSkin value="0" />
+        <BoneIndex value="2" />
+        <Geometries>
+          <Item>
+            <ShaderIndex value="0" />
+            <BoundingBoxMin x="-0.1" y="-0.114388373" z="0.0356116265" />
+            <BoundingBoxMax x="0.1" y="0.0843883735" z="0.234388373" />
+            <VertexBuffer>
+              <Layout type="GTAV1">
+                <Position />
+              </Layout>
+              <Data>
+0.1 -0.015 0.135
+-0.1 -0.015 0.135
+0 -0.0260431526 0.234388373
+0 -0.00395684739 0.0356116265
+0 -0.114388373 0.123956847
+0 0.0843883735 0.146043153
+</Data>
+            </VertexBuffer>
+            <IndexBuffer>
+              <Data>2 4 0 2 1 4 2 5 1 2 0 5 3 0 4 3 4 1 3 1 5 3 5 0</Data>
+            </IndexBuffer>
+          </Item>
+        </Geometries>
+      </Item>
+      <Item>
+        <HasSkin value="0" />
+        <BoneIndex value="3" />
+        <Geometries>
+          <Item>
+            <ShaderIndex value="0" />
+            <BoundingBoxMin x="2.77555756e-17" y="-0.0533904956" z="-0.061" />
+            <BoundingBoxMax x="0.25" y="0.0683904956" z="0.061" />
+            <VertexBuffer>
+              <Layout type="GTAV1">
+                <Position />
+              </Layout>
+              <Data>
+0.125 0.0075 -0.061
+0.125 0.0075 0.061
+0.25 0.015 0
+2.77555756e-17 6.9388939e-18 0
+0.12865343 -0.0533904956 0
+0.12134657 0.0683904956 0
+</Data>
+            </VertexBuffer>
+            <IndexBuffer>
+              <Data>2 4 0 2 1 4 2 5 1 2 0 5 3 0 4 3 4 1 3 1 5 3 5 0</Data>
+            </IndexBuffer>
+          </Item>
+        </Geometries>
+      </Item>
+      <Item>
+        <HasSkin value="0" />
+        <BoneIndex value="4" />
+        <Geometries>
+          <Item>
+            <ShaderIndex value="0" />
+            <BoundingBoxMin x="-2.77555756e-17" y="-0.0569549198" z="-0.052" />
+            <BoundingBoxMax x="0.24" y="0.0469549198" z="0.052" />
+            <VertexBuffer>
+              <Layout type="GTAV1">
+                <Position />
+              </Layout>
+              <Data>
+0.12 -0.005 -0.052
+0.12 -0.005 0.052
+0.24 -0.01 0
+-2.77555756e-17 6.9388939e-18 0
+0.117835212 -0.0569549198 0
+0.122164788 0.0469549198 0
+</Data>
+            </VertexBuffer>
+            <IndexBuffer>
+              <Data>2 4 0 2 1 4 2 5 1 2 0 5 3 0 4 3 4 1 3 1 5 3 5 0</Data>
+            </IndexBuffer>
+          </Item>
+        </Geometries>
+      </Item>
+      <Item>
+        <HasSkin value="0" />
+        <BoneIndex value="5" />
+        <Geometries>
+          <Item>
+            <ShaderIndex value="0" />
+            <BoundingBoxMin x="-5.55111512e-17" y="-0.0444689693" z="-0.042" />
+            <BoundingBoxMax x="0.13" y="0.0394689693" z="0.042" />
+            <VertexBuffer>
+              <Layout type="GTAV1">
+                <Position />
+              </Layout>
+              <Data>
+0.065 -0.0025 -0.042
+0.065 -0.0025 0.042
+0.13 -0.005 0
+-5.55111512e-17 -4.33680869e-19 0
+0.0633858089 -0.0444689693 0
+0.0666141911 0.0394689693 0
+</Data>
+            </VertexBuffer>
+            <IndexBuffer>
+              <Data>2 4 0 2 1 4 2 5 1 2 0 5 3 0 4 3 4 1 3 1 5 3 5 0</Data>
+            </IndexBuffer>
+          </Item>
+        </Geometries>
+      </Item>
+      <Item>
+        <HasSkin value="0" />
+        <BoneIndex value="6" />
+        <Geometries>
+          <Item>
+            <ShaderIndex value="0" />
+            <BoundingBoxMin x="-0.086" y="-0.086" z="-0.428" />
+            <BoundingBoxMax x="0.086" y="0.086" z="0" />
+            <VertexBuffer>
+              <Layout type="GTAV1">
+                <Position />
+              </Layout>
+              <Data>
+-0.086 0 -0.214
+0.086 0 -0.214
+0 0 -0.428
+0 0 0
+0 -0.086 -0.214
+0 0.086 -0.214
+</Data>
+            </VertexBuffer>
+            <IndexBuffer>
+              <Data>2 4 0 2 1 4 2 5 1 2 0 5 3 0 4 3 4 1 3 1 5 3 5 0</Data>
+            </IndexBuffer>
+          </Item>
+        </Geometries>
+      </Item>
+      <Item>
+        <HasSkin value="0" />
+        <BoneIndex value="7" />
+        <Geometries>
+          <Item>
+            <ShaderIndex value="0" />
+            <BoundingBoxMin x="-0.063" y="-0.0365943262" z="-0.456" />
+            <BoundingBoxMax x="0.063" y="0.0885943262" z="0" />
+            <VertexBuffer>
+              <Layout type="GTAV1">
+                <Position />
+              </Layout>
+              <Data>
+-0.063 0.026 -0.228
+0.063 0.026 -0.228
+0 0.052 -0.456
+0 3.46944695e-18 0
+0 -0.0365943262 -0.235137949
+0 0.0885943262 -0.220862051
+</Data>
+            </VertexBuffer>
+            <IndexBuffer>
+              <Data>2 4 0 2 1 4 2 5 1 2 0 5 3 0 4 3 4 1 3 1 5 3 5 0</Data>
+            </IndexBuffer>
+          </Item>
+        </Geometries>
+      </Item>
+      <Item>
+        <HasSkin value="0" />
+        <BoneIndex value="8" />
+        <Geometries>
+          <Item>
+            <ShaderIndex value="0" />
+            <BoundingBoxMin x="-0.048" y="-0.224" z="-0.0672525236" />
+            <BoundingBoxMax x="0.048" y="0" z="0.0272525236" />
+            <VertexBuffer>
+              <Layout type="GTAV1">
+                <Position />
+              </Layout>
+              <Data>
+0 -0.120437951 0.0272525236
+0 -0.103562049 -0.0672525236
+0 -0.224 -0.04
+0 0 6.9388939e-18
+0.048 -0.112 -0.02
+-0.048 -0.112 -0.02
+</Data>
+            </VertexBuffer>
+            <IndexBuffer>
+              <Data>2 4 0 2 1 4 2 5 1 2 0 5 3 0 4 3 4 1 3 1 5 3 5 0</Data>
+            </IndexBuffer>
+          </Item>
+        </Geometries>
+      </Item>
+      <Item>
+        <HasSkin value="0" />
+        <BoneIndex value="9" />
+        <Geometries>
+          <Item>
+            <ShaderIndex value="0" />
+            <BoundingBoxMin x="-0.25" y="-0.0533904956" z="-0.061" />
+            <BoundingBoxMax x="-2.77555756e-17" y="0.0683904956" z="0.061" />
+            <VertexBuffer>
+              <Layout type="GTAV1">
+                <Position />
+              </Layout>
+              <Data>
+-0.125 0.0075 0.061
+-0.125 0.0075 -0.061
+-0.25 0.015 0
+-2.77555756e-17 6.9388939e-18 0
+-0.12865343 -0.0533904956 0
+-0.12134657 0.0683904956 0
+</Data>
+            </VertexBuffer>
+            <IndexBuffer>
+              <Data>2 4 0 2 1 4 2 5 1 2 0 5 3 0 4 3 4 1 3 1 5 3 5 0</Data>
+            </IndexBuffer>
+          </Item>
+        </Geometries>
+      </Item>
+      <Item>
+        <HasSkin value="0" />
+        <BoneIndex value="10" />
+        <Geometries>
+          <Item>
+            <ShaderIndex value="0" />
+            <BoundingBoxMin x="-0.24" y="-0.0569549198" z="-0.052" />
+            <BoundingBoxMax x="2.77555756e-17" y="0.0469549198" z="0.052" />
+            <VertexBuffer>
+              <Layout type="GTAV1">
+                <Position />
+              </Layout>
+              <Data>
+-0.12 -0.005 0.052
+-0.12 -0.005 -0.052
+-0.24 -0.01 0
+2.77555756e-17 6.9388939e-18 0
+-0.117835212 -0.0569549198 0
+-0.122164788 0.0469549198 0
+</Data>
+            </VertexBuffer>
+            <IndexBuffer>
+              <Data>2 4 0 2 1 4 2 5 1 2 0 5 3 0 4 3 4 1 3 1 5 3 5 0</Data>
+            </IndexBuffer>
+          </Item>
+        </Geometries>
+      </Item>
+      <Item>
+        <HasSkin value="0" />
+        <BoneIndex value="11" />
+        <Geometries>
+          <Item>
+            <ShaderIndex value="0" />
+            <BoundingBoxMin x="-0.13" y="-0.0444689693" z="-0.042" />
+            <BoundingBoxMax x="5.55111512e-17" y="0.0394689693" z="0.042" />
+            <VertexBuffer>
+              <Layout type="GTAV1">
+                <Position />
+              </Layout>
+              <Data>
+-0.065 -0.0025 0.042
+-0.065 -0.0025 -0.042
+-0.13 -0.005 0
+5.55111512e-17 -4.33680869e-19 0
+-0.0633858089 -0.0444689693 0
+-0.0666141911 0.0394689693 0
+</Data>
+            </VertexBuffer>
+            <IndexBuffer>
+              <Data>2 4 0 2 1 4 2 5 1 2 0 5 3 0 4 3 4 1 3 1 5 3 5 0</Data>
+            </IndexBuffer>
+          </Item>
+        </Geometries>
+      </Item>
+      <Item>
+        <HasSkin value="0" />
+        <BoneIndex value="12" />
+        <Geometries>
+          <Item>
+            <ShaderIndex value="0" />
+            <BoundingBoxMin x="-0.086" y="-0.086" z="-0.428" />
+            <BoundingBoxMax x="0.086" y="0.086" z="0" />
+            <VertexBuffer>
+              <Layout type="GTAV1">
+                <Position />
+              </Layout>
+              <Data>
+-0.086 0 -0.214
+0.086 0 -0.214
+0 0 -0.428
+0 0 0
+0 -0.086 -0.214
+0 0.086 -0.214
+</Data>
+            </VertexBuffer>
+            <IndexBuffer>
+              <Data>2 4 0 2 1 4 2 5 1 2 0 5 3 0 4 3 4 1 3 1 5 3 5 0</Data>
+            </IndexBuffer>
+          </Item>
+        </Geometries>
+      </Item>
+      <Item>
+        <HasSkin value="0" />
+        <BoneIndex value="13" />
+        <Geometries>
+          <Item>
+            <ShaderIndex value="0" />
+            <BoundingBoxMin x="-0.063" y="-0.0365943262" z="-0.456" />
+            <BoundingBoxMax x="0.063" y="0.0885943262" z="0" />
+            <VertexBuffer>
+              <Layout type="GTAV1">
+                <Position />
+              </Layout>
+              <Data>
+-0.063 0.026 -0.228
+0.063 0.026 -0.228
+0 0.052 -0.456
+0 3.46944695e-18 0
+0 -0.0365943262 -0.235137949
+0 0.0885943262 -0.220862051
+</Data>
+            </VertexBuffer>
+            <IndexBuffer>
+              <Data>2 4 0 2 1 4 2 5 1 2 0 5 3 0 4 3 4 1 3 1 5 3 5 0</Data>
+            </IndexBuffer>
+          </Item>
+        </Geometries>
+      </Item>
+      <Item>
+        <HasSkin value="0" />
+        <BoneIndex value="14" />
+        <Geometries>
+          <Item>
+            <ShaderIndex value="0" />
+            <BoundingBoxMin x="-0.048" y="-0.224" z="-0.0672525236" />
+            <BoundingBoxMax x="0.048" y="0" z="0.0272525236" />
+            <VertexBuffer>
+              <Layout type="GTAV1">
+                <Position />
+              </Layout>
+              <Data>
+0 -0.120437951 0.0272525236
+0 -0.103562049 -0.0672525236
+0 -0.224 -0.04
+0 0 6.9388939e-18
+0.048 -0.112 -0.02
+-0.048 -0.112 -0.02
+</Data>
+            </VertexBuffer>
+            <IndexBuffer>
+              <Data>2 4 0 2 1 4 2 5 1 2 0 5 3 0 4 3 4 1 3 1 5 3 5 0</Data>
+            </IndexBuffer>
+          </Item>
+        </Geometries>
+      </Item>
+    </DrawableModelsHigh>
+  </Drawable>
+  <Physics>
+    <LOD1>
+      <PositionOffset x="0" y="0" z="0" />
+      <ArticulatedBody>
+        <ItemIndices>0 1 1 3 4 0 6 7 1 9 10 0 12 13 0 0 0 0 0 0 0 0</ItemIndices>
+        <ItemFlags>1 1 1 0 1 1 0 1 1 0 1 1 0 1 0 0 0 0 0 0 0 0</ItemFlags>
+        <UnknownVectors>
+0.0720896, 0.0720896, 0.0720896, 11
+0.391801659, 0.233302003, 0.391801659, 25
+0.02, 0.02, 0.02, 5
+0.0141807106, 0.00514870787, 0.0141807106, 3
+0.00666166744, 0.00195422234, 0.00666166744, 1.55
+0.00061005298, 0.000353359853, 0.00061005298, 0.45
+0.0951054849, 0.0242844201, 0.0951054849, 7
+0.0579325824, 0.00704679932, 0.0579325824, 3.7
+0.00500491956, 0.00139956918, 0.00500491956, 1.3
+0.0141807106, 0.00514870787, 0.0141807106, 3
+0.00666166744, 0.00195422234, 0.00666166744, 1.55
+0.00061005298, 0.000353359853, 0.00061005298, 0.45
+0.0951054849, 0.0242844201, 0.0951054849, 7
+0.0579325824, 0.00704679932, 0.0579325824, 3.7
+0.00500491956, 0.00139956918, 0.00500491956, 1.3
+</UnknownVectors>
+        <Joints>
+          <Item type="DOF3">
+            <FragIndex1 value="0" />
+            <FragIndex2 value="1" />
+            <Unknown10 value="0" />
+            <Unknown20 x="1" y="0" z="0" w="0" />
+            <Unknown30 x="0" y="0.992277877" z="-0.124034735" w="0" />
+            <Unknown40 x="0" y="0.124034735" z="0.992277877" w="0" />
+            <Unknown50 x="0" y="0.120933866" z="-5.20417043e-18" w="1" />
+            <Unknown60 x="1" y="0" z="0" w="0" />
+            <Unknown70 x="0" y="0.997683693" z="0.0680238881" w="0" />
+            <Unknown80 x="0" y="-0.0680238881" z="0.997683693" w="0" />
+            <Unknown90 x="0" y="-0.220510771" z="0" w="1" />
+            <UnknownA0 x="0.453785606" y="0.453785606" z="0.523598776" w="0" />
+          </Item>
+          <Item type="DOF3">
+            <FragIndex1 value="1" />
+            <FragIndex2 value="2" />
+            <Unknown10 value="0" />
+            <Unknown20 x="1" y="0" z="0" w="0" />
+            <Unknown30 x="0" y="0.997683693" z="0.0680238881" w="0" />
+            <Unknown40 x="0" y="-0.0680238881" z="0.997683693" w="0" />
+            <Unknown50 x="0" y="0.220510771" z="1.73472348e-18" w="1" />
+            <Unknown60 x="1" y="0" z="0" w="0" />
+            <Unknown70 x="0" y="0.993883735" z="-0.110431526" w="0" />
+            <Unknown80 x="0" y="0.110431526" z="0.993883735" w="0" />
+            <Unknown90 x="0" y="-0.135830777" z="0" w="1" />
+            <UnknownA0 x="0.610865238" y="0.872664626" z="0.698131701" w="0" />
+          </Item>
+          <Item type="DOF3">
+            <FragIndex1 value="1" />
+            <FragIndex2 value="3" />
+            <Unknown10 value="0" />
+            <Unknown20 x="1" y="0" z="0" w="0" />
+            <Unknown30 x="0" y="0.997683693" z="0.0680238881" w="0" />
+            <Unknown40 x="0" y="-0.0680238881" z="0.997683693" w="0" />
+            <Unknown50 x="0.21" y="0.162010227" z="-0.0240351071" w="1" />
+            <Unknown60 x="0" y="0.998204845" z="0.0598922907" w="0" />
+            <Unknown70 x="-1" y="0" z="0" w="0" />
+            <Unknown80 x="0" y="-0.0598922907" z="0.998204845" w="0" />
+            <Unknown90 x="0" y="-0.125224798" z="4.33680869e-18" w="1" />
+            <UnknownA0 x="1.48352986" y="1.48352986" z="1.3962634" w="0" />
+          </Item>
+          <Item type="DOF1">
+            <FragIndex1 value="3" />
+            <FragIndex2 value="4" />
+            <Unknown10 value="0" />
+            <Unknown20 x="-1" y="0" z="0" w="0" />
+            <Unknown30 x="0" y="-0.0598922907" z="0.998204845" w="0" />
+            <Unknown40 x="0" y="0.998204845" z="0.0598922907" w="0" />
+            <Unknown50 x="0" y="0.125224798" z="7.80625564e-18" w="1" />
+            <Unknown60 x="-1" y="0" z="0" w="0" />
+            <Unknown70 x="0" y="0.0416305447" z="0.999133073" w="0" />
+            <Unknown80 x="0" y="0.999133073" z="-0.0416305447" w="0" />
+            <Unknown90 x="0" y="-0.120104121" z="6.07153217e-18" w="1" />
+            <UnknownA0 x="-2.26892803" y="0.034906585" z="0" w="0" />
+          </Item>
+          <Item type="DOF3">
+            <FragIndex1 value="4" />
+            <FragIndex2 value="5" />
+            <Unknown10 value="0" />
+            <Unknown20 x="0" y="0.999133073" z="-0.0416305447" w="0" />
+            <Unknown30 x="-1" y="0" z="0" w="0" />
+            <Unknown40 x="0" y="0.0416305447" z="0.999133073" w="0" />
+            <Unknown50 x="0" y="0.120104121" z="6.07153217e-18" w="1" />
+            <Unknown60 x="0" y="0.999261175" z="-0.0384331221" w="0" />
+            <Unknown70 x="-1" y="0" z="0" w="0" />
+            <Unknown80 x="0" y="0.0384331221" z="0.999261175" w="0" />
+            <Unknown90 x="0" y="-0.0650480592" z="-2.16840434e-18" w="1" />
+            <UnknownA0 x="0.610865238" y="0.610865238" z="0.610865238" w="0" />
+          </Item>
+          <Item type="DOF3">
+            <FragIndex1 value="0" />
+            <FragIndex2 value="6" />
+            <Unknown10 value="0" />
+            <Unknown20 x="1" y="0" z="0" w="0" />
+            <Unknown30 x="0" y="0.992277877" z="-0.124034735" w="0" />
+            <Unknown40 x="0" y="0.124034735" z="0.992277877" w="0" />
+            <Unknown50 x="0.114" y="0.00855839669" z="-0.012155404" w="1" />
+            <Unknown60 x="-1" y="0" z="0" w="0" />
+            <Unknown70 x="0" y="-1" z="0" w="0" />
+            <Unknown80 x="0" y="0" z="1" w="0" />
+            <Unknown90 x="0" y="-0.214" z="0" w="1" />
+            <UnknownA0 x="0.785398163" y="0.872664626" z="1.22173048" w="0" />
+          </Item>
+          <Item type="DOF1">
+            <FragIndex1 value="6" />
+            <FragIndex2 value="7" />
+            <Unknown10 value="0" />
+            <Unknown20 x="-1" y="0" z="0" w="0" />
+            <Unknown30 x="0" y="-1" z="0" w="0" />
+            <Unknown40 x="0" y="0" z="1" w="0" />
+            <Unknown50 x="0" y="0.214" z="0" w="1" />
+            <Unknown60 x="-1" y="0" z="0" w="0" />
+            <Unknown70 x="0" y="-0.993560734" z="-0.113300785" w="0" />
+            <Unknown80 x="0" y="-0.113300785" z="0.993560734" w="0" />
+            <Unknown90 x="0" y="-0.229477668" z="6.9388939e-18" w="1" />
+            <UnknownA0 x="-0.0523598776" y="2.18166156" z="0" w="0" />
+          </Item>
+          <Item type="DOF3">
+            <FragIndex1 value="7" />
+            <FragIndex2 value="8" />
+            <Unknown10 value="0" />
+            <Unknown20 x="-1" y="0" z="0" w="0" />
+            <Unknown30 x="0" y="-0.993560734" z="-0.113300785" w="0" />
+            <Unknown40 x="0" y="-0.113300785" z="0.993560734" w="0" />
+            <Unknown50 x="0" y="0.229477668" z="-3.46944695e-18" w="1" />
+            <Unknown60 x="0" y="0" z="1" w="0" />
+            <Unknown70 x="0.984427576" y="-0.175790638" z="0" w="0" />
+            <Unknown80 x="0.175790638" y="0.984427576" z="0" w="0" />
+            <Unknown90 x="-1.04083409e-17" y="-0.113771701" z="0" w="1" />
+            <UnknownA0 x="0.20943951" y="0.314159265" z="0.610865238" w="0" />
+          </Item>
+          <Item type="DOF3">
+            <FragIndex1 value="1" />
+            <FragIndex2 value="9" />
+            <Unknown10 value="0" />
+            <Unknown20 x="1" y="0" z="0" w="0" />
+            <Unknown30 x="0" y="0.997683693" z="0.0680238881" w="0" />
+            <Unknown40 x="0" y="-0.0680238881" z="0.997683693" w="0" />
+            <Unknown50 x="-0.21" y="0.162010227" z="-0.0240351071" w="1" />
+            <Unknown60 x="0" y="-0.998204845" z="-0.0598922907" w="0" />
+            <Unknown70 x="1" y="0" z="0" w="0" />
+            <Unknown80 x="0" y="-0.0598922907" z="0.998204845" w="0" />
+            <Unknown90 x="0" y="-0.125224798" z="4.33680869e-18" w="1" />
+            <UnknownA0 x="1.48352986" y="1.48352986" z="1.3962634" w="0" />
+          </Item>
+          <Item type="DOF1">
+            <FragIndex1 value="9" />
+            <FragIndex2 value="10" />
+            <Unknown10 value="0" />
+            <Unknown20 x="1" y="0" z="0" w="0" />
+            <Unknown30 x="0" y="-0.0598922907" z="0.998204845" w="0" />
+            <Unknown40 x="0" y="-0.998204845" z="-0.0598922907" w="0" />
+            <Unknown50 x="0" y="0.125224798" z="7.80625564e-18" w="1" />
+            <Unknown60 x="1" y="0" z="0" w="0" />
+            <Unknown70 x="0" y="0.0416305447" z="0.999133073" w="0" />
+            <Unknown80 x="0" y="-0.999133073" z="0.0416305447" w="0" />
+            <Unknown90 x="0" y="-0.120104121" z="6.07153217e-18" w="1" />
+            <UnknownA0 x="-0.034906585" y="2.26892803" z="0" w="0" />
+          </Item>
+          <Item type="DOF3">
+            <FragIndex1 value="10" />
+            <FragIndex2 value="11" />
+            <Unknown10 value="0" />
+            <Unknown20 x="0" y="-0.999133073" z="0.0416305447" w="0" />
+            <Unknown30 x="1" y="0" z="0" w="0" />
+            <Unknown40 x="0" y="0.0416305447" z="0.999133073" w="0" />
+            <Unknown50 x="0" y="0.120104121" z="6.07153217e-18" w="1" />
+            <Unknown60 x="0" y="-0.999261175" z="0.0384331221" w="0" />
+            <Unknown70 x="1" y="0" z="0" w="0" />
+            <Unknown80 x="0" y="0.0384331221" z="0.999261175" w="0" />
+            <Unknown90 x="0" y="-0.0650480592" z="-2.16840434e-18" w="1" />
+            <UnknownA0 x="0.610865238" y="0.610865238" z="0.610865238" w="0" />
+          </Item>
+          <Item type="DOF3">
+            <FragIndex1 value="0" />
+            <FragIndex2 value="12" />
+            <Unknown10 value="0" />
+            <Unknown20 x="1" y="0" z="0" w="0" />
+            <Unknown30 x="0" y="0.992277877" z="-0.124034735" w="0" />
+            <Unknown40 x="0" y="0.124034735" z="0.992277877" w="0" />
+            <Unknown50 x="-0.114" y="0.00855839669" z="-0.012155404" w="1" />
+            <Unknown60 x="-1" y="0" z="0" w="0" />
+            <Unknown70 x="0" y="-1" z="0" w="0" />
+            <Unknown80 x="0" y="0" z="1" w="0" />
+            <Unknown90 x="0" y="-0.214" z="0" w="1" />
+            <UnknownA0 x="0.785398163" y="0.872664626" z="1.22173048" w="0" />
+          </Item>
+          <Item type="DOF1">
+            <FragIndex1 value="12" />
+            <FragIndex2 value="13" />
+            <Unknown10 value="0" />
+            <Unknown20 x="-1" y="0" z="0" w="0" />
+            <Unknown30 x="0" y="-1" z="0" w="0" />
+            <Unknown40 x="0" y="0" z="1" w="0" />
+            <Unknown50 x="0" y="0.214" z="0" w="1" />
+            <Unknown60 x="-1" y="0" z="0" w="0" />
+            <Unknown70 x="0" y="-0.993560734" z="-0.113300785" w="0" />
+            <Unknown80 x="0" y="-0.113300785" z="0.993560734" w="0" />
+            <Unknown90 x="0" y="-0.229477668" z="6.9388939e-18" w="1" />
+            <UnknownA0 x="-0.0523598776" y="2.18166156" z="0" w="0" />
+          </Item>
+          <Item type="DOF3">
+            <FragIndex1 value="13" />
+            <FragIndex2 value="14" />
+            <Unknown10 value="0" />
+            <Unknown20 x="-1" y="0" z="0" w="0" />
+            <Unknown30 x="0" y="-0.993560734" z="-0.113300785" w="0" />
+            <Unknown40 x="0" y="-0.113300785" z="0.993560734" w="0" />
+            <Unknown50 x="0" y="0.229477668" z="-3.46944695e-18" w="1" />
+            <Unknown60 x="0" y="0" z="1" w="0" />
+            <Unknown70 x="0.984427576" y="-0.175790638" z="0" w="0" />
+            <Unknown80 x="0.175790638" y="0.984427576" z="0" w="0" />
+            <Unknown90 x="-1.04083409e-17" y="-0.113771701" z="0" w="1" />
+            <UnknownA0 x="0.20943951" y="0.314159265" z="0.610865238" w="0" />
+          </Item>
+        </Joints>
+      </ArticulatedBody>
+      <Archetype>
+        <Name>osage_pedestrian</Name>
+        <Mass value="75" />
+        <Bounds type="Composite">
+          <BoxMin x="-0.86" y="-0.16" z="0" />
+          <BoxMax x="0.86" y="0.16" z="1.8" />
+          <SphereCenter x="0" y="0" z="0.9" />
+          <SphereRadius value="1.25" />
+          <Children>
+            <Item type="Sphere">
+              <BoxMin x="-0.128" y="-0.128" z="-0.128" />
+              <BoxMax x="0.128" y="0.128" z="0.128" />
+              <BoxCenter x="0" y="0" z="0" />
+              <SphereCenter x="0" y="0" z="0" />
+              <SphereRadius value="0.128" />
+              <Margin value="0" />
+              <MaterialIndex value="7" />
+              <CompositeTransform>
+1 0 0 0
+0 -0.124034735 0.992277877 0
+0 -0.992277877 -0.124034735 0
+0 0.025 0.96 1
+</CompositeTransform>
+              <Inertia x="0.0065536" y="0.0065536" z="0.0065536" />
+              <Volume value="0.00878452976" />
+              <CompositeFlags1>MAP_DYNAMIC</CompositeFlags1>
+              <CompositeFlags2>MAP_DYNAMIC</CompositeFlags2>
+            </Item>
+            <Item type="Capsule">
+              <BoxMin x="-0.145" y="-0.220510771" z="-0.145" />
+              <BoxMax x="0.145" y="0.220510771" z="0.145" />
+              <BoxCenter x="0" y="0" z="0" />
+              <SphereCenter x="0" y="0" z="0" />
+              <SphereRadius value="0.220510771" />
+              <Margin value="0.145" />
+              <MaterialIndex value="7" />
+              <CompositeTransform>
+1 0 0 0
+0 0.0680238881 0.997683693 0
+0 -0.997683693 0.0680238881 0
+0 0.025 1.3 1
+</CompositeTransform>
+              <Inertia x="0.0156720664" y="0.00933208014" z="0.0156720664" />
+              <Volume value="0.0227453232" />
+              <CompositeFlags1>MAP_DYNAMIC</CompositeFlags1>
+              <CompositeFlags2>MAP_DYNAMIC</CompositeFlags2>
+            </Item>
+            <Item type="Sphere">
+              <BoxMin x="-0.1" y="-0.1" z="-0.1" />
+              <BoxMax x="0.1" y="0.1" z="0.1" />
+              <BoxCenter x="0" y="0" z="0" />
+              <SphereCenter x="0" y="0" z="0" />
+              <SphereRadius value="0.1" />
+              <Margin value="0" />
+              <MaterialIndex value="7" />
+              <CompositeTransform>
+1 0 0 0
+0 -0.110431526 0.993883735 0
+0 -0.993883735 -0.110431526 0
+0 0.025 1.655 1
+</CompositeTransform>
+              <Inertia x="0.004" y="0.004" z="0.004" />
+              <Volume value="0.0041887902" />
+              <CompositeFlags1>MAP_DYNAMIC</CompositeFlags1>
+              <CompositeFlags2>MAP_DYNAMIC</CompositeFlags2>
+            </Item>
+            <Item type="Capsule">
+              <BoxMin x="-0.061" y="-0.125224798" z="-0.061" />
+              <BoxMax x="0.061" y="0.125224798" z="0.061" />
+              <BoxCenter x="0" y="0" z="0" />
+              <SphereCenter x="0" y="0" z="0" />
+              <SphereRadius value="0.125224798" />
+              <Margin value="0.061" />
+              <MaterialIndex value="7" />
+              <CompositeTransform>
+0 0 -1 0
+0.998204845 0.0598922907 0 0
+0.0598922907 -0.998204845 0 0
+0.335 0.0675 1.46 1
+</CompositeTransform>
+              <Inertia x="0.00472690353" y="0.00171623596" z="0.00472690353" />
+              <Volume value="0.00245233439" />
+              <CompositeFlags1>MAP_DYNAMIC</CompositeFlags1>
+              <CompositeFlags2>MAP_DYNAMIC</CompositeFlags2>
+            </Item>
+            <Item type="Capsule">
+              <BoxMin x="-0.052" y="-0.120104121" z="-0.052" />
+              <BoxMax x="0.052" y="0.120104121" z="0.052" />
+              <BoxCenter x="0" y="0" z="0" />
+              <SphereCenter x="0" y="0" z="0" />
+              <SphereRadius value="0.120104121" />
+              <Margin value="0.052" />
+              <MaterialIndex value="7" />
+              <CompositeTransform>
+0 0 -1 0
+0.999133073 -0.0416305447 0 0
+-0.0416305447 -0.999133073 0 0
+0.58 0.07 1.46 1
+</CompositeTransform>
+              <Inertia x="0.00429784996" y="0.00126078861" z="0.00429784996" />
+              <Volume value="0.00174604826" />
+              <CompositeFlags1>MAP_DYNAMIC</CompositeFlags1>
+              <CompositeFlags2>MAP_DYNAMIC</CompositeFlags2>
+            </Item>
+            <Item type="Capsule">
+              <BoxMin x="-0.042" y="-0.0650480592" z="-0.042" />
+              <BoxMax x="0.042" y="0.0650480592" z="0.042" />
+              <BoxCenter x="0" y="0" z="0" />
+              <SphereCenter x="0" y="0" z="0" />
+              <SphereRadius value="0.0650480592" />
+              <Margin value="0.042" />
+              <MaterialIndex value="7" />
+              <CompositeTransform>
+0 0 -1 0
+0.999261175 -0.0384331221 0 0
+-0.0384331221 -0.999261175 0 0
+0.765 0.0625 1.46 1
+</CompositeTransform>
+              <Inertia x="0.00135567329" y="0.000785244118" z="0.00135567329" />
+              <Volume value="0.000565793149" />
+              <CompositeFlags1>MAP_DYNAMIC</CompositeFlags1>
+              <CompositeFlags2>MAP_DYNAMIC</CompositeFlags2>
+            </Item>
+            <Item type="Capsule">
+              <BoxMin x="-0.086" y="-0.214" z="-0.086" />
+              <BoxMax x="0.086" y="0.214" z="0.086" />
+              <BoxCenter x="0" y="0" z="0" />
+              <SphereCenter x="0" y="0" z="0" />
+              <SphereRadius value="0.214" />
+              <Margin value="0.086" />
+              <MaterialIndex value="7" />
+              <CompositeTransform>
+-1 0 0 0
+0 0 -1 0
+0 -1 0 0
+0.114 0.036 0.756 1
+</CompositeTransform>
+              <Inertia x="0.0135864978" y="0.00346920288" z="0.0135864978" />
+              <Volume value="0.00861252127" />
+              <CompositeFlags1>MAP_DYNAMIC</CompositeFlags1>
+              <CompositeFlags2>MAP_DYNAMIC</CompositeFlags2>
+            </Item>
+            <Item type="Capsule">
+              <BoxMin x="-0.063" y="-0.229477668" z="-0.063" />
+              <BoxMax x="0.063" y="0.229477668" z="0.063" />
+              <BoxCenter x="0" y="0" z="0" />
+              <SphereCenter x="0" y="0" z="0" />
+              <SphereRadius value="0.229477668" />
+              <Margin value="0.063" />
+              <MaterialIndex value="7" />
+              <CompositeTransform>
+-1 0 0 0
+0 0.113300785 -0.993560734 0
+0 -0.993560734 -0.113300785 0
+0.114 0.062 0.314 1
+</CompositeTransform>
+              <Inertia x="0.0156574547" y="0.00190454036" z="0.0156574547" />
+              <Volume value="0.00519900826" />
+              <CompositeFlags1>MAP_DYNAMIC</CompositeFlags1>
+              <CompositeFlags2>MAP_DYNAMIC</CompositeFlags2>
+            </Item>
+            <Item type="Capsule">
+              <BoxMin x="-0.048" y="-0.113771701" z="-0.048" />
+              <BoxMax x="0.048" y="0.113771701" z="0.048" />
+              <BoxCenter x="0" y="0" z="0" />
+              <SphereCenter x="0" y="0" z="0" />
+              <SphereRadius value="0.113771701" />
+              <Margin value="0.048" />
+              <MaterialIndex value="7" />
+              <CompositeTransform>
+0 -0.175790638 0.984427576 0
+0 -0.984427576 -0.175790638 0
+1 0 0 0
+0.114 -0.024 0.066 1
+</CompositeTransform>
+              <Inertia x="0.00384993812" y="0.00107659168" z="0.00384993812" />
+              <Volume value="0.00141538802" />
+              <CompositeFlags1>MAP_DYNAMIC</CompositeFlags1>
+              <CompositeFlags2>MAP_DYNAMIC</CompositeFlags2>
+            </Item>
+            <Item type="Capsule">
+              <BoxMin x="-0.061" y="-0.125224798" z="-0.061" />
+              <BoxMax x="0.061" y="0.125224798" z="0.061" />
+              <BoxCenter x="0" y="0" z="0" />
+              <SphereCenter x="0" y="0" z="0" />
+              <SphereRadius value="0.125224798" />
+              <Margin value="0.061" />
+              <MaterialIndex value="7" />
+              <CompositeTransform>
+0 0 1 0
+-0.998204845 0.0598922907 0 0
+-0.0598922907 -0.998204845 0 0
+-0.335 0.0675 1.46 1
+</CompositeTransform>
+              <Inertia x="0.00472690353" y="0.00171623596" z="0.00472690353" />
+              <Volume value="0.00245233439" />
+              <CompositeFlags1>MAP_DYNAMIC</CompositeFlags1>
+              <CompositeFlags2>MAP_DYNAMIC</CompositeFlags2>
+            </Item>
+            <Item type="Capsule">
+              <BoxMin x="-0.052" y="-0.120104121" z="-0.052" />
+              <BoxMax x="0.052" y="0.120104121" z="0.052" />
+              <BoxCenter x="0" y="0" z="0" />
+              <SphereCenter x="0" y="0" z="0" />
+              <SphereRadius value="0.120104121" />
+              <Margin value="0.052" />
+              <MaterialIndex value="7" />
+              <CompositeTransform>
+0 0 1 0
+-0.999133073 -0.0416305447 0 0
+0.0416305447 -0.999133073 0 0
+-0.58 0.07 1.46 1
+</CompositeTransform>
+              <Inertia x="0.00429784996" y="0.00126078861" z="0.00429784996" />
+              <Volume value="0.00174604826" />
+              <CompositeFlags1>MAP_DYNAMIC</CompositeFlags1>
+              <CompositeFlags2>MAP_DYNAMIC</CompositeFlags2>
+            </Item>
+            <Item type="Capsule">
+              <BoxMin x="-0.042" y="-0.0650480592" z="-0.042" />
+              <BoxMax x="0.042" y="0.0650480592" z="0.042" />
+              <BoxCenter x="0" y="0" z="0" />
+              <SphereCenter x="0" y="0" z="0" />
+              <SphereRadius value="0.0650480592" />
+              <Margin value="0.042" />
+              <MaterialIndex value="7" />
+              <CompositeTransform>
+0 0 1 0
+-0.999261175 -0.0384331221 0 0
+0.0384331221 -0.999261175 0 0
+-0.765 0.0625 1.46 1
+</CompositeTransform>
+              <Inertia x="0.00135567329" y="0.000785244118" z="0.00135567329" />
+              <Volume value="0.000565793149" />
+              <CompositeFlags1>MAP_DYNAMIC</CompositeFlags1>
+              <CompositeFlags2>MAP_DYNAMIC</CompositeFlags2>
+            </Item>
+            <Item type="Capsule">
+              <BoxMin x="-0.086" y="-0.214" z="-0.086" />
+              <BoxMax x="0.086" y="0.214" z="0.086" />
+              <BoxCenter x="0" y="0" z="0" />
+              <SphereCenter x="0" y="0" z="0" />
+              <SphereRadius value="0.214" />
+              <Margin value="0.086" />
+              <MaterialIndex value="7" />
+              <CompositeTransform>
+-1 0 0 0
+0 0 -1 0
+0 -1 0 0
+-0.114 0.036 0.756 1
+</CompositeTransform>
+              <Inertia x="0.0135864978" y="0.00346920288" z="0.0135864978" />
+              <Volume value="0.00861252127" />
+              <CompositeFlags1>MAP_DYNAMIC</CompositeFlags1>
+              <CompositeFlags2>MAP_DYNAMIC</CompositeFlags2>
+            </Item>
+            <Item type="Capsule">
+              <BoxMin x="-0.063" y="-0.229477668" z="-0.063" />
+              <BoxMax x="0.063" y="0.229477668" z="0.063" />
+              <BoxCenter x="0" y="0" z="0" />
+              <SphereCenter x="0" y="0" z="0" />
+              <SphereRadius value="0.229477668" />
+              <Margin value="0.063" />
+              <MaterialIndex value="7" />
+              <CompositeTransform>
+-1 0 0 0
+0 0.113300785 -0.993560734 0
+0 -0.993560734 -0.113300785 0
+-0.114 0.062 0.314 1
+</CompositeTransform>
+              <Inertia x="0.0156574547" y="0.00190454036" z="0.0156574547" />
+              <Volume value="0.00519900826" />
+              <CompositeFlags1>MAP_DYNAMIC</CompositeFlags1>
+              <CompositeFlags2>MAP_DYNAMIC</CompositeFlags2>
+            </Item>
+            <Item type="Capsule">
+              <BoxMin x="-0.048" y="-0.113771701" z="-0.048" />
+              <BoxMax x="0.048" y="0.113771701" z="0.048" />
+              <BoxCenter x="0" y="0" z="0" />
+              <SphereCenter x="0" y="0" z="0" />
+              <SphereRadius value="0.113771701" />
+              <Margin value="0.048" />
+              <MaterialIndex value="7" />
+              <CompositeTransform>
+0 -0.175790638 0.984427576 0
+0 -0.984427576 -0.175790638 0
+1 0 0 0
+-0.114 -0.024 0.066 1
+</CompositeTransform>
+              <Inertia x="0.00384993812" y="0.00107659168" z="0.00384993812" />
+              <Volume value="0.00141538802" />
+              <CompositeFlags1>MAP_DYNAMIC</CompositeFlags1>
+              <CompositeFlags2>MAP_DYNAMIC</CompositeFlags2>
+            </Item>
+          </Children>
+        </Bounds>
+      </Archetype>
+      <Transforms>
+        <Item>
+1 0 0 0
+0 -0.124034735 0.992277877 0
+0 -0.992277877 -0.124034735 0
+0 0.025 0.96 1
+</Item>
+        <Item>
+1 0 0 0
+0 0.0680238881 0.997683693 0
+0 -0.997683693 0.0680238881 0
+0 0.025 1.3 1
+</Item>
+        <Item>
+1 0 0 0
+0 -0.110431526 0.993883735 0
+0 -0.993883735 -0.110431526 0
+0 0.025 1.655 1
+</Item>
+        <Item>
+0 0 -1 0
+0.998204845 0.0598922907 0 0
+0.0598922907 -0.998204845 0 0
+0.335 0.0675 1.46 1
+</Item>
+        <Item>
+0 0 -1 0
+0.999133073 -0.0416305447 0 0
+-0.0416305447 -0.999133073 0 0
+0.58 0.07 1.46 1
+</Item>
+        <Item>
+0 0 -1 0
+0.999261175 -0.0384331221 0 0
+-0.0384331221 -0.999261175 0 0
+0.765 0.0625 1.46 1
+</Item>
+        <Item>
+-1 0 0 0
+0 0 -1 0
+0 -1 0 0
+0.114 0.036 0.756 1
+</Item>
+        <Item>
+-1 0 0 0
+0 0.113300785 -0.993560734 0
+0 -0.993560734 -0.113300785 0
+0.114 0.062 0.314 1
+</Item>
+        <Item>
+0 -0.175790638 0.984427576 0
+0 -0.984427576 -0.175790638 0
+1 0 0 0
+0.114 -0.024 0.066 1
+</Item>
+        <Item>
+0 0 1 0
+-0.998204845 0.0598922907 0 0
+-0.0598922907 -0.998204845 0 0
+-0.335 0.0675 1.46 1
+</Item>
+        <Item>
+0 0 1 0
+-0.999133073 -0.0416305447 0 0
+0.0416305447 -0.999133073 0 0
+-0.58 0.07 1.46 1
+</Item>
+        <Item>
+0 0 1 0
+-0.999261175 -0.0384331221 0 0
+0.0384331221 -0.999261175 0 0
+-0.765 0.0625 1.46 1
+</Item>
+        <Item>
+-1 0 0 0
+0 0 -1 0
+0 -1 0 0
+-0.114 0.036 0.756 1
+</Item>
+        <Item>
+-1 0 0 0
+0 0.113300785 -0.993560734 0
+0 -0.993560734 -0.113300785 0
+-0.114 0.062 0.314 1
+</Item>
+        <Item>
+0 -0.175790638 0.984427576 0
+0 -0.984427576 -0.175790638 0
+1 0 0 0
+-0.114 -0.024 0.066 1
+</Item>
+      </Transforms>
+      <Groups>
+        <Item>
+          <Name>pelvis</Name>
+          <ParentIndex value="255" />
+        </Item>
+        <Item>
+          <Name>spine_01</Name>
+          <ParentIndex value="0" />
+        </Item>
+        <Item>
+          <Name>Head</Name>
+          <ParentIndex value="1" />
+        </Item>
+        <Item>
+          <Name>upperarm_l</Name>
+          <ParentIndex value="1" />
+        </Item>
+        <Item>
+          <Name>lowerarm_l</Name>
+          <ParentIndex value="3" />
+        </Item>
+        <Item>
+          <Name>hand_l</Name>
+          <ParentIndex value="4" />
+        </Item>
+        <Item>
+          <Name>thigh_l</Name>
+          <ParentIndex value="0" />
+        </Item>
+        <Item>
+          <Name>calf_l</Name>
+          <ParentIndex value="6" />
+        </Item>
+        <Item>
+          <Name>foot_l</Name>
+          <ParentIndex value="7" />
+        </Item>
+        <Item>
+          <Name>upperarm_r</Name>
+          <ParentIndex value="1" />
+        </Item>
+        <Item>
+          <Name>lowerarm_r</Name>
+          <ParentIndex value="9" />
+        </Item>
+        <Item>
+          <Name>hand_r</Name>
+          <ParentIndex value="10" />
+        </Item>
+        <Item>
+          <Name>thigh_r</Name>
+          <ParentIndex value="0" />
+        </Item>
+        <Item>
+          <Name>calf_r</Name>
+          <ParentIndex value="12" />
+        </Item>
+        <Item>
+          <Name>foot_r</Name>
+          <ParentIndex value="13" />
+        </Item>
+      </Groups>
+      <Children>
+        <Item>
+          <GroupIndex value="0" />
+          <BoneTag value="1000" />
+          <PristineMass value="11" />
+          <DamagedMass value="11" />
+          <InertiaTensor x="0.0720896" y="0.0720896" z="0.0720896" w="0.00878452976" />
+        </Item>
+        <Item>
+          <GroupIndex value="1" />
+          <BoneTag value="1001" />
+          <PristineMass value="25" />
+          <DamagedMass value="25" />
+          <InertiaTensor x="0.391801659" y="0.233302003" z="0.391801659" w="0.0227453232" />
+        </Item>
+        <Item>
+          <GroupIndex value="2" />
+          <BoneTag value="1002" />
+          <PristineMass value="5" />
+          <DamagedMass value="5" />
+          <InertiaTensor x="0.02" y="0.02" z="0.02" w="0.0041887902" />
+        </Item>
+        <Item>
+          <GroupIndex value="3" />
+          <BoneTag value="1003" />
+          <PristineMass value="3" />
+          <DamagedMass value="3" />
+          <InertiaTensor x="0.0141807106" y="0.00514870787" z="0.0141807106" w="0.00245233439" />
+        </Item>
+        <Item>
+          <GroupIndex value="4" />
+          <BoneTag value="1004" />
+          <PristineMass value="1.55" />
+          <DamagedMass value="1.55" />
+          <InertiaTensor x="0.00666166744" y="0.00195422234" z="0.00666166744" w="0.00174604826" />
+        </Item>
+        <Item>
+          <GroupIndex value="5" />
+          <BoneTag value="1005" />
+          <PristineMass value="0.45" />
+          <DamagedMass value="0.45" />
+          <InertiaTensor x="0.00061005298" y="0.000353359853" z="0.00061005298" w="0.000565793149" />
+        </Item>
+        <Item>
+          <GroupIndex value="6" />
+          <BoneTag value="1006" />
+          <PristineMass value="7" />
+          <DamagedMass value="7" />
+          <InertiaTensor x="0.0951054849" y="0.0242844201" z="0.0951054849" w="0.00861252127" />
+        </Item>
+        <Item>
+          <GroupIndex value="7" />
+          <BoneTag value="1007" />
+          <PristineMass value="3.7" />
+          <DamagedMass value="3.7" />
+          <InertiaTensor x="0.0579325824" y="0.00704679932" z="0.0579325824" w="0.00519900826" />
+        </Item>
+        <Item>
+          <GroupIndex value="8" />
+          <BoneTag value="1008" />
+          <PristineMass value="1.3" />
+          <DamagedMass value="1.3" />
+          <InertiaTensor x="0.00500491956" y="0.00139956918" z="0.00500491956" w="0.00141538802" />
+        </Item>
+        <Item>
+          <GroupIndex value="9" />
+          <BoneTag value="1009" />
+          <PristineMass value="3" />
+          <DamagedMass value="3" />
+          <InertiaTensor x="0.0141807106" y="0.00514870787" z="0.0141807106" w="0.00245233439" />
+        </Item>
+        <Item>
+          <GroupIndex value="10" />
+          <BoneTag value="1010" />
+          <PristineMass value="1.55" />
+          <DamagedMass value="1.55" />
+          <InertiaTensor x="0.00666166744" y="0.00195422234" z="0.00666166744" w="0.00174604826" />
+        </Item>
+        <Item>
+          <GroupIndex value="11" />
+          <BoneTag value="1011" />
+          <PristineMass value="0.45" />
+          <DamagedMass value="0.45" />
+          <InertiaTensor x="0.00061005298" y="0.000353359853" z="0.00061005298" w="0.000565793149" />
+        </Item>
+        <Item>
+          <GroupIndex value="12" />
+          <BoneTag value="1012" />
+          <PristineMass value="7" />
+          <DamagedMass value="7" />
+          <InertiaTensor x="0.0951054849" y="0.0242844201" z="0.0951054849" w="0.00861252127" />
+        </Item>
+        <Item>
+          <GroupIndex value="13" />
+          <BoneTag value="1013" />
+          <PristineMass value="3.7" />
+          <DamagedMass value="3.7" />
+          <InertiaTensor x="0.0579325824" y="0.00704679932" z="0.0579325824" w="0.00519900826" />
+        </Item>
+        <Item>
+          <GroupIndex value="14" />
+          <BoneTag value="1014" />
+          <PristineMass value="1.3" />
+          <DamagedMass value="1.3" />
+          <InertiaTensor x="0.00500491956" y="0.00139956918" z="0.00500491956" w="0.00141538802" />
+        </Item>
+      </Children>
+    </LOD1>
+  </Physics>
+</Fragment>

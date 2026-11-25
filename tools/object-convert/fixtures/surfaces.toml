@@ -1,0 +1,10 @@
+# SPDX-FileCopyrightText: The osage contributors
+# SPDX-License-Identifier: LicenseRef-osage-AGPL-3.0-or-later-with-exceptions
+
+# Original synthetic coefficients for the comparison fixture.
+[surface-7]
+friction = 0.72
+restitution = 0.08
+absorption = [0.12, 0.23, 0.31]
+transmission = [0.16, 0.09, 0.04]
+scattering = 0.25

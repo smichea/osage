@@ -7,9 +7,12 @@ licence: LicenseRef-osage-AGPL-3.0-or-later-with-exceptions
 status: draft
 tags: [physics, collision, replay]
 sources:
-  - id: implementation
-    title: Load transfer on a moving support
-    resource: https://github.com/smichea/osage/blob/main/crates/osage-dynamics/src/lift_response.rs
+  - id: glance
+    title: Replay beside a finite ledge with a paired free-flight control
+    resource: https://github.com/smichea/osage/blob/main/worlds/ville-paris/check-loaded-twist.py
+  - id: response
+    title: Moving deck load and penetration oracle
+    resource: https://github.com/smichea/osage/blob/main/worlds/ville-paris/lift_response_checks.py
 generated: { by: "OpenAI/Codex", at: "2026-11-24T17:24:00Z" }
 ---
 <!-- SPDX-FileCopyrightText: The osage contributors -->
@@ -21,7 +24,7 @@ A paw can stop at the deck while the trunk still carries downward momentum. The 
 
 # Idea
 
-Estimate normal travel from the rig's mass-weighted velocity and the local velocity at each contacting point. Use the larger closing speed to choose the number of native solves in the following base interval. Limit the work to the first impact.
+Estimate normal travel from the rig's mass-weighted velocity and the local velocity at each contacting point. Use the larger closing speed to choose the number of native solves in the following base interval. Limit the work to the first impact.[^response]
 
 # Method
 
@@ -49,10 +52,14 @@ A fixed clock is simpler. A finer clock throughout a long slide also spends work
 
 # Oracle
 
-A stationary-paw control checks the contribution of incoming trunk mass. The integration test combines the approach and load-transfer clocks and bounds penetration and joint excursions over the first quarter-second.[^implementation] [Loaded landing test](https://github.com/smichea/osage/blob/main/crates/osage-dynamics/tests/loaded_landing.rs).
+The quadruped replay measures the signed capsule-to-box gap at every ordinary tick boundary and the upward centre-of-mass speed relative to the deck over the first 250 ms. It checks both native backends on a full landing, a rear-paw landing, a miss and five lateral velocities. It also verifies identical repeated runs, first contact times, span accounting and paged Rapier reports.[^response]
+
+A crossing beside a narrow ledge leaves a strictly positive clearance for all sixteen parts. The replay certifies the lower bound from capsule-to-box distance and a relative speed bound between samples, then checks that every pose and velocity equals the control with the lift ten metres farther away. A positive speculative witness can be reported in either engine.[^glance]
 
 # Reuse
 
-Call `Simulation::sample_lift_response` after planning an approach and inspect the extra intervals in the approach report.
+Set the optional route field `lift_response_travel_m` in metres together with `lift_contact_hz`. Read `lift_approach.response` for the response-only counts and `lift_approach.extra_intervals` for the total.
 
-[^implementation]: [Implementation and unit tests](https://github.com/smichea/osage/blob/main/crates/osage-dynamics/src/lift_response.rs).
+[^response]: [Geometric measurements and bounded native replay checks](https://github.com/smichea/osage/blob/main/worlds/ville-paris/lift_response_checks.py).
+
+[^glance]: [Paired ledge and free-flight replay](https://github.com/smichea/osage/blob/main/worlds/ville-paris/check-loaded-twist.py).

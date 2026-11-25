@@ -3,7 +3,7 @@
 
 [workspace]
 resolver = "3"
-members = ["crates/*", "worlds/kart/physics", "worlds/kart/world", "worlds/kart/server", "worlds/kart/native", "worlds/kart/components/*", "worlds/paris/world", "worlds/paris/server", "worlds/paris/native", "tools/paris-soundscape"]
+members = ["crates/*", "worlds/kart/physics", "worlds/kart/world", "worlds/kart/server", "worlds/kart/native", "worlds/kart/components/*", "worlds/paris/world", "worlds/paris/server", "worlds/paris/native", "worlds/ville-paris", "tools/paris-soundscape"]
 
 [workspace.package]
 version = "0.1.0"

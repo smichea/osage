@@ -146,6 +146,37 @@ fn what_comes_nearer_sounds_higher_and_what_goes_away_lower() {
 }
 
 #[test]
+fn a_moving_tone_keeps_its_doppler_shift_without_a_loud_interpolation_image() {
+    use std::f64::consts::TAU;
+
+    // The source approaches the listener along the line of sight at c/17.
+    // A 10 kHz tone arrives at 17/16 of its emitted frequency. The first
+    // sampling image at −38 kHz folds to 7,625 Hz in the 48 kHz output.
+    let speed_kmh = 343.0 / 17.0 * 3.6;
+    let mover = format!(
+        r#"{{"translation": [0, 0, -50], "extras": {{"osage": {{"id": "car"}}, "osageSound": {{
+          "motion": {{"alongM": [0, 0, 1], "atS": 0, "speedKmh": {speed_kmh}}},
+          "emitters": [{{"id": "tone", "voice": "tone", "params": {{"hz": 10000}}}}]}}}}}}"#
+    );
+    let nodes = [world(2, ""), EARS.to_owned(), mover].join(",");
+    let heard = render(&scene(&nodes, 1.0), &options(Listening::Speakers), 1.0);
+    let samples = part(&heard.left, 0.50, 0.75);
+    let magnitude = |hz: f64| {
+        let (mut real, mut imag) = (0., 0.);
+        for (n, &sample) in samples.iter().enumerate() {
+            let window = 0.5 - 0.5 * (TAU * n as f64 / samples.len() as f64).cos();
+            let (sin, cos) = (TAU * hz * n as f64 / RATE as f64).sin_cos();
+            real += f64::from(sample) * window * cos;
+            imag += f64::from(sample) * window * sin;
+        }
+        real.hypot(imag)
+    };
+    assert!((pitch(samples) - 10_625.).abs() < 0.5);
+    let image_db = 20.0 * (magnitude(7_625.) / magnitude(10_625.)).log10();
+    assert!(image_db < -48., "interpolation image at {image_db} dBc");
+}
+
+#[test]
 fn a_floor_adds_its_reflection_with_its_own_delay() {
     // An emitter 1 m and ears 2 m above a hard floor, 4 m apart: the mirrored way is 0.877 m longer.
     let heard = |hz: f64, floor: &str| {

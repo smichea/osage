@@ -1,0 +1,31 @@
+{
+  "SPDX-FileCopyrightText": "The osage contributors",
+  "SPDX-License-Identifier": "MIT OR Apache-2.0",
+  "version": 1,
+  "tick_hz": 60,
+  "gravity_m_s2": 9.81,
+  "terminal_m_s": 55,
+  "viewport": [1280, 720],
+  "vertical_fov_deg": 42,
+  "routes": [
+    {
+      "id": "standing-lift",
+      "ticks": 600,
+      "start_m": [32.5, 24.125, 7.625],
+      "velocity_m_s": [0, 0, 0],
+      "expected_support": "lift",
+      "lift": {
+        "center_m": [32, 24, 8],
+        "half_extents_m": [1.5, 0.125, 1.25],
+        "travel_m": 3,
+        "period_s": 10,
+        "friction": 0.6
+      },
+      "camera": [
+        {"tick": 0, "eye": [37, 27, 14], "aim": [32.5, 25, 7.625]},
+        {"tick": 300, "eye": [37, 30, 14], "aim": [32.5, 28, 7.625]},
+        {"tick": 600, "eye": [37, 27, 14], "aim": [32.5, 25, 7.625]}
+      ]
+    }
+  ]
+}

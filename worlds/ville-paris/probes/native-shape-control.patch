@@ -1,0 +1,20 @@
+# SPDX-FileCopyrightText: The osage contributors
+# SPDX-License-Identifier: LicenseRef-osage-AGPL-3.0-or-later-with-exceptions
+# Apply only to a separate measurement checkout.
+--- a/crates/osage-dynamics/src/static_instances.rs
++++ b/crates/osage-dynamics/src/static_instances.rs
+@@ -130,6 +130,14 @@
+     mut build: impl FnMut(&StaticMesh) -> Result<S>,
+     mut install: impl FnMut(usize, &StaticMesh, &S, [f32; 3]) -> Result<H>,
+ ) -> Result<Deferred<H>> {
++    // Measurement only: select the original native construction in this same frozen executable.
++    if std::env::var_os("OSAGE_D178_EXPANDED_CONTROL").is_some() {
++        for (slot, mesh) in meshes.iter().enumerate() {
++            let shape = build(mesh)?;
++            install(slot, mesh, &shape, [0.; 3])?;
++        }
++        return Ok(Deferred { remaining: 0, tree: Bvh::default(), copies: Vec::new(), templates: HashMap::new() });
++    }
+     let mut groups: HashMap<u64, Vec<(usize, S)>> = HashMap::new();
+     let mut bounds = Vec::new();
+     let mut copies = Vec::new();

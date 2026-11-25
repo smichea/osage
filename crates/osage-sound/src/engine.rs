@@ -64,7 +64,7 @@ pub enum Reading {
     Linear,
     /// Four samples (Lagrange): flat to a few kilohertz.
     Cubic,
-    /// Eight samples under a window: flat to most of the band.
+    /// Eight samples of a binomially windowed sinc (seventh-order Lagrange).
     Sinc,
 }
 
@@ -720,7 +720,6 @@ pub struct Engine {
     block: u64,
     tail: Tail,
     touched: Vec<Touched>,
-    sinc: Vec<[f32; 8]>,
     send: Vec<f32>,
     made: Vec<f32>,
     /// What each ear's sum holds that is not sound: its mean, followed slowly.
@@ -939,26 +938,31 @@ fn clear_pass(clear_db: f64) -> f32 {
 /// Phases of the windowed sinc.
 const PHASES: usize = 256;
 
-fn sinc_table() -> Vec<[f32; 8]> {
-    (0..=PHASES)
-        .map(|phase| {
-            let f = phase as f64 / PHASES as f64;
-            let mut taps = [0.0f64; 8];
-            for (k, tap) in taps.iter_mut().enumerate() {
-                // Samples −3…4 round the one before the point read.
-                let x = k as f64 - 3.0 - f;
-                let sinc =
-                    if x.abs() < 1e-9 { 1.0 } else { (std::f64::consts::PI * x).sin() / (std::f64::consts::PI * x) };
-                // A Blackman-Harris window over the eight samples.
-                let w = (x + 4.0) / 8.0 * std::f64::consts::TAU;
-                let window = 0.35875 - 0.48829 * w.cos() + 0.14128 * (2.0 * w).cos() - 0.01168 * (3.0 * w).cos();
-                *tap = sinc * window.max(0.0);
+// A binomially windowed sinc is equivalent, after normalization, to the
+// Lagrange basis on samples −3…4. Compute each cardinal polynomial at build time.
+// All emitters and listeners share the table, including its exact integer phases.
+static SINC: [[f32; 8]; PHASES + 1] = {
+    let mut rows = [[0.; 8]; PHASES + 1];
+    let mut phase = 0;
+    while phase <= PHASES {
+        let at = 3.0 + phase as f64 / PHASES as f64;
+        let mut tap = 0;
+        while tap < 8 {
+            let mut weight = 1.0;
+            let mut other = 0;
+            while other < 8 {
+                if other != tap {
+                    weight *= (at - other as f64) / (tap as f64 - other as f64);
+                }
+                other += 1;
             }
-            let sum: f64 = taps.iter().sum();
-            taps.map(|tap| (tap / sum) as f32)
-        })
-        .collect()
-}
+            rows[phase][tap] = weight as f32;
+            tap += 1;
+        }
+        phase += 1;
+    }
+    rows
+};
 
 impl Engine {
     /// The engine on `scene`: all of its sound, or — when `options.far` is
@@ -1145,7 +1149,6 @@ impl Engine {
             ranked: Vec::new(),
             air,
             touched,
-            sinc: sinc_table(),
             send: vec![0.0; BLOCK],
             made: vec![0.0; BLOCK],
             still: [0.0; 2],
@@ -1935,7 +1938,6 @@ impl Engine {
                         base,
                         parts,
                         self.clear,
-                        &self.sinc,
                         quality,
                         self.options.listening,
                         left,
@@ -2114,7 +2116,6 @@ fn run(
     base: u64,
     parts: [f32; 3],
     clear: f32,
-    sinc: &[[f32; 8]],
     quality: Quality,
     listening: Listening,
     left: &mut [f32; BLOCK],
@@ -2167,7 +2168,7 @@ fn run(
                 let phase = f * PHASES as f32;
                 let row = (phase as usize).min(PHASES - 1);
                 let between = phase - row as f32;
-                let (a, b) = (&sinc[row], &sinc[row + 1]);
+                let (a, b) = (&SINC[row], &SINC[row + 1]);
                 let mut sum = 0.0;
                 for tap in 0..8 {
                     sum += ring[i.wrapping_add(tap).wrapping_sub(3) & mask] * (a[tap] + (b[tap] - a[tap]) * between);
@@ -2281,7 +2282,6 @@ pub fn way_cost(quality: Quality, listening: Listening, seconds: f64) -> f64 {
     let mut noise = Noise::new(9);
     let ring: Vec<f32> = (0..1 << 16).map(|_| noise.next() * 0.1).collect();
     let parts = PARTS.map(|frequency| (1.0 - (-std::f64::consts::TAU * frequency * DT).exp()) as f32);
-    let sinc = sinc_table();
     let head = crate::scene::Head { at: Vec3::ZERO, forward: -Vec3::Z, right: Vec3::X, up: Vec3::Y };
     let (mut left, mut right, mut send) = ([0.0f32; BLOCK], [0.0f32; BLOCK], vec![0.0f32; BLOCK]);
     let mut line = Line { live: true, ..Line::default() };
@@ -2306,7 +2306,6 @@ pub fn way_cost(quality: Quality, listening: Listening, seconds: f64) -> f64 {
             (1 << 15) + block * BLOCK as u64,
             parts,
             clear_pass(quality.clear_db),
-            &sinc,
             quality,
             listening,
             &mut left,

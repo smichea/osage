@@ -7,9 +7,9 @@ licence: LicenseRef-osage-AGPL-3.0-or-later-with-exceptions
 status: draft
 tags: [geometry, physics, collision, replay]
 sources:
-  - id: implementation
-    title: First contact with a finite moving platform
-    resource: https://github.com/smichea/osage/blob/main/crates/osage-dynamics/src/lift_flight.rs
+  - id: flight
+    title: Continuous flight and contact oracle on an authored moving lift
+    resource: https://github.com/smichea/osage/blob/main/worlds/ville-paris/lift_approach_checks.py
 generated: { by: "OpenAI/Codex", at: "2026-11-24T16:59:00Z" }
 ---
 <!-- SPDX-FileCopyrightText: The osage contributors -->
@@ -21,7 +21,7 @@ A lift can rise into a falling paw between fixed solver samples. A held speculat
 
 # Idea
 
-Use relative motion to find an interval containing the first inward crossing. Then spend additional native solver steps around this time. Report the geometric prediction and the first nonpositive native contact independently.
+Use relative motion to find an interval containing the first inward crossing. Then spend additional native solver steps around this time. Report the geometric prediction and the first nonpositive native contact independently.[^flight]
 
 # Method
 
@@ -45,14 +45,14 @@ A forecast assumes uninterrupted flight with the supplied linear and angular mot
 
 # Alternatives
 
-A uniformly faster clock also improves timing, with additional solves across the whole replay. A terrain-only ballistic query handles fixed triangles and supplies a source triangle ID. [Static geometry](https://github.com/smichea/osage/blob/main/crates/osage-dynamics/src/ballistic.rs)
+A uniformly faster clock also improves timing, with additional solves across the whole replay. A terrain-only ballistic query handles fixed triangles and supplies a source triangle ID. [Static geometry](ballistic-impact.md)
 
 # Oracle
 
-The flight tests exercise a returning lift, a spinning capsule, a rounded edge and terminal speed. The quadruped landing regression runs the forecast and checks first touch at both local sampling rates.[^implementation] [Loaded landing test](https://github.com/smichea/osage/blob/main/crates/osage-dynamics/tests/loaded_landing.rs).
+Tests cover a lift passing through and returning to the same endpoint, a rotating capsule, an edge with an oblique normal, terminal speed and a miss. The city oracle brackets the independent paw-to-box distance, checks the unmodified and refined clocks for both native solvers, verifies a deterministic replay, and compares paged and resident Rapier reports. A separate capsule falls onto the road above a lift, cancelling the predicted window.[^flight]
 
 # Reuse
 
-Install the lift and call `Simulation::plan_lift_approach`. Its report includes the finite-platform forecast and the first measured native contact interval.
+Call `Lift::first_impact` for a single shape. Call `Simulation::plan_lift_approach` after installing a lift to schedule the native contact window for the supplied rig. In a Ville-Paris replay set `lift_contact_hz` on the route. The resulting `lift_approach` record contains both measurements.
 
-[^implementation]: [Implementation and unit tests](https://github.com/smichea/osage/blob/main/crates/osage-dynamics/src/lift_flight.rs).
+[^flight]: [Independent geometry and native replay checks](https://github.com/smichea/osage/blob/main/worlds/ville-paris/lift_approach_checks.py).

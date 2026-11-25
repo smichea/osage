@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- SPDX-FileCopyrightText: The osage contributors -->
+<!-- SPDX-License-Identifier: LicenseRef-osage-AGPL-3.0-or-later-with-exceptions -->
+<Drawable>
+  <Name>slab</Name>
+  <BoundingSphereCenter x="0" y="0" z="1.25"/><BoundingSphereRadius value="1.42"/>
+  <BoundingBoxMin x="-1" y="-1" z="1.25"/><BoundingBoxMax x="1" y="1" z="1.25"/>
+  <LodDistHigh value="40"/><LodDistMed value="70"/><LodDistLow value="100"/><LodDistVlow value="120"/>
+  <ShaderGroup><Shaders><Item><Name>slab_shader</Name><FileName>slab_shader.sps</FileName><RenderBucket value="0"/><Parameters/></Item></Shaders></ShaderGroup>
+  <DrawableModelsHigh>
+    <Item><BoneIndex value="0"/><HasSkin value="0"/><Geometries><Item>
+      <ShaderIndex value="0"/>
+      <BoundingBoxMin x="-1" y="-1" z="1.25"/><BoundingBoxMax x="1" y="1" z="1.25"/>
+      <VertexBuffer><Flags value="0"/><Layout type="GTAV1"><Position/><Normal/><Colour0/><TexCoord0/></Layout>
+        <Data>
+          -1 -1 1.25   0 0 1   192 128 64 255   0 0
+           1 -1 1.25   0 0 1   192 128 64 255   1 0
+           1  1 1.25   0 0 1   192 128 64 255   1 1
+          -1  1 1.25   0 0 1   192 128 64 255   0 1
+        </Data>
+      </VertexBuffer>
+      <IndexBuffer><Data>0 1 2 0 2 3</Data></IndexBuffer>
+    </Item></Geometries></Item>
+  </DrawableModelsHigh>
+  <DrawableModelsLow>
+    <Item><BoneIndex value="0"/><HasSkin value="0"/><Geometries><Item>
+      <ShaderIndex value="0"/><BoundingBoxMin x="-1" y="-1" z="1.25"/><BoundingBoxMax x="1" y="1" z="1.25"/>
+      <VertexBuffer><Flags value="0"/><Layout type="GTAV1"><Position/><Normal/></Layout><Data>
+        -1 -1 1.25   0 0 1
+         1 -1 1.25   0 0 1
+         0  1 1.25   0 0 1
+      </Data></VertexBuffer>
+      <IndexBuffer><Data>0 1 2</Data></IndexBuffer>
+    </Item></Geometries></Item>
+  </DrawableModelsLow>
+</Drawable>

@@ -20,7 +20,7 @@ An object has a look: colour, relief, gloss. It also has a sound, and it has thr
 
 | Side | What it says | Where it is carried |
 |---|---|---|
-| **What it does to sound that reaches it** | For each band: the share it absorbs, lets through, mirrors, scatters | The acoustic material of a surface. The object format has it already (`acousticMaterials`, `node.extras.osage.acoustic[]`), at 250, 1 000 and 4 000 Hz. |
+| **What it does to sound that reaches it** | For each band: the share it absorbs, lets through, mirrors, scatters | The acoustic material of a surface. The [object format](08-object-format.md#fields) has it already (`acousticMaterials`, `node.extras.osage.acoustic[]`), at 250, 1 000 and 4 000 Hz. |
 | **What it emits by itself** | A voice and its parameters, a place in the node, a level, from how far it is heard | New: an **emitter** on a node. |
 | **What it emits when touched** | How it rings (its lowest mode, how long it lasts, its shape), how hard it is, how much it rubs or crumbles | New: a **contact sound** on a collision material, beside its friction and its bounce. |
 
@@ -41,7 +41,7 @@ Four contacts, as the `impact` voice makes them (measured by its tests):
 | Leather sole on a paving stone | long | almost nothing; the sole rubs | 0.07 s, weight at 2.7 kHz |
 | Wooden clog on the same stone | medium | the clog itself, a hollow body: a note at 520 Hz | 0.08 s, weight at 1.3 kHz |
 
-The same hammer ticks less on limestone than on steel, because the stone gives way and the push lasts longer. Nothing says so: it follows from giving each object its own modes and the pair one push. In the engine, a contact comes from the physics solver, which reports where, between which surfaces, how hard and when (issue #15): the world tells it to the engine (`Engine::strike_told`) as the struck node and its collision material, what struck it, and a strength — by default the change of speed the impulse made, full at 5 m/s. It is struck at its own sample. Feet and wheels remain as stand-ins for a scene without a solver. Which contacts are heard when there are more than voices is [contact voices](../knowledge/algorithms/contact-voices.md).
+The same hammer ticks less on limestone than on steel, because the stone gives way and the push lasts longer. Nothing says so: it follows from giving each object its own modes and the pair one push. In the engine, a contact comes from the [physics solver](../knowledge/modules/osage-dynamics.md), which reports where, between which surfaces, how hard and when (issue #15): the world tells it to the engine (`Engine::strike_told`) as the struck node and its collision material, what struck it, and a strength — by default the change of speed the impulse made, full at 5 m/s. It is struck at its own sample. Feet and wheels remain as stand-ins for a scene without a solver. Which contacts are heard when there are more than voices is [contact voices](../knowledge/algorithms/contact-voices.md).
 
 Listened to on 2026-11-24 (issue #20), the default contact — a slab struck by something soft — sounds like a hand on a thin metal sheet: the modes need checking against recordings before the presets are trusted.
 
@@ -56,7 +56,7 @@ The prototype writes them in sibling `osageSound` keys, because the engine's rea
 | `asset.extras.osageSound.contactSounds` | For a key of `collisionMaterials`: `voice` and `params` (`tone`, `ring`, `shape`, `scuff`, `grain`), `hardness`, `gainDb`. |
 | `node.extras.osageSound.surfaces[]` | Stands for `acoustic[]` and `collision[]` while a scene has no meshes: `quadM` (four corners), `acoustic` and `collision` (material keys), `reflects`, `occludes`, `strikes`. |
 | `node.extras.osageSound.surfaceSound` | For an object with meshes: by the identifier of an `acoustic[]` or `collision[]` surface, `reflects` and `occludes` (true when not said) and `strikes` (false). The faces are the meshes' triangles, two of a flat convex quad taken as one; faces of one plane that share a side are one surface ([sound faces from meshes](../knowledge/algorithms/sound-faces.md)). An acoustic material the format leaves unknown (`{}`) is not met by sound. |
-| `node.extras.osageSound.motion`, `turning`, `touches` | Stand for the simulation: a node going along a straight way at a speed that changes, a node turning, feet and wheels. |
+| `node.extras.osageSound.motion`, `turning`, `touches` | Stand for the [simulation](07-city-scale-quality.md#movement-people-and-vehicles): a node going along a straight way at a speed that changes, a node turning, feet and wheels. |
 
 Two things the format should decide before these move in. A thing's **modes belong to the object** (its size sets them) and its **damping to the material**: today both are parameters set by hand on the collision material. And an acoustic material has three bands; the engine shapes a way in four, the fourth for what the air and edges take first.
 
