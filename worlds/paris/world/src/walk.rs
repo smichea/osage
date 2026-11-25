@@ -10,6 +10,8 @@
 //! Frame: the glTF's — x east, y up, z south; a walker's heading turns
 //! about y, 0 facing -z.
 
+mod route;
+
 use bevy::math::{Vec2, Vec3, Vec3Swizzles};
 use serde::Deserialize;
 use std::ops::Range;
@@ -44,6 +46,8 @@ struct Header {
     rows: usize,
     origin: [f32; 2],
     start: [f32; 3],
+    #[serde(default)]
+    patrols: Option<Vec<[[f32; 2]; 2]>>,
 }
 
 /// The walk grid.
@@ -56,8 +60,11 @@ pub struct Walk {
     origin: Vec2,
     /// Row by row from the smallest z; NaN where nobody stands.
     heights: Vec<f32>,
+    /// One bit per centre cell whose entire 3×3 neighbourhood supports a disc.
+    clear_cells: Vec<u64>,
     /// Where walkers arrive: on the ground under the scene's camera.
     pub start: Vec3,
+    pub(super) patrols: Option<Vec<[[f32; 2]; 2]>>,
 }
 
 impl Walk {
@@ -68,12 +75,39 @@ impl Walk {
             return Err(format!("walk.bin: {} bytes for {} x {} cells", heights.len(), h.columns, h.rows));
         }
         let heights = heights.as_chunks::<4>().0.iter().map(|b| f32::from_le_bytes(*b)).collect::<Vec<_>>();
-        Ok(Self::new(h.cell, h.columns, h.rows, Vec2::from(h.origin), heights, Vec3::from(h.start)))
+        let mut walk = Self::new(h.cell, h.columns, h.rows, Vec2::from(h.origin), heights, Vec3::from(h.start));
+        walk.patrols = h.patrols;
+        Ok(walk)
     }
 
     pub fn new(cell: f32, columns: usize, rows: usize, origin: Vec2, heights: Vec<f32>, start: Vec3) -> Self {
         assert_eq!(heights.len(), columns * rows, "a height a cell");
-        Self { cell, columns, rows, origin, heights, start }
+        let mut clear_cells = vec![0; heights.len().div_ceil(64)];
+        if cell >= RADIUS {
+            for r in 1..rows.saturating_sub(1) {
+                for c in 1..columns.saturating_sub(1) {
+                    let id = r * columns + c;
+                    if !heights[id].is_finite() {
+                        continue;
+                    }
+                    let mut low = heights[id];
+                    let mut high = low;
+                    for row in r - 1..=r + 1 {
+                        for &h in &heights[row * columns + c - 1..=row * columns + c + 1] {
+                            if !h.is_finite() {
+                                high = f32::INFINITY;
+                            }
+                            low = low.min(h);
+                            high = high.max(h);
+                        }
+                    }
+                    if high - low <= STEP {
+                        clear_cells[id / 64] |= 1 << (id % 64);
+                    }
+                }
+            }
+        }
+        Self { cell, columns, rows, origin, heights, start, clear_cells, patrols: None }
     }
 
     /// The cell `p` (x, z) is in, if on the grid.
@@ -84,6 +118,15 @@ impl Walk {
         }
         let (c, r) = (g.x as usize, g.y as usize);
         (c < self.columns && r < self.rows).then_some((c, r))
+    }
+
+    pub(super) fn same_cell(&self, a: Vec2, b: Vec2) -> bool {
+        self.index(a) == self.index(b)
+    }
+
+    fn clear_cell(&self, (c, r): (usize, usize)) -> bool {
+        let id = r * self.columns + c;
+        self.clear_cells[id / 64] & (1 << (id % 64)) != 0
     }
 
     fn at(&self, c: usize, r: usize) -> Option<f32> {
@@ -145,10 +188,10 @@ impl Walk {
 
     /// Whether a walker can stand at `p`: the ground holds it all round.
     pub fn holds(&self, p: Vec2) -> bool {
-        let Some(own) = self.height(p) else { return false };
-        [Vec2::X, Vec2::NEG_X, Vec2::Y, Vec2::NEG_Y]
-            .iter()
-            .all(|&d| self.height(p + d * RADIUS).is_some_and(|h| (h - own).abs() <= STEP))
+        p.is_finite()
+            && self.index(p).is_some_and(|cell| {
+                self.clear_cell(cell) || self.at(cell.0, cell.1).is_some_and(|h| self.supports_sweep(p, p, h))
+            })
     }
 
     /// A walker's next place, `dt` seconds on: as far as its stride takes it,
@@ -164,12 +207,15 @@ impl Walk {
     pub(super) fn slide(&self, at: Vec3, movement: Vec2) -> Vec3 {
         let from = Vec2::new(at.x, at.z);
         let here = self.ground(from).unwrap_or(at.y);
-        let fits = |p: Vec2| self.holds(p) && self.ground(p).is_some_and(|h| (h - here).abs() <= STEP);
-        let to = [from + movement, from + Vec2::new(movement.x, 0.0), from + Vec2::new(0.0, movement.y)]
-            .into_iter()
-            .find(|&p| p != from && fits(p))
-            .unwrap_or(from);
-        Vec3::new(to.x, self.ground(to).unwrap_or(here), to.y)
+        for to in [from + movement, from + Vec2::new(movement.x, 0.0), from + Vec2::new(0.0, movement.y)] {
+            if to != from
+                && self.clear_segment(from, to)
+                && let Some(h) = self.ground(to).filter(|h| (h - here).abs() <= STEP)
+            {
+                return Vec3::new(to.x, h, to.y);
+            }
+        }
+        Vec3::new(from.x, here, from.y)
     }
 }
 
@@ -195,6 +241,26 @@ mod tests {
             }
         }
         Walk::new(0.25, columns, rows, Vec2::ZERO, heights, Vec3::new(5.0, 0.0, 5.0))
+    }
+
+    #[test]
+    fn neighbourhood_bits_preserve_the_full_swept_footprint_test() {
+        let cached = street();
+        assert!(cached.clear_cells.iter().any(|word| *word != 0));
+        let mut uncached = cached.clone();
+        uncached.clear_cells.fill(0);
+        let mut positions = 0;
+        for cell in cached.places() {
+            let start = cell.xz() + Vec2::new(0.04, -0.11);
+            assert_eq!(cached.holds(start), uncached.holds(start));
+            for delta in
+                [Vec2::new(0.04, 0.03), Vec2::new(-0.13, 0.05), Vec2::new(0.24, -0.28), Vec2::new(-0.67, -0.53)]
+            {
+                assert_eq!(cached.clear_segment(start, start + delta), uncached.clear_segment(start, start + delta));
+            }
+            positions += 1;
+        }
+        assert!(positions > 1000);
     }
 
     #[test]

@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: The osage contributors
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-//! Server-owned walkers on two crossing routes. Each accepted velocity is visible
+//! Server-owned walkers following street patrols. Each accepted velocity is visible
 //! to the next decision in the same fixed tick.
 use super::{
     Grid, Ids, Striding, core, proto,
@@ -12,9 +12,36 @@ use osage_world_module_api::{Discrete, EntityIds, Replicated, builtin};
 
 #[derive(Component)]
 pub(super) struct Patrol {
-    ends: [Vec3; 2],
-    goal: usize,
+    points: Vec<Vec3>,
+    ends: [Vec2; 2],
+    next: usize,
+    forward: bool,
     velocity: Vec2,
+}
+
+impl Patrol {
+    fn new(points: Vec<Vec3>, ends: [Vec2; 2]) -> Self {
+        Self { points, ends, next: 1, forward: true, velocity: Vec2::ZERO }
+    }
+
+    fn destination(&mut self, walk: &Walk, at: Vec3) -> Vec3 {
+        let last = self.points.len() - 1;
+        let distance = at.xz().distance_squared(self.points[self.next].xz());
+        if self.next == 0 || self.next == last {
+            if at.xz().distance_squared(self.ends[usize::from(self.next == last)]) < ARRIVAL * ARRIVAL {
+                self.forward = self.next == 0;
+                self.next = if self.forward { 1 } else { last - 1 };
+            }
+        } else {
+            let following = if self.forward { self.next + 1 } else { self.next - 1 };
+            // Local avoidance can carry a passer past a corner. Let it enter
+            // the next leg as soon as its footprint can turn there safely.
+            if distance <= 1. && walk.clear_segment(at.xz(), self.points[following].xz()) {
+                self.next = following;
+            }
+        }
+        self.points[self.next]
+    }
 }
 
 /// Choose the nearest valid crossing to the street entrance. The grid may have
@@ -46,19 +73,58 @@ fn crossing(walk: &Walk) -> Option<[[Vec3; 2]; 2]> {
     None
 }
 
+const ARRIVAL: f32 = 0.05;
+
+/// If a corner clips the body at the requested endpoint, find a standing
+/// position on that same cell within the existing patrol arrival tolerance.
+fn standing_end(walk: &Walk, requested: Vec2) -> Option<Vec2> {
+    if walk.holds(requested) {
+        return Some(requested);
+    }
+    walk.height(requested)?;
+    for radius in [0.01, 0.02, 0.03, 0.04, ARRIVAL - 0.001] {
+        for direction in 0..16 {
+            let p = requested + radius * Vec2::from_angle(std::f32::consts::TAU * direction as f32 / 16.);
+            if walk.same_cell(requested, p) && walk.holds(p) {
+                return Some(p);
+            }
+        }
+    }
+    None
+}
+
 pub(super) fn spawn(mut commands: Commands, grid: Res<Grid>, ids: Res<Ids>, mut entity_ids: ResMut<EntityIds>) {
-    let Some(routes) = crossing(&grid.0) else { return };
-    for ends in routes {
+    let walk = &grid.0;
+    let endpoints = match &walk.patrols {
+        Some(routes) => routes.iter().map(|ends| ends.map(Vec2::from)).collect(),
+        None => crossing(walk).into_iter().flatten().map(|ends| ends.map(|p| p.xz())).collect::<Vec<_>>(),
+    };
+    let mut starts: Vec<Vec3> = Vec::new();
+    for [from, to] in endpoints {
+        let route = standing_end(walk, from).zip(standing_end(walk, to)).and_then(|(a, b)| walk.route(a, b));
+        let Some(points) = route.filter(|points| points.len() >= 2) else {
+            tracing::warn!(?from, ?to, "no walkable patrol route");
+            continue;
+        };
+        let start = points[0];
+        if starts
+            .iter()
+            .any(|p| (p.y - start.y).abs() < super::walk::EYES && p.xz().distance_squared(start.xz()) < DIAMETER_SQ)
+        {
+            tracing::warn!(?from, "patrol starts too close to another passer");
+            continue;
+        }
+        starts.push(start);
         let id = entity_ids.next_id();
-        let dir = ends[1] - ends[0];
+        let dir = points[1] - start;
         let discrete = Discrete::default()
             .with(ids.content_ref, &builtin(core::BUILTIN_AVATAR))
             .with(ids.walker, &proto::Walker { look: id.0, passer_by: true });
         commands.spawn((
             id,
             discrete,
-            Transform::from_translation(ends[0]).with_rotation(Quat::from_rotation_y((-dir.x).atan2(-dir.z))),
-            Patrol { ends, goal: 1, velocity: Vec2::ZERO },
+            Transform::from_translation(start).with_rotation(Quat::from_rotation_y((-dir.x).atan2(-dir.z))),
+            Patrol::new(points, [from, to]),
         ));
     }
 }
@@ -163,12 +229,10 @@ pub(super) fn advance(
     for (i, (_, entity, _)) in order.into_iter().enumerate() {
         let (_, _, mut transform, mut patrol) = people.get_mut(entity).unwrap();
         let from = transform.translation;
-        if from.xz().distance_squared(patrol.ends[patrol.goal].xz()) < 0.05 * 0.05 {
-            patrol.goal = 1 - patrol.goal;
-        }
+        let destination = patrol.destination(&grid.0, from);
         let index = first + i;
         let others = neighbours[..index].iter().chain(&neighbours[index + 1..]);
-        let to = choose(&grid.0, from, patrol.ends[patrol.goal], patrol.velocity, others, dt);
+        let to = choose(&grid.0, from, destination, patrol.velocity, others, dt);
         let velocity = (to.xz() - from.xz()) / dt;
         neighbours[index] = Motion { at: from, velocity, undecided: false };
         transform.translation = to;

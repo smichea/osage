@@ -1669,3 +1669,7 @@ Paris moves its two autonomous passers after controlled walkers, in stable entit
 ## D-233 — Admit a Paris walker when its footprint fits at the entrance
 
 After controlled movement, reserve space for new walkers in arrival order. Include the current positions of residents and all earlier reservations made in this tick. If the entrance is full, retain the session's request until a position becomes available or the session leaves. Spectators can follow the same replicated residents throughout. The region and SDK replay checks the positions that both an existing observer and a late observer actually receive. [Paris world](../knowledge/modules/paris-world.md) · [Replay](../worlds/paris/server/tests/arrivals.rs)
+
+## D-234 — Plan Paris patrols on the same grid that supports their feet
+
+A street can supply a pair of horizontal endpoints for each resident. Test direct travel first, then search neighbouring ground cells and remove waypoints only where a footprint can pass along the shortcut. Plan the stationary terrain at startup. Each tick the resident follows the route and steers around moving neighbours. The movement step checks the swept disc against cell edges and corners. A bit per centre cell caches its fully supported neighbourhood. This lets the world describe an intended destination without hand-authoring its corners. [Algorithm and oracle](../knowledge/algorithms/walk-grid-routing.md)

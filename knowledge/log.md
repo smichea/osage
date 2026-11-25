@@ -2,6 +2,8 @@
 
 ## 2026-11-25
 
+* [Walk-grid routing](/algorithms/walk-grid-routing.md) takes two endpoints from the street header. The Bistro replay follows the detour in both directions (D-234).
+
 * The [Paris world](/modules/paris-world.md) reserves space for each arriving walker and waits when its entrance is full. Two SDK replicas check simultaneous arrivals and a late observer (D-233).
 
 * Paris now simulates two [autonomous passers](/algorithms/pedestrian-encounters.md) on crossing street routes, with one-second encounter prediction (D-232).

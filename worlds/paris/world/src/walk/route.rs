@@ -1,0 +1,190 @@
+// SPDX-FileCopyrightText: The osage contributors
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
+use super::{RADIUS, STEP, Walk};
+use bevy::math::{Vec2, Vec3};
+use std::{
+    cmp::Reverse,
+    collections::{BinaryHeap, HashMap},
+};
+
+type Cell = (usize, usize);
+
+impl Walk {
+    fn centre(&self, (x, z): Cell) -> Vec2 {
+        self.origin + (Vec2::new(x as f32, z as f32) + 0.5) * self.cell
+    }
+
+    /// Test the entire swept footprint on each interval of constant centre-cell height.
+    pub(crate) fn clear_segment(&self, from: Vec2, to: Vec2) -> bool {
+        if !from.is_finite() || !to.is_finite() {
+            return false;
+        }
+        let (Some(a), Some(b)) = (self.index(from), self.index(to)) else { return false };
+        if a.0.abs_diff(b.0) <= 1
+            && a.1.abs_diff(b.1) <= 1
+            && self.clear_cell(a)
+            && self.clear_cell(b)
+            && self.clear_cell((a.0, b.1))
+            && self.clear_cell((b.0, a.1))
+        {
+            return true;
+        }
+        let Some(start) = self.at(a.0, a.1) else { return false };
+        if a == b {
+            return self.supports_sweep(from, to, start);
+        }
+        let Some(end) = self.at(b.0, b.1) else { return false };
+        let mut cuts = vec![0., 1.];
+        for axis in 0..2 {
+            let a = (f64::from(from[axis]) - f64::from(self.origin[axis])) / f64::from(self.cell);
+            let b = (f64::from(to[axis]) - f64::from(self.origin[axis])) / f64::from(self.cell);
+            for edge in (a.min(b).floor() as i64 + 1)..=a.max(b).floor() as i64 {
+                let t = (edge as f64 - a) / (b - a);
+                if t > 0. && t < 1. {
+                    cuts.push(t as f32);
+                }
+            }
+        }
+        cuts.sort_unstable_by(f32::total_cmp);
+        cuts.dedup();
+        let mut previous = start;
+        for interval in cuts.windows(2) {
+            let a = from.lerp(to, interval[0]);
+            let b = from.lerp(to, interval[1]);
+            let Some(h) = self.height(a.midpoint(b)) else { return false };
+            if (h - previous).abs() > STEP || !self.supports_sweep(a, b, h) {
+                return false;
+            }
+            previous = h;
+        }
+        (end - previous).abs() <= STEP && self.supports_sweep(to, to, end)
+    }
+
+    /// With a fixed supporting height, every cell under the moving disc must support it.
+    pub(super) fn supports_sweep(&self, a: Vec2, b: Vec2, floor: f32) -> bool {
+        let lo = a.min(b) - RADIUS;
+        let hi = a.max(b) + RADIUS;
+        let upper = self.origin + Vec2::new(self.columns as f32, self.rows as f32) * self.cell;
+        if lo.cmplt(self.origin).any() || hi.cmpgt(upper).any() {
+            return false;
+        }
+        let lo_cell = ((lo - self.origin) / self.cell).floor().as_uvec2();
+        let hi_cell = ((hi - self.origin) / self.cell).floor().as_uvec2();
+        for z in lo_cell.y as usize..(hi_cell.y as usize + 1).min(self.rows) {
+            for x in lo_cell.x as usize..(hi_cell.x as usize + 1).min(self.columns) {
+                if self.at(x, z).is_some_and(|h| (h - floor).abs() <= STEP) {
+                    continue;
+                }
+                let corner = self.origin + Vec2::new(x as f32, z as f32) * self.cell;
+                if disc_hits_cell(a, b, corner, corner + self.cell) {
+                    return false;
+                }
+            }
+        }
+        true
+    }
+
+    fn route_cell(&self, p: Vec2) -> Option<Cell> {
+        let home = self.index(p)?;
+        if self.clear_segment(p, self.centre(home)) {
+            return Some(home);
+        }
+        // An off-centre position can support the full disc even when the centre
+        // of its own cell does not. Join it to a visible neighbouring centre.
+        let mut nearby = Vec::with_capacity(8);
+        for dz in -1..=1 {
+            for dx in -1..=1 {
+                let (Some(x), Some(z)) = (home.0.checked_add_signed(dx), home.1.checked_add_signed(dz)) else {
+                    continue;
+                };
+                if (x, z) != home && x < self.columns && z < self.rows {
+                    nearby.push((x, z));
+                }
+            }
+        }
+        nearby.sort_by(|&a, &b| p.distance_squared(self.centre(a)).total_cmp(&p.distance_squared(self.centre(b))));
+        nearby.into_iter().find(|&c| self.clear_segment(p, self.centre(c)))
+    }
+
+    /// A route between exact horizontal endpoints, including both. Uses the
+    /// installed walker's footprint and the height field's four-neighbour graph.
+    pub fn route(&self, from: Vec2, to: Vec2) -> Option<Vec<Vec3>> {
+        if !from.is_finite() || !to.is_finite() || !self.holds(from) || !self.holds(to) {
+            return None;
+        }
+        let on_ground = |p: Vec2| Some(Vec3::new(p.x, self.ground(p)?, p.y));
+        if from == to {
+            return Some(vec![on_ground(from)?]);
+        }
+        if self.clear_segment(from, to) {
+            return Some(vec![on_ground(from)?, on_ground(to)?]);
+        }
+        let source = self.route_cell(from)?;
+        let target = self.route_cell(to)?;
+        let estimate = |p: Cell| p.0.abs_diff(target.0) + p.1.abs_diff(target.1);
+        // Order ties by remaining distance and cell coordinates for repeatable paths.
+        let mut open = BinaryHeap::from([Reverse((estimate(source), estimate(source), source))]);
+        let mut seen = HashMap::from([(source, (0, source))]);
+        while let Some(Reverse((total, remaining, at))) = open.pop() {
+            let cost = total - remaining;
+            if cost != seen[&at].0 {
+                continue;
+            }
+            if at == target {
+                let mut path = vec![to, self.centre(at)];
+                let mut cursor = at;
+                while cursor != source {
+                    cursor = seen[&cursor].1;
+                    path.push(self.centre(cursor));
+                }
+                path.push(from);
+                path.reverse();
+                path.dedup();
+                // Keep the last directly reachable point before each obstruction.
+                let mut result = vec![on_ground(from)?];
+                let mut anchor = from;
+                for pair in path[1..].windows(2) {
+                    if !self.clear_segment(anchor, pair[1]) {
+                        result.push(on_ground(pair[0])?);
+                        anchor = pair[0];
+                    }
+                }
+                result.push(on_ground(to)?);
+                return Some(result);
+            }
+            for (dx, dz) in [(-1, 0), (1, 0), (0, -1), (0, 1)] {
+                let (Some(x), Some(z)) = (at.0.checked_add_signed(dx), at.1.checked_add_signed(dz)) else { continue };
+                let next = (x, z);
+                if x >= self.columns || z >= self.rows || seen.get(&next).is_some_and(|&(old, _)| old <= cost + 1) {
+                    continue;
+                }
+                if self.clear_segment(self.centre(at), self.centre(next)) {
+                    seen.insert(next, (cost + 1, at));
+                    let h = estimate(next);
+                    open.push(Reverse((cost + 1 + h, h, next)));
+                }
+            }
+        }
+        None
+    }
+}
+
+/// The segment is inside a single centre cell. For any other grid square the
+/// closest pair includes a segment endpoint or a square corner. Its interior
+/// cannot be crossed between these two centre-cell boundary events.
+fn disc_hits_cell(a: Vec2, b: Vec2, lo: Vec2, hi: Vec2) -> bool {
+    let radius_sq = RADIUS * RADIUS;
+    if [a, b].into_iter().any(|p| p.distance_squared(p.clamp(lo, hi)) < radius_sq) {
+        return true;
+    }
+    let v = b - a;
+    let vv = v.length_squared();
+    if vv == 0. {
+        return false;
+    }
+    [lo, hi, Vec2::new(lo.x, hi.y), Vec2::new(hi.x, lo.y)].into_iter().any(|corner| {
+        let t = ((corner - a).dot(v) / vv).clamp(0., 1.);
+        corner.distance_squared(a + v * t) < radius_sq
+    })
+}
