@@ -2,6 +2,8 @@
 
 ## 2026-11-25
 
+* [Pedestrian encounters](/algorithms/pedestrian-encounters.md) protect committed steps before predicting undecided steps. A shared passing side helps 64 crossing walkers reach both ends of a crowded plaza (D-238).
+
 * [Pedestrian encounters](/algorithms/pedestrian-encounters.md) bound relative travel on both axes to find which neighbours can affect a steering decision. The replay compares those distances with a full scan (D-237).
 
 * [Walk-grid routing](/algorithms/walk-grid-routing.md) now checks terrain intervals in crossing order and stops at the first blocked interval. A grazing test covers cells exactly one walker radius wide (D-236).

@@ -1685,3 +1685,7 @@ Merge the crossings of the two grid axes while testing the walker’s footprint.
 ## D-237 — Bound pedestrian encounters by relative travel on each axis
 
 Paris keeps two sorted position arrays for a crowd, using the same starting positions throughout a tick. A candidate velocity and the greatest neighbour speed bound how far separation can close on each axis. Only people who can reach the comfort distance on both axes need a closest-approach calculation. Each accepted velocity updates the speed bound before the next person decides. The [steering oracle](../knowledge/algorithms/pedestrian-encounters.md) compares the indexed and exhaustive distances that affect movement.
+
+## D-238 — Keep a safe standing position for every undecided pedestrian
+
+Score the path already committed by each earlier walker and the standing position of each later walker before considering where the later walker might move. In a convergence involving several neighbours, give the candidate velocities a common passing side. A plaza replay follows all 64 residents at the fixed simulation rate. It checks the continuous distance between every pair and requires everyone to cross and return. [Encounter scoring and limits](../knowledge/algorithms/pedestrian-encounters.md)

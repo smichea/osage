@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: The osage contributors
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-use super::{COMFORT, HORIZON, Motion, clearance};
+use super::{COMFORT, Clearance, HORIZON, Motion, clearance};
 use bevy::math::{Vec2, Vec3, Vec3Swizzles};
 
 /// Positions stay at the start of the tick while accepted velocities change.
@@ -30,7 +30,7 @@ impl Neighbours {
         self.fastest = self.fastest.max(velocity.abs());
     }
 
-    pub(super) fn measure(&self, people: &[Motion], me: usize, v: Vec2, dt: f32) -> (f32, f32) {
+    pub(super) fn measure(&self, people: &[Motion], me: usize, v: Vec2, dt: f32) -> Clearance {
         let at: Vec3 = people[me].at;
         if self.axes[0].is_empty() {
             return clearance(at, v, people[..me].iter().chain(&people[me + 1..]), dt);

@@ -149,44 +149,61 @@ fn separation_sq(delta: Vec2, relative_velocity: Vec2, horizon: f32) -> f32 {
 const HORIZON: f32 = 1.;
 const COMFORT: f32 = 0.65;
 
-/// Measure the closest approach with simultaneous travel. The first distance
-/// protects the current tick, the second anticipates contact one second ahead.
-fn clearance<'a>(at: Vec3, v: Vec2, others: impl Iterator<Item = &'a Motion>, dt: f32) -> (f32, f32) {
+struct Clearance {
+    /// Earlier decisions are final. Later walkers can still stand at their starting position.
+    reserved: f32,
+    /// Includes the possibility that a later walker keeps its old velocity.
+    tick: f32,
+    forecast: f32,
+    close_approaches: usize,
+}
+
+/// Minimum squared centre distances for this candidate.
+fn clearance<'a>(at: Vec3, v: Vec2, others: impl Iterator<Item = &'a Motion>, dt: f32) -> Clearance {
+    let mut reserved = DIAMETER_SQ;
     let mut tick = DIAMETER_SQ;
     let mut forecast = f32::INFINITY;
+    let mut close_approaches = 0;
     for other in others {
         if (other.at.y - at.y).abs() >= super::walk::EYES {
             continue;
         }
         let delta = at.xz() - other.at.xz();
         let relative = v - other.velocity;
-        tick = tick.min(separation_sq(delta, relative, dt));
-        if other.undecided {
-            tick = tick.min(separation_sq(delta, v, dt));
-        }
-        forecast = forecast.min(separation_sq(delta, relative, HORIZON));
+        let moving = separation_sq(delta, relative, dt);
+        let committed = if other.undecided { separation_sq(delta, v, dt) } else { moving };
+        reserved = reserved.min(committed);
+        tick = tick.min(moving);
+        let approach = separation_sq(delta, relative, HORIZON);
+        close_approaches += usize::from(approach < COMFORT * COMFORT);
+        forecast = forecast.min(approach);
     }
-    (tick, forecast)
+    Clearance { reserved, tick: tick.min(reserved), forecast, close_approaches }
 }
 
-fn choose(grid: &Walk, at: Vec3, goal: Vec3, previous: Vec2, measure: impl Fn(Vec2) -> (f32, f32), dt: f32) -> Vec3 {
+fn choose(grid: &Walk, at: Vec3, goal: Vec3, previous: Vec2, measure: impl Fn(Vec2) -> Clearance, dt: f32) -> Vec3 {
     let wish = ((goal.xz() - at.xz()) / dt).clamp_length_max(WALK);
     let straight = grid.slide(at, wish * dt);
-    let (gap, forecast) = measure((straight.xz() - at.xz()) / dt);
-    if gap >= DIAMETER_SQ && forecast >= DIAMETER_SQ {
+    let direct = measure((straight.xz() - at.xz()) / dt);
+    if direct.tick >= DIAMETER_SQ && direct.forecast >= DIAMETER_SQ {
         return straight;
     }
+    // When several streams converge, favour the same side of each walker's
+    // own heading. Its actual step still has to clear the reserved space.
+    let preferred =
+        if direct.close_approaches >= 2 { Vec2::from_angle(-std::f32::consts::FRAC_PI_4).rotate(wish) } else { wish };
     let mut best = at;
     let mut best_cost = f32::INFINITY;
-    let mut best_gap = -1.;
+    let mut best_gap = (-1., -1.);
     for speed in [1., 0.5, 0.] {
         for angle in [0_f32, -15., 15., -30., 30., -45., 45., -65., 65., -90., 90.] {
             let movement = Vec2::from_angle(angle.to_radians()).rotate(wish) * (speed * dt);
             let next = grid.slide(at, movement);
             let v = (next.xz() - at.xz()) / dt;
-            let (gap, forecast) = measure(v);
-            let comfort = (COMFORT - forecast.sqrt()).max(0.);
-            let cost = v.distance_squared(wish) + 0.15 * v.distance_squared(previous) + 24. * comfort * comfort;
+            let safety = measure(v);
+            let gap = (safety.reserved, safety.tick);
+            let comfort = (COMFORT - safety.forecast.sqrt()).max(0.);
+            let cost = v.distance_squared(preferred) + 0.15 * v.distance_squared(previous) + 24. * comfort * comfort;
             if gap > best_gap || (gap == best_gap && cost < best_cost) {
                 best = next;
                 best_gap = gap;

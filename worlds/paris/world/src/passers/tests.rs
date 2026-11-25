@@ -65,7 +65,7 @@ fn track(app: &mut App, actors: [Entity; 2], label: &str) -> (f32, [usize; 2]) {
                 velocity: app.world().get::<Patrol>(id).unwrap().velocity,
                 undecided: false,
             });
-            let (_, forecast) = clearance(a.at, a.velocity, std::iter::once(&b), 1. / TICK_HZ as f32);
+            let forecast = clearance(a.at, a.velocity, std::iter::once(&b), 1. / TICK_HZ as f32).forecast;
             writeln!(
                 file,
                 "{tick},{},{},{},{},{},{},{},{},{}",
@@ -139,9 +139,9 @@ fn prediction_sees_both_velocities_and_ignores_parallel_and_late_encounters() {
             let other = Motion { at: Vec3::new(at.x, 0., at.y), velocity: v * WALK, undecided: false };
             let from = Vec3::new(a.x, 0., a.y);
             let dt = 1. / TICK_HZ as f32;
-            let (_, forecast) = clearance(from, x * WALK, std::iter::once(&other), dt);
+            let forecast = clearance(from, x * WALK, std::iter::once(&other), dt).forecast;
             let me = Motion { at: from, velocity: x * WALK, undecided: false };
-            let (_, reverse) = clearance(other.at, other.velocity, std::iter::once(&me), dt);
+            let reverse = clearance(other.at, other.velocity, std::iter::once(&me), dt).forecast;
             assert_eq!(forecast < DIAMETER_SQ, reverse < DIAMETER_SQ);
             signal.push(if forecast < DIAMETER_SQ { '1' } else { '0' });
             if forecast < DIAMETER_SQ {
@@ -465,12 +465,60 @@ fn neighbourhood_search_preserves_every_distance_used_for_steering() {
         search.accept(v);
         for dt in [1. / 30., 1.5] {
             for candidate in [Vec2::ZERO, Vec2::X * WALK, Vec2::NEG_Y * WALK, v] {
-                let (tick, forecast) = search.measure(&motions, me, candidate, dt);
+                let indexed = search.measure(&motions, me, candidate, dt);
                 let others = motions[..me].iter().chain(&motions[me + 1..]);
-                let (full_tick, full_forecast) = clearance(motions[me].at, candidate, others, dt);
-                assert_eq!(tick, full_tick);
-                assert_eq!(forecast.min(COMFORT * COMFORT), full_forecast.min(COMFORT * COMFORT));
+                let full = clearance(motions[me].at, candidate, others, dt);
+                assert_eq!(indexed.close_approaches, full.close_approaches);
+                assert_eq!(indexed.reserved, full.reserved);
+                assert_eq!(indexed.tick, full.tick);
+                assert_eq!(indexed.forecast.min(COMFORT * COMFORT), full.forecast.min(COMFORT * COMFORT));
             }
         }
     }
+}
+
+#[test]
+fn sixty_four_pedestrians_cross_a_plaza_and_return_without_overlap() {
+    use bevy::math::DVec2;
+    let centre = Vec2::splat(15.);
+    let ends: Vec<_> = (0..64)
+        .map(|i| {
+            let offset = 5. * Vec2::from_angle(std::f32::consts::TAU * i as f32 / 64.);
+            [centre + offset, centre - offset]
+        })
+        .collect();
+    let mut grid = Walk::new(0.5, 64, 64, Vec2::ZERO, vec![0.; 64 * 64], Vec3::ZERO);
+    grid.patrols = Some(ends.iter().map(|pair| pair.map(|p| p.to_array())).collect());
+    let mut plaza = app(grid);
+    let world = plaza.world_mut();
+    let mut residents: Vec<_> =
+        world.query_filtered::<(Entity, &Replicated), With<Patrol>>().iter(world).map(|(e, id)| (id.0, e)).collect();
+    residents.sort_unstable_by_key(|p| p.0);
+    assert_eq!(residents.len(), ends.len());
+    let positions = |app: &App| -> Vec<DVec2> {
+        residents.iter().map(|(_, e)| app.world().get::<Transform>(*e).unwrap().translation.xz().as_dvec2()).collect()
+    };
+    let mut prev = positions(&plaza);
+    let mut visits = vec![0; ends.len()];
+    for tick in 1..=900 {
+        plaza.update();
+        let now = positions(&plaza);
+        for i in 0..now.len() {
+            if now[i].distance(ends[i][1 - visits[i] % 2].as_dvec2()) < f64::from(ARRIVAL) {
+                visits[i] += 1;
+            }
+            for j in 0..i {
+                let d = prev[i] - prev[j];
+                let travel = (now[i] - now[j]) - d;
+                let t =
+                    if travel == DVec2::ZERO { 0. } else { (-d.dot(travel) / travel.length_squared()).clamp(0., 1.) };
+                assert!((d + t * travel).length() >= 2. * f64::from(RADIUS) - 1e-5, "tick {tick}, pair {i}/{j}");
+            }
+        }
+        if visits.iter().all(|n| *n >= 2) {
+            return;
+        }
+        prev = now;
+    }
+    panic!("incomplete plaza crossings: {visits:?}");
 }
