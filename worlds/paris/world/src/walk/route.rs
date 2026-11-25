@@ -10,6 +10,19 @@ use std::{
 
 type Cell = (usize, usize);
 
+const AXIAL: u64 = 1_000_000;
+const DIAGONAL: u64 = 1_414_214;
+const NEIGHBOURS: [(isize, isize, u64); 8] = [
+    (-1, 0, AXIAL),
+    (1, 0, AXIAL),
+    (0, -1, AXIAL),
+    (0, 1, AXIAL),
+    (-1, -1, DIAGONAL),
+    (-1, 1, DIAGONAL),
+    (1, -1, DIAGONAL),
+    (1, 1, DIAGONAL),
+];
+
 impl Walk {
     fn centre(&self, (x, z): Cell) -> Vec2 {
         self.origin + (Vec2::new(x as f32, z as f32) + 0.5) * self.cell
@@ -108,7 +121,7 @@ impl Walk {
     }
 
     /// A route between exact horizontal endpoints, including both. Uses the
-    /// installed walker's footprint and the height field's four-neighbour graph.
+    /// installed walker's footprint and the height field's eight-neighbour graph.
     pub fn route(&self, from: Vec2, to: Vec2) -> Option<Vec<Vec3>> {
         if !from.is_finite() || !to.is_finite() || !self.holds(from) || !self.holds(to) {
             return None;
@@ -122,7 +135,11 @@ impl Walk {
         }
         let source = self.route_cell(from)?;
         let target = self.route_cell(to)?;
-        let estimate = |p: Cell| p.0.abs_diff(target.0) + p.1.abs_diff(target.1);
+        let estimate = |p: Cell| {
+            let dx = p.0.abs_diff(target.0) as u64;
+            let dz = p.1.abs_diff(target.1) as u64;
+            dx.min(dz) * DIAGONAL + dx.abs_diff(dz) * AXIAL
+        };
         // Order ties by remaining distance and cell coordinates for repeatable paths.
         let mut open = BinaryHeap::from([Reverse((estimate(source), estimate(source), source))]);
         let mut seen = HashMap::from([(source, (0, source))]);
@@ -153,16 +170,17 @@ impl Walk {
                 result.push(on_ground(to)?);
                 return Some(result);
             }
-            for (dx, dz) in [(-1, 0), (1, 0), (0, -1), (0, 1)] {
+            for (dx, dz, length) in NEIGHBOURS {
                 let (Some(x), Some(z)) = (at.0.checked_add_signed(dx), at.1.checked_add_signed(dz)) else { continue };
                 let next = (x, z);
-                if x >= self.columns || z >= self.rows || seen.get(&next).is_some_and(|&(old, _)| old <= cost + 1) {
+                let next_cost = cost + length;
+                if x >= self.columns || z >= self.rows || seen.get(&next).is_some_and(|&(old, _)| old <= next_cost) {
                     continue;
                 }
                 if self.clear_segment(self.centre(at), self.centre(next)) {
-                    seen.insert(next, (cost + 1, at));
+                    seen.insert(next, (next_cost, at));
                     let h = estimate(next);
-                    open.push(Reverse((cost + 1 + h, h, next)));
+                    open.push(Reverse((next_cost + h, h, next)));
                 }
             }
         }

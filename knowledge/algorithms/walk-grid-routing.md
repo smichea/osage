@@ -28,7 +28,7 @@ Plan on the height field used for character movement. Accept a straight segment 
 
 # Method
 
-Test the straight segment first. Otherwise join each exact endpoint to its cell centre, or the nearest directly reachable neighbouring centre when the first link fails. Run A* on axial neighbours at unit edge cost. The Manhattan distance to the target cell is a lower bound on remaining edge count. Break ties by remaining distance and then cell coordinates. Store the parent when a cheaper route reaches a cell.[^astar]
+Test the straight segment first. Otherwise join each exact endpoint to its cell centre, or the nearest directly reachable neighbouring centre when the first link fails. Run A* on eight neighbours. Charge 1,000,000 units for an axial step and 1,414,214 for a diagonal. On an empty grid each step that reduces both coordinate differences can be diagonal. The remaining steps are axial. Their combined cost is a lower bound when obstacles are present. Every diagonal must pass the same swept-footprint check as an axial step. Break ties by remaining distance and then cell coordinates. Store the parent when a cheaper route reaches a cell.[^astar]
 
 Split a segment wherever the centre crosses a grid line. Inside each interval the centre has a fixed ground cell. Enumerate the cells in the swept disc's bounding box. A cell whose height differs by more than one step, or has no floor, can block the segment. Compute the nearest distance between the interval and its rectangle using segment endpoints and rectangle corners. Reject penetration inside the radius. Check the height transition between consecutive centre cells. Apply the same sweep to search edges, shortcuts, and the movement step itself. A stationary support query is a zero-length sweep. For cell widths at least as large as the radius, cache one bit per cell whose 3 × 3 neighbourhood is finite and fits within one step of vertical variation. A sweep within or between adjacent cells can use this certificate when every possible centre cell along the segment has the bit. Other steps use the geometric test. The immutable grid builds the bits when loaded.
 
@@ -40,7 +40,7 @@ A successful route includes the requested horizontal endpoints. An obstructed or
 
 # Cost
 
-Only visited cells need parent and cost records. With V visited cells, the heap search on a four-neighbour graph costs O(V log V) for fixed footprint and cell size. Segment validation sorts crossing parameters. A candidate segment crossing K grid lines costs O(K log K). Greedy shortening can reconsider long portions of the route. Paris plans once at startup and reuses the waypoints for the return trip.
+Only visited cells need parent and cost records. With V visited cells, the heap search on a eight-neighbour graph costs O(V log V) for fixed footprint and cell size. Segment validation sorts crossing parameters. A candidate segment crossing K grid lines costs O(K log K). Greedy shortening can reconsider long portions of the route. Paris plans once at startup and reuses the waypoints for the return trip.
 
 # Failure modes
 
@@ -52,7 +52,7 @@ Detour takes a polygon navigation mesh and can return a sequence of polygons fol
 
 # Oracle
 
-Run `cargo test -p osage-world-paris passers::tests`. Cases cover a wall with an opening, opposing walkers, a high step sealing the exit, five rooms in a U and a passage narrower than the body. With the open Bistro grid installed, set `OSAGE_PARIS_WALK_DIR` to its export directory and run `cargo test -p osage-world-paris server_finds_the_bistro_detour -- --ignored --nocapture`. The test configures only the endpoints, runs the server world at 30 Hz and checks support and motion on both legs. Set `OSAGE_ROUTE_TRACE_DIR` to an existing output directory to save the simulated horizontal positions per tick.
+Run `cargo test -p osage-world-paris passers::tests`. Cases cover a wall with an opening, opposing walkers, a high step sealing the exit, five rooms in a U and a passage narrower than the body. A wall with two open ends checks that a mirrored route, in either direction, is shorter than the geometric lower bound for the competing passage. A server replay measures both legs of the patrol. With the open Bistro grid installed, set `OSAGE_PARIS_WALK_DIR` to its export directory and run `cargo test -p osage-world-paris server_finds_the_bistro_detour -- --ignored --nocapture`. The test configures only the endpoints, runs the server world at 30 Hz and checks support and motion on both legs. Set `OSAGE_ROUTE_TRACE_DIR` to an existing output directory to save the simulated horizontal positions per tick.
 
 # Reuse
 

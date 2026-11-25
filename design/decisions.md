@@ -1673,3 +1673,7 @@ After controlled movement, reserve space for new walkers in arrival order. Inclu
 ## D-234 — Plan Paris patrols on the same grid that supports their feet
 
 A street can supply a pair of horizontal endpoints for each resident. Test direct travel first, then search neighbouring ground cells and remove waypoints only where a footprint can pass along the shortcut. Plan the stationary terrain at startup. Each tick the resident follows the route and steers around moving neighbours. The movement step checks the swept disc against cell edges and corners. A bit per centre cell caches its fully supported neighbourhood. This lets the world describe an intended destination without hand-authoring its corners. [Algorithm and oracle](../knowledge/algorithms/walk-grid-routing.md)
+
+## D-235 — Include diagonal travel when choosing a pedestrian passage
+
+Paris searches eight neighbours per walk-grid cell. Axial and diagonal steps have costs proportional to their length. Each candidate step must support the entire walker. When an obstacle offers two passages, the server can account for the distance covered along a diagonal before it chooses which side to follow. The two-passage replay checks the distance walked against a lower bound for the competing passage. [Walk-grid routing](../knowledge/algorithms/walk-grid-routing.md)

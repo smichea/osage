@@ -237,7 +237,7 @@ fn an_arrival_accounts_for_a_resident_and_a_player_who_just_moved() {
     }
 }
 
-fn replay_detour(name: &str, grid: Walk, endpoints: [Vec2; 2]) {
+fn replay_detour(name: &str, grid: Walk, endpoints: [Vec2; 2]) -> [f32; 2] {
     use std::io::Write;
     let start = std::time::Instant::now();
     let mut app = app(grid);
@@ -301,7 +301,7 @@ fn replay_detour(name: &str, grid: Walk, endpoints: [Vec2; 2]) {
                 distance - outbound
             );
             if goal == 0 {
-                return;
+                return [outbound, distance - outbound];
             }
             goal = 0;
             outbound = distance;
@@ -340,6 +340,40 @@ fn server_routes_a_passer_around_a_wall_from_just_the_endpoints() {
     let mut app = app(closed);
     let world = app.world_mut();
     assert_eq!(world.query_filtered::<Entity, With<Patrol>>().iter(world).count(), 0);
+}
+
+#[test]
+fn patrols_choose_the_shorter_side_of_a_wall_in_both_directions() {
+    let mut heights = vec![0.; 80 * 40];
+    for row in 8..32 {
+        heights[row * 80 + 16..row * 80 + 20].fill(f32::NAN);
+    }
+    let mut grid = Walk::new(0.25, 80, 40, Vec2::ZERO, heights, Vec3::ZERO);
+    // The lower passage crosses x=4 and x=5 at z <= 2 minus the body radius.
+    // The distances to those half-lines plus the wall width bound every such route.
+    let a = Vec2::new(3.375, 7.125);
+    let b = Vec2::new(18.125, 2.125);
+    let lower_bound = a.distance(Vec2::new(4., 2. - RADIUS)) + 1. + b.distance(Vec2::new(5., 2. - RADIUS));
+    for mirrored in [false, true] {
+        let ends = [a, b].map(|p| if mirrored { Vec2::new(p.x, 10. - p.y) } else { p });
+        for [start, goal] in [ends, [ends[1], ends[0]]] {
+            let route = grid.route(start, goal).unwrap();
+            let distance: f32 = route
+                .windows(2)
+                .map(|pair| {
+                    assert!(grid.clear_segment(pair[0].xz(), pair[1].xz()));
+                    pair[0].xz().distance(pair[1].xz())
+                })
+                .sum();
+            assert!(distance < lower_bound, "route {distance} m, opposite passage at least {lower_bound} m");
+        }
+    }
+    grid.patrols = Some(vec![[a.to_array(), b.to_array()]]);
+    let legs = replay_detour("two-passages", grid, [a, b]);
+    for length in legs {
+        // The server can turn within the arrival radius at either end.
+        assert!(length + 2. * ARRIVAL < lower_bound);
+    }
 }
 
 #[test]
