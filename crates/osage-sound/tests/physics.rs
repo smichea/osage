@@ -983,3 +983,35 @@ fn a_contact_hidden_when_it_is_struck_is_heard_once_what_hid_it_is_gone() {
     let (late, bare) = (rms(part(&opened.right, 1.2, 1.4)), rms(part(&open.right, 1.2, 1.4)));
     assert!(bare > 1e-5 && (late / bare - 1.0).abs() < 0.01, "{late} against {bare}");
 }
+
+#[test]
+fn a_mirror_that_sets_off_is_heard_to_when_its_change_arrives() {
+    // A horn at rest, ears 80 m in front of it, and a mirror 60 m behind it that sets off at 1 s towards
+    // both, at 50 m/s within a hundredth of a second. What the mirror did at 1 s reaches the ears by its
+    // second leg, 140 m: not before 1.408 s. After, the echo is higher by (c + v)/(c − v).
+    let heard = |mirror: bool| {
+        let wall = if mirror {
+            r#"{"extras": {"osage": {"id": "mirror"}, "osageSound": {
+                 "motion": {"alongM": [1, 0, 0], "atS": 1.0, "speedKmh": [[0, 0], [0.01, 180]]},
+                 "surfaces": [{"id": "mirror", "acoustic": "hard", "occludes": false,
+                 "quadM": [[-60, -300, -300], [-60, -300, 300], [-60, 300, 300], [-60, 300, -300]]}]}}}"#
+        } else {
+            r#"{"extras": {"osage": {"id": "mirror"}}}"#
+        };
+        let ears = r#"{"translation": [80, 0, 0], "extras": {"osage": {"id": "ears"}}}"#;
+        let horn = r#"{"extras": {"osage": {"id": "car"}, "osageSound": {
+            "emitters": [{"id": "horn", "voice": "tone", "params": {"hz": 1000}}]}}}"#;
+        let made = render(
+            &scene(&[world(3, ""), ears.to_owned(), horn.to_owned(), wall.to_owned()].join(","), 2.0),
+            &options(Listening::Speakers),
+            2.0,
+        );
+        made.left.iter().zip(&made.right).map(|(l, r)| l + r).collect::<Vec<f32>>()
+    };
+    let (alone, mirrored) = (heard(false), heard(true));
+    let echo: Vec<f32> = mirrored.iter().zip(&alone).map(|(both, straight)| both - straight).collect();
+    let (before, after) = (pitch(part(&echo, 1.05, 1.39)), pitch(part(&echo, 1.45, 1.75)));
+    let faster = (343.0 + 50.0) / (343.0 - 50.0) * 1_000.0;
+    assert!((before - 1_000.0).abs() < 0.3, "by the mirror before 1.408 s: {before} Hz");
+    assert!((after - faster).abs() < 0.5, "by the mirror after: {after} Hz for {faster}");
+}

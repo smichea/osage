@@ -35,7 +35,7 @@ use crate::{
     scene::{Head, Load, Material, Reach, Scene, Touching},
     space::{Placement, Vec3, vec3},
     tree::Motion,
-    ways::{Face, SOUND, Scatter, Way, Ways, air_loss, direct, mirrored},
+    ways::{Face, SOUND, Scatter, Way, Ways, air_loss, direct, mirrored, mirrored_then},
 };
 
 pub use osage_sound_voices::RATE;
@@ -370,6 +370,10 @@ struct Source {
     /// one, and what arrives by it left the emitter earlier, from where the
     /// emitter then was.
     lags: Vec<f64>,
+    /// For each way mirrored by a face, how long its sound took from the
+    /// face to the ears when it was last found, s: when the face it met was
+    /// where it mirrored it from.
+    legs: Vec<f64>,
     /// Whether its node or anything above it moves or turns. Where it was
     /// at the end of each of the last blocks is then kept, for as long as
     /// its sound can take to arrive: the newest at the block's own number.
@@ -438,6 +442,35 @@ impl Source {
         (0..self.trailed.min(kept))
             .map(|back| self.trail[(block + kept - back) % kept].distance(now))
             .fold(0.0, f64::max)
+    }
+}
+
+/// Where a node that carries faces that move was at the end of each of the
+/// last blocks, for as long as sound can take from a face to the ears: what
+/// a face mirrors now it mirrored from where it then was.
+struct FaceTrail {
+    node: usize,
+    kept: Vec<Placement>,
+    /// How many are kept since the faces were placed.
+    filled: usize,
+}
+
+impl FaceTrail {
+    /// Where its node was `ago` blocks before the end of block `block`,
+    /// between two of those kept; before the oldest, where it then was.
+    fn was(&self, block: usize, ago: f64) -> Placement {
+        let kept = self.kept.len();
+        let at = |back: usize| self.kept[(block + kept - back) % kept];
+        if self.filled < 2 {
+            return at(0);
+        }
+        let oldest = self.filled - 1;
+        let ago = ago.clamp(0.0, oldest as f64);
+        let whole = ago as usize;
+        if whole >= oldest {
+            return at(whole);
+        }
+        at(whole).toward(&at(whole + 1), ago - whole as f64)
     }
 }
 
@@ -708,6 +741,10 @@ pub struct Engine {
     faces: Faces,
     ground: Faces,
     placed_faces: bool,
+    /// The nodes whose faces move, and where they were; for each face, its
+    /// node's trail if it moves.
+    face_trails: Vec<FaceTrail>,
+    trail_of: Vec<Option<usize>>,
     /// Kept from one block to the next: the faces a source's ways are
     /// looked for by.
     near: Vec<usize>,
@@ -1048,6 +1085,7 @@ impl Engine {
                 left: 1,
                 aims: vec![None; lines],
                 lags: vec![0.0; lines],
+                legs: vec![0.0; lines],
                 asleep: false,
                 waking: 0,
                 moves,
@@ -1090,6 +1128,7 @@ impl Engine {
                 left: 1,
                 aims: vec![None; lines],
                 lags: vec![0.0; lines],
+                legs: vec![0.0; lines],
                 asleep: false,
                 waking: 0,
                 moves: false,
@@ -1156,6 +1195,8 @@ impl Engine {
             faces: Faces::default(),
             ground: Faces::default(),
             placed_faces: false,
+            face_trails: Vec::new(),
+            trail_of: Vec::new(),
             near: Vec::new(),
             told: Default::default(),
             struck: 0,
@@ -1324,6 +1365,26 @@ impl Engine {
         let faces = (0..self.facing.len()).map(|k| self.face(k, false)).collect();
         let moving: Vec<bool> = self.facing.iter().map(|&i| moves(i)).collect();
         self.faces = Faces::new(faces, &moving);
+        // A trail for each node whose faces move, as long as the longest way
+        // an emitter is heard by.
+        let longest = self.sources.iter().map(|source| source.max_distance).fold(CONTACT_REACH, f64::max);
+        self.face_trails.clear();
+        self.trail_of = vec![None; self.facing.len()];
+        for (k, &i) in self.facing.iter().enumerate() {
+            if !moving[k] {
+                continue;
+            }
+            let node = self.scene.surfaces[i].node;
+            let trail = match self.face_trails.iter().position(|trail| trail.node == node) {
+                Some(trail) => trail,
+                None => {
+                    let kept = vec![Placement::default(); trail_blocks(longest)];
+                    self.face_trails.push(FaceTrail { node, kept, filled: 0 });
+                    self.face_trails.len() - 1
+                }
+            };
+            self.trail_of[k] = Some(trail);
+        }
         let ground = (0..self.treading.len()).map(|k| self.face(k, true)).collect();
         let moving: Vec<bool> = self.treading.iter().map(|&i| moves(i)).collect();
         self.ground = Faces::new(ground, &moving);
@@ -1479,6 +1540,7 @@ impl Engine {
             source.waking = 0;
             source.hit = Some(Hit { at: at.min(BLOCK - 1), strength: strength as f32 });
             source.lags.fill(0.0);
+            source.legs.fill(0.0);
             source.moves = moves;
             source.trailed = 0;
             source.ring.fill(0.0);
@@ -1649,6 +1711,11 @@ impl Engine {
         };
         self.head = head;
         self.place_faces();
+        for trail in &mut self.face_trails {
+            let kept = trail.kept.len();
+            trail.kept[self.block as usize % kept] = self.placed[trail.node];
+            trail.filled = (trail.filled + 1).min(kept);
+        }
         let faces = std::mem::take(&mut self.faces);
         self.touch(t1, seconds, head.at, &faces);
         self.told_contacts(head.at, &faces);
@@ -1780,11 +1847,22 @@ impl Engine {
                     // by the way found last.
                     let slot = faces.slot(sheet);
                     let from = source.was(now, block, source.lags[1 + slot] / seconds);
+                    // A sheet that moves mirrors from where it was when the
+                    // sound met it: as long before as the sound takes from it
+                    // to the ears.
+                    let was = self.trail_of[sheet].map(|trail| {
+                        let trail = &self.face_trails[trail];
+                        let then = trail.was(block, source.legs[1 + slot] / seconds);
+                        then.then(&self.placed[trail.node].inverse())
+                    });
                     mirroring.clear();
-                    let scatter = mirrored(sheet, from, head.at, &faces, quality.careful, &mut mirroring);
+                    let scatter =
+                        mirrored_then(sheet, from, head.at, &faces, quality.careful, was.as_ref(), &mut mirroring);
                     let length =
                         mirroring.first().map(|(_, way)| way.length).or(scatter.map(|(_, scatter)| scatter.length));
                     source.lags[1 + slot] = length.map_or(source.lags[0], |length| length / SOUND);
+                    let turn = mirroring.first().map(|(_, way)| way.from).or(scatter.map(|(_, scatter)| scatter.from));
+                    source.legs[1 + slot] = turn.map_or(0.0, |turn| turn.distance(head.at) / SOUND);
                     // The faces under the mirror point mirror one way: from
                     // the same image, by the same point; across a side they
                     // share, their fades sum to one.

@@ -34,7 +34,7 @@
 use crate::{
     faces::Faces,
     scene::Material,
-    space::{Vec3, vec3},
+    space::{Placement, Vec3, vec3},
 };
 
 /// The speed of sound, m/s, as `osage-kart-native` takes it.
@@ -506,17 +506,42 @@ pub fn mirrored(
     careful: bool,
     ways: &mut Vec<(usize, Way)>,
 ) -> Option<(usize, Scatter)> {
+    mirrored_then(sheet, source, head, faces, careful, None, ways)
+}
+
+/// [`mirrored`] by a sheet that moves, as it was when the sound met it:
+/// `was` takes a point of the sheet where it is now to where it then was.
+/// The image, the mirror point and what stands on the legs are found where
+/// the sheet then was; its faces' rims, where they are now, at the point
+/// that was the mirror point then.
+pub fn mirrored_then(
+    sheet: usize,
+    source: Vec3,
+    head: Vec3,
+    faces: &Faces,
+    careful: bool,
+    was: Option<&Placement>,
+    ways: &mut Vec<(usize, Way)>,
+) -> Option<(usize, Scatter)> {
     let plane = &faces[sheet];
     if !plane.reflects {
         return None;
     }
-    let (hs, hh) = (plane.height(source), plane.height(head));
+    let (normal, on) = match was {
+        Some(was) => (was.direction(plane.normal), was.point(plane.corners[0])),
+        None => (plane.normal, plane.corners[0]),
+    };
+    let height = |x: Vec3| (x - on).dot(normal);
+    let (hs, hh) = (height(source), height(head));
     // Both on the same side, and off the face.
     if hs * hh <= 0.0 || hs.abs() < 1e-3 || hh.abs() < 1e-3 {
         return None;
     }
-    let image = source - plane.normal * (2.0 * hs);
-    let p = image + (head - image) * (hs.abs() / (hs.abs() + hh.abs()));
+    let image = source - normal * (2.0 * hs);
+    // The mirror point where the sheet was, and the same point of it now.
+    let then = image + (head - image) * (hs.abs() / (hs.abs() + hh.abs()));
+    let p = was.map_or(then, |was| was.local(then));
+    let back = |x: Vec3| was.map_or(x, |was| was.point(x));
     // The sheet's faces near the mirror point, in their order.
     let mut near: Vec<usize> = Vec::new();
     faces.along(p, p, RIM, |k| {
@@ -546,6 +571,7 @@ pub fn mirrored(
             .min_by(|a, b| a.0.distance(p).total_cmp(&b.0.distance(p)).then(a.1.cmp(&b.1)))
             .unwrap_or_else(|| nearest(sheet)),
     };
+    let q = back(q);
     let (to, fro) = (through(source, q, faces, Some(sheet)), through(q, head, faces, Some(sheet)));
     let scattered = faces[by_face].material.scattered();
     let by = source.distance(q) + q.distance(head);
@@ -566,8 +592,9 @@ pub fn mirrored(
         let share = face.material.mirrored();
         let mut bands: [f64; 4] = std::array::from_fn(|b| share[b.min(2)] * fade);
         if careful {
-            let (to, fro) = *legs
-                .get_or_insert_with(|| (through(source, p, faces, Some(sheet)), through(p, head, faces, Some(sheet))));
+            let (to, fro) = *legs.get_or_insert_with(|| {
+                (through(source, then, faces, Some(sheet)), through(then, head, faces, Some(sheet)))
+            });
             for (b, band) in bands.iter_mut().enumerate() {
                 *band *= to[b] * fro[b];
             }
@@ -577,7 +604,7 @@ pub fn mirrored(
                 continue;
             }
         }
-        ways.push((k, Way { length: image.distance(head), from: p, bands }));
+        ways.push((k, Way { length: image.distance(head), from: then, bands }));
     }
     scatter
 }

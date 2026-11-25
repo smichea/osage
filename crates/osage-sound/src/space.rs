@@ -185,6 +185,25 @@ impl Placement {
         self.rotation.back().turn(point - self.translation)
     }
 
+    /// The placement that undoes this one: `inverse().point(x)` is `local(x)`.
+    pub fn inverse(&self) -> Placement {
+        let back = self.rotation.back();
+        Placement { translation: -back.turn(self.translation), rotation: back }
+    }
+
+    /// `share` of the way from this placement to `to`: the translation along
+    /// a straight line, the turn by the shorter way round, made unit again
+    /// (near enough to the even turn between two placements a block apart).
+    pub fn toward(&self, to: &Placement, share: f64) -> Placement {
+        let (a, b) = (self.rotation, to.rotation);
+        let sign = if a.x * b.x + a.y * b.y + a.z * b.z + a.w * b.w < 0.0 { -1.0 } else { 1.0 };
+        let mix = |p: f64, q: f64| p + (q * sign - p) * share;
+        Placement {
+            translation: self.translation + (to.translation - self.translation) * share,
+            rotation: Quat::from_xyzw([mix(a.x, b.x), mix(a.y, b.y), mix(a.z, b.z), mix(a.w, b.w)]).unwrap_or(b),
+        }
+    }
+
     /// The placement of a child placed at `child` in this one: parent × child,
     /// as the object format composes them.
     pub fn then(&self, child: &Placement) -> Placement {
@@ -225,6 +244,12 @@ mod tests {
         assert!(near(world.direction(Vec3::X), -Vec3::Z));
         // And back.
         assert!(near(world.local(world.point(vec3(0.3, -2.0, 5.0))), vec3(0.3, -2.0, 5.0)));
+        assert!(near(world.inverse().point(vec3(0.3, -2.0, 5.0)), world.local(vec3(0.3, -2.0, 5.0))));
+        // Halfway between two placements: halfway along, half the turn.
+        let start = Placement { translation: Vec3::ZERO, rotation: Quat::IDENTITY };
+        let half = start.toward(&parent, 0.5);
+        assert!(near(half.translation, vec3(5.0, 0.0, 0.0)));
+        assert!(near(half.direction(Vec3::X), Quat::about(Vec3::Y, FRAC_PI_2 / 2.0).turn(Vec3::X)));
     }
 
     #[test]
