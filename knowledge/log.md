@@ -2,6 +2,8 @@
 
 ## 2026-11-25
 
+* [Walk-grid routing](/algorithms/walk-grid-routing.md) now checks terrain intervals in crossing order and stops at the first blocked interval. A grazing test covers cells exactly one walker radius wide (D-236).
+
 * [Walk-grid routing](/algorithms/walk-grid-routing.md) now measures axial and diagonal steps separately when choosing between passages. A server replay checks the length travelled on both legs (D-235).
 
 * [Walk-grid routing](/algorithms/walk-grid-routing.md) takes two endpoints from the street header. The Bistro replay follows the detour in both directions (D-234).

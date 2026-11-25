@@ -45,37 +45,54 @@ impl Walk {
         }
         let Some(start) = self.at(a.0, a.1) else { return false };
         if a == b {
-            return self.supports_sweep(from, to, start);
+            return self.supports_sweep(from, to, a, start);
         }
         let Some(end) = self.at(b.0, b.1) else { return false };
-        let mut cuts = vec![0., 1.];
-        for axis in 0..2 {
-            let a = (f64::from(from[axis]) - f64::from(self.origin[axis])) / f64::from(self.cell);
-            let b = (f64::from(to[axis]) - f64::from(self.origin[axis])) / f64::from(self.cell);
-            for edge in (a.min(b).floor() as i64 + 1)..=a.max(b).floor() as i64 {
-                let t = (edge as f64 - a) / (b - a);
-                if t > 0. && t < 1. {
-                    cuts.push(t as f32);
-                }
-            }
-        }
-        cuts.sort_unstable_by(f32::total_cmp);
-        cuts.dedup();
+        // Each axis yields its grid crossings in travel order. Merge equal
+        // crossings at corners and stop as soon as the footprint loses support.
+        let crossings = |axis: usize| {
+            let grid = |p: Vec2| (f64::from(p[axis]) - f64::from(self.origin[axis])) / f64::from(self.cell);
+            let start = grid(from);
+            let finish = grid(to);
+            let first = start.floor() as i64;
+            let last = finish.floor() as i64;
+            (0..first.abs_diff(last)).map(move |i| {
+                let edge = if first < last { first + 1 + i as i64 } else { first - i as i64 };
+                ((edge as f64 - start) / (finish - start)) as f32
+            })
+        };
+        let mut x = crossings(0);
+        let mut z = crossings(1);
+        let mut next_x = x.next().unwrap_or(1.);
+        let mut next_z = z.next().unwrap_or(1.);
+        let mut t = 0.;
         let mut previous = start;
-        for interval in cuts.windows(2) {
-            let a = from.lerp(to, interval[0]);
-            let b = from.lerp(to, interval[1]);
-            let Some(h) = self.height(a.midpoint(b)) else { return false };
-            if (h - previous).abs() > STEP || !self.supports_sweep(a, b, h) {
+        while t < 1. {
+            let next = next_x.min(next_z);
+            if next == next_x {
+                next_x = x.next().unwrap_or(1.);
+            }
+            if next == next_z {
+                next_z = z.next().unwrap_or(1.);
+            }
+            if next <= t {
+                continue;
+            }
+            let a = from.lerp(to, t);
+            let b = from.lerp(to, next);
+            t = next;
+            let Some(cell) = self.index(a.midpoint(b)) else { return false };
+            let Some(h) = self.at(cell.0, cell.1) else { return false };
+            if (h - previous).abs() > STEP || !self.supports_sweep(a, b, cell, h) {
                 return false;
             }
             previous = h;
         }
-        (end - previous).abs() <= STEP && self.supports_sweep(to, to, end)
+        (end - previous).abs() <= STEP && self.supports_sweep(to, to, b, end)
     }
 
     /// With a fixed supporting height, every cell under the moving disc must support it.
-    pub(super) fn supports_sweep(&self, a: Vec2, b: Vec2, floor: f32) -> bool {
+    pub(super) fn supports_sweep(&self, a: Vec2, b: Vec2, centre: Cell, floor: f32) -> bool {
         let lo = a.min(b) - RADIUS;
         let hi = a.max(b) + RADIUS;
         let upper = self.origin + Vec2::new(self.columns as f32, self.rows as f32) * self.cell;
@@ -84,6 +101,16 @@ impl Walk {
         }
         let lo_cell = ((lo - self.origin) / self.cell).floor().as_uvec2();
         let hi_cell = ((hi - self.origin) / self.cell).floor().as_uvec2();
+        // On grid boundaries, a rounded endpoint can put a sliver of the
+        // footprint beyond the centre cell's certified neighbourhood.
+        if self.clear_cell(centre)
+            && lo_cell.x as usize >= centre.0 - 1
+            && hi_cell.x as usize <= centre.0 + 1
+            && lo_cell.y as usize >= centre.1 - 1
+            && hi_cell.y as usize <= centre.1 + 1
+        {
+            return true;
+        }
         for z in lo_cell.y as usize..(hi_cell.y as usize + 1).min(self.rows) {
             for x in lo_cell.x as usize..(hi_cell.x as usize + 1).min(self.columns) {
                 if self.at(x, z).is_some_and(|h| (h - floor).abs() <= STEP) {

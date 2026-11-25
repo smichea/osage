@@ -83,7 +83,12 @@ impl Walk {
     pub fn new(cell: f32, columns: usize, rows: usize, origin: Vec2, heights: Vec<f32>, start: Vec3) -> Self {
         assert_eq!(heights.len(), columns * rows, "a height a cell");
         let mut clear_cells = vec![0; heights.len().div_ceil(64)];
-        if cell >= RADIUS {
+        // Three cells across must contain the disc even after subtracting the
+        // origin, scaling to a grid index, and rounding a world-space edge.
+        // Use the largest coordinate on either axis to bound those operations.
+        let span = Vec2::new(columns as f32, rows as f32) * cell;
+        let rounding = 8. * f32::EPSILON * (origin.abs() + span).max_element();
+        if cell - RADIUS > rounding {
             for r in 1..rows.saturating_sub(1) {
                 for c in 1..columns.saturating_sub(1) {
                     let id = r * columns + c;
@@ -190,7 +195,7 @@ impl Walk {
     pub fn holds(&self, p: Vec2) -> bool {
         p.is_finite()
             && self.index(p).is_some_and(|cell| {
-                self.clear_cell(cell) || self.at(cell.0, cell.1).is_some_and(|h| self.supports_sweep(p, p, h))
+                self.clear_cell(cell) || self.at(cell.0, cell.1).is_some_and(|h| self.supports_sweep(p, p, cell, h))
             })
     }
 
@@ -253,14 +258,36 @@ mod tests {
         for cell in cached.places() {
             let start = cell.xz() + Vec2::new(0.04, -0.11);
             assert_eq!(cached.holds(start), uncached.holds(start));
-            for delta in
-                [Vec2::new(0.04, 0.03), Vec2::new(-0.13, 0.05), Vec2::new(0.24, -0.28), Vec2::new(-0.67, -0.53)]
-            {
+            for delta in [
+                Vec2::new(0.04, 0.03),
+                Vec2::new(-0.13, 0.05),
+                Vec2::new(0.24, -0.28),
+                Vec2::new(-0.67, -0.53),
+                Vec2::new(4., 0.),
+                Vec2::new(-3.5, 3.5),
+            ] {
                 assert_eq!(cached.clear_segment(start, start + delta), uncached.clear_segment(start, start + delta));
             }
             positions += 1;
         }
         assert!(positions > 1000);
+    }
+
+    #[test]
+    fn a_rounded_grid_crossing_still_checks_the_whole_disc() {
+        let mut heights = vec![0.; 24 * 48];
+        heights[36 * 24 + 12] = f32::NAN;
+        let walk = Walk::new(RADIUS, 24, 48, Vec2::ZERO, heights, Vec3::ZERO);
+        // The edge of the missing floor is (12 * cell + cell) in world space.
+        // At x=2.8 rounding puts the footprint just inside that edge.
+        let end = Vec2::new(3.4, 7.9999976);
+        for (x, clear) in [(2.8, false), (2.8001, true)] {
+            let start = Vec2::new(x, 7.3999977);
+            assert_eq!(walk.holds(start), clear);
+            assert_eq!(walk.clear_segment(start, start + Vec2::splat(0.01)), clear);
+            assert_eq!(walk.clear_segment(start, end), clear);
+            assert_eq!(walk.clear_segment(end, start), clear);
+        }
     }
 
     #[test]

@@ -1677,3 +1677,7 @@ A street can supply a pair of horizontal endpoints for each resident. Test direc
 ## D-235 — Include diagonal travel when choosing a pedestrian passage
 
 Paris searches eight neighbours per walk-grid cell. Axial and diagonal steps have costs proportional to their length. Each candidate step must support the entire walker. When an obstacle offers two passages, the server can account for the distance covered along a diagonal before it chooses which side to follow. The two-passage replay checks the distance walked against a lower bound for the competing passage. [Walk-grid routing](../knowledge/algorithms/walk-grid-routing.md)
+
+## D-236 — Visit walk-grid crossings in travel order
+
+Merge the crossings of the two grid axes while testing the walker’s footprint. A blocked interval ends the query immediately. Terrain stays immutable, so the neighbourhood certificate used for a step can also serve each interval of a long shortcut when the full swept bounds fit inside the certificate. When rounding could extend the disc beyond a three-by-three neighbourhood, the grid uses the geometric check. Temporary storage per sweep is constant for both patrol planning and movement. [Algorithm and geometric checks](../knowledge/algorithms/walk-grid-routing.md)
