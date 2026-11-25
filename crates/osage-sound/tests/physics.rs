@@ -842,9 +842,10 @@ fn steps_behind_a_wall_take_no_voice_from_a_step_that_is_heard() {
             let open = render(&scene, &four_voices(&[], &["walker-at--"]), 1.5);
             let hidden = render(&scene, &four_voices(&["walker-at--"], &[]), 1.5);
             assert!(open.tally.contacts >= 3 && open.peak() > 1e-5, "{} steps, {}", open.tally.contacts, open.peak());
-            assert_eq!((hidden.tally.contacts, hidden.peak()), (0, 0.0));
+            // Those behind the wall take the voices no step heard holds, in case the listener comes round
+            // it while they ring; nothing of them is heard.
+            assert_eq!(hidden.peak(), 0.0);
             assert!(all.left == open.left && all.right == open.right, "{} {ahead:?}", quality.name);
-            assert_eq!(all.tally.contacts, open.tally.contacts);
             // Without the wall the four are heard, and louder than the one.
             let bare = render(&walkers(&ahead), &four_voices(&["walker-at--"], &[]), 1.5);
             assert!(bare.peak() > 3.0 * open.peak(), "{} against {}", bare.peak(), open.peak());
@@ -876,21 +877,31 @@ fn who_else_walks_changes_nothing_of_a_step() {
 }
 
 #[test]
-fn of_two_echoes_as_loud_the_one_kept_is_not_told_by_where_its_wall_is_listed() {
+fn of_two_echoes_as_loud_at_the_budget_s_edge_both_are_kept_or_neither() {
     // A tone straight ahead between two walls, one as far to the left as the other to the right, on a
-    // device that affords two ways: the straight one and one echo of the two, which are as loud. The same
-    // samples whichever wall is listed first and whatever the walls are called — and the echo kept is the
-    // one on the left.
-    let heard = |ids: [&str; 2], swapped: bool, ways: usize| {
+    // device that affords two ways: the straight one and an echo — and the two echoes are as loud. Both are
+    // kept, a way over the budget, so that what is the same on both sides is heard the same on both sides;
+    // the same samples whichever wall is listed first and whatever the walls are called. With a floor and a
+    // ceiling as far as the walls, four echoes are as loud: too many over the budget, none is kept.
+    let heard = |ids: [&str; 2], swapped: bool, ways: usize, four: bool| {
         let wall = |id: &str, x: f64| {
             format!(
                 r#"{{"id": "{id}", "acoustic": "hard", "occludes": false,
                      "quadM": [[{x}, -9, -12], [{x}, 9, -12], [{x}, 9, 5], [{x}, -9, 5]]}}"#
             )
         };
-        let mut walls = [wall(ids[0], -4.0), wall(ids[1], 4.0)];
+        let level = |id: &str, y: f64| {
+            format!(
+                r#"{{"id": "{id}", "acoustic": "hard", "occludes": false,
+                     "quadM": [[-9, {y}, -12], [9, {y}, -12], [9, {y}, 5], [-9, {y}, 5]]}}"#
+            )
+        };
+        let mut walls = vec![wall(ids[0], -4.0), wall(ids[1], 4.0)];
         if swapped {
             walls.swap(0, 1);
+        }
+        if four {
+            walls.extend([level("floor", -4.0), level("ceiling", 4.0)]);
         }
         let sound =
             format!(r#", "osageSound": {{"surfaces": [{}]}}"#, if ways == 1 { String::new() } else { walls.join(",") });
@@ -898,19 +909,77 @@ fn of_two_echoes_as_loud_the_one_kept_is_not_told_by_where_its_wall_is_listed() 
         let quality = Quality { ways, ..DRY };
         render(&scene(&nodes, 0.5), &Options { quality, listening: Listening::Speakers, ..Options::default() }, 0.5)
     };
-    let one = heard(["a", "b"], false, 2);
-    assert_eq!(one.tally.most_ways, 2);
+    let one = heard(["a", "b"], false, 2, false);
+    assert_eq!(one.tally.most_ways, 3);
     for (ids, swapped) in [(["a", "b"], true), (["b", "a"], false), (["b", "a"], true)] {
-        let other = heard(ids, swapped, 2);
+        let other = heard(ids, swapped, 2, false);
         assert!(one.left == other.left && one.right == other.right, "{ids:?} {swapped}");
     }
-    // The echo alone: what the walls add to the straight way.
-    let straight = heard(["a", "b"], false, 1);
+    // The echoes alone: what the walls add to the straight way — as much on each side.
+    let straight = heard(["a", "b"], false, 1, false);
     let echo = |ear: &[f32], bare: &[f32]| rms(&ear.iter().zip(bare).map(|(a, b)| a - b).collect::<Vec<f32>>());
     let (left, right) = (echo(&one.left, &straight.left), echo(&one.right, &straight.right));
-    assert!(left > 5.0 * right && right > 0.0, "left {left}, right {right}");
-    // With a way more, both echoes: as much on each side.
-    let both = heard(["a", "b"], false, 3);
-    let (left, right) = (echo(&both.left, &straight.left), echo(&both.right, &straight.right));
-    assert!((left / right - 1.0).abs() < 1e-3, "left {left}, right {right}");
+    assert!(left > 0.0 && (left / right - 1.0).abs() < 1e-3, "left {left}, right {right}");
+    // As with a way more.
+    let both = heard(["a", "b"], false, 3, false);
+    assert!(both.left == one.left && both.right == one.right);
+    // Four as loud for one place left: the straight way alone.
+    let four = heard(["a", "b"], false, 2, true);
+    assert_eq!(four.tally.most_ways, 1);
+    assert!(four.left == straight.left && four.right == straight.right);
+}
+
+#[test]
+fn a_contact_hidden_when_it_is_struck_is_heard_once_what_hid_it_is_gone() {
+    // The ears in a closed box 10 m wide that lets nothing through; a wheel comes onto a plate 20 m to the
+    // right, outside, at 1 s. The box's side towards the plate is a door that slides away from 1.1 s, at
+    // 360 km/h: from about 1.18 s nothing stands between, and the plate is still ringing.
+    let heard = |box_: bool, door: bool| {
+        let quad = |id: &str, corners: [[f64; 3]; 4]| {
+            let corners: Vec<String> = corners.iter().map(|c| format!("[{}, {}, {}]", c[0], c[1], c[2])).collect();
+            format!(r#"{{"id": "{id}", "acoustic": "hard", "reflects": false, "quadM": [{}]}}"#, corners.join(", "))
+        };
+        let (lo, hi) = (-3.4, 6.6);
+        let walls = [
+            quad("west", [[-5.0, lo, -5.0], [-5.0, hi, -5.0], [-5.0, hi, 5.0], [-5.0, lo, 5.0]]),
+            quad("north", [[-5.0, lo, -5.0], [5.0, lo, -5.0], [5.0, hi, -5.0], [-5.0, hi, -5.0]]),
+            quad("south", [[-5.0, lo, 5.0], [5.0, lo, 5.0], [5.0, hi, 5.0], [-5.0, hi, 5.0]]),
+            quad("under", [[-5.0, lo, -5.0], [5.0, lo, -5.0], [5.0, lo, 5.0], [-5.0, lo, 5.0]]),
+            quad("over", [[-5.0, hi, -5.0], [5.0, hi, -5.0], [5.0, hi, 5.0], [-5.0, hi, 5.0]]),
+        ];
+        let ground = format!(
+            r#", "osageSound": {{"surfaces": [{}
+            {{"id": "ground", "quadM": [[-50, 0, -50], [-50, 0, 50], [50, 0, 50], [50, 0, -50]], "collision": "ground"}},
+            {{"id": "plate", "quadM": [[20, 0.01, -3], [20, 0.01, 3], [21, 0.01, 3], [21, 0.01, -3]], "collision": "plate", "strikes": true}}]}}"#,
+            if box_ { format!("{},", walls.join(",")) } else { String::new() }
+        );
+        let ears = r#"{"translation": [0, 1.6, 0], "extras": {"osage": {"id": "ears"}}}"#;
+        let wheel = r#"{"translation": [10, 0, 0], "extras": {"osage": {"id": "wheel"}, "osageSound": {
+            "motion": {"alongM": [1, 0, 0], "atS": 0, "speedKmh": 36},
+            "touches": [{"kind": "wheels", "material": "wheel", "pointsM": [[0, 0, 0]], "strength": 1.0}]}}}"#;
+        let slides = if door {
+            r#""motion": {"alongM": [0, 0, 1], "atS": 1.1, "speedKmh": [[0, 0], [0.01, 360]]},"#
+        } else {
+            ""
+        };
+        let door = format!(
+            r#"{{"extras": {{"osage": {{"id": "door"}}, "osageSound": {{{slides} "surfaces": [{}]}}}}}}"#,
+            // Larger than the side it shuts, and outside it: no edge of it meets a wall's.
+            quad("door", [[5.5, lo - 1.0, -6.0], [5.5, hi + 1.0, -6.0], [5.5, hi + 1.0, 6.0], [5.5, lo - 1.0, 6.0]])
+        );
+        let mut nodes = vec![world(2 + usize::from(box_), &ground), ears.to_owned(), wheel.to_owned()];
+        if box_ {
+            nodes.push(door);
+        }
+        render(&scene(&nodes.join(","), 1.6), &options(Listening::Speakers), 1.6)
+    };
+    let (open, closed, opened) = (heard(false, false), heard(true, false), heard(true, true));
+    assert_eq!(open.tally.contacts, 1);
+    assert!(open.peak() > 1e-3, "{}", open.peak());
+    // Shut in, nothing; the door gone, the plate as it rings then, as if nothing had ever stood between.
+    assert_eq!(closed.peak(), 0.0);
+    // Nothing before the door starts to move: round its edge as it goes, then straight.
+    assert_eq!(rms(part(&opened.right, 0.0, 1.1)), 0.0);
+    let (late, bare) = (rms(part(&opened.right, 1.2, 1.4)), rms(part(&open.right, 1.2, 1.4)));
+    assert!(bare > 1e-5 && (late / bare - 1.0).abs() < 0.01, "{late} against {bare}");
 }

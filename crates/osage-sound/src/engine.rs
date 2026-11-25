@@ -397,6 +397,9 @@ struct Source {
     last: f32,
     /// A contact's first block: its level is there at once.
     struck: bool,
+    /// How hard a contact was struck, 0 to 1: what it is worth once it is
+    /// heard, if it was not when it was struck.
+    strength: f32,
     hit: Option<Hit>,
     load: f32,
     speed: f32,
@@ -1059,6 +1062,7 @@ impl Engine {
                 top: 0.0,
                 last: 0.0,
                 struck: false,
+                strength: 0.0,
                 hit: None,
                 load: 0.0,
                 speed: 0.0,
@@ -1097,6 +1101,7 @@ impl Engine {
                 top: 0.0,
                 last: 0.0,
                 struck: false,
+                strength: 0.0,
                 hit: None,
                 load: 0.0,
                 speed: 0.0,
@@ -1446,7 +1451,12 @@ impl Engine {
                 continue;
             }
             let loud = *arrives.get_or_insert_with(|| (gain * strength * self.arriving(place, ears, faces)) as f32);
-            if loud <= 0.0 || worth(&self.sources[slot]) >= loud {
+            // One that does not reach the ears now may still ring when the
+            // listener comes round what hides it: it takes a voice no
+            // other contact holds, and is worth nothing against one that is
+            // heard until it is heard itself.
+            let free = self.block > self.sources[slot].until;
+            if (loud <= 0.0 && !free) || (loud > 0.0 && worth(&self.sources[slot]) >= loud) {
                 continue;
             }
             params.set("hardness", hardness);
@@ -1461,6 +1471,10 @@ impl Engine {
             source.until = self.block + (CONTACT_SECONDS / (BLOCK as f64 * DT)) as u64;
             (source.worth, source.top, source.last) = (loud, 0.0, 0.0);
             source.struck = true;
+            source.strength = strength as f32;
+            // Its ways are found anew in blocks told by the contact, not by
+            // the voice it took.
+            source.turn = u64::from(seed);
             source.asleep = false;
             source.waking = 0;
             source.hit = Some(Hit { at: at.min(BLOCK - 1), strength: strength as f32 });
@@ -1842,6 +1856,12 @@ impl Engine {
                     _ => None,
                 };
             }
+            if source.emitter.is_none() && source.worth <= 0.0 {
+                // A contact hidden when it was struck, heard now: worth what
+                // it arrives with, as one heard at once is.
+                let loudest = source.targets.iter().flatten().flat_map(|aim| aim.gains).fold(0.0f32, f32::max);
+                source.worth = loudest * source.strength;
+            }
         }
         for (i, source) in self.sources.iter_mut().enumerate() {
             source.aims.copy_from_slice(&source.targets);
@@ -1858,15 +1878,18 @@ impl Engine {
             }
         }
         // Only the loudest ways are rendered; one left out still feeds the
-        // space's answer what its face scatters. Of two as loud, the one
-        // kept is told by what the ways are — never by where their faces
-        // are listed.
+        // space's answer what its face scatters. Ways as loud as one another
+        // at the budget's edge are kept or left out together, so that a
+        // scene the same on both sides is heard the same on both sides: all
+        // of them when that oversteps the budget by an eighth of it at most
+        // (and by one way at least, for a pair), none of them otherwise.
         if ranked.len() > quality.ways {
             let aim = |&(_, i, k): &(f32, usize, usize)| self.sources[i].aims[k].unwrap_or_default();
             ranked.sort_by(|a, b| {
                 b.0.total_cmp(&a.0).then_with(|| aim(a).before(&aim(b))).then(a.1.cmp(&b.1)).then(a.2.cmp(&b.2))
             });
-            for &(_, i, k) in &ranked[quality.ways..] {
+            let kept = edge_of(&ranked, quality.ways);
+            for &(_, i, k) in &ranked[kept..] {
                 let aim = &mut self.sources[i].aims[k];
                 *aim = aim.map(Aim::feeding).filter(|aim| k > 0 && aim.send > 0.0);
             }
@@ -1888,7 +1911,10 @@ impl Engine {
         for source in &mut self.sources {
             let wanted = source.aims.iter().any(Option::is_some) || source.lines.iter().any(|line| line.live);
             let global = matches!(source.reach, Reach::Global { .. }) && source.heard;
-            if !(wanted || global) {
+            // A contact rings out in its line whether it is heard or not:
+            // what is heard of it later is what it then still makes.
+            let ringing = source.emitter.is_none() && source.heard && self.block <= source.until;
+            if !(wanted || global || ringing) {
                 if !source.asleep {
                     // Asleep: its line is silence, so that nothing old is read when it wakes.
                     source.ring.fill(0.0);
@@ -2019,6 +2045,26 @@ impl Engine {
         self.tally.most_ways = self.tally.most_ways.max(ways_now);
         self.block += 1;
     }
+}
+
+/// How many of `ranked` (loudest first) are kept for a budget of `ways`:
+/// the budget, unless ways as loud as one another stand across its edge —
+/// as loud within a part in 10⁵, which a scene mirrored about the listener
+/// keeps between its two sides. Those are all kept when they overstep the
+/// budget by an eighth of it at most, and one way at least, and all left
+/// out otherwise.
+fn edge_of(ranked: &[(f32, usize, usize)], ways: usize) -> usize {
+    if ranked.len() <= ways || ways == 0 {
+        return ranked.len().min(ways);
+    }
+    let edge = ranked[ways].0;
+    let alike = |loud: f32| (loud - edge).abs() <= 1e-5 * edge.abs();
+    if !alike(ranked[ways - 1].0) {
+        return ways;
+    }
+    let first = ranked[..ways].iter().rposition(|way| !alike(way.0)).map_or(0, |at| at + 1);
+    let end = ways + ranked[ways..].iter().position(|way| !alike(way.0)).unwrap_or(ranked.len() - ways);
+    if end - ways <= (ways / 8).max(1) { end } else { first }
 }
 
 /// The ears' stage of a way for headphones: `x`, what the way carries this
