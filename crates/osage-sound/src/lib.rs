@@ -12,6 +12,8 @@
 //!   faces from the meshes of its acoustic and collision surfaces;
 //! - [`ways`]: the ways sound takes from an emitter to a head: straight,
 //!   round an edge, mirrored by a face; what the air takes;
+//! - [`decay`]: how long the space round a point rings, found from its
+//!   faces by rays;
 //! - [`ears`]: how a sound from a direction reaches each ear;
 //! - [`hrir`]: measured head responses for headphones, through virtual
 //!   loudspeakers;
@@ -24,6 +26,7 @@
 //! - [`bench`]: what all this costs a processor.
 
 pub mod bench;
+pub mod decay;
 pub mod ears;
 pub mod engine;
 pub mod faces;

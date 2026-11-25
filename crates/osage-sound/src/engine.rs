@@ -28,6 +28,7 @@
 use osage_sound_voices::{Drive, Hit, Voice, dsp::Noise, dsp::seed_for};
 
 use crate::{
+    decay::{CENTRES, Decay},
     ears::{HEAD_RADIUS, Heard, Listening, PINNA, hear_for},
     faces::{Faces, Sheets, sheets},
     field::{Decoder, Far, MOST, far_share, harmonics},
@@ -57,6 +58,10 @@ const SHORT: usize = 64;
 const TINY: f32 = 1e-15;
 /// A voice that wakes swells in over this many samples: 20 ms.
 const WAKE: u32 = 960;
+/// Rays sent to find how long the space rings, when found from its faces:
+/// at first, and in each block after.
+const DECAY_FIRST: usize = 1_024;
+const DECAY_RAYS: usize = 2;
 
 /// How a line is read between two of its samples.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -501,6 +506,21 @@ fn spread(direction: Vec3) -> [f32; 8] {
     lean.map(|share| (share * (8.0 / power).sqrt()) as f32)
 }
 
+/// What the reverberation's eight lines are fed in a block, line by line.
+type Send = [[f32; BLOCK]; 8];
+
+/// `fed`, shared among the lines by `into`: a line given nothing is not
+/// written (most ways lean away from half the corners).
+fn spread_into(send: &mut Send, fed: &[f32; BLOCK], into: &[f32; 8]) {
+    for (lane, &share) in send.iter_mut().zip(into) {
+        if share != 0.0 {
+            for (to, sample) in lane.iter_mut().zip(fed) {
+                *to += sample * share;
+            }
+        }
+    }
+}
+
 /// How many blocks sound takes from `metres` away, and a few more.
 fn trail_blocks(metres: f64) -> usize {
     (metres / SOUND / (BLOCK as f64 * DT)).ceil() as usize + 3
@@ -587,19 +607,25 @@ impl Tail {
             pass: Self::pass().map(|pass| pass as f32),
             keep: [[0.0; 3]; 8],
         };
-        for (i, length) in Self::LENGTHS.into_iter().enumerate() {
-            // What a line keeps after one turn of a sound that dies in `t60`.
-            let asked = seconds.map(|t60| 10f64.powf(-3.0 * length as f64 / (t60 * RATE as f64)));
-            tail.keep[i] = Self::shares(asked).map(|share| share as f32);
-        }
+        tail.set(seconds);
         tail
     }
 
-    /// `input`: what each line is fed, sample by sample.
-    fn run(&mut self, input: &[[f32; 8]], left: &mut [f32], right: &mut [f32]) {
+    /// From now on, it dies by 60 dB in `seconds`: what it holds already
+    /// dies as fast from here.
+    fn set(&mut self, seconds: [f64; 3]) {
+        for (i, length) in Self::LENGTHS.into_iter().enumerate() {
+            // What a line keeps after one turn of a sound that dies in `t60`.
+            let asked = seconds.map(|t60| 10f64.powf(-3.0 * length as f64 / (t60 * RATE as f64)));
+            self.keep[i] = Self::shares(asked).map(|share| share as f32);
+        }
+    }
+
+    /// `input`: what each line is fed, line by line.
+    fn run(&mut self, input: &[[f32; BLOCK]; 8], left: &mut [f32], right: &mut [f32]) {
         const LEFT: [f32; 8] = [1.0, -1.0, 1.0, -1.0, 1.0, -1.0, 1.0, -1.0];
         const RIGHT: [f32; 8] = [1.0, 1.0, -1.0, -1.0, 1.0, 1.0, -1.0, -1.0];
-        for n in 0..input.len() {
+        for n in 0..left.len() {
             let mut out = [0.0f32; 8];
             let (mut sum, mut l, mut r) = (0.0f32, 0.0f32, 0.0f32);
             for i in 0..8 {
@@ -615,7 +641,7 @@ impl Tail {
             // Each line feeds all the others and takes back a little of
             // itself (Householder): nothing is added, nothing lost.
             for (i, fed) in out.into_iter().enumerate() {
-                self.lines[i][self.at[i]] = input[n][i] + fed - sum * 0.25;
+                self.lines[i][self.at[i]] = input[i][n] + fed - sum * 0.25;
                 self.at[i] = (self.at[i] + 1) % Self::LENGTHS[i];
             }
             left[n] += l * 0.35;
@@ -799,8 +825,12 @@ pub struct Engine {
     parts: [f32; 3],
     block: u64,
     tail: Tail,
+    /// With a decay found from the faces: the rays that find it, and the
+    /// decay the tail was last given.
+    decay: Option<Decay>,
+    ringing: [f64; 3],
     touched: Vec<Touched>,
-    send: Vec<[f32; 8]>,
+    send: Box<Send>,
     made: Vec<f32>,
     /// What each ear's sum holds that is not sound: its mean, followed slowly.
     still: [f32; 2],
@@ -1213,6 +1243,11 @@ impl Engine {
             parts: PARTS.map(|frequency| (1.0 - (-std::f64::consts::TAU * frequency * DT).exp()) as f32),
             clear: clear_pass(options.quality.clear_db),
             tail: Tail::new(scene.reverb.seconds),
+            decay: (scene.reverb.from_faces && options.quality.reverb).then(|| {
+                let air = CENTRES.map(|hz| air_loss(hz, scene.air.celsius, scene.air.humidity));
+                Decay::new(air, scene.seed)
+            }),
+            ringing: scene.reverb.seconds,
             // Blocks are counted from the instant 0: a render that starts
             // earlier starts at a block before it.
             block: 0,
@@ -1237,7 +1272,7 @@ impl Engine {
             ranked: Vec::new(),
             air,
             touched,
-            send: vec![[0.0; 8]; BLOCK],
+            send: Box::new([[0.0; BLOCK]; 8]),
             made: vec![0.0; BLOCK],
             still: [0.0; 2],
             driven: Vec::new(),
@@ -1261,6 +1296,12 @@ impl Engine {
 
     pub fn scene(&self) -> &Scene {
         &self.scene
+    }
+
+    /// How long the space's own answer rings now, s, at 250 Hz, 1 kHz and
+    /// 4 kHz: as the scene gives it, or as last found from its faces.
+    pub fn ringing(&self) -> [f64; 3] {
+        self.ringing
     }
 
     /// Whether `node` or anything above it moves, turns or is driven.
@@ -1705,7 +1746,9 @@ impl Engine {
     pub fn render(&mut self, left: &mut [f32; BLOCK], right: &mut [f32; BLOCK]) {
         left.fill(0.0);
         right.fill(0.0);
-        self.send.fill([0.0; 8]);
+        for lane in self.send.iter_mut() {
+            lane.fill(0.0);
+        }
         let seconds = BLOCK as f64 * DT;
         let t1 = self.instant() + seconds;
         let quality = self.options.quality;
@@ -1745,6 +1788,26 @@ impl Engine {
             trail.filled = (trail.filled + 1).min(kept);
         }
         let faces = std::mem::take(&mut self.faces);
+        if let Some(decay) = &mut self.decay {
+            // How long the space round the head rings: many rays at first,
+            // then a few each block, older ones forgotten as new ones come,
+            // so that it follows the listener; told to the tail every
+            // tenth of a second or so.
+            let clock = Clock::now();
+            if !decay.started() {
+                decay.trace(head.at, &faces, DECAY_FIRST);
+            } else {
+                decay.forget(DECAY_RAYS as f64 / DECAY_FIRST as f64);
+                decay.trace(head.at, &faces, DECAY_RAYS);
+            }
+            if self.block.is_multiple_of(32)
+                && let Some(found) = decay.seconds()
+            {
+                self.ringing = found;
+                self.tail.set(found);
+            }
+            self.tally.tailing += clock.seconds();
+        }
         self.touch(t1, seconds, head.at, &faces);
         self.told_contacts(head.at, &faces);
         self.tally.touching += clock.seconds();
@@ -2336,7 +2399,7 @@ fn cubic(p: f32, q: f32, r: f32, s: f32, f: f32) -> f32 {
 /// A way that reaches the ears with nothing, for one block: only what it
 /// feeds the space's own answer — the emitter's line read `delay` back,
 /// between two samples (that answer blurs far more than this does).
-fn feed(line: &mut Line, goal: &Aim, ring: &[f32], base: u64, send: &mut [[f32; 8]]) {
+fn feed(line: &mut Line, goal: &Aim, ring: &[f32], base: u64, send: &mut Send) {
     let mask = ring.len() - 1;
     let from = line.now;
     if from.send != 0.0 || goal.send != 0.0 {
@@ -2347,15 +2410,14 @@ fn feed(line: &mut Line, goal: &Aim, ring: &[f32], base: u64, send: &mut [[f32; 
         let mut point = (((first.floor() as u64) & 0xffff_ffff) << 32) | ((first - first.floor()) * ONE) as u64;
         let advance = ((1.0 - slope) * ONE) as u64;
         let step = (goal.send - from.send) / BLOCK as f32;
-        for (n, to) in send.iter_mut().enumerate() {
+        let mut fed = [0.0f32; BLOCK];
+        for (n, to) in fed.iter_mut().enumerate() {
             let (i, f) = ((point >> 32) as usize, ((point as u32) >> 8) as f32 * (1.0 / 16_777_216.0));
             let here = ring[i & mask];
-            let fed = (here + (ring[i.wrapping_add(1) & mask] - here) * f) * (from.send + step * (n + 1) as f32);
-            for (lane, share) in to.iter_mut().zip(&goal.into) {
-                *lane += fed * share;
-            }
+            *to = (here + (ring[i.wrapping_add(1) & mask] - here) * f) * (from.send + step * (n + 1) as f32);
             point = point.wrapping_add(advance);
         }
+        spread_into(send, &fed, &goal.into);
     }
     // What it would hold had it been carried to the ears: nothing.
     *line = Line { live: line.live, now: *goal, ..Line::default() };
@@ -2378,7 +2440,7 @@ fn run(
     listening: Listening,
     left: &mut [f32; BLOCK],
     right: &mut [f32; BLOCK],
-    send: &mut [[f32; 8]],
+    send: &mut Send,
     field: Option<&mut [[f32; BLOCK]; MOST]>,
     speakers: Option<&mut Speakers>,
 ) {
@@ -2444,12 +2506,11 @@ fn run(
     // next, and a processor does several at once.)
     if from.send != 0.0 || goal.send != 0.0 {
         let step = (goal.send - from.send) * per;
-        for (n, (to, read)) in send.iter_mut().zip(&x).enumerate() {
-            let fed = read * (from.send + step * (n + 1) as f32);
-            for (lane, share) in to.iter_mut().zip(&goal.into) {
-                *lane += fed * share;
-            }
+        let mut fed = [0.0f32; BLOCK];
+        for (n, (to, read)) in fed.iter_mut().zip(&x).enumerate() {
+            *to = read * (from.send + step * (n + 1) as f32);
         }
+        spread_into(send, &fed, &goal.into);
     }
 
     // Four bands, each with what distance, edges and materials leave of it,
@@ -2545,7 +2606,7 @@ pub fn way_cost(quality: Quality, listening: Listening, seconds: f64) -> f64 {
     let ring: Vec<f32> = (0..1 << 16).map(|_| noise.next() * 0.1).collect();
     let parts = PARTS.map(|frequency| (1.0 - (-std::f64::consts::TAU * frequency * DT).exp()) as f32);
     let head = crate::scene::Head { at: Vec3::ZERO, forward: -Vec3::Z, right: Vec3::X, up: Vec3::Y };
-    let (mut left, mut right, mut send) = ([0.0f32; BLOCK], [0.0f32; BLOCK], vec![[0.0f32; 8]; BLOCK]);
+    let (mut left, mut right, mut send) = ([0.0f32; BLOCK], [0.0f32; BLOCK], Box::new([[0.0f32; BLOCK]; 8]));
     let mut line = Line { live: true, ..Line::default() };
     let blocks = (seconds * RATE as f64 / BLOCK as f64) as u64;
     let started = crate::bench::cpu_seconds();
@@ -2592,10 +2653,14 @@ mod tests {
     fn decay(seconds: [f64; 3], hz: f32) -> f64 {
         let mut tail = Tail::new(seconds);
         let frames = 3 * RATE as usize;
-        let mut input = vec![[0.0f32; 8]; frames];
-        input[0] = [1.0; 8];
+        let (mut first, silent) = ([[0.0f32; BLOCK]; 8], [[0.0f32; BLOCK]; 8]);
+        for lane in &mut first {
+            lane[0] = 1.0;
+        }
         let (mut left, mut right) = (vec![0.0f32; frames], vec![0.0f32; frames]);
-        tail.run(&input, &mut left, &mut right);
+        for (k, (l, r)) in left.chunks_mut(BLOCK).zip(right.chunks_mut(BLOCK)).enumerate() {
+            tail.run(if k == 0 { &first } else { &silent }, l, r);
+        }
         let (mut band, mut again) = (Biquad::default(), Biquad::default());
         band.band_pass(hz, 4.3);
         again.band_pass(hz, 4.3);

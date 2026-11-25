@@ -163,6 +163,10 @@ pub struct Touch {
 pub struct Reverb {
     /// Seconds to fall by 60 dB, in each of [`BANDS`].
     pub seconds: [f64; 3],
+    /// Whether they are found from the faces round the listener instead
+    /// (`"secondsT60": "fromFaces"`, [`crate::decay`]); `seconds` are then
+    /// what the space rings for until the first are found.
+    pub from_faces: bool,
     /// Its level, as a gain on what the surfaces scatter.
     pub gain: f64,
 }
@@ -599,9 +603,11 @@ impl Scene {
         if !(0.1..=3_600.0).contains(&seconds) {
             return about.fail("between a tenth of a second and an hour");
         }
-        let t60: [f64; 3] = reverb.need("secondsT60")?.numbers()?;
+        let given = reverb.need("secondsT60")?;
+        let from_faces = given.value.as_str() == Some("fromFaces");
+        let t60: [f64; 3] = if from_faces { [0.5; 3] } else { given.numbers()? };
         if t60.iter().any(|s| !(0.05..=10.0).contains(s)) {
-            return reverb.fail("a decay between 0.05 and 10 s");
+            return reverb.fail("a decay between 0.05 and 10 s, or \"fromFaces\"");
         }
         Ok(Scene {
             id,
@@ -610,7 +616,7 @@ impl Scene {
             seconds,
             seed: about.number_or("seed", 1.0)? as u64,
             loudness: about.number_or("loudnessLufs", -20.0)?,
-            reverb: Reverb { seconds: t60, gain: gain(reverb.number_or("gainDb", 0.0)?) },
+            reverb: Reverb { seconds: t60, from_faces, gain: gain(reverb.number_or("gainDb", 0.0)?) },
             air: Air { celsius: air.number_or("celsius", 15.0)?, humidity: air.number_or("humidityPercent", 70.0)? },
             tree,
             surfaces,
@@ -728,6 +734,10 @@ mod tests {
         assert_eq!(scene.contacts["ground"].params.get("tone", 0.0), 120.0);
         assert_eq!(scene.touches.len(), 1);
         assert_eq!(scene.air, Air { celsius: 20.0, humidity: 50.0 });
+        assert!(!scene.reverb.from_faces);
+        // Or how long the space rings found from its faces.
+        let found = Scene::from_json(&SMALL.replace("[0.5, 0.4, 0.3]", r#""fromFaces""#)).unwrap();
+        assert!(found.reverb.from_faces);
     }
 
     #[test]
@@ -804,6 +814,7 @@ mod tests {
         assert!(broken(r#""material": "sole""#, r#""material": "hoof""#).contains("no contact sound"));
         assert!(broken(r#""version": 1"#, r#""version": 2"#).contains("another version"));
         assert!(broken(r#"{"id": "spring"}"#, r#"{"id": "head"}"#).contains("a second or an empty node identifier"));
+        assert!(broken("[0.5, 0.4, 0.3]", r#""fromRoom""#).contains("reverb"));
         assert!(Scene::from_json("{").unwrap_err().contains("not JSON"));
     }
 }

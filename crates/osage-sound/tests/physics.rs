@@ -1116,3 +1116,48 @@ fn a_wall_that_sees_what_is_hidden_scatters_it_as_if_nothing_hid_it() {
     let (boxed, open) = (answer(true), answer(false));
     assert!(open > 1e-4 && (boxed / open - 1.0).abs() < 1e-3, "{boxed} against {open}");
 }
+
+#[test]
+fn a_space_asked_to_ring_as_its_faces_say_rings_as_a_room_of_them_does() {
+    // The ears in a closed room 12 m by 8 m, 1.6 m above its floor, whose faces take a tenth of what meets
+    // them and scatter most of the rest: asked to ring as its faces say, the space rings as Eyring's room of
+    // that size and those faces does — with Kuttruff's correction for a box, and what the air takes at
+    // 20 °C and 50 % — and a lower room rings shorter.
+    let ringing = |height: f64| {
+        let quad = |id: &str, c: [[f64; 3]; 4]| {
+            let c: Vec<String> = c.iter().map(|p| format!("[{}, {}, {}]", p[0], p[1], p[2])).collect();
+            format!(r#"{{"id": "{id}", "acoustic": "rough", "quadM": [{}]}}"#, c.join(", "))
+        };
+        let (x, z, low, high) = (6.0, 4.0, -1.6, height - 1.6);
+        let walls = [
+            quad("west", [[-x, low, -z], [-x, high, -z], [-x, high, z], [-x, low, z]]),
+            quad("east", [[x, low, -z], [x, high, -z], [x, high, z], [x, low, z]]),
+            quad("north", [[-x, low, -z], [x, low, -z], [x, high, -z], [-x, high, -z]]),
+            quad("south", [[-x, low, z], [x, low, z], [x, high, z], [-x, high, z]]),
+            quad("floor", [[-x, low, -z], [x, low, -z], [x, low, z], [-x, low, z]]),
+            quad("ceiling", [[-x, high, -z], [x, high, -z], [x, high, z], [-x, high, z]]),
+        ];
+        let sound = format!(r#", "osageSound": {{"surfaces": [{}]}}"#, walls.join(","));
+        let mut read = scene(&[world(1, &sound), EARS.to_owned()].join(","), 1.0);
+        assert_eq!(read.reverb.seconds, [0.5, 0.4, 0.3]);
+        read.reverb.from_faces = true;
+        let mut engine = Engine::new(read, Options { quality: Quality::REFERENCE, ..Options::default() });
+        let (mut left, mut right) = ([0.0f32; BLOCK], [0.0f32; BLOCK]);
+        engine.render(&mut left, &mut right);
+        engine.ringing()
+    };
+    let eyring = |height: f64, band: usize| {
+        let (volume, surface) = (12.0 * 8.0 * height, 2.0 * (12.0 * 8.0 + 8.0 * height + height * 12.0));
+        let air = osage_sound::ways::air_loss([250.0, 1_000.0, 4_000.0][band], 20.0, 50.0);
+        let m = air / (10.0 * std::f64::consts::LOG10_E);
+        let lost = (1.0f64 - 0.1).ln();
+        24.0 * std::f64::consts::LN_10 / 343.0 * volume / (-surface * lost * (1.0 + 0.2 * lost) + 4.0 * m * volume)
+    };
+    let tall = ringing(5.0);
+    for (band, found) in tall.iter().enumerate() {
+        let expected = eyring(5.0, band);
+        assert!((found / expected - 1.0).abs() < 0.1, "band {band}: {found} s for {expected} s");
+    }
+    let low = ringing(2.5);
+    assert!(low[1] < 0.75 * tall[1], "{} s for 2.5 m, {} s for 5 m", low[1], tall[1]);
+}
