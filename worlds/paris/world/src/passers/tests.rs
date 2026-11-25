@@ -149,7 +149,7 @@ fn prediction_sees_both_velocities_and_ignores_parallel_and_late_encounters() {
             }
             if first.is_none() {
                 let measure = |v| clearance(from, v, std::iter::once(&other), dt);
-                let next = choose(&grid, from, from + Vec3::X * 3., x * WALK, measure, dt);
+                let next = choose(&grid, from, from + Vec3::X * 3., x * WALK, measure, dt, false);
                 assert!(next.distance(from + Vec3::X * WALK * dt) < 1e-6, "unexpected avoidance on {label} at {frame}");
             }
         }
@@ -479,7 +479,6 @@ fn neighbourhood_search_preserves_every_distance_used_for_steering() {
 
 #[test]
 fn sixty_four_pedestrians_cross_a_plaza_and_return_without_overlap() {
-    use bevy::math::DVec2;
     let centre = Vec2::splat(15.);
     let ends: Vec<_> = (0..64)
         .map(|i| {
@@ -487,6 +486,27 @@ fn sixty_four_pedestrians_cross_a_plaza_and_return_without_overlap() {
             [centre + offset, centre - offset]
         })
         .collect();
+    cross_plaza(ends);
+}
+
+#[test]
+fn pedestrians_yield_when_nearby_destinations_block_one_another() {
+    let centre = Vec2::splat(15.);
+    let radii = Vec2::new(6., 5.5);
+    let ends = (0..64)
+        .map(|i| {
+            let i = i as f32;
+            let angle = std::f32::consts::TAU * i / 64.;
+            let start = centre + radii * Vec2::from_angle(angle + 0.007 * i.cos());
+            let goal = centre - radii * Vec2::from_angle(angle + 0.12 + 0.006 * i.sin());
+            [start, goal]
+        })
+        .collect();
+    cross_plaza(ends);
+}
+
+fn cross_plaza(ends: Vec<[Vec2; 2]>) {
+    use bevy::math::DVec2;
     let mut grid = Walk::new(0.5, 64, 64, Vec2::ZERO, vec![0.; 64 * 64], Vec3::ZERO);
     grid.patrols = Some(ends.iter().map(|pair| pair.map(|p| p.to_array())).collect());
     let mut plaza = app(grid);

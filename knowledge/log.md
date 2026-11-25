@@ -2,6 +2,8 @@
 
 ## 2026-11-25
 
+* A [blocked pedestrian](/algorithms/pedestrian-encounters.md) can step aside and try a retreat before resuming its route. An offset-destination plaza checks all 64 return trips (D-239).
+
 * [Pedestrian encounters](/algorithms/pedestrian-encounters.md) protect committed steps before predicting undecided steps. A shared passing side helps 64 crossing walkers reach both ends of a crowded plaza (D-238).
 
 * [Pedestrian encounters](/algorithms/pedestrian-encounters.md) bound relative travel on both axes to find which neighbours can affect a steering decision. The replay compares those distances with a full scan (D-237).

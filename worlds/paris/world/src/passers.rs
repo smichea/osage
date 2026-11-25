@@ -20,11 +20,28 @@ pub(super) struct Patrol {
     next: usize,
     forward: bool,
     velocity: Vec2,
+    still_seconds: f32,
+    yield_remaining: f32,
 }
 
 impl Patrol {
     fn new(points: Vec<Vec3>, ends: [Vec2; 2]) -> Self {
-        Self { points, ends, next: 1, forward: true, velocity: Vec2::ZERO }
+        Self { points, ends, next: 1, forward: true, velocity: Vec2::ZERO, still_seconds: 0., yield_remaining: 0. }
+    }
+
+    fn record_step(&mut self, velocity: Vec2, dt: f32) {
+        self.velocity = velocity;
+        if self.yield_remaining > 0. {
+            self.yield_remaining = (self.yield_remaining - dt).max(0.);
+        } else if velocity.length_squared() < 0.01 {
+            self.still_seconds += dt;
+            if self.still_seconds >= 0.75 {
+                self.yield_remaining = 0.6;
+                self.still_seconds = 0.;
+            }
+        } else {
+            self.still_seconds = 0.;
+        }
     }
 
     fn destination(&mut self, walk: &Walk, at: Vec3) -> Vec3 {
@@ -181,7 +198,15 @@ fn clearance<'a>(at: Vec3, v: Vec2, others: impl Iterator<Item = &'a Motion>, dt
     Clearance { reserved, tick: tick.min(reserved), forecast, close_approaches }
 }
 
-fn choose(grid: &Walk, at: Vec3, goal: Vec3, previous: Vec2, measure: impl Fn(Vec2) -> Clearance, dt: f32) -> Vec3 {
+fn choose(
+    grid: &Walk,
+    at: Vec3,
+    goal: Vec3,
+    previous: Vec2,
+    measure: impl Fn(Vec2) -> Clearance,
+    dt: f32,
+    yielding: bool,
+) -> Vec3 {
     let wish = ((goal.xz() - at.xz()) / dt).clamp_length_max(WALK);
     let straight = grid.slide(at, wish * dt);
     let direct = measure((straight.xz() - at.xz()) / dt);
@@ -190,13 +215,20 @@ fn choose(grid: &Walk, at: Vec3, goal: Vec3, previous: Vec2, measure: impl Fn(Ve
     }
     // When several streams converge, favour the same side of each walker's
     // own heading. Its actual step still has to clear the reserved space.
-    let preferred =
-        if direct.close_approaches >= 2 { Vec2::from_angle(-std::f32::consts::FRAC_PI_4).rotate(wish) } else { wish };
+    let preferred = if yielding {
+        Vec2::from_angle(-std::f32::consts::FRAC_PI_2).rotate(wish)
+    } else if direct.close_approaches >= 2 {
+        Vec2::from_angle(-std::f32::consts::FRAC_PI_4).rotate(wish)
+    } else {
+        wish
+    };
     let mut best = at;
     let mut best_cost = f32::INFINITY;
     let mut best_gap = (-1., -1.);
+    let headings = [0_f32, -15., 15., -30., 30., -45., 45., -65., 65., -90., 90., -135., 135., 180.];
+    let candidates = if yielding { &headings[..] } else { &headings[..11] };
     for speed in [1., 0.5, 0.] {
-        for angle in [0_f32, -15., 15., -30., 30., -45., 45., -65., 65., -90., 90.] {
+        for &angle in candidates {
             let movement = Vec2::from_angle(angle.to_radians()).rotate(wish) * (speed * dt);
             let next = grid.slide(at, movement);
             let v = (next.xz() - at.xz()) / dt;
@@ -247,7 +279,7 @@ pub(super) fn advance(
         let destination = patrol.destination(&grid.0, from);
         let index = first + i;
         let measure = |v| search.measure(&neighbours, index, v, dt);
-        let to = choose(&grid.0, from, destination, patrol.velocity, measure, dt);
+        let to = choose(&grid.0, from, destination, patrol.velocity, measure, dt, patrol.yield_remaining > 0.);
         let velocity = (to.xz() - from.xz()) / dt;
         search.accept(velocity);
         neighbours[index] = Motion { at: from, velocity, undecided: false };
@@ -255,7 +287,7 @@ pub(super) fn advance(
         if velocity.length_squared() > 1e-6 {
             transform.rotation = Quat::from_rotation_y((-velocity.x).atan2(-velocity.y));
         }
-        patrol.velocity = velocity;
+        patrol.record_step(velocity, dt);
     }
 }
 

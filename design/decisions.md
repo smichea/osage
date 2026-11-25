@@ -1689,3 +1689,7 @@ Paris keeps two sorted position arrays for a crowd, using the same starting posi
 ## D-238 — Keep a safe standing position for every undecided pedestrian
 
 Score the path already committed by each earlier walker and the standing position of each later walker before considering where the later walker might move. In a convergence involving several neighbours, give the candidate velocities a common passing side. A plaza replay follows all 64 residents at the fixed simulation rate. It checks the continuous distance between every pair and requires everyone to cross and return. [Encounter scoring and limits](../knowledge/algorithms/pedestrian-encounters.md)
+
+## D-239 — Let a blocked pedestrian yield space at a busy destination
+
+When a passer remains almost stationary for three quarters of a second, offer a sideways or retreating step for up to six tenths of a second. Use the same ground and body clearance checks as a normal step. Take the direct step whenever it clears. The offset-destination plaza checks that walkers sharing a small arrival area can finish both legs of their routes. [Movement and oracle](../knowledge/algorithms/pedestrian-encounters.md)
