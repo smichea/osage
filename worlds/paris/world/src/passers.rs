@@ -5,7 +5,7 @@
 //! to the next decision in the same fixed tick.
 use super::{
     Grid, Ids, Striding, core, proto,
-    walk::{RADIUS, WALK, Walk},
+    walk::{DIAMETER_SQ, WALK, Walk},
 };
 use bevy::prelude::*;
 use osage_world_module_api::{Discrete, EntityIds, Replicated, builtin};
@@ -20,7 +20,8 @@ pub(super) struct Patrol {
 /// Choose the nearest valid crossing to the street entrance. The grid may have
 /// disconnected floors: check every segment by walking it with the movement rules.
 fn crossing(walk: &Walk) -> Option<[[Vec3; 2]; 2]> {
-    let mut cells: Vec<_> = walk.places().filter(|p| p.distance_squared(walk.start) < 12. * 12.).collect();
+    let mut cells: Vec<_> =
+        walk.places_near(walk.start.xz(), 12.).filter(|p| p.distance_squared(walk.start) < 12. * 12.).collect();
     let preferred = walk.start + Vec3::new(2.5, 0., -3.5);
     cells.sort_by(|a, b| a.distance_squared(preferred).total_cmp(&b.distance_squared(preferred)));
     for centre in cells {
@@ -77,7 +78,6 @@ fn separation_sq(delta: Vec2, relative_velocity: Vec2, horizon: f32) -> f32 {
 }
 
 const HORIZON: f32 = 1.;
-const DIAMETER_SQ: f32 = (2. * RADIUS) * (2. * RADIUS);
 
 /// Measure the closest approach with simultaneous travel. The first distance
 /// protects the current tick, the second anticipates contact one second ahead.

@@ -1665,3 +1665,7 @@ The Paris client keeps the full gait and skeleton running on each remote walker.
 ## D-232 — Predict pedestrian encounters on the server
 
 Paris moves its two autonomous passers after controlled walkers, in stable entity order. Use relative ground-plane velocity to check closest approach within both the current tick and a one-second forecast. This accounts for the arrival times of two walkers at a crossing. Choose among steps the existing grid can realise. Clients receive the resulting pose through the existing walker protocol. The replay checks continuous clearance and arrival at both ends. [Method and limits](../knowledge/algorithms/pedestrian-encounters.md)
+
+## D-233 — Admit a Paris walker when its footprint fits at the entrance
+
+After controlled movement, reserve space for new walkers in arrival order. Include the current positions of residents and all earlier reservations made in this tick. If the entrance is full, retain the session's request until a position becomes available or the session leaves. Spectators can follow the same replicated residents throughout. The region and SDK replay checks the positions that both an existing observer and a late observer actually receive. [Paris world](../knowledge/modules/paris-world.md) · [Replay](../worlds/paris/server/tests/arrivals.rs)

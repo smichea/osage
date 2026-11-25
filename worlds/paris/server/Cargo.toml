@@ -22,3 +22,6 @@ osage-hologram-stream.workspace = true
 osage-content.workspace = true
 anyhow.workspace = true
 serde_json.workspace = true
+
+[dev-dependencies]
+osage-sdk.workspace = true

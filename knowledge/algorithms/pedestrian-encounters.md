@@ -54,6 +54,8 @@ ORCA divides avoidance responsibility between agents and solves velocity constra
 
 Run `cargo test -p osage-world-paris passers`. Six pairs of straight trajectories cover head-on motion, simultaneous and staggered crossings, parallel travel and a lateral offset. Two route replays also measure continuous separation between server ticks and count visits to both endpoints. A stationary player and a grid too small to contain a crossing are separate controls. With the exported Bistro street installed, set `OSAGE_PARIS_WALK_DIR` to the directory containing `walk.json` and `walk.bin` and run `cargo test -p osage-world-paris two_passers_in_the_installed_street -- --ignored`.
 
+For that street replay, set `OSAGE_ENCOUNTER_CSV` to a file path to record both centres, their current horizontal velocities in metres per second and the one-second overlap prediction for every tick. This records the velocities actually chosen. Each walker can change course on the following tick.
+
 # Reuse
 
 The closest-approach calculation applies to any two constant-velocity discs. A different world can supply its own footprint, traversability rules and preferred velocities.

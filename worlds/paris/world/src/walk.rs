@@ -10,14 +10,16 @@
 //! Frame: the glTF's — x east, y up, z south; a walker's heading turns
 //! about y, 0 facing -z.
 
-use bevy::math::{Vec2, Vec3};
+use bevy::math::{Vec2, Vec3, Vec3Swizzles};
 use serde::Deserialize;
+use std::ops::Range;
 
 /// Walking and running speeds, m/s.
 pub const WALK: f32 = 1.4;
 pub const RUN: f32 = 4.0;
 /// How far from a walker's centre the ground must hold it, m.
 pub const RADIUS: f32 = 0.2;
+pub(super) const DIAMETER_SQ: f32 = (2. * RADIUS) * (2. * RADIUS);
 /// The highest step a walker takes up or down at once, m.
 pub const STEP: f32 = 0.4;
 /// Where a walker's eyes are above the ground, m.
@@ -119,8 +121,21 @@ impl Walk {
 
     /// The centre of every cell a walker can stand in, on its ground.
     pub fn places(&self) -> impl Iterator<Item = Vec3> + '_ {
-        (0..self.rows).flat_map(move |r| {
-            (0..self.columns).filter_map(move |c| {
+        self.places_in(0..self.columns, 0..self.rows)
+    }
+
+    /// Cell centres inside a horizontal disc. Visit only the rows and columns it touches.
+    pub(super) fn places_near(&self, centre: Vec2, radius: f32) -> impl Iterator<Item = Vec3> + '_ {
+        let lo = ((centre - radius - self.origin) / self.cell).floor();
+        let hi = ((centre + radius - self.origin) / self.cell).floor();
+        let span = |a: f32, b: f32, count: usize| (a as usize).min(count)..((b + 1.) as usize).min(count);
+        self.places_in(span(lo.x, hi.x, self.columns), span(lo.y, hi.y, self.rows))
+            .filter(move |p| p.xz().distance_squared(centre) <= radius * radius)
+    }
+
+    fn places_in(&self, columns: Range<usize>, rows: Range<usize>) -> impl Iterator<Item = Vec3> + '_ {
+        rows.flat_map(move |r| {
+            columns.clone().filter_map(move |c| {
                 let h = self.at(c, r)?;
                 let p = self.origin + (Vec2::new(c as f32, r as f32) + 0.5) * self.cell;
                 Some(Vec3::new(p.x, h, p.y))

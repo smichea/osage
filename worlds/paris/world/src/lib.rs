@@ -13,6 +13,7 @@
 //! server beside the world sends as the walker's place and speed ask —
 //! [`Walkers`] tells it where each is.
 
+mod arrivals;
 mod passers;
 pub mod tiles;
 pub mod walk;
@@ -25,9 +26,8 @@ use std::{
 
 use bevy::prelude::*;
 use osage_world_module_api::{
-    Discrete, EntityIds, IntentReceived, Joined, Owner, RegionSet, Replicated, Schema, SessionKind, TypeSpec,
-    WorldModule, builtin,
-    osage_proto::{types as core, v0::Role},
+    Discrete, EntityIds, IntentReceived, RegionSet, Replicated, Schema, TypeSpec, WorldModule,
+    osage_proto::types as core,
 };
 use prost::Message as _;
 
@@ -105,7 +105,10 @@ impl Plugin for ParisWorld {
             .insert_resource(self.walkers.clone())
             .insert_resource(Light { port: self.light_port, horizon: self.horizon })
             .add_systems(Startup, (ids, passers::spawn).chain())
-            .add_systems(Update, (arrive, stroll, step, passers::advance, tell).chain().in_set(RegionSet::World));
+            .add_systems(
+                Update,
+                (stroll, step, arrivals::admit, passers::advance, tell).chain().in_set(RegionSet::World),
+            );
     }
 }
 
@@ -154,46 +157,6 @@ fn ids(mut commands: Commands, schema: Res<Schema>, mut entity_ids: ResMut<Entit
     });
     let world = proto::World { light_port: u32::from(light.port), horizon: light.horizon };
     commands.spawn((entity_ids.next_id(), Transform::default(), Discrete::default().with(id(types::WORLD), &world)));
-}
-
-/// A walker for each person and agent that joins, where the street starts.
-fn arrive(
-    mut commands: Commands,
-    mut entity_ids: ResMut<EntityIds>,
-    ids: Res<Ids>,
-    grid: Res<Grid>,
-    mut joined: MessageReader<Joined>,
-) {
-    for joined in joined.read() {
-        if joined.role != Role::Player && joined.kind != SessionKind::Agent {
-            continue;
-        }
-        // Side by side, not on top of one another.
-        let mut at = grid.0.start;
-        for k in 0..16 {
-            let angle = (joined.session + k) as f32 * 2.399_963;
-            let candidate = grid.0.start + Vec3::new(angle.cos(), 0.0, angle.sin()) * (0.8 + 0.2 * k as f32);
-            if grid.0.holds(Vec2::new(candidate.x, candidate.z)) {
-                at = Vec3::new(
-                    candidate.x,
-                    grid.0.ground(Vec2::new(candidate.x, candidate.z)).unwrap_or(at.y),
-                    candidate.z,
-                );
-                break;
-            }
-        }
-        let discrete = Discrete::default()
-            .with(ids.content_ref, &builtin(core::BUILTIN_AVATAR))
-            .with(ids.controller, &joined.controller)
-            .with(ids.walker, &proto::Walker { look: joined.session, passer_by: false });
-        commands.spawn((
-            entity_ids.next_id(),
-            Transform::from_translation(at),
-            discrete,
-            Owner(joined.session),
-            Striding::default(),
-        ));
-    }
 }
 
 /// Takes each walker's newest stroll.

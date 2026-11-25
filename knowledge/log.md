@@ -2,6 +2,8 @@
 
 ## 2026-11-25
 
+* The [Paris world](/modules/paris-world.md) reserves space for each arriving walker and waits when its entrance is full. Two SDK replicas check simultaneous arrivals and a late observer (D-233).
+
 * Paris now simulates two [autonomous passers](/algorithms/pedestrian-encounters.md) on crossing street routes, with one-second encounter prediction (D-232).
 
 * The [Paris client](/modules/paris-native.md) selects pedestrian foot correction using the camera projection (D-231). A 24-actor replay checks the live clip clocks and both forefeet through a camera turn.

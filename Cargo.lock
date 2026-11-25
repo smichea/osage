@@ -5364,6 +5364,7 @@ dependencies = [
  "anyhow",
  "osage-content",
  "osage-hologram-stream",
+ "osage-sdk",
  "osage-server",
  "osage-world-paris",
  "serde_json",

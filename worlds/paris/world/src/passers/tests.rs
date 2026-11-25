@@ -2,9 +2,9 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 use super::*;
-use crate::{ParisWorld, TICK_HZ, Walkers};
+use crate::{ParisWorld, TICK_HZ, Walkers, walk::RADIUS};
 use bevy::time::TimeUpdateStrategy;
-use osage_world_module_api::{IntentReceived, Joined, Schema};
+use osage_world_module_api::{IntentReceived, Joined, Left, Schema};
 use prost::Message;
 use std::{sync::Arc, time::Duration};
 
@@ -21,6 +21,7 @@ fn app(grid: Walk) -> App {
         .init_resource::<EntityIds>()
         .add_message::<IntentReceived>()
         .add_message::<Joined>()
+        .add_message::<Left>()
         .add_plugins(module);
     app.update();
     app
@@ -49,7 +50,37 @@ fn track(app: &mut App, actors: [Entity; 2], label: &str) -> (f32, [usize; 2]) {
     let mut previous = state(app.world());
     let mut gap = f32::INFINITY;
     let mut reversals = [0, 0];
-    for _ in 0..600 {
+    let mut trace = (label == "Bistro")
+        .then(|| std::env::var_os("OSAGE_ENCOUNTER_CSV"))
+        .flatten()
+        .map(|path| std::io::BufWriter::new(std::fs::File::create(path).unwrap()));
+    use std::io::Write;
+    if let Some(file) = &mut trace {
+        writeln!(file, "tick,ax,az,avx,avz,bx,bz,bvx,bvz,osage").unwrap();
+    }
+    for tick in 0..600 {
+        if let Some(file) = &mut trace {
+            let [a, b] = actors.map(|id| Motion {
+                at: app.world().get::<Transform>(id).unwrap().translation,
+                velocity: app.world().get::<Patrol>(id).unwrap().velocity,
+                undecided: false,
+            });
+            let (_, forecast) = clearance(a.at, a.velocity, std::iter::once(&b), 1. / TICK_HZ as f32);
+            writeln!(
+                file,
+                "{tick},{},{},{},{},{},{},{},{},{}",
+                a.at.x,
+                a.at.z,
+                a.velocity.x,
+                a.velocity.y,
+                b.at.x,
+                b.at.z,
+                b.velocity.x,
+                b.velocity.y,
+                u8::from(forecast < DIAMETER_SQ)
+            )
+            .unwrap();
+        }
         app.update();
         let now = state(app.world());
         let before = previous[0].0.xz() - previous[1].0.xz();
@@ -171,4 +202,37 @@ fn a_passer_walks_around_a_stationary_controlled_walker() {
     }
     println!("stationary walker clearance={nearest:.7} reached={reached}");
     assert!(nearest >= 2. * RADIUS && reached);
+}
+
+#[test]
+fn an_arrival_accounts_for_a_resident_and_a_player_who_just_moved() {
+    use osage_world_module_api::{Owner, SessionKind, osage_proto::v0::Role};
+
+    let join = Joined { session: 7, kind: SessionKind::Human, role: Role::Player, controller: Default::default() };
+    let mut app = app(flat());
+    let arrived = |app: &mut App| {
+        let world = app.world_mut();
+        let mut owned = world.query::<(&Owner, &Transform)>();
+        owned.iter(world).find(|(owner, _)| owner.0 == 7).map(|(_, place)| place.translation).unwrap()
+    };
+    app.world_mut().write_message(join.clone());
+    app.update();
+    let preferred = arrived(&mut app);
+
+    for moving_player in [false, true] {
+        let mut app = self::app(flat());
+        if moving_player {
+            // Clear of the first candidate at the start of the tick, inside it at the end.
+            app.world_mut().spawn((
+                Transform::from_translation(preferred - Vec3::X * 0.48),
+                Striding { stride: crate::walk::Stride { right: 1., run: true, ..default() }, ..default() },
+            ));
+        } else {
+            let resident = pair(&mut app)[0];
+            app.world_mut().get_mut::<Transform>(resident).unwrap().translation = preferred;
+        }
+        app.world_mut().write_message(join.clone());
+        app.update();
+        assert!(arrived(&mut app).distance(preferred) > 0.4);
+    }
 }
