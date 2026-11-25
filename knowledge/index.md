@@ -142,6 +142,7 @@ What osage knows about its own modules: their architecture, the algorithms and t
 * [Pedestrian impact](oracles/pedestrian-impact.md) - Measures contact time, penetration and rebound on a moving or stationary bonnet.
 * [Physics golden file](oracles/physics-golden.md) - Proves that the kart physics gives the same bits natively and in WebAssembly, which exact prediction relies on.
 * [Soundscape verify](oracles/soundscape-verify.md) - Proves that a render of a scene is reproducible, does not clip, is as loud as asked, keeps a side source on its side and swaps it when the head turns, and hears the train come, pass on the right and go.
+* [Sound against another engine](oracles/sound-against-reference.md) - Measures osage's sound beside another engine's captures of the same controlled scenes, figure for figure, and judges both by a blind listening test fixed before it runs.
 
 ## Elsewhere in the repository
 

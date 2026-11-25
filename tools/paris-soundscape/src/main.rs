@@ -8,6 +8,8 @@
 //!
 //! See the README beside this crate.
 
+mod against;
+
 use std::{path::PathBuf, process::ExitCode, time::Instant};
 
 use osage_sound::{
@@ -73,6 +75,11 @@ paris-soundscape: a scene's sound placed in its object tree and carried to two e
   ears     a source going round the listener, then from below to above, heard by the sphere model and
            by the measured responses: the time and level between the ears by band, against the set
              --hrir FILE (needed)
+  against  the controlled scenes (scenes/controlled-*.json) rendered raw at reference quality, read beside
+           another engine's captures of the same geometries: markdown tables, figure for figure
+             --reference DIR     the captures (circle.wav, passby.wav, far.wav, click-near.wav,
+                                 click-far.wav, screen.wav, screen-absent.wav, floor.wav, floor-absent.wav)
+             --hrir FILE         also with measured ears
   measure FILE.wav
            what any stereo file tells of where its sounds are: peaks, loudness, octaves, and second
            by second the level and time differences between the ears (--json for a receipt)
@@ -1246,6 +1253,9 @@ fn main() -> ExitCode {
         "render" => run_render(&args),
         "tree" => run_tree(&args),
         "measure" => run_measure(&args),
+        "against" => {
+            measured(&args).and_then(|set| against::run(args.value("--reference").map(std::path::Path::new), set))
+        }
         "verify" => run_verify(&args),
         "bench" => run_bench(&args),
         "hrir" => run_hrir(&args),

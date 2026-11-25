@@ -87,6 +87,14 @@ cargo run --release -p paris-soundscape -- render --hrir assets/sadie/d2-48k.hri
 
 `--hrir` is taken by `render`, `verify`, `bench`, `live` and `ears`, at high and reference quality.
 
+## Against another engine
+
+```sh
+cargo run --release -p paris-soundscape -- against --reference DIR [--hrir assets/sadie/d2-48k.hrir]
+```
+
+renders the controlled scenes (`scenes/controlled-*.json`, made by `scenes/make_controlled.py`: a noise going round, a tone passing, a tone far away, clicks at a distance, a screen, a floor) raw at reference quality, and reads them beside another engine's captures of the same geometries in `DIR` (`circle.wav`, `passby.wav`, `far.wav`, `click-near.wav`, `click-far.wav`, `screen.wav`, `screen-absent.wav`, `floor.wav`, `floor-absent.wav`; a missing file leaves its column empty). It prints markdown tables: where the ears hear the sound, its pitch, when it arrives, what a surface takes away. The figures against reference A are in [research 11](../../research/11-sound-against-reference.md). A blind listening test of the same takes has its protocol and kit in [listening/](listening/PROTOCOL.md).
+
 ## Live
 
 ```sh

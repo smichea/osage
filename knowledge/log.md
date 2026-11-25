@@ -2,6 +2,8 @@
 
 ## 2026-11-25
 
+* **Creation**: Added the oracle [sound against another engine](/oracles/sound-against-reference.md) (issue #19, D-243). On the controlled scenes osage is nearer what the geometry asks than reference A in every scene both played (research 11). The blind listening test is written down and its kit made; it has not run.
+
 * [Walk-grid routing](/algorithms/walk-grid-routing.md) retries at half-cell spacing on connected floor when a bend cannot be reached through cell centres. Two opposing pedestrians complete a 50 cm bend (D-241).
 
 * [Pedestrian encounters](/algorithms/pedestrian-encounters.md) find a supported waiting place when opposing patrols meet in single-file traffic. Straight, bent and no-bay streets exercise the full trajectory (D-240).
