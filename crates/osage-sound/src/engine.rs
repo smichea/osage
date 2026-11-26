@@ -25,7 +25,7 @@
 //! on a joint — wakes a voice from a small pool, placed where the contact is
 //! on the node that was touched.
 
-use std::collections::BTreeMap;
+use std::{collections::BTreeMap, sync::Mutex};
 
 use osage_sound_voices::{
     Drive, Hit, Params, Voice,
@@ -39,6 +39,7 @@ use crate::{
     faces::{Faces, Sheets, sheets},
     field::{Decoder, Far, MOST, far_share, harmonics},
     hrir::{Hrir, Share, Speakers},
+    pool::Pool,
     scene::{ClipSource, Head, Load, Material, Reach, Recorded, Scene, Touching},
     space::{Placement, Vec3, vec3},
     tree::Motion,
@@ -201,6 +202,9 @@ pub struct Options {
     /// qualities that make the outer ear, every way is heard through them
     /// instead of the sphere's model.
     pub measured: Option<std::sync::Arc<Hrir>>,
+    /// How many threads it shares its emitters among (1 by default): the
+    /// samples are the same, to the bit, whatever the number.
+    pub threads: usize,
 }
 
 impl Options {
@@ -209,6 +213,12 @@ impl Options {
         (self.solo.is_empty() || self.solo.iter().any(|text| name.contains(text.as_str())))
             && !self.mute.iter().any(|text| name.contains(text.as_str()))
     }
+}
+
+/// The threads an engine shares its emitters among: as many as asked, one
+/// at least, and one in a browser's WebAssembly, which has none.
+fn threads_of(options: &Options) -> usize {
+    if cfg!(all(target_arch = "wasm32", target_os = "unknown")) { 1 } else { options.threads.clamp(1, 64) }
 }
 
 impl Default for Options {
@@ -222,6 +232,7 @@ impl Default for Options {
             start: 0.0,
             far: None,
             measured: None,
+            threads: 1,
         }
     }
 }
@@ -867,9 +878,14 @@ pub struct Engine {
     /// node's trail if it moves.
     face_trails: Vec<FaceTrail>,
     trail_of: Vec<Option<usize>>,
-    /// Kept from one block to the next: the faces a source's ways are
-    /// looked for by.
-    near: Vec<usize>,
+    /// Kept from one block to the next: what each thread finds ways in, and
+    /// the sources due their ways this block.
+    scratches: Vec<Scratch>,
+    jobs: Vec<Job>,
+    /// The threads it shares its emitters among, past its own; none for one.
+    pool: Option<Pool>,
+    /// What each group of its sources makes in a block.
+    mixes: Vec<Mix>,
     /// Contacts told by a solver, soonest first, not yet struck.
     told: std::collections::VecDeque<Struck>,
     /// How many of them have been struck.
@@ -880,16 +896,9 @@ pub struct Engine {
     order: Vec<usize>,
     placed: Vec<Placement>,
     /// Kept from one block to the next, so that none makes a list: where
-    /// each source is; what each face scatters of the one being looked at.
+    /// each source is, and its ways ranked by the budget.
     nows: Vec<Vec3>,
-    scatters: Vec<Option<Scatter>>,
-    found: Ways,
     ranked: Vec<(f32, usize, usize)>,
-    /// The sheets that mirror the source looked at loudest, and its ways
-    /// mirrored twice by them.
-    loudest: Vec<(f64, usize)>,
-    twice_found: Vec<(f64, (usize, usize), Way)>,
-    twice_aimed: Vec<(usize, Way)>,
     /// What the air takes at 4 kHz, dB a metre.
     air: f64,
     /// What it takes at a sixth of an octave apart from 500 Hz to 24 kHz:
@@ -907,7 +916,6 @@ pub struct Engine {
     ringing: [f64; 3],
     touched: Vec<Touched>,
     send: Box<Send>,
-    made: Vec<f32>,
     /// What each ear's sum holds that is not sound: its mean, followed slowly.
     still: [f32; 2],
     /// For each node, whether it is driven from outside ([`Engine::drive`]):
@@ -1339,19 +1347,17 @@ impl Engine {
             placed_faces: false,
             face_trails: Vec::new(),
             trail_of: Vec::new(),
-            near: Vec::new(),
+            scratches: (0..threads_of(&options)).map(|_| Scratch::default()).collect(),
+            jobs: Vec::new(),
+            pool: (threads_of(&options) > 1).then(|| Pool::new(threads_of(&options))),
+            mixes: Vec::new(),
             told: Default::default(),
             struck: 0,
             loading,
             order: scene.tree.order(),
             placed: Vec::new(),
             nows: Vec::new(),
-            scatters: Vec::new(),
-            found: Ways::default(),
             ranked: Vec::new(),
-            loudest: Vec::new(),
-            twice_found: Vec::new(),
-            twice_aimed: Vec::new(),
             air,
             air_table: (0..=34)
                 .map(|sixth| {
@@ -1361,7 +1367,6 @@ impl Engine {
                 .collect(),
             touched,
             send: Box::new([[0.0; BLOCK]; 8]),
-            made: vec![0.0; BLOCK],
             still: [0.0; 2],
             driven: Vec::new(),
             part,
@@ -1904,9 +1909,9 @@ impl Engine {
         // Where each source is; one that moves leaves a trail, from which
         // where it was when a sound left it is read back.
         let clock = Clock::now();
-        let (mut nows, mut scatters) = (std::mem::take(&mut self.nows), std::mem::take(&mut self.scatters));
-        let mut near = std::mem::take(&mut self.near);
-        let mut mirroring: Vec<(usize, Way)> = Vec::new();
+        let mut nows = std::mem::take(&mut self.nows);
+        let mut jobs = std::mem::take(&mut self.jobs);
+        jobs.clear();
         let measured = self.speakers.as_ref().map(|speakers| speakers.hrir.clone());
         let block = self.block as usize;
         nows.clear();
@@ -1920,12 +1925,6 @@ impl Engine {
             nows.push(now);
         }
         let mut ranked = std::mem::take(&mut self.ranked);
-        let (mut loudest, mut twice_found, mut twice_aimed) = (
-            std::mem::take(&mut self.loudest),
-            std::mem::take(&mut self.twice_found),
-            std::mem::take(&mut self.twice_aimed),
-        );
-        let mut found = std::mem::take(&mut self.found);
         ranked.clear();
         for i in 0..self.sources.len() {
             // Where it was when the sound now arriving straight left it.
@@ -1994,194 +1993,26 @@ impl Engine {
             {
                 continue;
             }
-            let mirrors = source.mirrors && (quality.mirrors || quality.folded);
-            let feeds = source.mirrors && quality.reverb;
-            // A way longer than the emitter is heard from is not one: its
-            // sound is no longer in the line, and is never read sooner than
-            // it took to come.
-            let reach = source.max_distance;
-            found.direct = direct(place, head.at, &faces);
-            found.mirrored.clear();
-            found.mirrored.resize(faces.sheets().len(), None);
-            scatters.clear();
-            scatters.resize(faces.sheets().len(), None);
-            if mirrors || feeds {
-                // The faces by which a way could be no longer than the
-                // emitter is heard from, from wherever its sound left it.
-                let slack = source.slack(now, block);
-                near.clear();
-                faces.sheets_within(place, head.at, reach + slack, |sheet| {
-                    if faces[sheet].reflects {
-                        near.push(sheet);
-                    }
-                });
-                near.sort_unstable();
-                near.dedup();
-                // The others send nothing; they are looked at again from
-                // where the straight way's sound left.
-                let mut next = 0;
-                for (slot, &sheet) in faces.sheets().iter().enumerate() {
-                    if near.get(next) == Some(&sheet) {
-                        next += 1;
-                    } else if faces[sheet].reflects {
-                        source.lags[1 + slot] = source.lags[0];
-                    }
-                }
-                for &sheet in &near {
-                    // What a sheet sends back left the emitter earlier than
-                    // what comes straight: from where the emitter was then,
-                    // by the way found last.
-                    let slot = faces.slot(sheet);
-                    let from = source.was(now, block, source.lags[1 + slot] / seconds);
-                    // A sheet that moves mirrors from where it was when the
-                    // sound met it: as long before as the sound takes from it
-                    // to the ears.
-                    let was = self.trail_of[sheet].map(|trail| {
-                        let trail = &self.face_trails[trail];
-                        let then = trail.was(block, source.legs[1 + slot] / seconds);
-                        then.then(&self.placed[trail.node].inverse())
-                    });
-                    mirroring.clear();
-                    let scatter =
-                        mirrored_then(sheet, from, head.at, &faces, quality.careful, was.as_ref(), &mut mirroring);
-                    let length =
-                        mirroring.first().map(|(_, way)| way.length).or(scatter.map(|(_, scatter)| scatter.length));
-                    source.lags[1 + slot] = length.map_or(source.lags[0], |length| length / SOUND);
-                    let turn = mirroring.first().map(|(_, way)| way.from).or(scatter.map(|(_, scatter)| scatter.from));
-                    source.legs[1 + slot] = turn.map_or(0.0, |turn| turn.distance(head.at) / SOUND);
-                    // The faces under the mirror point mirror one way: from
-                    // the same image, by the same point; across a side they
-                    // share, their fades sum to one.
-                    let way = mirroring.iter().map(|&(_, way)| way).reduce(|one, other| Way {
-                        bands: std::array::from_fn(|b| one.bands[b] + other.bands[b]),
-                        ..one
-                    });
-                    found.mirrored[slot] = way.filter(|way| mirrors && way.length <= reach);
-                    scatters[slot] =
-                        scatter.map(|(_, scatter)| scatter).filter(|scatter| feeds && scatter.length <= reach);
-                }
-            }
-            // Mirrored twice, at the qualities that check what hides a way:
-            // by two of the sheets that mirror it loudest once, one then the
-            // other, the loudest of those ways. Each keeps its line while it
-            // is among them; a new one takes a line no way is fading out of.
-            let first_twice = 1 + faces.sheets().len();
-            twice_found.clear();
-            if mirrors && quality.mirrors && quality.careful {
-                loudest.clear();
-                for (slot, way) in found.mirrored.iter().enumerate() {
-                    if let Some(way) = way {
-                        loudest.push((way.bands[1] / way.length.max(NEAREST), faces.sheets()[slot]));
-                    }
-                }
-                loudest.sort_by(|a, b| b.0.total_cmp(&a.0).then(a.1.cmp(&b.1)));
-                loudest.truncate(TWICE_FROM);
-                for &(_, one) in loudest.iter() {
-                    for &(_, other) in loudest.iter() {
-                        if one == other {
-                            continue;
-                        }
-                        let kept = source.twice.iter().position(|pair| *pair == Some((one, other)));
-                        let lag = kept.map_or(source.lags[0], |slot| source.lags[first_twice + slot]);
-                        let from = source.was(now, block, lag / seconds);
-                        if let Some(way) =
-                            mirrored_twice(one, other, from, head.at, &faces, true).filter(|way| way.length <= reach)
-                        {
-                            twice_found.push((way.bands[1] / way.length.max(NEAREST), (one, other), way));
-                        }
-                    }
-                }
-                twice_found.sort_by(|a, b| b.0.total_cmp(&a.0).then(a.1.cmp(&b.1)));
-                twice_found.truncate(TWICE);
-            }
-            for pair in source.twice.iter_mut() {
-                if pair.is_some_and(|pair| !twice_found.iter().any(|found| found.1 == pair)) {
-                    *pair = None;
-                }
-            }
-            twice_aimed.clear();
-            for &(_, pair, way) in twice_found.iter() {
-                let slot = source.twice.iter().position(|kept| *kept == Some(pair)).or_else(|| {
-                    (0..TWICE).find(|&slot| source.twice[slot].is_none() && !source.lines[first_twice + slot].live)
-                });
-                if let Some(slot) = slot {
-                    source.twice[slot] = Some(pair);
-                    source.lags[first_twice + slot] = way.length / SOUND;
-                    twice_aimed.push((first_twice + slot, way));
-                }
-            }
-            let aim = |way: &Way, send: f32| {
-                let into = spread(way.from - head.at);
-                let length = way.length.max(NEAREST);
-                let gains: [f32; 4] = std::array::from_fn(|b| (level * way.bands[b] / length) as f32);
-                // The line holds what the emitter made for as long as sound
-                // takes from as far as it is heard, and more.
-                let delay = length / SOUND * RATE as f64;
-                debug_assert!(delay <= (source.ring.len() - 2 * BLOCK) as f64);
-                let mut aim = if encoding {
-                    // For a field: no ears, the channels of where it comes from.
-                    let mut aim = Aim::new(delay, gains, air_pass(self.air * length), send, &Heard::nothing());
-                    aim.field = harmonics(way.from - head.at, order).map(|g| g as f32);
-                    aim
-                } else if let Some(hrir) = &measured {
-                    // Its own time between the ears, and the loudspeakers round where it comes from.
-                    let towards = Hrir::towards(way.from, &head);
-                    let itd = hrir.itd(towards);
-                    let late = if itd > 0.0 { [itd, 0.0] } else { [0.0, -itd] };
-                    let heard = Heard { delay: late, shadow: [1.0; 2], pan: [0.0; 2], pinna: [0.0; 5] };
-                    let mut aim = Aim::new(delay, gains, air_pass(self.air * length), send, &heard);
-                    aim.share = hrir.share(towards);
-                    aim
-                } else {
-                    let heard = hear_for(way.from, &head, self.options.listening, quality.outer_ear);
-                    Aim::new(delay, gains, air_pass(self.air * length), send, &heard)
-                };
-                aim.into = into;
-                aim
-            };
-            source.lags[0] = found.direct.map_or(straight, |way| way.length) / SOUND;
-            if let Some(way) = found.direct.filter(|way| way.length <= reach) {
-                let mut way = way;
-                if !quality.mirrors {
-                    // What the faces send back is not followed as ways of its
-                    // own, but its level is kept: with the straight way's in
-                    // the low band, where the two arrive in step, and as so
-                    // much more power above.
-                    for mirrored in found.mirrored.iter().flatten() {
-                        let share = way.length.max(NEAREST) / mirrored.length.max(NEAREST);
-                        way.bands[0] += mirrored.bands[0] * share;
-                        for b in 1..4 {
-                            way.bands[b] = way.bands[b].hypot(mirrored.bands[b] * share);
-                        }
-                    }
-                }
-                source.targets[0] = Some(aim(&way, 0.0));
-            }
-            for (k, scatter) in scatters.iter().enumerate() {
-                // What a face scatters goes to the space's own answer by the
-                // way it takes by that face, at the time that way takes: on
-                // the mirrored way when it is followed, and otherwise on a
-                // way of its own that reaches the ears with nothing.
-                let send =
-                    scatter.map_or(0.0, |scatter| (level * scatter.energy.sqrt() * self.scene.reverb.gain) as f32);
-                source.targets[1 + k] = match (found.mirrored[k].filter(|_| quality.mirrors), scatter) {
-                    (Some(way), _) => Some(aim(&way, send)),
-                    (None, Some(scatter)) if send > 0.0 => {
-                        Some(aim(&Way { length: scatter.length, from: scatter.from, bands: [0.0; 4] }, send))
-                    }
-                    _ => None,
-                };
-            }
-            for &(line, way) in twice_aimed.iter() {
-                source.targets[line] = Some(aim(&way, 0.0));
-            }
-            if source.emitter.is_none() && source.worth <= 0.0 {
-                // A contact hidden when it was struck, heard now: worth what
-                // it arrives with, as one heard at once is.
-                let loudest = source.targets.iter().flatten().flat_map(|aim| aim.gains).fold(0.0f32, f32::max);
-                source.worth = loudest * source.strength;
-            }
+            jobs.push(Job { index: i, now, place, straight, level });
         }
+        // Each source due finds its ways by itself, among the threads.
+        let ctx = Finding {
+            faces: &faces,
+            head,
+            quality,
+            block,
+            seconds,
+            trail_of: &self.trail_of,
+            face_trails: &self.face_trails,
+            placed: &self.placed,
+            reverb_gain: self.scene.reverb.gain,
+            air: self.air,
+            listening: self.options.listening,
+            measured: measured.as_deref(),
+            encoding,
+            order,
+        };
+        find_all(&mut self.sources, &jobs, &ctx, &mut self.scratches, self.pool.as_ref());
         for (i, source) in self.sources.iter_mut().enumerate() {
             source.aims.copy_from_slice(&source.targets);
             for (k, aim) in source.aims.iter().enumerate() {
@@ -2235,120 +2066,69 @@ impl Engine {
                 self.sources[i].aims.fill(None);
             }
         }
-        (self.nows, self.scatters, self.ranked, self.found, self.near) = (nows, scatters, ranked, found, near);
-        (self.loudest, self.twice_found, self.twice_aimed) = (loudest, twice_found, twice_aimed);
+        (self.nows, self.ranked, self.jobs) = (nows, ranked, jobs);
         self.faces = faces;
         self.tally.finding += clock.seconds();
 
-        // Every voice that is heard makes its block, into its own line.
-        let clock = Clock::now();
-        let base = self.block * BLOCK as u64;
-        for source in &mut self.sources {
-            let wanted = source.aims.iter().any(Option::is_some) || source.lines.iter().any(|line| line.live);
-            let global = matches!(source.reach, Reach::Global { .. }) && source.heard;
-            // A contact rings out in its line whether it is heard or not:
-            // what is heard of it later is what it then still makes.
-            let ringing = source.emitter.is_none() && source.heard && self.block <= source.until;
-            if !(wanted || global || ringing) {
-                if !source.asleep {
-                    // Asleep: its line is silence, so that nothing old is read when it wakes.
-                    source.ring.fill(0.0);
-                    source.asleep = true;
-                }
-                // A contact that is not heard is worth nothing against another.
-                (source.top, source.last) = (source.top.max(f32::MIN_POSITIVE), 0.0);
-                continue;
-            }
-            if source.asleep {
-                source.asleep = false;
-                source.waking = WAKE;
-            }
-            let drive = Drive {
-                speed: source.speed,
-                accel: source.accel,
-                load: source.load,
-                hit: source.hit.take(),
-                detail: source.detail,
-                top: source.highest,
-            };
-            source.voice.render(&drive, &mut self.made);
-            self.tally.voices += 1;
-            if source.emitter.is_none() {
-                source.last = self.made.iter().fold(0.0f32, |peak, sample| peak.max(sample.abs()));
-                source.top = source.top.max(source.last);
-            }
-            if source.waking > 0 {
-                for sample in self.made.iter_mut() {
-                    *sample *= 1.0 - source.waking as f32 / WAKE as f32;
-                    source.waking = source.waking.saturating_sub(1);
-                }
-            }
-            let mask = source.ring.len() - 1;
-            for (n, sample) in self.made.iter().enumerate() {
-                // What is too small to be heard is nothing: numbers near the
-                // smallest a float holds are a hundred times slower to work on.
-                source.ring[(base as usize + n) & mask] = if sample.abs() < TINY { 0.0 } else { *sample };
-            }
-            if let Reach::Global { pan } = source.reach {
-                // From nowhere: straight into the ears.
-                let turn = (pan + 1.0) * std::f64::consts::FRAC_PI_4;
-                let (l, r) = ((source.gain * turn.cos()) as f32, (source.gain * turn.sin()) as f32);
-                for n in 0..BLOCK {
-                    left[n] += self.made[n] * l;
-                    right[n] += self.made[n] * r;
-                }
-            }
+        // Every voice that is heard makes its block, into its own line, and
+        // every way carries its emitter's line to the ears: group by group of
+        // the sources, each into a mix of its own, shared among the threads.
+        // The mixes are then added in the order of the groups, so that the
+        // number of threads changes no sample.
+        let carrying = Carrying {
+            base: self.block * BLOCK as u64,
+            block: self.block,
+            parts: self.parts,
+            clear: self.clear,
+            quality,
+            listening: self.options.listening,
+            encoding,
+        };
+        let groups = self.sources.len().div_ceil(GROUP);
+        if self.mixes.len() < groups {
+            let hrir = self.speakers.as_ref().map(|speakers| speakers.hrir.clone());
+            self.mixes.resize_with(groups, || Mix::new(hrir.clone()));
         }
-        self.tally.voicing += clock.seconds();
-
-        // Every way carries its emitter's line to the ears.
-        let clock = Clock::now();
-        let (mut ways_now, parts) = (0usize, self.parts);
-        for source in &mut self.sources {
-            if source.reach != Reach::Positional || source.asleep {
-                continue;
+        voice_and_carry_all(&mut self.sources, &mut self.mixes[..groups], &carrying, self.pool.as_ref());
+        let mut ways_now = 0usize;
+        for mix in &mut self.mixes[..groups] {
+            for n in 0..BLOCK {
+                left[n] += mix.left[n];
+                right[n] += mix.right[n];
             }
-            for (line, aim) in source.lines.iter_mut().zip(&source.aims) {
-                let goal = match aim {
-                    Some(target) => {
-                        if !line.live {
-                            // A new way, with nothing left of an older one: from
-                            // silence where it will be — or, for a contact, there
-                            // at once (nothing was sounding before).
-                            *line = Line::default();
-                            line.now = if source.struck { *target } else { target.silent() };
-                        }
-                        // Evenly, over the blocks left until its ways are found anew.
-                        if source.left <= 1 { *target } else { line.now.toward(target, 1.0 / source.left as f32) }
+            for (lane, fed) in self.send.iter_mut().zip(mix.send.iter()) {
+                for (to, x) in lane.iter_mut().zip(fed) {
+                    *to += x;
+                }
+            }
+            if encoding {
+                for (channel, made) in self.field.iter_mut().zip(mix.field.iter()) {
+                    for (to, x) in channel.iter_mut().zip(made) {
+                        *to += x;
                     }
-                    None if line.live => line.now.silent(),
-                    None => continue,
-                };
-                if goal.sounds() || line.now.sounds() {
-                    run(
-                        line,
-                        &goal,
-                        &source.ring,
-                        base,
-                        parts,
-                        self.clear,
-                        quality,
-                        self.options.listening,
-                        left,
-                        right,
-                        &mut self.send,
-                        if encoding { Some(&mut self.field) } else { None },
-                        self.speakers.as_mut(),
-                    );
-                    ways_now += 1;
-                } else {
-                    feed(line, &goal, &source.ring, base, &mut self.send);
                 }
-                line.live = aim.is_some();
             }
-            source.struck = false;
-            source.left = source.left.saturating_sub(1).max(1);
+            if let (Some(speakers), Some(feeds)) = (&mut self.speakers, &mut mix.speakers) {
+                for s in 0..feeds.fed.len() {
+                    if feeds.fed[s] {
+                        speakers.fed[s] = true;
+                        for ear in 0..2 {
+                            for (to, x) in speakers.feed[s][ear].iter_mut().zip(&feeds.feed[s][ear]) {
+                                *to += x;
+                            }
+                            feeds.feed[s][ear] = [0.0; BLOCK];
+                        }
+                        feeds.fed[s] = false;
+                    }
+                }
+            }
+            ways_now += mix.ways;
+            self.tally.voices += mix.voices;
+            self.tally.voicing += mix.voicing;
+            self.tally.carrying += mix.carrying;
+            mix.clear();
         }
+        let clock = Clock::now();
         if let Some(speakers) = &mut self.speakers {
             // The loudspeakers the ways were shared among, through their responses.
             speakers.hear(left, right);
@@ -2381,6 +2161,478 @@ impl Engine {
         self.tally.most_ways = self.tally.most_ways.max(ways_now);
         self.block += 1;
     }
+}
+
+/// A source whose ways are found in this block, and what the block found of
+/// it before: where it is, where its straight way's sound left it, how far
+/// that is, and how loud it is heard.
+#[derive(Clone, Copy, Debug)]
+struct Job {
+    index: usize,
+    now: Vec3,
+    place: Vec3,
+    straight: f64,
+    level: f64,
+}
+
+/// What finding a source's ways reads, the same for every source of a block.
+struct Finding<'a> {
+    faces: &'a Faces,
+    head: Head,
+    quality: Quality,
+    block: usize,
+    seconds: f64,
+    trail_of: &'a [Option<usize>],
+    face_trails: &'a [FaceTrail],
+    placed: &'a [Placement],
+    reverb_gain: f64,
+    air: f64,
+    listening: Listening,
+    measured: Option<&'a Hrir>,
+    encoding: bool,
+    order: usize,
+}
+
+/// What finding a source's ways works in: one for each thread, kept from
+/// one block to the next so that none makes a list.
+#[derive(Default)]
+struct Scratch {
+    found: Ways,
+    scatters: Vec<Option<Scatter>>,
+    near: Vec<usize>,
+    mirroring: Vec<(usize, Way)>,
+    loudest: Vec<(f64, usize)>,
+    twice_found: Vec<(f64, (usize, usize), Way)>,
+    twice_aimed: Vec<(usize, Way)>,
+}
+
+/// The ways of one source, found anew: straight or round edges, mirrored
+/// once and twice, what its faces scatter — set as its targets.
+fn find(ctx: &Finding, source: &mut Source, job: &Job, scratch: &mut Scratch) {
+    let Job { now, place, straight, level, .. } = *job;
+    let (faces, head, quality, block, seconds) = (ctx.faces, ctx.head, ctx.quality, ctx.block, ctx.seconds);
+    let (encoding, order, measured) = (ctx.encoding, ctx.order, ctx.measured);
+    let Scratch { found, scatters, near, mirroring, loudest, twice_found, twice_aimed } = scratch;
+    let mirrors = source.mirrors && (quality.mirrors || quality.folded);
+    let feeds = source.mirrors && quality.reverb;
+    // A way longer than the emitter is heard from is not one: its
+    // sound is no longer in the line, and is never read sooner than
+    // it took to come.
+    let reach = source.max_distance;
+    found.direct = direct(place, head.at, faces);
+    found.mirrored.clear();
+    found.mirrored.resize(faces.sheets().len(), None);
+    scatters.clear();
+    scatters.resize(faces.sheets().len(), None);
+    if mirrors || feeds {
+        // The faces by which a way could be no longer than the
+        // emitter is heard from, from wherever its sound left it.
+        let slack = source.slack(now, block);
+        near.clear();
+        faces.sheets_within(place, head.at, reach + slack, |sheet| {
+            if faces[sheet].reflects {
+                near.push(sheet);
+            }
+        });
+        near.sort_unstable();
+        near.dedup();
+        // The others send nothing; they are looked at again from
+        // where the straight way's sound left.
+        let mut next = 0;
+        for (slot, &sheet) in faces.sheets().iter().enumerate() {
+            if near.get(next) == Some(&sheet) {
+                next += 1;
+            } else if faces[sheet].reflects {
+                source.lags[1 + slot] = source.lags[0];
+            }
+        }
+        for &sheet in near.iter() {
+            // What a sheet sends back left the emitter earlier than
+            // what comes straight: from where the emitter was then,
+            // by the way found last.
+            let slot = faces.slot(sheet);
+            let from = source.was(now, block, source.lags[1 + slot] / seconds);
+            // A sheet that moves mirrors from where it was when the
+            // sound met it: as long before as the sound takes from it
+            // to the ears.
+            let was = ctx.trail_of[sheet].map(|trail| {
+                let trail = &ctx.face_trails[trail];
+                let then = trail.was(block, source.legs[1 + slot] / seconds);
+                then.then(&ctx.placed[trail.node].inverse())
+            });
+            mirroring.clear();
+            let scatter = mirrored_then(sheet, from, head.at, faces, quality.careful, was.as_ref(), mirroring);
+            let length = mirroring.first().map(|(_, way)| way.length).or(scatter.map(|(_, scatter)| scatter.length));
+            source.lags[1 + slot] = length.map_or(source.lags[0], |length| length / SOUND);
+            let turn = mirroring.first().map(|(_, way)| way.from).or(scatter.map(|(_, scatter)| scatter.from));
+            source.legs[1 + slot] = turn.map_or(0.0, |turn| turn.distance(head.at) / SOUND);
+            // The faces under the mirror point mirror one way: from
+            // the same image, by the same point; across a side they
+            // share, their fades sum to one.
+            let way = mirroring
+                .iter()
+                .map(|&(_, way)| way)
+                .reduce(|one, other| Way { bands: std::array::from_fn(|b| one.bands[b] + other.bands[b]), ..one });
+            found.mirrored[slot] = way.filter(|way| mirrors && way.length <= reach);
+            scatters[slot] = scatter.map(|(_, scatter)| scatter).filter(|scatter| feeds && scatter.length <= reach);
+        }
+    }
+    // Mirrored twice, at the qualities that check what hides a way:
+    // by two of the sheets that mirror it loudest once, one then the
+    // other, the loudest of those ways. Each keeps its line while it
+    // is among them; a new one takes a line no way is fading out of.
+    let first_twice = 1 + faces.sheets().len();
+    twice_found.clear();
+    if mirrors && quality.mirrors && quality.careful {
+        loudest.clear();
+        for (slot, way) in found.mirrored.iter().enumerate() {
+            if let Some(way) = way {
+                loudest.push((way.bands[1] / way.length.max(NEAREST), faces.sheets()[slot]));
+            }
+        }
+        loudest.sort_by(|a, b| b.0.total_cmp(&a.0).then(a.1.cmp(&b.1)));
+        loudest.truncate(TWICE_FROM);
+        for &(_, one) in loudest.iter() {
+            for &(_, other) in loudest.iter() {
+                if one == other {
+                    continue;
+                }
+                let kept = source.twice.iter().position(|pair| *pair == Some((one, other)));
+                let lag = kept.map_or(source.lags[0], |slot| source.lags[first_twice + slot]);
+                let from = source.was(now, block, lag / seconds);
+                if let Some(way) =
+                    mirrored_twice(one, other, from, head.at, faces, true).filter(|way| way.length <= reach)
+                {
+                    twice_found.push((way.bands[1] / way.length.max(NEAREST), (one, other), way));
+                }
+            }
+        }
+        twice_found.sort_by(|a, b| b.0.total_cmp(&a.0).then(a.1.cmp(&b.1)));
+        twice_found.truncate(TWICE);
+    }
+    for pair in source.twice.iter_mut() {
+        if pair.is_some_and(|pair| !twice_found.iter().any(|found| found.1 == pair)) {
+            *pair = None;
+        }
+    }
+    twice_aimed.clear();
+    for &(_, pair, way) in twice_found.iter() {
+        let slot = source.twice.iter().position(|kept| *kept == Some(pair)).or_else(|| {
+            (0..TWICE).find(|&slot| source.twice[slot].is_none() && !source.lines[first_twice + slot].live)
+        });
+        if let Some(slot) = slot {
+            source.twice[slot] = Some(pair);
+            source.lags[first_twice + slot] = way.length / SOUND;
+            twice_aimed.push((first_twice + slot, way));
+        }
+    }
+    let aim = |way: &Way, send: f32| {
+        let into = spread(way.from - head.at);
+        let length = way.length.max(NEAREST);
+        let gains: [f32; 4] = std::array::from_fn(|b| (level * way.bands[b] / length) as f32);
+        // The line holds what the emitter made for as long as sound
+        // takes from as far as it is heard, and more.
+        let delay = length / SOUND * RATE as f64;
+        debug_assert!(delay <= (source.ring.len() - 2 * BLOCK) as f64);
+        let mut aim = if encoding {
+            // For a field: no ears, the channels of where it comes from.
+            let mut aim = Aim::new(delay, gains, air_pass(ctx.air * length), send, &Heard::nothing());
+            aim.field = harmonics(way.from - head.at, order).map(|g| g as f32);
+            aim
+        } else if let Some(hrir) = &measured {
+            // Its own time between the ears, and the loudspeakers round where it comes from.
+            let towards = Hrir::towards(way.from, &head);
+            let itd = hrir.itd(towards);
+            let late = if itd > 0.0 { [itd, 0.0] } else { [0.0, -itd] };
+            let heard = Heard { delay: late, shadow: [1.0; 2], pan: [0.0; 2], pinna: [0.0; 5] };
+            let mut aim = Aim::new(delay, gains, air_pass(ctx.air * length), send, &heard);
+            aim.share = hrir.share(towards);
+            aim
+        } else {
+            let heard = hear_for(way.from, &head, ctx.listening, quality.outer_ear);
+            Aim::new(delay, gains, air_pass(ctx.air * length), send, &heard)
+        };
+        aim.into = into;
+        aim
+    };
+    source.lags[0] = found.direct.map_or(straight, |way| way.length) / SOUND;
+    if let Some(way) = found.direct.filter(|way| way.length <= reach) {
+        let mut way = way;
+        if !quality.mirrors {
+            // What the faces send back is not followed as ways of its
+            // own, but its level is kept: with the straight way's in
+            // the low band, where the two arrive in step, and as so
+            // much more power above.
+            for mirrored in found.mirrored.iter().flatten() {
+                let share = way.length.max(NEAREST) / mirrored.length.max(NEAREST);
+                way.bands[0] += mirrored.bands[0] * share;
+                for b in 1..4 {
+                    way.bands[b] = way.bands[b].hypot(mirrored.bands[b] * share);
+                }
+            }
+        }
+        source.targets[0] = Some(aim(&way, 0.0));
+    }
+    for (k, scatter) in scatters.iter().enumerate() {
+        // What a face scatters goes to the space's own answer by the
+        // way it takes by that face, at the time that way takes: on
+        // the mirrored way when it is followed, and otherwise on a
+        // way of its own that reaches the ears with nothing.
+        let send = scatter.map_or(0.0, |scatter| (level * scatter.energy.sqrt() * ctx.reverb_gain) as f32);
+        source.targets[1 + k] = match (found.mirrored[k].filter(|_| quality.mirrors), scatter) {
+            (Some(way), _) => Some(aim(&way, send)),
+            (None, Some(scatter)) if send > 0.0 => {
+                Some(aim(&Way { length: scatter.length, from: scatter.from, bands: [0.0; 4] }, send))
+            }
+            _ => None,
+        };
+    }
+    for &(line, way) in twice_aimed.iter() {
+        source.targets[line] = Some(aim(&way, 0.0));
+    }
+    if source.emitter.is_none() && source.worth <= 0.0 {
+        // A contact hidden when it was struck, heard now: worth what
+        // it arrives with, as one heard at once is.
+        let loudest = source.targets.iter().flatten().flat_map(|aim| aim.gains).fold(0.0f32, f32::max);
+        source.worth = loudest * source.strength;
+    }
+}
+
+/// The ways of every source due, shared among the pool's threads, if any:
+/// each takes the next source not yet taken, so that a few costly sources do
+/// not hold one thread while the others wait. What a source finds depends
+/// on it alone: the number of threads changes no way by a bit.
+fn find_all(sources: &mut [Source], jobs: &[Job], ctx: &Finding, scratches: &mut [Scratch], pool: Option<&Pool>) {
+    let threads = pool.map_or(1, Pool::threads).min(scratches.len()).min(jobs.len());
+    let (Some(pool), true) = (pool, threads > 1) else {
+        for job in jobs {
+            find(ctx, &mut sources[job.index], job, &mut scratches[0]);
+        }
+        return;
+    };
+    // The sources due, each to be taken by one thread.
+    let mut due: Vec<Mutex<(&Job, &mut Source)>> = Vec::with_capacity(jobs.len());
+    let mut next_job = jobs.iter().peekable();
+    for (index, source) in sources.iter_mut().enumerate() {
+        if let Some(job) = next_job.next_if(|job| job.index == index) {
+            due.push(Mutex::new((job, source)));
+        }
+    }
+    let scratches: Vec<Mutex<&mut Scratch>> = scratches.iter_mut().take(threads).map(Mutex::new).collect();
+    let taken = std::sync::atomic::AtomicUsize::new(0);
+    pool.run(&|index| {
+        let Some(scratch) = scratches.get(index) else { return };
+        let mut scratch = scratch.lock().expect("a scratch");
+        loop {
+            let k = taken.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+            let Some(slot) = due.get(k) else { break };
+            let mut slot = slot.lock().expect("a source");
+            let (job, source) = &mut *slot;
+            find(ctx, source, job, &mut scratch);
+        }
+    });
+}
+
+/// Sources mixed together before the mixes are added: the groups' order,
+/// not the threads', says in what order the sums are made.
+const GROUP: usize = 8;
+
+/// What making a source's voice and carrying its ways read, the same for
+/// every source of a block.
+struct Carrying {
+    /// The block's first sample, counted from the instant 0.
+    base: u64,
+    block: u64,
+    parts: [f32; 3],
+    clear: f32,
+    quality: Quality,
+    listening: Listening,
+    encoding: bool,
+}
+
+/// What a group of sources makes in a block: both ears, the reverberation's
+/// lines, the far part's channels, the virtual loudspeakers' feeds; and what
+/// it did and cost.
+struct Mix {
+    left: [f32; BLOCK],
+    right: [f32; BLOCK],
+    send: Box<Send>,
+    field: Box<[[f32; BLOCK]; MOST]>,
+    speakers: Option<Speakers>,
+    made: Vec<f32>,
+    voices: u64,
+    ways: usize,
+    voicing: f64,
+    carrying: f64,
+}
+
+impl Mix {
+    fn new(hrir: Option<std::sync::Arc<Hrir>>) -> Mix {
+        Mix {
+            left: [0.0; BLOCK],
+            right: [0.0; BLOCK],
+            send: Box::new([[0.0; BLOCK]; 8]),
+            field: Box::new([[0.0; BLOCK]; MOST]),
+            speakers: hrir.map(Speakers::new),
+            made: vec![0.0; BLOCK],
+            voices: 0,
+            ways: 0,
+            voicing: 0.0,
+            carrying: 0.0,
+        }
+    }
+
+    /// Back to nothing, for the next block (the loudspeakers' feeds are
+    /// cleared as they are taken).
+    fn clear(&mut self) {
+        self.left = [0.0; BLOCK];
+        self.right = [0.0; BLOCK];
+        for lane in self.send.iter_mut() {
+            lane.fill(0.0);
+        }
+        for channel in self.field.iter_mut() {
+            channel.fill(0.0);
+        }
+        (self.voices, self.ways, self.voicing, self.carrying) = (0, 0, 0.0, 0.0);
+    }
+}
+
+/// The voices and ways of every group of sources into its mix, the groups
+/// shared among the pool's threads, if any, each taking the next not yet
+/// taken.
+fn voice_and_carry_all(sources: &mut [Source], mixes: &mut [Mix], ctx: &Carrying, pool: Option<&Pool>) {
+    let groups: Vec<Mutex<(&mut [Source], &mut Mix)>> =
+        sources.chunks_mut(GROUP).zip(mixes.iter_mut()).map(Mutex::new).collect();
+    let work = |group: &Mutex<(&mut [Source], &mut Mix)>| {
+        let mut group = group.lock().expect("a group");
+        let (sources, mix) = &mut *group;
+        for source in sources.iter_mut() {
+            voice_and_carry(source, mix, ctx);
+        }
+    };
+    match pool {
+        Some(pool) if groups.len() > 1 => {
+            let taken = std::sync::atomic::AtomicUsize::new(0);
+            pool.run(&|_| {
+                while let Some(group) = groups.get(taken.fetch_add(1, std::sync::atomic::Ordering::Relaxed)) {
+                    work(group);
+                }
+            });
+        }
+        _ => groups.iter().for_each(work),
+    }
+}
+
+/// A source's voice makes its block into its line, and its ways carry the
+/// line into `mix`.
+fn voice_and_carry(source: &mut Source, mix: &mut Mix, ctx: &Carrying) {
+    let (base, quality, encoding) = (ctx.base, ctx.quality, ctx.encoding);
+    let clock = Clock::now();
+    let wanted = source.aims.iter().any(Option::is_some) || source.lines.iter().any(|line| line.live);
+    let global = matches!(source.reach, Reach::Global { .. }) && source.heard;
+    // A contact rings out in its line whether it is heard or not: what is
+    // heard of it later is what it then still makes.
+    let ringing = source.emitter.is_none() && source.heard && ctx.block <= source.until;
+    if !(wanted || global || ringing) {
+        if !source.asleep {
+            // Asleep: its line is silence, so that nothing old is read when it wakes.
+            source.ring.fill(0.0);
+            source.asleep = true;
+        }
+        // A contact that is not heard is worth nothing against another.
+        (source.top, source.last) = (source.top.max(f32::MIN_POSITIVE), 0.0);
+        mix.voicing += clock.seconds();
+        return;
+    }
+    if source.asleep {
+        source.asleep = false;
+        source.waking = WAKE;
+    }
+    let drive = Drive {
+        speed: source.speed,
+        accel: source.accel,
+        load: source.load,
+        hit: source.hit.take(),
+        detail: source.detail,
+        top: source.highest,
+    };
+    let made = &mut mix.made;
+    source.voice.render(&drive, made);
+    mix.voices += 1;
+    if source.emitter.is_none() {
+        source.last = made.iter().fold(0.0f32, |peak, sample| peak.max(sample.abs()));
+        source.top = source.top.max(source.last);
+    }
+    if source.waking > 0 {
+        for sample in made.iter_mut() {
+            *sample *= 1.0 - source.waking as f32 / WAKE as f32;
+            source.waking = source.waking.saturating_sub(1);
+        }
+    }
+    let mask = source.ring.len() - 1;
+    for (n, sample) in made.iter().enumerate() {
+        // What is too small to be heard is nothing: numbers near the
+        // smallest a float holds are a hundred times slower to work on.
+        source.ring[(base as usize + n) & mask] = if sample.abs() < TINY { 0.0 } else { *sample };
+    }
+    if let Reach::Global { pan } = source.reach {
+        // From nowhere: straight into the ears.
+        let turn = (pan + 1.0) * std::f64::consts::FRAC_PI_4;
+        let (l, r) = ((source.gain * turn.cos()) as f32, (source.gain * turn.sin()) as f32);
+        for ((left, right), sample) in mix.left.iter_mut().zip(mix.right.iter_mut()).zip(made.iter()) {
+            *left += sample * l;
+            *right += sample * r;
+        }
+    }
+    mix.voicing += clock.seconds();
+
+    // Every way carries its emitter's line to the ears.
+    let clock = Clock::now();
+    if source.reach != Reach::Positional {
+        mix.carrying += clock.seconds();
+        return;
+    }
+    for (line, aim) in source.lines.iter_mut().zip(&source.aims) {
+        let goal = match aim {
+            Some(target) => {
+                if !line.live {
+                    // A new way, with nothing left of an older one: from
+                    // silence where it will be — or, for a contact, there
+                    // at once (nothing was sounding before).
+                    *line = Line::default();
+                    line.now = if source.struck { *target } else { target.silent() };
+                }
+                // Evenly, over the blocks left until its ways are found anew.
+                if source.left <= 1 { *target } else { line.now.toward(target, 1.0 / source.left as f32) }
+            }
+            None if line.live => line.now.silent(),
+            None => continue,
+        };
+        if goal.sounds() || line.now.sounds() {
+            run(
+                line,
+                &goal,
+                &source.ring,
+                base,
+                ctx.parts,
+                ctx.clear,
+                quality,
+                ctx.listening,
+                &mut mix.left,
+                &mut mix.right,
+                &mut mix.send,
+                if encoding { Some(&mut mix.field) } else { None },
+                mix.speakers.as_mut(),
+            );
+            mix.ways += 1;
+        } else {
+            feed(line, &goal, &source.ring, base, &mut mix.send);
+        }
+        line.live = aim.is_some();
+    }
+    source.struck = false;
+    source.left = source.left.saturating_sub(1).max(1);
+    mix.carrying += clock.seconds();
 }
 
 /// How many of `ranked` (loudest first) are kept for a budget of `ways`:

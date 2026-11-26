@@ -22,6 +22,8 @@
 //! - [`field`]: far sound as an ambisonic field at a cube's centre, and its
 //!   decoder to a head;
 //! - [`engine`]: a scene heard block by block, at what a device can afford;
+//! - [`pool`]: a few threads kept from one block to the next, that an
+//!   engine shares its emitters among;
 //! - [`render`]: a scene rendered to a file's samples, offline;
 //! - [`live`]: a scene played as it goes, a block ahead of the output, its
 //!   nodes placed by a game; with the `bevy` feature, a Bevy audio source;
@@ -37,6 +39,7 @@ pub mod field;
 pub mod hrir;
 pub mod live;
 pub mod objects;
+pub mod pool;
 pub mod render;
 pub mod scene;
 pub mod space;

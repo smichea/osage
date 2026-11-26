@@ -113,3 +113,56 @@ fn without_the_set_or_for_loudspeakers_or_below_high_nothing_changes() {
         assert_eq!((a.left, a.right), (b.left, b.right), "{} {listening:?}", quality.name);
     }
 }
+
+#[test]
+fn through_measured_ears_the_samples_are_the_same_whatever_the_number_of_threads() {
+    // Twenty noises round the head, so that their virtual loudspeakers' feeds are mixed in three groups: 1, 2 and
+    // 3 threads give the same samples to the bit.
+    let emitters: Vec<String> = (0..20)
+        .map(|k| {
+            let turn = f64::from(k) * std::f64::consts::TAU / 20.0;
+            format!(
+                r#"{{"translation": [{}, {}, {}], "extras": {{"osage": {{"id": "noise-{k}"}}, "osageSound": {{
+                     "emitters": [{{"id": "noise", "voice": "noise"}}]}}}}}}"#,
+                5.0 * turn.sin(),
+                0.5 * (turn * 3.0).sin(),
+                -5.0 * turn.cos()
+            )
+        })
+        .collect();
+    let children: Vec<String> = (1..=21).map(|i| i.to_string()).collect();
+    let scene = Scene::from_json(&format!(
+        r#"{{
+        "asset": {{"version": "2.0", "extras": {{
+          "osageObject": {{"version": 1, "id": "ring", "collisionMaterials": {{}}, "acousticMaterials": {{}}}},
+          "osageSound": {{"version": 0, "contactSounds": {{}}}}}}}},
+        "scene": 0,
+        "scenes": [{{"nodes": [0], "extras": {{"osageSound": {{"seconds": 1, "seed": 2,
+          "listener": {{"node": ["world", "ears"]}}, "reverb": {{"secondsT60": [0.3, 0.3, 0.3]}},
+          "air": {{"celsius": 20, "humidityPercent": 50}}}}}}}}],
+        "nodes": [
+          {{"children": [{}], "extras": {{"osage": {{"id": "world"}}}}}},
+          {{"extras": {{"osage": {{"id": "ears"}}}}}},
+          {}
+        ]}}"#,
+        children.join(", "),
+        emitters.join(",\n")
+    ))
+    .unwrap();
+    let heard = |threads: usize| {
+        let options = Options {
+            quality: Quality::REFERENCE,
+            listening: Listening::Headphones,
+            measured: Some(Arc::new(set())),
+            threads,
+            ..Options::default()
+        };
+        render(&scene, &options, 0.5)
+    };
+    let one = heard(1);
+    assert!(one.peak() > 0.0);
+    for threads in [2, 3] {
+        let other = heard(threads);
+        assert!(one.left == other.left && one.right == other.right, "{threads} threads");
+    }
+}

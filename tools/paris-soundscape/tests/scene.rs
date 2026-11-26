@@ -265,3 +265,27 @@ fn the_bridge_played_live_with_a_walking_listener_is_its_offline_render_block_fo
         }
     }
 }
+
+#[test]
+fn the_bridge_is_the_same_samples_whatever_the_number_of_threads() {
+    // Its emitters shared among 1, 2 and 4 threads: the same samples to the bit — at reference quality for
+    // headphones, at medium for loudspeakers, and with what is beyond 60 m heard as a field.
+    let scene = paris_soundscape::bridge();
+    let far = Some(osage_sound::field::Far { centre: scene.head(0.0).at, beyond: 60.0, order: 1 });
+    for (quality, listening, far) in [
+        (Quality::REFERENCE, Listening::Headphones, None),
+        (Quality::MEDIUM, Listening::Speakers, None),
+        (Quality::HIGH, Listening::Headphones, far),
+    ] {
+        let heard = |threads: usize| {
+            let options = Options { quality, listening, far, threads, ..Options::default() };
+            render(&scene, &options, 3.0)
+        };
+        let one = heard(1);
+        assert!(one.peak() > 0.0);
+        for threads in [2, 4] {
+            let other = heard(threads);
+            assert!(one.left == other.left && one.right == other.right, "{} with {threads} threads", quality.name);
+        }
+    }
+}

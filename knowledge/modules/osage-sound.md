@@ -59,6 +59,7 @@ Order: the engine sorts the scene's emitters, surfaces and touches by node path 
 - `engine::Engine::{new(scene, options), render(left, right)}`: the next block for each ear. `Options`: `quality`, `listening`, `turn` (the head turned), `solo` and `mute` (by name), `start`. `Quality::{LOW, MEDIUM, HIGH, REFERENCE}`. `Tally`: what a render cost, stage by stage.
 - `ways::{direct, mirrored, mirrored_then, mirrored_twice, edge_loss, edges_loss, air_loss}`, `ears::hear_for`: usable alone.
 - `clips::{from_ogg, from_wav}`, `Scene::{load_clips, set_clip}`, `scene::{ClipSource, Recorded}`: recordings a scene's voices play ([recorded voices](/algorithms/recorded-voices.md)).
+- `Options::threads`, `pool::Pool`: the emitters shared among threads, with the same samples whatever their number.
 - `decay::Decay`, `Engine::ringing`, `Reverb::from_faces`: how long the space rings, found from its faces ([space decay from rays](/algorithms/space-decay-rays.md)).
 - `Engine::{drive, drive_at, node}`, `Pose`: a node placed from outside.
 - `Engine::strike_told(Struck)`, `engine::strength(impulse, mass)`, `Scene::collision_surface(path, id)`, `render::Hearing::strike_told`, `Live::strike`: contacts a solver reports.
@@ -73,7 +74,7 @@ Order: the engine sorts the scene's emitters, surfaces and touches by node path 
 
 Each is a test of `crates/osage-sound/tests/` or of the module, or a check of [soundscape verify](/oracles/soundscape-verify.md):
 
-- The same scene and seed give the same bytes; the scene's file in another order (nodes, children, lists shuffled) gives the same samples at every quality.
+- The same scene and seed give the same bytes, whatever the number of threads; the scene's file in another order (nodes, children, lists shuffled) gives the same samples at every quality.
 - Turning the head half round moves a side source to the other ear, sample for sample.
 - Distance, Doppler shift (of an echo too), the floor's reflection and its delay, what a pane lets through, an echo's time of arrival, the reverberation's decay in each band and a contact's place and time agree with the physics they stand for, within stated tolerances.
 - Nothing steps as an emitter goes behind a face, whatever the face lets through. A way never reads sound sooner than its length takes.
@@ -86,7 +87,7 @@ Each is a test of `crates/osage-sound/tests/` or of the module, or a check of [s
 
 # Knowledge
 
-- Algorithms: [recorded voices](/algorithms/recorded-voices.md), [far sound field](/algorithms/far-sound-field.md), [sound ways](/algorithms/sound-ways.md), [space decay from rays](/algorithms/space-decay-rays.md), [sound faces from meshes](/algorithms/sound-faces.md), [measured ears](/algorithms/measured-ears.md), [sound delay lines](/algorithms/sound-delay-lines.md), [contact voices](/algorithms/contact-voices.md), [feedback delay reverberation](/algorithms/feedback-delay-reverb.md), [loudness mastering](/algorithms/loudness-mastering.md).
+- Algorithms: [sound shared among threads](/algorithms/sound-threads.md), [recorded voices](/algorithms/recorded-voices.md), [far sound field](/algorithms/far-sound-field.md), [sound ways](/algorithms/sound-ways.md), [space decay from rays](/algorithms/space-decay-rays.md), [sound faces from meshes](/algorithms/sound-faces.md), [measured ears](/algorithms/measured-ears.md), [sound delay lines](/algorithms/sound-delay-lines.md), [contact voices](/algorithms/contact-voices.md), [feedback delay reverberation](/algorithms/feedback-delay-reverb.md), [loudness mastering](/algorithms/loudness-mastering.md).
 - Oracle: [soundscape verify](/oracles/soundscape-verify.md), and the crate's tests, which measure their claims with [osage-sound-analysis](/modules/osage-sound-analysis.md).
 - Voices: [osage-sound-voices](/modules/osage-sound-voices.md). The scooter is [osage-kart-sound](/modules/kart-sound.md)'s two-stroke.
 - Design: [design/09](https://github.com/smichea/osage/blob/main/design/09-sound.md) (what an object carries for sound, qualities by device, server and clients, far sound as a field; decision D-185) and the prototype's [DESIGN.md](https://github.com/smichea/osage/blob/main/tools/paris-soundscape/DESIGN.md) (its measurements and its limits).
@@ -97,7 +98,7 @@ The engine knows nothing of Paris: any tree of nodes with emitters, faces and to
 
 # Limits
 
-- One thread for the engine, at the system's ordinary priority: on a busy machine it can be late, and the output then hears silence (measured below). In a browser, see [osage-sound-web](/modules/osage-sound-web.md).
+- The engine runs at the system's ordinary priority, its emitters shared among the threads it is given (one by default, [sound shared among threads](/algorithms/sound-threads.md)): on a busy machine it can be late, and the output then hears silence (measured below). In a browser it is one thread: see [osage-sound-web](/modules/osage-sound-web.md).
 - Live, a pose is heard after the blocks kept ahead and the one made with it, plus the output's own buffer: on the bridge with a 10 ms output buffer, 13 ms on average from a pose to the output taking it, 23 ms to the ears. Rendering in the output's callback would save the blocks kept ahead, at the cost of making the output wait on the engine.
 - Reflections to the second order and edges to two: no third reflection, no way round an edge and then off a face.
 - Without the measured responses (an asset a client may not have) and below high quality, the ears are the sphere model: height is weak and behind sounds like its mirror in front. With them, the top octave between virtual loudspeakers is off by up to 10 dB, and the far field is still heard through the sphere model.

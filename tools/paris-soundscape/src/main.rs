@@ -43,6 +43,7 @@ paris-soundscape: a scene's sound placed in its object tree and carried to two e
                                  ambisonic field made there (on render, verify and live)
              --far-order N       the field's order, 1 (4 channels, default) or 2 (9)
              --cube M            the cube's side (default 27; 0: the field made where the listener stands)
+             --threads N         share the emitters among N threads (default 1; the same samples whatever N)
              --hrir FILE         measured head responses for headphones at high and reference
                                  (assets/sadie/d2-48k.hrir, made by tools/make-hrir.py; on render, verify,
                                  bench, live and ears)
@@ -196,6 +197,7 @@ fn options(args: &Args, scene: &Scene) -> Result<Options, String> {
         start: 0.0,
         far: far(args, scene)?,
         measured: measured(args)?,
+        threads: args.number("--threads")?.map_or(1, |n| n.max(1.0) as usize),
     })
 }
 
@@ -886,6 +888,35 @@ fn run_bench(args: &Args) -> Result<(), String> {
             }
         }
         receipt.push(format!("\"bridge\": [{}]", rows.join(", ")));
+
+        // The same shared among threads: the clock's time, which threads
+        // shorten, and all processors' together, which they lengthen a little.
+        let most = std::thread::available_parallelism().map_or(1, |n| n.get()).min(4);
+        println!("Shared among threads, headphones: milliseconds on the clock, and of all processors together:");
+        let mut threaded = Vec::new();
+        for quality in [Quality::HIGH, Quality::REFERENCE] {
+            for threads in [1, 2, most].into_iter().filter(|&n| n <= most).collect::<std::collections::BTreeSet<_>>() {
+                let options = Options {
+                    quality,
+                    listening: Listening::Headphones,
+                    measured: measured.clone(),
+                    threads,
+                    ..Options::default()
+                };
+                let (clock, all) =
+                    osage_sound::bench::threaded_cost(&scene, &options, if quick { 15.0 } else { scene.seconds }, runs);
+                println!(
+                    "  {:<10} {threads} thread{}  {clock:>8.1} on the clock  {all:>8.1} in all",
+                    quality.name,
+                    if threads == 1 { " " } else { "s" }
+                );
+                threaded.push(format!(
+                    "{{\"quality\": \"{}\", \"threads\": {threads}, \"clock_ms_per_second\": {clock:.3}, \"all_ms_per_second\": {all:.3}}}",
+                    quality.name
+                ));
+            }
+        }
+        receipt.push(format!("\"bridge_threads\": [{}]", threaded.join(", ")));
     }
 
     if part("faces") {

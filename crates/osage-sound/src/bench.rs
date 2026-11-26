@@ -27,6 +27,38 @@ pub fn cpu_seconds() -> f64 {
         .map_or_else(|| START.get_or_init(std::time::Instant::now).elapsed().as_secs_f64(), |ns| ns / 1e9)
 }
 
+/// Seconds every thread of this program has spent on a processor, to a
+/// hundredth (Linux counts in ticks); `None` where the system does not say.
+pub fn process_seconds() -> Option<f64> {
+    let stat = std::fs::read_to_string("/proc/self/stat").ok()?;
+    // After the command's name, in brackets, which may hold spaces.
+    let fields: Vec<&str> = stat.rsplit_once(')')?.1.split_whitespace().collect();
+    let ticks = fields.get(11)?.parse::<f64>().ok()? + fields.get(12)?.parse::<f64>().ok()?;
+    Some(ticks / 100.0)
+}
+
+/// What `seconds` of `scene` cost at `options` shared among its threads:
+/// milliseconds on the clock for a second of sound, and on all processors
+/// together (or `NaN` where the system does not say); the run of `runs`
+/// quickest on the clock.
+pub fn threaded_cost(scene: &Scene, options: &Options, seconds: f64, runs: usize) -> (f64, f64) {
+    let share = seconds / (seconds + crate::render::LEAD);
+    let mut found: Vec<(f64, f64)> = (0..runs.max(1))
+        .map(|_| {
+            let (clock, processors) = (std::time::Instant::now(), process_seconds());
+            render(scene, options, seconds);
+            let wall = clock.elapsed().as_secs_f64();
+            let all = match (processors, process_seconds()) {
+                (Some(before), Some(after)) => after - before,
+                _ => f64::NAN,
+            };
+            (wall * share / seconds * 1_000.0, all * share / seconds * 1_000.0)
+        })
+        .collect();
+    found.sort_by(|a, b| a.0.total_cmp(&b.0));
+    found[0]
+}
+
 /// The most memory this program has held at once, bytes, where the system
 /// says.
 pub fn peak_memory() -> Option<u64> {

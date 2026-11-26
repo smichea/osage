@@ -163,7 +163,15 @@ Not there, or weak:
 - **The reverberation's length** is given by the scene, or found from the faces round the listener by rays (`"secondsT60": "fromFaces"`, issue #21). Either way it is one decay for the whole space round the listener. The bridge keeps its own three decays, since its seven faces do not stand for the city round it. Each decay, at 250 Hz, 1 kHz and 4 kHz, is met within a tenth when neighbours are no more than about twice apart. The bands are parted gently (6 dB an octave), so decays further apart than that are not met. Whatever is asked, nothing rings more than twice as long as the longest.
 - **Materials** are made-up test values in the range textbooks give.
 - **The metro's spectrum** is a proxy: no public measurement of a rubber-tyred train on a steel viaduct was found.
-- **One thread.** Emitters are independent and could be shared between cores; the figures above are for one.
+- **Threads** (issue #23, D-246). The engine shares its emitters among as many threads as it is given (`--threads`, `Options::threads`), with the same samples to the bit whatever their number; the figures above are for one. On the bridge at reference quality, under a load of 9 on 2026-11-26:
+
+    | Threads | ms on the clock for a second of sound | All processors together |
+    |---:|---:|---:|
+    | 1 | 824 | 814 |
+    | 2 | 511 | 851 |
+    | 4 | 334 | 899 |
+
+    What is not shared stays on one thread: placing the tree, the contacts, ranking the ways under the budget, the reverberation, the virtual loudspeakers' responses. In a browser it is one thread still.
 - **A voice that wakes** starts in the middle of its sound and is heard only once that sound has arrived: a far emitter that comes within the budget is late by its distance.
 - **The cars' engines** are steady tones (the road-noise model puts most of a car's power at 30 km/h in its lowest octave). Two of them a few turns a minute apart beat; the scene lets every car's speed drift so that they do not beat like a clock.
 
