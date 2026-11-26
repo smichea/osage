@@ -92,7 +92,14 @@ def main() -> int:
         folder.mkdir(parents=True, exist_ok=True)
         (folder / "scene.json").write_text(json.dumps(part))
         frame = ",".join(f"{v}" for v in [*framing["centre"], framing["radius"]])
-        bake(folder / "scene.json", folder, size, {"frame": frame, "HOLOGRAM_ASPECT": str(framing["aspect"])})
+        # The GPU may still lose itself near its limit: a second try.
+        # (A lost device quits without an error: the framing is written last.)
+        for attempt in range(2):
+            if attempt:
+                print(f"group {g}: lost, tried again", flush=True)
+            bake(folder / "scene.json", folder, size, {"frame": frame, "HOLOGRAM_ASPECT": str(framing["aspect"])})
+            if (folder / "hologram.json").exists():
+                break
         if not (folder / "hologram.json").exists():
             print(f"group {g}: the bake failed, see target/hologram-groups/", file=sys.stderr)
             return 1
