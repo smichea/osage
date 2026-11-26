@@ -121,7 +121,7 @@ fn march(column: f32, row: f32, q: vec3<f32>, ray: vec3<f32>) -> vec4<f32> {
     let root = sqrt(h);
     let t0 = -b - root;
     let t1 = -b + root;
-    let steps = 48;
+    let steps = 24;
     let dt = (t1 - t0) / f32(steps);
     var before = t0;
     for (var i = 0; i <= steps; i++) {
