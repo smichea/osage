@@ -44,6 +44,9 @@ import bevy_pbr::render::{
 // The window of views on the GPU (issue #8): first column, first row,
 // columns, rows of the grid that the arrays hold; z 0: the whole grid. A
 // view outside it is taken as the nearest inside, its point found by depth.
+// A view's layer wraps round the window's size (row modulo its rows,
+// column modulo its columns): a window slid by a column changes only that
+// column's layers.
 @group(constants::MATERIAL_BIND_GROUP) @binding(109) var<uniform> window: vec4<f32>;
 
 // A view's layer in the arrays.
@@ -53,7 +56,9 @@ fn layer_of(column: f32, row: f32) -> i32 {
     }
     let c = clamp(column, window.x, window.x + window.z - 1.0);
     let r = clamp(row, window.y, window.y + window.w - 1.0);
-    return i32((r - window.y) * window.z + (c - window.x));
+    let wrapped_r = r - window.w * floor(r / window.w);
+    let wrapped_c = c - window.z * floor(c / window.z);
+    return i32(wrapped_r * window.z + wrapped_c);
 }
 
 const DEGREES: f32 = 0.017453292;

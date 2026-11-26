@@ -757,9 +757,8 @@ fn slide(
         };
         let (fa, fe) = (place(azimuth, &grid.azimuths, columns), place(elevation, &grid.elevations, rows));
         // Seen near, the hologram spans more directions than its window
-        // (a chunk of woods by the track): the window widens to the angle
-        // its sphere subtends, in columns and rows of the grid, and narrows
-        // again, a little late, as it goes away.
+        // (a chunk of woods by the track): the window widens to the whole
+        // grid when the angle its sphere subtends needs more than its own.
         let distance = (eye - centre).length().max(1e-3);
         let scale = at.affine().matrix3.x_axis.length();
         let half_span = |half: f32, axis: &[f32]| {
@@ -770,9 +769,13 @@ fn slide(
             half_span(hologram.radius, &grid.azimuths),
             half_span(hologram.radius * hologram.aspect, &grid.elevations),
         );
+        // Two sizes only, the window's own and the whole grid's: a window
+        // resized is made again whole, so as the eye comes near it goes to
+        // the whole grid at once, and back only once well away.
         let size = |half: f32, least: usize, now: usize, n: usize| {
-            let need = ((2.0 * half).ceil() as usize + 2).max(least).min(n);
-            if now >= need && now <= need + 2 { now } else { need }
+            let need = ((2.0 * half).ceil() as usize + 2).min(n);
+            let least = least.min(n);
+            if need > least || (now == n && need * 2 > least) { n } else { least }
         };
         let (width, height) = (size(sa, width, sources.size.0, columns), size(se, height, sources.size.1, rows));
         let needed = |f: f32, half: f32, n: usize| {
@@ -789,9 +792,11 @@ fn slide(
         // Views have come into a window still in place: only its layers
         // whose views changed are written, on the GPU, not the arrays made
         // again (hundreds of megabytes sent at once).
-        let refresh = inside && sources.size == (width, height) && sources.layers.len() == width * height;
+        // A window of the same size slid: its layers wrap round it, so
+        // only those of the views it gained are written too.
+        let refresh = sources.size == (width, height) && sources.layers.len() == width * height;
         let (x, y) = match sources.at {
-            Some(at) if refresh => at,
+            Some(at) if inside && refresh => at,
             _ => (first(fa, width, columns), first(fe, height, rows)),
         };
         let pick = |set: &Vec<Option<Handle<Image>>>| window(set, columns, (x, y), (width, height));
@@ -875,6 +880,12 @@ fn slide(
             sources.layers = layers;
             sources.stale = false;
             sources.made = now;
+            if sources.at != Some((x, y)) {
+                sources.at = Some((x, y));
+                if let Some(mut material) = materials.get_mut(material) {
+                    material.extension.window = Vec4::new(x as f32, y as f32, width as f32, height as f32);
+                }
+            }
             continue;
         }
         let set = |k: usize| pictures.iter().map(move |p| p[k]);
@@ -895,7 +906,7 @@ fn slide(
 }
 
 /// The views of a window of the grid (first column and row, columns and
-/// rows), in the order the shader reads them: row by row. Where a view has
+/// rows), in the order the shader reads them: each at its layer, wrapped round the window. Where a view has
 /// not come (a streamed hologram's), the nearest that has stands in for it;
 /// none when no view has come at all.
 pub(crate) fn window(
@@ -904,9 +915,16 @@ pub(crate) fn window(
     (x, y): (usize, usize),
     (width, height): (usize, usize),
 ) -> Option<Vec<Handle<Image>>> {
-    (y..y + height)
-        .flat_map(|row| (x..x + width).map(move |column| (row, column)))
-        .map(|(row, column)| nearest(set, columns, row, column))
+    // Each view at its layer, wrapped round the window's size (as the
+    // shader reads it): a window slid by a column changes that column's
+    // layers only.
+    (0..width * height)
+        .map(|layer| {
+            let (wr, wc) = (layer / width, layer % width);
+            let row = y + (wr + height - y % height) % height;
+            let column = x + (wc + width - x % width) % width;
+            nearest(set, columns, row, column)
+        })
         .collect()
 }
 
@@ -960,6 +978,19 @@ fn follow(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_window_s_layers_wrap_round_it() {
+        let view = |i: u128| Some(Handle::<Image>::Uuid(bevy::asset::uuid::Uuid::from_u128(i + 1), Default::default()));
+        // One row of five views; a window of three from the second.
+        let set: Vec<_> = (0..5).map(view).collect();
+        let held = window(&set, 5, (1, 0), (3, 1)).expect("views");
+        // Column c at layer c modulo 3: the fourth view first.
+        assert_eq!(held, vec![view(3).unwrap(), view(1).unwrap(), view(2).unwrap()]);
+        // Slid by one: only the layer of the view it lost changes.
+        let slid = window(&set, 5, (2, 0), (3, 1)).expect("views");
+        assert_eq!(slid, vec![view(3).unwrap(), view(4).unwrap(), view(2).unwrap()]);
+    }
 
     #[test]
     fn a_wide_window_is_reduced_to_its_budget() {
