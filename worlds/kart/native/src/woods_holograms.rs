@@ -46,11 +46,20 @@ const MARGIN: f32 = 2.0;
 /// made from (D-133: a hologram's geometry costs nothing where it is drawn,
 /// so it is the most detailed there is): the cards' model, the baked one,
 /// and the scale the cards' model stands at on average, which the baked one
-/// takes as its own size. Poly Haven's pines and firs of its pine forest,
-/// whole, needles modelled: 15 to 20 m, 5 to 6 million faces a tree.
+/// takes as its own size (the cards grown as tall, `GROWN`). Poly Haven's
+/// pines and firs of its pine forest, whole, needles modelled: 15 to 20 m,
+/// 5 to 6 million faces a tree.
 const REAL_TREES: [(&str, &str, f32); 2] = [
-    ("polyhaven/pine_sapling_small/pine_sapling_small_1k.gltf", "polyhaven/pine_tree_01/pine_tree_01_2k.gltf", 6.5),
-    ("polyhaven/fir_sapling_medium/fir_sapling_medium_1k.gltf", "polyhaven/fir_tree_01/fir_tree_01_2k.gltf", 1.08),
+    (
+        "polyhaven/pine_sapling_small/pine_sapling_small_1k.gltf",
+        "polyhaven/pine_tree_01/pine_tree_01_2k.gltf",
+        6.5 * osage_kart_roadside::GROWN,
+    ),
+    (
+        "polyhaven/fir_sapling_medium/fir_sapling_medium_1k.gltf",
+        "polyhaven/fir_tree_01/fir_tree_01_2k.gltf",
+        1.08 * osage_kart_roadside::GROWN,
+    ),
 ];
 
 /// The model a chunk bakes in place of `path`, and how much smaller a place

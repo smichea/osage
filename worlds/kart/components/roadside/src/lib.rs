@@ -300,6 +300,12 @@ const GRASS: Color = Color::srgb(0.36, 0.42, 0.17);
 /// for them (T2), they may come nearer: `woods` takes the distance.
 pub const WOODS_FROM: f32 = 110.0;
 
+/// How much taller the woods' pines and firs stand than the saplings their
+/// cards are made from at their sizes of before: as tall as the real pines
+/// and firs their chunks are baked from (15 to 20 m), so that a baked chunk
+/// and the cards round it meet at one height.
+pub const GROWN: f32 = 2.1;
+
 /// The woods off the circuit, out to the edge of the modelled land: groves
 /// of pines, firs and broadleaf trees, dense as woods grow (a tree every
 /// twenty square metres or so), drawn as cards ([`osage_props::Woods`]):
@@ -349,9 +355,9 @@ pub fn woods(
             // a few old giants above the canopy.
             let age = 0.6 + 0.9 * dice.roll().powf(1.6);
             if kind < 0.45 {
-                pines.push(verge.stand(at, 0.2, turn, dice.between(5.5, 9.0) * age));
+                pines.push(verge.stand(at, 0.2, turn, dice.between(5.5, 9.0) * age * GROWN));
             } else if kind < 0.85 {
-                firs.push(verge.stand(at, 0.2, turn, dice.between(0.9, 1.35) * age));
+                firs.push(verge.stand(at, 0.2, turn, dice.between(0.9, 1.35) * age * GROWN));
             } else {
                 broadleaves.push(verge.stand(at, 0.2, turn, dice.between(1.7, 2.5) * age));
             }
