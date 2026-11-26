@@ -367,6 +367,9 @@ pub(crate) struct Drawn(pub(crate) Handle<HologramMaterial>);
 /// A windowed hologram's views, depths and normals on the CPU, by row and
 /// column of its grid (none where a streamed view has not come yet), and
 /// the window its arrays hold now (first column, first row) and its size.
+/// A reduced view's key: its view, depth and normals, and by how much.
+pub(crate) type Reduced = (AssetId<Image>, AssetId<Image>, AssetId<Image>, usize);
+
 #[derive(Component)]
 pub(crate) struct Sources {
     pub(crate) views: Vec<Option<Handle<Image>>>,
@@ -380,6 +383,9 @@ pub(crate) struct Sources {
     pub(crate) stale: bool,
     /// When the window was last made, s.
     pub(crate) made: f64,
+    /// Views reduced for a wide window, by their view, depth and normal
+    /// and how much: made once each.
+    pub(crate) reduced: std::collections::HashMap<Reduced, [Handle<Image>; 3]>,
 }
 
 #[allow(clippy::type_complexity)]
@@ -494,6 +500,7 @@ fn assemble(
                 size: hologram.window.unwrap_or_default(),
                 stale: false,
                 made: 0.0,
+                reduced: Default::default(),
             });
         }
         let (quad, centre) = stand_in(hologram, &mut meshes);
@@ -560,7 +567,8 @@ pub(crate) fn stand_in(hologram: &Hologram, meshes: &mut Assets<Mesh>) -> (Handl
 /// The views stacked into one texture array, if all are the same size and
 /// kind of 8-bit RGBA.
 pub(crate) fn stack<'a>(views: impl Iterator<Item = &'a Image>) -> Option<Image> {
-    let mut data = Vec::new();
+    let views: Vec<&Image> = views.collect();
+    let mut data = Vec::with_capacity(views.iter().map(|v| v.data.as_ref().map_or(0, Vec::len)).sum());
     let mut first: Option<(u32, u32, bevy::render::render_resource::TextureFormat)> = None;
     let mut layers = 0;
     for view in views {
@@ -582,6 +590,65 @@ pub(crate) fn stack<'a>(views: impl Iterator<Item = &'a Image>) -> Option<Image>
     );
     image.reinterpret_stacked_2d_as_array(layers).ok()?;
     Some(image)
+}
+
+/// The most a window's three arrays may weigh, bytes: a wider one has its
+/// views halved, or quartered, as it is stacked.
+const WINDOW_BUDGET: usize = 768 << 20;
+
+/// By how much a window's views are reduced, 1, 2 or 4, for its three
+/// arrays of `weight` bytes to come within `budget`.
+pub(crate) fn reduction(weight: usize, budget: usize) -> usize {
+    [1usize, 2, 4].into_iter().find(|f| weight / (f * f) <= budget).unwrap_or(4)
+}
+
+/// A view, its depth and its normals reduced by `factor`: a reduced texel
+/// is the one of its square nearest the camera, in all three, so that no
+/// colour of the ground bleeds into an edge and no depth is an average of
+/// a leaf and what is behind it. None unless all three are 8-bit RGBA of
+/// one size.
+pub(crate) fn reduce(factor: usize, view: &Image, depth: &Image, normal: &Image) -> Option<[Image; 3]> {
+    let (w, h) = (depth.width() as usize, depth.height() as usize);
+    let four = |i: &Image| i.texture_descriptor.format.block_copy_size(None) == Some(4);
+    if [view, normal].iter().any(|i| (i.width() as usize, i.height() as usize) != (w, h))
+        || ![view, depth, normal].into_iter().all(four)
+    {
+        return None;
+    }
+    let (dv, dd, dn) = (view.data.as_ref()?, depth.data.as_ref()?, normal.data.as_ref()?);
+    let (sw, sh) = (w / factor, h / factor);
+    let (mut v, mut d, mut n) = (vec![0u8; sw * sh * 4], vec![0u8; sw * sh * 4], vec![0u8; sw * sh * 4]);
+    for y in 0..sh {
+        for x in 0..sw {
+            // The texel of the square nearest the camera, or its first.
+            let mut best = ((y * factor) * w + x * factor) * 4;
+            let mut nearest = -1i32;
+            for dy in 0..factor {
+                let row = ((y * factor + dy) * w + x * factor) * 4;
+                for dx in 0..factor {
+                    let i = row + dx * 4;
+                    let near = if dd[i + 2] > 127 { dd[i] as i32 * 256 + dd[i + 1] as i32 } else { -1 };
+                    if near > nearest {
+                        (nearest, best) = (near, i);
+                    }
+                }
+            }
+            let o = (y * sw + x) * 4;
+            v[o..o + 4].copy_from_slice(&dv[best..best + 4]);
+            d[o..o + 4].copy_from_slice(&dd[best..best + 4]);
+            n[o..o + 4].copy_from_slice(&dn[best..best + 4]);
+        }
+    }
+    let small = |data: Vec<u8>, like: &Image| {
+        Image::new(
+            bevy::render::render_resource::Extent3d { width: sw as u32, height: sh as u32, depth_or_array_layers: 1 },
+            bevy::render::render_resource::TextureDimension::D2,
+            data,
+            like.texture_descriptor.format,
+            bevy::asset::RenderAssetUsages::MAIN_WORLD,
+        )
+    };
+    Some([small(v, view), small(d, depth), small(n, normal)])
 }
 
 /// How often a window is made again for views that have come, at most, s.
@@ -656,11 +723,52 @@ fn slide(
             let got: Vec<&Image> = set.iter().filter_map(|v| images.get(v)).collect();
             (got.len() == width * height).then_some(got)
         };
-        let made = (
-            whole(&views).and_then(|v| stack(v.into_iter())),
-            whole(&depths).and_then(|v| stack(v.into_iter())),
-            whole(&normals).and_then(|v| stack(v.into_iter())),
-        );
+        let (Some(v), Some(d), Some(n)) = (whole(&views), whole(&depths), whole(&normals)) else { continue };
+        let weight: usize =
+            [&v, &d, &n].into_iter().flat_map(|set| set.iter()).map(|i| i.data.as_ref().map_or(0, Vec::len)).sum();
+        let factor = reduction(weight, WINDOW_BUDGET);
+        let made = if factor == 1 {
+            (stack(v.into_iter()), stack(d.into_iter()), stack(n.into_iter()))
+        } else {
+            // Each view reduced once, when first needed so; a few threads
+            // share those not reduced yet.
+            let key = |i: usize| (views[i].id(), depths[i].id(), normals[i].id(), factor);
+            // A few views a frame, one a thread: the window is made once
+            // all are reduced, without a frame stalled for all of them.
+            let threads = std::thread::available_parallelism().map_or(2, |n| n.get()).min(4);
+            let missing: Vec<usize> = (0..views.len()).filter(|&i| !sources.reduced.contains_key(&key(i))).collect();
+            let more = missing.len() > threads;
+            let missing = &missing[..missing.len().min(threads)];
+            let per = missing.len().div_ceil(threads).max(1);
+            let done: Vec<(usize, Option<[Image; 3]>)> = std::thread::scope(|scope| {
+                let parts: Vec<_> = missing
+                    .chunks(per)
+                    .map(|part| {
+                        let (v, d, n) = (&v, &d, &n);
+                        scope.spawn(move || {
+                            part.iter().map(|&i| (i, reduce(factor, v[i], d[i], n[i]))).collect::<Vec<_>>()
+                        })
+                    })
+                    .collect();
+                parts.into_iter().flat_map(|p| p.join().unwrap_or_default()).collect()
+            });
+            for (i, small) in done {
+                let Some([sv, sd, sn]) = small else { continue };
+                sources.reduced.insert(key(i), [images.add(sv), images.add(sd), images.add(sn)]);
+            }
+            if more {
+                continue;
+            }
+            let picked: Option<Vec<&[Handle<Image>; 3]>> =
+                (0..views.len()).map(|i| sources.reduced.get(&key(i))).collect();
+            let Some(picked) = picked else { continue };
+            let set = |k: usize| picked.iter().filter_map(|h| images.get(&h[k])).collect::<Vec<_>>();
+            let (sv, sd, sn) = (set(0), set(1), set(2));
+            if sv.len() != picked.len() || sd.len() != picked.len() || sn.len() != picked.len() {
+                continue;
+            }
+            (stack(sv.into_iter()), stack(sd.into_iter()), stack(sn.into_iter()))
+        };
         let (Some(colour), Some(depth), Some(normal)) = made else { continue };
         let Some(mut material) = materials.get_mut(material) else { continue };
         material.extension.views = Some(images.add(colour));
@@ -740,6 +848,35 @@ fn follow(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_wide_window_is_reduced_to_its_budget() {
+        assert_eq!(reduction(500, 1000), 1);
+        assert_eq!(reduction(2800, 1000), 2);
+        assert_eq!(reduction(10_000, 1000), 4);
+        assert_eq!(reduction(100_000, 1000), 4);
+    }
+
+    #[test]
+    fn a_reduced_texel_is_the_nearest_of_its_square() {
+        let image = |texels: [[u8; 4]; 4]| {
+            Image::new(
+                bevy::render::render_resource::Extent3d { width: 2, height: 2, depth_or_array_layers: 1 },
+                bevy::render::render_resource::TextureDimension::D2,
+                texels.concat(),
+                bevy::render::render_resource::TextureFormat::Rgba8Unorm,
+                bevy::asset::RenderAssetUsages::MAIN_WORLD,
+            )
+        };
+        // Depths: nothing, far, nearest, near; the colour says which.
+        let depth = image([[0, 0, 0, 255], [10, 0, 255, 255], [200, 0, 255, 255], [100, 0, 255, 255]]);
+        let colour = image([[1, 1, 1, 255], [2, 2, 2, 255], [3, 3, 3, 255], [4, 4, 4, 255]]);
+        let [v, d, n] = reduce(2, &colour, &depth, &colour).expect("reduced");
+        assert_eq!((v.width(), v.height()), (1, 1));
+        assert_eq!(v.data.as_deref(), Some(&[3, 3, 3, 255][..]));
+        assert_eq!(d.data.as_deref(), Some(&[200, 0, 255, 255][..]));
+        assert_eq!(n.data.as_deref(), Some(&[3, 3, 3, 255][..]));
+    }
 
     #[test]
     fn the_facade_grid_has_its_views() {
