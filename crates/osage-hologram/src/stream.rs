@@ -213,6 +213,7 @@ fn receive(
                         depths: vec![None; n],
                         normals: vec![None; n],
                         at: None,
+                        size: (0, 0),
                         stale: true,
                     },
                     Stream {

@@ -366,13 +366,14 @@ pub(crate) struct Drawn(pub(crate) Handle<HologramMaterial>);
 
 /// A windowed hologram's views, depths and normals on the CPU, by row and
 /// column of its grid (none where a streamed view has not come yet), and
-/// the window its arrays hold now (first column, first row).
+/// the window its arrays hold now (first column, first row) and its size.
 #[derive(Component)]
 pub(crate) struct Sources {
     pub(crate) views: Vec<Option<Handle<Image>>>,
     pub(crate) depths: Vec<Option<Handle<Image>>>,
     pub(crate) normals: Vec<Option<Handle<Image>>>,
     pub(crate) at: Option<(usize, usize)>,
+    pub(crate) size: (usize, usize),
     /// Views have come since the window was made: it is made again.
     pub(crate) stale: bool,
 }
@@ -486,6 +487,7 @@ fn assemble(
                 depths: some(depths),
                 normals: some(normals),
                 at: Some((0, 0)),
+                size: hologram.window.unwrap_or_default(),
                 stale: false,
             });
         }
@@ -604,10 +606,31 @@ fn slide(
             ((angle - axis[0]) / step).clamp(0.0, (n - 1) as f32)
         };
         let (fa, fe) = (place(azimuth, &grid.azimuths, columns), place(elevation, &grid.elevations, rows));
-        let needed = |f: f32, n: usize| (f.floor() as usize, (f.floor() as usize + 1).min(n - 1));
-        let ((c0, c1), (r0, r1)) = (needed(fa, columns), needed(fe, rows));
+        // Seen near, the hologram spans more directions than its window
+        // (a chunk of woods by the track): the window widens to the angle
+        // its sphere subtends, in columns and rows of the grid, and narrows
+        // again, a little late, as it goes away.
+        let distance = (eye - centre).length().max(1e-3);
+        let scale = at.affine().matrix3.x_axis.length();
+        let half_span = |half: f32, axis: &[f32]| {
+            let step = if axis.len() > 1 { axis[1] - axis[0] } else { 1.0 };
+            (half * scale / distance).min(1.0).asin().to_degrees() / step
+        };
+        let (sa, se) = (
+            half_span(hologram.radius, &grid.azimuths),
+            half_span(hologram.radius * hologram.aspect, &grid.elevations),
+        );
+        let size = |half: f32, least: usize, now: usize, n: usize| {
+            let need = ((2.0 * half).ceil() as usize + 2).max(least).min(n);
+            if now >= need && now <= need + 2 { now } else { need }
+        };
+        let (width, height) = (size(sa, width, sources.size.0, columns), size(se, height, sources.size.1, rows));
+        let needed = |f: f32, half: f32, n: usize| {
+            ((f - half).floor().max(0.0) as usize, ((f + half).floor() as usize + 1).min(n - 1))
+        };
+        let ((c0, c1), (r0, r1)) = (needed(fa, sa, columns), needed(fe, se, rows));
         let inside = sources.at.is_some_and(|(x, y)| c0 >= x && c1 < x + width && r0 >= y && r1 < y + height);
-        if inside && !sources.stale {
+        if inside && sources.size == (width, height) && !sources.stale {
             continue;
         }
         let first =
@@ -635,6 +658,7 @@ fn slide(
         material.extension.normals = Some(images.add(normal));
         material.extension.window = Vec4::new(x as f32, y as f32, width as f32, height as f32);
         sources.at = Some((x, y));
+        sources.size = (width, height);
         sources.stale = false;
     }
 }

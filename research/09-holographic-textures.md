@@ -125,6 +125,16 @@ A world's holograms are kept by its server and sent to each viewer as it needs t
 - **What it shows:** 44 m from the forest circuit's track, the chunk now stands as its 208 trees, with trunks, branches and parallax, on their own ground. The cards beside it are fuller and lighter. The street of 40 facades draws as before.
 - **Measured** (load 7–8, 1920 × 1080, T2, runs alternated, two each): the chunk as its cards 24.1 ms a frame; as its hologram marched in 48 steps 34–37 ms, in 24 steps 29.1–29.6 ms, which looks the same. 24 steps kept. One chunk fills most of the screen here; the forest's other 180 are not baked yet, so a whole circuit's cost is still to be measured.
 
+## Twelfth experiment: the woods' chunk from real trees (2026-11-26, issue #8)
+
+**Change.** Chunk -3,0 of the forest circuit (208 trees) baked from Poly Haven's whole `pine_tree_01` and `fir_tree_01`, needles modelled, 5 to 6 million faces a tree, in place of the saplings the cards are made from, each at the cards' size (15 to 20 m). About a billion faces: the laptop's Iris Xe lost its device drawing it in one frame, and once in two runs in groups of eight. `tools/hologram-groups.py` bakes it in sixteen groups with one framing and merges them view by view by depth: 100 views at 2048 px, 2 h 55 on the laptop, 584 MB.
+
+**What it shows** (same camera as the eleventh, T2, 1920×1080): an undergrowth of trunks row behind row under modelled crowns, where the cards made a flat wall. Two faults found on the way: one of `fir_tree_01`'s trunks has no texture coordinates and was drawn white (osage-props now wraps coordinates round such a piece); and the window of five columns cut the chunk down a vertical line, the camera 44 m from it seeing it across the whole grid (the window now widens to the angle the sphere subtends).
+
+**Measures** (load 5 to 6, shared laptop): 41.8 ms mean with the chunk covering most of the screen and all its views, against 35.4 ms with the fixed window cutting it; the eleventh measured 24.1 ms with cards and 29.1 to 29.6 ms with the chunk baked from them (another load: to be measured again side by side).
+
+**Open.** At 584 MB a chunk, the circuit's 181 chunks do not fit: 1024 px or compressed views before the whole forest. The real trees are taller than the cards around them, which shows where a baked chunk meets cards.
+
 ## Ideas to explore (the maintainer's, 2026-11-17)
 
 *Decided the same day:* the grandstands' crowd waits for its hologram version (issue #12). A 3D crowd of rigged people, each different and reacting to the race, was tried — 21.8 → 32.5 ms a frame at T2 on the laptop — and not kept: the people of a hologram do not react to the race, until the server that streams holograms (idea 3) renders them live.
