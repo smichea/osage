@@ -118,6 +118,13 @@ A world's holograms are kept by its server and sent to each viewer as it needs t
 - **Facade** (135 views of 256 px): its colours come back at 26 dB however fine the quantizer: its views were baked on magenta, and its glass, transparent in colour but solid in depth, leaves magenta inside the object, which the halved chroma spreads. Views to be streamed are baked on a transparent ground.
 - **Decoding**, one thread of the laptop, a view of 1024 × 256 px: colour 15 ms, depth 13 ms, outline 14 ms, normals 29 ms — rav1d with its assembly (nasm), the conversion to RGBA a row at a time. Without the assembly and converting texel by texel, colour took 61–92 ms.
 
+## Eleventh experiment: the woods' chunk found along the ray (2026-11-26, issue #8)
+
+- **Why the chunk drew blots:** not its resolution. Rebaked at 2048 px (100 views, 4 min 10 s on the laptop, 316 MB of pictures), it drew the same few skinny trees as at 512. The shader found each pixel's point from where the eye's ray crosses the stand-in, then refined it with the views' depth. A chunk of saplings is 60 m deep and mostly empty, so at the crossing most views see nothing and the pixel was dropped, even where the ray meets a tree in front of or behind it.
+- **The change (`hologram.wesl`):** for a hologram told by its depth pictures (baked on black, `masked`), the ray is now marched through the photographed sphere in the nearest view: 48 steps, then 5 halvings, until it passes behind the surface that view saw. The point found is sampled in the four views around the eye's direction, and any view that sees it gives its colour. Where the march finds nothing, or for a hologram baked on magenta (a facade), the old way stays: each view's point is settled from the stand-in.
+- **What it shows:** 44 m from the forest circuit's track, the chunk now stands as its 208 trees, with trunks, branches and parallax, on their own ground. The cards beside it are fuller and lighter. The street of 40 facades draws as before.
+- **Not measured fairly:** frame times on the laptop that night swung with other work (a load of 6 to 25). With the chunk, 32.7 ms against 28.6 ms with its cards, both at 1920 × 1080 in T2 under the same light load; to measure again on a quiet machine or the cloud bench, with the 512-pixel views as well, now that resolution is no longer the suspect.
+
 ## Ideas to explore (the maintainer's, 2026-11-17)
 
 *Decided the same day:* the grandstands' crowd waits for its hologram version (issue #12). A 3D crowd of rigged people, each different and reacting to the race, was tried — 21.8 → 32.5 ms a frame at T2 on the laptop — and not kept: the people of a hologram do not react to the race, until the server that streams holograms (idea 3) renders them live.

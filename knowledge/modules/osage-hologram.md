@@ -47,4 +47,4 @@ Any Bevy app or tool that needs an object photographed from a grid of directions
 
 # Limits
 
-With `lit`, it is drawn from views of its colour without light and of its normals, through the world's lighting. Each view's depth corrects the parallax (`HOLOGRAM_FLAT` not to); close up it is blurred at 256 px; no shadow; the light is baked; drawn blended (no depth prepass).
+With `lit`, it is drawn from views of its colour without light and of its normals, through the world's lighting. Each view's depth corrects the parallax (`HOLOGRAM_FLAT` not to): a `masked` hologram (a stand of trees, deep and mostly empty) marches the eye's ray through the sphere in the nearest view until it passes behind what that view saw; others settle each view's point from the stand-in; close up it is blurred at 256 px; no shadow; the light is baked; drawn blended (no depth prepass).

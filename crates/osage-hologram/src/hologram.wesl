@@ -92,33 +92,96 @@ struct Seen {
     normal: vec3<f32>,
 }
 
-// What view (column, row) saw where the eye's ray meets the object: `q` is
-// where the ray crosses the stand-in (from the sphere's centre), `ray` its
-// direction, both in the object's frame. The point is found in the view
-// along the ray: its depth there read, the point on the ray at that depth
-// taken, a few times over. Its colour, and how much of the pixel is the
-// object.
-fn seen(column: f32, row: f32, q: vec3<f32>, ray: vec3<f32>) -> Seen {
+// Where a point of the object's frame (from the sphere's centre) falls in
+// a view's picture.
+fn uv_in(column: f32, row: f32, p: vec3<f32>) -> vec2<f32> {
     let back = view_direction(column, row);
     let right = normalize(cross(vec3<f32>(0.0, 1.0, 0.0), back));
     let up = cross(back, right);
     let size = vec2<f32>(2.0 * frame.w, 2.0 * frame.w * framing.x);
+    return vec2<f32>(dot(p, right) / size.x + 0.5, 0.5 - dot(p, up) / size.y);
+}
+
+// Where the eye's ray first meets the object as one view saw it (w: 1 if
+// it does): the ray marched through the photographed sphere, the view's
+// depth read at each step, until the ray passes behind the surface the
+// view saw there; then the crossing narrowed down. A deep, sparse object
+// (a stand of trees) is mostly empty where the ray crosses the stand-in,
+// so the point cannot be found from there alone.
+fn march(column: f32, row: f32, q: vec3<f32>, ray: vec3<f32>) -> vec4<f32> {
+    let back = view_direction(column, row);
+    let layer = layer_of(column, row);
+    // The ray's span inside the sphere: |q + ray t| = r.
+    let b = dot(q, ray);
+    let c = dot(q, q) - frame.w * frame.w;
+    let h = b * b - c;
+    if (h <= 0.0) {
+        return vec4<f32>(q, 0.0);
+    }
+    let root = sqrt(h);
+    let t0 = -b - root;
+    let t1 = -b + root;
+    let steps = 48;
+    let dt = (t1 - t0) / f32(steps);
+    var before = t0;
+    for (var i = 0; i <= steps; i++) {
+        let t = t0 + f32(i) * dt;
+        let p = q + ray * t;
+        let uv = uv_in(column, row, p);
+        if (all(uv >= vec2<f32>(0.0)) && all(uv <= vec2<f32>(1.0))) {
+            let surface = depth_at(layer, uv);
+            // Behind the surface seen there, and not by more than a step
+            // (else the ray went behind something it never touched).
+            let gap = surface - dot(p, back);
+            if (surface > -1e8 && gap >= 0.0 && gap <= abs(dt * dot(ray, back)) * 1.5 + 0.02 * frame.w) {
+                // Narrowed down between the last step in front and this one.
+                var lo = before;
+                var hi = t;
+                for (var k = 0; k < 5; k++) {
+                    let m = 0.5 * (lo + hi);
+                    let pm = q + ray * m;
+                    let sm = depth_at(layer, uv_in(column, row, pm));
+                    if (sm > -1e8 && sm >= dot(pm, back)) {
+                        hi = m;
+                    } else {
+                        lo = m;
+                    }
+                }
+                return vec4<f32>(q + ray * hi, 1.0);
+            }
+        }
+        before = t;
+    }
+    return vec4<f32>(q, 0.0);
+}
+
+// Where a view sees the eye's ray, from where it crosses the stand-in:
+// the view's depth read there, the point on the ray at that depth taken, a
+// few times over. Right for a surface the stand-in lies on (a facade),
+// where the march finds nothing its depth tells apart.
+fn settle(column: f32, row: f32, q: vec3<f32>, ray: vec3<f32>) -> vec3<f32> {
+    let back = view_direction(column, row);
     let layer = layer_of(column, row);
     let along = dot(ray, back);
     var p = q;
-    var uv = vec2<f32>(dot(p, right) / size.x + 0.5, 0.5 - dot(p, up) / size.y);
-    // shape.z: 1 to correct the parallax with the views' depth, 0 not to.
-    if (shape.z > 0.5 && abs(along) > 0.05) {
+    if (abs(along) > 0.05) {
         for (var i = 0; i < 4; i++) {
-            let depth = depth_at(layer, uv);
+            let depth = depth_at(layer, uv_in(column, row, p));
             if (depth < -1e8) {
                 break;
             }
-            let t = (depth - dot(q, back)) / along;
-            p = q + ray * t;
-            uv = vec2<f32>(dot(p, right) / size.x + 0.5, 0.5 - dot(p, up) / size.y);
+            p = q + ray * ((depth - dot(q, back)) / along);
         }
     }
+    return p;
+}
+
+// What view (column, row) saw at a point `p` of the object's frame: its
+// colour (alpha: how much of the pixel is the object) and the surface's
+// direction there, in the object's frame.
+fn seen(column: f32, row: f32, p: vec3<f32>) -> Seen {
+    let layer = layer_of(column, row);
+    let uv = uv_in(column, row, p);
     let c = textureSampleLevel(views, views_sampler, uv, layer, 0.0);
     var ground = 0.0;
     if (framing.y > 0.5) {
@@ -164,17 +227,31 @@ fn fragment(in: VertexOutput, @builtin(front_facing) is_front: bool) -> Fragment
     let wa = fa - c0;
     let we = fe - r0;
 
-    let s00 = seen(c0, r0, q, ray);
-    let s10 = seen(c1, r0, q, ray);
-    let s01 = seen(c0, r1, q, ray);
-    let s11 = seen(c1, r1, q, ray);
+    // The point the eye sees: for an object told by its depth pictures (a
+    // stand of trees, baked on black), found along its ray in the nearest
+    // view; else, or failing that, each view's point settled from where the
+    // ray crosses the stand-in (enough for a facade, and cheaper).
+    var hit = vec4<f32>(q, 0.0);
+    if (shape.z > 0.5 && framing.y > 0.5) {
+        hit = march(round(fa), round(fe), q, ray);
+    }
+    let found = hit.w > 0.5;
+    let depthy = shape.z > 0.5 && !found;
+    let s00 = seen(c0, r0, select(select(q, settle(c0, r0, q, ray), depthy), hit.xyz, found));
+    let s10 = seen(c1, r0, select(select(q, settle(c1, r0, q, ray), depthy), hit.xyz, found));
+    let s01 = seen(c0, r1, select(select(q, settle(c0, r1, q, ray), depthy), hit.xyz, found));
+    let s11 = seen(c1, r1, select(select(q, settle(c1, r1, q, ray), depthy), hit.xyz, found));
     let w00 = (1.0 - wa) * (1.0 - we) * s00.colour.a;
     let w10 = wa * (1.0 - we) * s10.colour.a;
     let w01 = (1.0 - wa) * we * s01.colour.a;
     let w11 = wa * we * s11.colour.a;
     let covered = w00 + w10 + w01 + w11;
     let all = (1.0 - wa) * (1.0 - we) + wa * (1.0 - we) + (1.0 - wa) * we + wa * we;
-    if (covered < 0.5 * all) {
+    // Half the views must see the object for it to be drawn, unless the
+    // march found the point: then it is the object's, and any view seeing
+    // it gives its colour.
+    let needed = select(0.5 * all, 1e-4, found);
+    if (covered < needed) {
         discard;
     }
     let colour = (s00.colour.rgb * w00 + s10.colour.rgb * w10 + s01.colour.rgb * w01 + s11.colour.rgb * w11) / covered;
