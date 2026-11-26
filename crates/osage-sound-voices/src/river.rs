@@ -177,6 +177,13 @@ fn agitation(load: f32) -> f32 {
     0.4 + load * (1.02 + 0.36 * load)
 }
 
+/// Ticks until something `seconds` away, one at least: water barely
+/// stirring waits for ever, which is not the mark of no lap at all
+/// (`u32::MAX`), nor a number that overflows.
+fn ticks_until(seconds: f32) -> u32 {
+    ((seconds / TICK_S) as u32).saturating_add(1).min(u32::MAX - 1)
+}
+
 /// How often the water laps for a load, against an ordinary day: not at all
 /// on still water, twice as often in a wake.
 fn lapping(load: f32) -> f32 {
@@ -646,7 +653,7 @@ impl Water {
         }
         let lapping = laps * lapping(water.load);
         if lapping > 0.0 {
-            water.lap_in = (water.chance.between(0.1, 1.6) / (lapping * TICK_S)) as u32 + 1;
+            water.lap_in = ticks_until(water.chance.between(0.1, 1.6) / lapping);
         }
         water.gap = -(1.0 - water.bank.unit()).ln();
         water
@@ -719,7 +726,7 @@ impl Water {
         // often near it.
         let wait = (self.chance.between(0.4, 1.6) + self.chance.between(0.4, 1.6)) / 2.0;
         let rate = self.laps * lapping(self.load);
-        self.lap_in = if rate > 0.0 { (wait / (rate * TICK_S)) as u32 + 1 } else { u32::MAX };
+        self.lap_in = if rate > 0.0 { ticks_until(wait / rate) } else { u32::MAX };
         #[cfg(test)]
         self.tally.laps.push(self.tally.ticks);
     }
@@ -763,7 +770,7 @@ impl Water {
         } else if self.laps * lapping(self.load) > 0.0 {
             // The water stirs again: the next lap is waited for.
             let rate = self.laps * lapping(self.load);
-            self.lap_in = (self.chance.between(0.4, 1.6) / (rate * TICK_S)) as u32 + 1;
+            self.lap_in = ticks_until(self.chance.between(0.4, 1.6) / rate);
         }
         let ease_lap = 1.0 - self.lap_keep;
         self.lap[0] *= self.lap_keep;
@@ -1221,8 +1228,7 @@ mod tests {
         water.load = load;
         water.load_to = load;
         let laps = water.laps * lapping(load);
-        water.lap_in =
-            if laps > 0.0 { (water.chance.between(0.1, 1.6) / (laps * TICK_S)) as u32 + 1 } else { u32::MAX };
+        water.lap_in = if laps > 0.0 { ticks_until(water.chance.between(0.1, 1.6) / laps) } else { u32::MAX };
         water
     }
 
