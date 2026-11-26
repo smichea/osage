@@ -15962,3 +15962,255 @@ licence = "Apache-2.0"
 author = "University of York, The Audio Lab (Cal Armstrong, Lewis Thresh, Gavin Kearney), SADIE project; derived by the osage contributors"
 source = "https://www.york.ac.uk/sadie-project/database.html"
 used_by = "crates/osage-sound: 54 virtual loudspeakers for headphones at high and reference (--hrir)"
+
+[[asset]]
+path = "assets/polyhaven/pine_tree_01/pine_tree_01_2k.gltf"
+url = "https://dl.polyhaven.org/file/ph-assets/Models/gltf/2k/pine_tree_01/pine_tree_01_2k.gltf"
+sha256 = "3ba564fda11ee173d43b1302908e51ef491f95453f2793b1b17c3bf74ed0ad0b"
+licence = "CC0-1.0"
+author = "Rob Tuytel, Rico Cilliers (Poly Haven)"
+source = "https://polyhaven.com/a/pine_tree_01"
+used_by = "worlds/kart/native: the woods' holograms (D-133); glTF model"
+
+[[asset]]
+path = "assets/polyhaven/pine_tree_01/textures/pine_tree_01_bark_nor_gl_2k.jpg"
+url = "https://dl.polyhaven.org/file/ph-assets/Models/jpg/2k/pine_tree_01/pine_tree_01_bark_nor_gl_2k.jpg"
+sha256 = "5b0cc5c45f8f42c2bb7f20518f6a06485d4eaa5444380907916e278517cc5b1e"
+licence = "CC0-1.0"
+author = "Rob Tuytel, Rico Cilliers (Poly Haven)"
+source = "https://polyhaven.com/a/pine_tree_01"
+used_by = "worlds/kart/native: the woods' holograms (D-133); texture"
+
+[[asset]]
+path = "assets/polyhaven/pine_tree_01/textures/pine_tree_01_bark_diff_2k.jpg"
+url = "https://dl.polyhaven.org/file/ph-assets/Models/jpg/2k/pine_tree_01/pine_tree_01_bark_diff_2k.jpg"
+sha256 = "359bb1be7aab30f5b79d391af9ef088503d6d135d529c9fc06bce60adf28ef60"
+licence = "CC0-1.0"
+author = "Rob Tuytel, Rico Cilliers (Poly Haven)"
+source = "https://polyhaven.com/a/pine_tree_01"
+used_by = "worlds/kart/native: the woods' holograms (D-133); texture"
+
+[[asset]]
+path = "assets/polyhaven/pine_tree_01/textures/pine_tree_01_bark_arm_2k.jpg"
+url = "https://dl.polyhaven.org/file/ph-assets/Models/jpg/2k/pine_tree_01/pine_tree_01_bark_arm_2k.jpg"
+sha256 = "7afccadf4d239dfbcb99338067bf1b4d0c3316b42021ac2d7cdf17f8dddb7346"
+licence = "CC0-1.0"
+author = "Rob Tuytel, Rico Cilliers (Poly Haven)"
+source = "https://polyhaven.com/a/pine_tree_01"
+used_by = "worlds/kart/native: the woods' holograms (D-133); texture"
+
+[[asset]]
+path = "assets/polyhaven/pine_tree_01/textures/pine_tree_01_trunk_a_nor_gl_2k.jpg"
+url = "https://dl.polyhaven.org/file/ph-assets/Models/jpg/2k/pine_tree_01/pine_tree_01_trunk_a_nor_gl_2k.jpg"
+sha256 = "783e714a9916f411ed6686e2558f469e4b3e0de407c9e2ed797f97020b7bf6e9"
+licence = "CC0-1.0"
+author = "Rob Tuytel, Rico Cilliers (Poly Haven)"
+source = "https://polyhaven.com/a/pine_tree_01"
+used_by = "worlds/kart/native: the woods' holograms (D-133); texture"
+
+[[asset]]
+path = "assets/polyhaven/pine_tree_01/textures/pine_tree_01_trunk_a_diff_2k.jpg"
+url = "https://dl.polyhaven.org/file/ph-assets/Models/jpg/2k/pine_tree_01/pine_tree_01_trunk_a_diff_2k.jpg"
+sha256 = "34dc75688c783a9ecbbd79f072449f270baededb5787f556846c03759fa2f818"
+licence = "CC0-1.0"
+author = "Rob Tuytel, Rico Cilliers (Poly Haven)"
+source = "https://polyhaven.com/a/pine_tree_01"
+used_by = "worlds/kart/native: the woods' holograms (D-133); texture"
+
+[[asset]]
+path = "assets/polyhaven/pine_tree_01/textures/pine_tree_01_trunk_a_arm_2k.jpg"
+url = "https://dl.polyhaven.org/file/ph-assets/Models/jpg/2k/pine_tree_01/pine_tree_01_trunk_a_arm_2k.jpg"
+sha256 = "ee5d9aad98a063ed67698ab39d972a764a719986dc704957f9b2a0e18a7d4ef2"
+licence = "CC0-1.0"
+author = "Rob Tuytel, Rico Cilliers (Poly Haven)"
+source = "https://polyhaven.com/a/pine_tree_01"
+used_by = "worlds/kart/native: the woods' holograms (D-133); texture"
+
+[[asset]]
+path = "assets/polyhaven/pine_tree_01/textures/pine_tree_01_twig_nor_gl_2k.jpg"
+url = "https://dl.polyhaven.org/file/ph-assets/Models/jpg/2k/pine_tree_01/pine_tree_01_twig_nor_gl_2k.jpg"
+sha256 = "d1275b97c77199d22aa523bb408389d1c661517fee1a73961b2f64d0697819c2"
+licence = "CC0-1.0"
+author = "Rob Tuytel, Rico Cilliers (Poly Haven)"
+source = "https://polyhaven.com/a/pine_tree_01"
+used_by = "worlds/kart/native: the woods' holograms (D-133); texture"
+
+[[asset]]
+path = "assets/polyhaven/pine_tree_01/textures/pine_tree_01_twig_diff_2k.jpg"
+url = "https://dl.polyhaven.org/file/ph-assets/Models/jpg/2k/pine_tree_01/pine_tree_01_twig_diff_2k.jpg"
+sha256 = "288f8752514dfcfb78e5d6bc927b585605a13b050a1a79de78044f7c0574c0fc"
+licence = "CC0-1.0"
+author = "Rob Tuytel, Rico Cilliers (Poly Haven)"
+source = "https://polyhaven.com/a/pine_tree_01"
+used_by = "worlds/kart/native: the woods' holograms (D-133); texture"
+
+[[asset]]
+path = "assets/polyhaven/pine_tree_01/textures/pine_tree_01_twig_arm_2k.jpg"
+url = "https://dl.polyhaven.org/file/ph-assets/Models/jpg/2k/pine_tree_01/pine_tree_01_twig_arm_2k.jpg"
+sha256 = "4906628f36f545db1bb9fb3d83ce247ef1266ae2ad77942f23066030c3abce22"
+licence = "CC0-1.0"
+author = "Rob Tuytel, Rico Cilliers (Poly Haven)"
+source = "https://polyhaven.com/a/pine_tree_01"
+used_by = "worlds/kart/native: the woods' holograms (D-133); texture"
+
+[[asset]]
+path = "assets/polyhaven/pine_tree_01/textures/pine_tree_01_trunk_b_nor_gl_2k.jpg"
+url = "https://dl.polyhaven.org/file/ph-assets/Models/jpg/2k/pine_tree_01/pine_tree_01_trunk_b_nor_gl_2k.jpg"
+sha256 = "e8c30af34534ae51f24f445b4a77f650f52f3e0771ef92ce834bbc148b2ad979"
+licence = "CC0-1.0"
+author = "Rob Tuytel, Rico Cilliers (Poly Haven)"
+source = "https://polyhaven.com/a/pine_tree_01"
+used_by = "worlds/kart/native: the woods' holograms (D-133); texture"
+
+[[asset]]
+path = "assets/polyhaven/pine_tree_01/textures/pine_tree_01_trunk_b_diff_2k.jpg"
+url = "https://dl.polyhaven.org/file/ph-assets/Models/jpg/2k/pine_tree_01/pine_tree_01_trunk_b_diff_2k.jpg"
+sha256 = "ce30477f492b6aeee5c467350024fa375eb5f95e19f4ab60a2dc778c1559b696"
+licence = "CC0-1.0"
+author = "Rob Tuytel, Rico Cilliers (Poly Haven)"
+source = "https://polyhaven.com/a/pine_tree_01"
+used_by = "worlds/kart/native: the woods' holograms (D-133); texture"
+
+[[asset]]
+path = "assets/polyhaven/pine_tree_01/textures/pine_tree_01_trunk_b_arm_2k.jpg"
+url = "https://dl.polyhaven.org/file/ph-assets/Models/jpg/2k/pine_tree_01/pine_tree_01_trunk_b_arm_2k.jpg"
+sha256 = "f4c3473798c9096a9050eeafc699d1d6aedc13c949a24a46405dd70869e80d08"
+licence = "CC0-1.0"
+author = "Rob Tuytel, Rico Cilliers (Poly Haven)"
+source = "https://polyhaven.com/a/pine_tree_01"
+used_by = "worlds/kart/native: the woods' holograms (D-133); texture"
+
+[[asset]]
+path = "assets/polyhaven/pine_tree_01/pine_tree_01.bin"
+url = "https://dl.polyhaven.org/file/ph-assets/Models/gltf/8k/pine_tree_01/pine_tree_01.bin"
+sha256 = "9955ac7e2f8fe28dc6da8e4d478593ad830f8a23d44e39a2187ef7dffac2646b"
+licence = "CC0-1.0"
+author = "Rob Tuytel, Rico Cilliers (Poly Haven)"
+source = "https://polyhaven.com/a/pine_tree_01"
+used_by = "worlds/kart/native: the woods' holograms (D-133); model data"
+
+[[asset]]
+path = "assets/polyhaven/fir_tree_01/fir_tree_01_2k.gltf"
+url = "https://dl.polyhaven.org/file/ph-assets/Models/gltf/2k/fir_tree_01/fir_tree_01_2k.gltf"
+sha256 = "f9a463483151e7e699a7ff0f8e59dbba4a1a26965c5318e5d4c14fc87b82bf6f"
+licence = "CC0-1.0"
+author = "Rob Tuytel, Rico Cilliers (Poly Haven)"
+source = "https://polyhaven.com/a/fir_tree_01"
+used_by = "worlds/kart/native: the woods' holograms (D-133); glTF model"
+
+[[asset]]
+path = "assets/polyhaven/fir_tree_01/textures/fir_tree_01_bark_nor_gl_2k.jpg"
+url = "https://dl.polyhaven.org/file/ph-assets/Models/jpg/2k/fir_tree_01/fir_tree_01_bark_nor_gl_2k.jpg"
+sha256 = "fc12db22e058f81340a4d4d08c0f2a50bb0a8960c9fc23a760e625bf2d9d1970"
+licence = "CC0-1.0"
+author = "Rob Tuytel, Rico Cilliers (Poly Haven)"
+source = "https://polyhaven.com/a/fir_tree_01"
+used_by = "worlds/kart/native: the woods' holograms (D-133); texture"
+
+[[asset]]
+path = "assets/polyhaven/fir_tree_01/textures/fir_tree_01_bark_diff_2k.jpg"
+url = "https://dl.polyhaven.org/file/ph-assets/Models/jpg/2k/fir_tree_01/fir_tree_01_bark_diff_2k.jpg"
+sha256 = "c3dbce0207d9b0e6d1ef3d2e3c3ba394722464c898e6d4eb6b76439ada76e0b3"
+licence = "CC0-1.0"
+author = "Rob Tuytel, Rico Cilliers (Poly Haven)"
+source = "https://polyhaven.com/a/fir_tree_01"
+used_by = "worlds/kart/native: the woods' holograms (D-133); texture"
+
+[[asset]]
+path = "assets/polyhaven/fir_tree_01/textures/fir_tree_01_bark_arm_2k.jpg"
+url = "https://dl.polyhaven.org/file/ph-assets/Models/jpg/2k/fir_tree_01/fir_tree_01_bark_arm_2k.jpg"
+sha256 = "774c585e2f92082de4bf2955ade4f405dc73bf62899a71b1876788ce21d54784"
+licence = "CC0-1.0"
+author = "Rob Tuytel, Rico Cilliers (Poly Haven)"
+source = "https://polyhaven.com/a/fir_tree_01"
+used_by = "worlds/kart/native: the woods' holograms (D-133); texture"
+
+[[asset]]
+path = "assets/polyhaven/fir_tree_01/textures/fir_tree_01_trunk_a_nor_gl_2k.jpg"
+url = "https://dl.polyhaven.org/file/ph-assets/Models/jpg/2k/fir_tree_01/fir_tree_01_trunk_a_nor_gl_2k.jpg"
+sha256 = "783e714a9916f411ed6686e2558f469e4b3e0de407c9e2ed797f97020b7bf6e9"
+licence = "CC0-1.0"
+author = "Rob Tuytel, Rico Cilliers (Poly Haven)"
+source = "https://polyhaven.com/a/fir_tree_01"
+used_by = "worlds/kart/native: the woods' holograms (D-133); texture"
+
+[[asset]]
+path = "assets/polyhaven/fir_tree_01/textures/fir_tree_01_trunk_a_diff_2k.jpg"
+url = "https://dl.polyhaven.org/file/ph-assets/Models/jpg/2k/fir_tree_01/fir_tree_01_trunk_a_diff_2k.jpg"
+sha256 = "34dc75688c783a9ecbbd79f072449f270baededb5787f556846c03759fa2f818"
+licence = "CC0-1.0"
+author = "Rob Tuytel, Rico Cilliers (Poly Haven)"
+source = "https://polyhaven.com/a/fir_tree_01"
+used_by = "worlds/kart/native: the woods' holograms (D-133); texture"
+
+[[asset]]
+path = "assets/polyhaven/fir_tree_01/textures/fir_tree_01_trunk_a_arm_2k.jpg"
+url = "https://dl.polyhaven.org/file/ph-assets/Models/jpg/2k/fir_tree_01/fir_tree_01_trunk_a_arm_2k.jpg"
+sha256 = "16af3415ff42805b26443da5063d0dae3ea37475a1b65eced181c50ff785cb43"
+licence = "CC0-1.0"
+author = "Rob Tuytel, Rico Cilliers (Poly Haven)"
+source = "https://polyhaven.com/a/fir_tree_01"
+used_by = "worlds/kart/native: the woods' holograms (D-133); texture"
+
+[[asset]]
+path = "assets/polyhaven/fir_tree_01/textures/fir_tree_01_twig_nor_gl_2k.jpg"
+url = "https://dl.polyhaven.org/file/ph-assets/Models/jpg/2k/fir_tree_01/fir_tree_01_twig_nor_gl_2k.jpg"
+sha256 = "874596561e6fa69ae6fc381e77180298441bd469b3918bb493436ea829ccd815"
+licence = "CC0-1.0"
+author = "Rob Tuytel, Rico Cilliers (Poly Haven)"
+source = "https://polyhaven.com/a/fir_tree_01"
+used_by = "worlds/kart/native: the woods' holograms (D-133); texture"
+
+[[asset]]
+path = "assets/polyhaven/fir_tree_01/textures/fir_tree_01_twig_diff_2k.jpg"
+url = "https://dl.polyhaven.org/file/ph-assets/Models/jpg/2k/fir_tree_01/fir_tree_01_twig_diff_2k.jpg"
+sha256 = "5504646d484a08649a9cd14402860063e69fd10072238f5afe72214e6bf478be"
+licence = "CC0-1.0"
+author = "Rob Tuytel, Rico Cilliers (Poly Haven)"
+source = "https://polyhaven.com/a/fir_tree_01"
+used_by = "worlds/kart/native: the woods' holograms (D-133); texture"
+
+[[asset]]
+path = "assets/polyhaven/fir_tree_01/textures/fir_tree_01_twig_arm_2k.jpg"
+url = "https://dl.polyhaven.org/file/ph-assets/Models/jpg/2k/fir_tree_01/fir_tree_01_twig_arm_2k.jpg"
+sha256 = "16f785953e0c72931c478801064b8e552675e76c62a2880bedc7e8e90593ca14"
+licence = "CC0-1.0"
+author = "Rob Tuytel, Rico Cilliers (Poly Haven)"
+source = "https://polyhaven.com/a/fir_tree_01"
+used_by = "worlds/kart/native: the woods' holograms (D-133); texture"
+
+[[asset]]
+path = "assets/polyhaven/fir_tree_01/textures/fir_tree_01_trunk_b_nor_gl_2k.jpg"
+url = "https://dl.polyhaven.org/file/ph-assets/Models/jpg/2k/fir_tree_01/fir_tree_01_trunk_b_nor_gl_2k.jpg"
+sha256 = "e8c30af34534ae51f24f445b4a77f650f52f3e0771ef92ce834bbc148b2ad979"
+licence = "CC0-1.0"
+author = "Rob Tuytel, Rico Cilliers (Poly Haven)"
+source = "https://polyhaven.com/a/fir_tree_01"
+used_by = "worlds/kart/native: the woods' holograms (D-133); texture"
+
+[[asset]]
+path = "assets/polyhaven/fir_tree_01/textures/fir_tree_01_trunk_b_diff_2k.jpg"
+url = "https://dl.polyhaven.org/file/ph-assets/Models/jpg/2k/fir_tree_01/fir_tree_01_trunk_b_diff_2k.jpg"
+sha256 = "ce30477f492b6aeee5c467350024fa375eb5f95e19f4ab60a2dc778c1559b696"
+licence = "CC0-1.0"
+author = "Rob Tuytel, Rico Cilliers (Poly Haven)"
+source = "https://polyhaven.com/a/fir_tree_01"
+used_by = "worlds/kart/native: the woods' holograms (D-133); texture"
+
+[[asset]]
+path = "assets/polyhaven/fir_tree_01/textures/fir_tree_01_trunk_b_arm_2k.jpg"
+url = "https://dl.polyhaven.org/file/ph-assets/Models/jpg/2k/fir_tree_01/fir_tree_01_trunk_b_arm_2k.jpg"
+sha256 = "d865a74f5fcd3871e99898612fa93ce7bd9ab396cd9208794ca349d30aef8c8e"
+licence = "CC0-1.0"
+author = "Rob Tuytel, Rico Cilliers (Poly Haven)"
+source = "https://polyhaven.com/a/fir_tree_01"
+used_by = "worlds/kart/native: the woods' holograms (D-133); texture"
+
+[[asset]]
+path = "assets/polyhaven/fir_tree_01/fir_tree_01.bin"
+url = "https://dl.polyhaven.org/file/ph-assets/Models/gltf/8k/fir_tree_01/fir_tree_01.bin"
+sha256 = "ba2ef15a1061a84c73b0a74643e88c118f801ce1664ca7a25a6a79bcc2c63790"
+licence = "CC0-1.0"
+author = "Rob Tuytel, Rico Cilliers (Poly Haven)"
+source = "https://polyhaven.com/a/fir_tree_01"
+used_by = "worlds/kart/native: the woods' holograms (D-133); model data"

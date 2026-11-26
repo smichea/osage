@@ -36,6 +36,23 @@ const SEEN: f32 = 450.0;
 const STEP: f32 = 3.0;
 const MARGIN: f32 = 2.0;
 
+/// The real tree a hologram is baked from, for a model the woods' cards are
+/// made from (D-133: a hologram's geometry costs nothing where it is drawn,
+/// so it is the most detailed there is): the cards' model, the baked one,
+/// and the scale the cards' model stands at on average, which the baked one
+/// takes as its own size. Poly Haven's pines and firs of its pine forest,
+/// whole, needles modelled: 15 to 20 m, 5 to 6 million faces a tree.
+const REAL_TREES: [(&str, &str, f32); 2] = [
+    ("polyhaven/pine_sapling_small/pine_sapling_small_1k.gltf", "polyhaven/pine_tree_01/pine_tree_01_2k.gltf", 6.5),
+    ("polyhaven/fir_sapling_medium/fir_sapling_medium_1k.gltf", "polyhaven/fir_tree_01/fir_tree_01_2k.gltf", 1.08),
+];
+
+/// The model a chunk bakes in place of `path`, and how much smaller a place
+/// scales it.
+fn baked_as(path: &str) -> (&str, f32) {
+    REAL_TREES.iter().find(|(cards, ..)| *cards == path).map_or((path, 1.0), |(_, real, usual)| (*real, *usual))
+}
+
 /// A chunk's name, from its square.
 fn name(cell: IVec2) -> String {
     format!("chunk-{}-{}", cell.x, cell.y)
@@ -93,11 +110,13 @@ pub fn write_chunks(dir: &Path, track: &str, woods: &[Woods], land: &Land, frame
         let mut models: Vec<SceneModel> = woods
             .iter()
             .map(|w| SceneModel {
-                path: w.model.path().map(|p| p.to_string()).unwrap_or_default(),
+                path: baked_as(&w.model.path().map(|p| p.to_string()).unwrap_or_default()).0.to_owned(),
                 variants: w.using == Use::Variants,
                 places: Vec::new(),
             })
             .collect();
+        let shrink: Vec<f32> =
+            woods.iter().map(|w| baked_as(&w.model.path().map(|p| p.to_string()).unwrap_or_default()).1).collect();
         for (kind, place) in &trees {
             let local = inverse.transform_point3(place.translation);
             let rotation = turn.inverse() * place.rotation;
@@ -109,7 +128,7 @@ pub fn write_chunks(dir: &Path, track: &str, woods: &[Woods], land: &Land, frame
                 rotation.y,
                 rotation.z,
                 rotation.w,
-                place.scale.x,
+                place.scale.x / shrink[*kind],
             ]);
         }
         models.retain(|m| !m.places.is_empty() && !m.path.is_empty());
@@ -185,6 +204,13 @@ mod tests {
             let name = name(cell);
             assert_eq!(parse_cell(name.strip_prefix("chunk-").unwrap()), Some(cell), "{name}");
         }
+    }
+
+    #[test]
+    fn saplings_are_baked_as_grown_trees() {
+        let (real, usual) = baked_as("polyhaven/fir_sapling_medium/fir_sapling_medium_1k.gltf");
+        assert!(real.contains("fir_tree_01") && usual > 0.0);
+        assert_eq!(baked_as("polyhaven/rock_09/rock_09.gltf"), ("polyhaven/rock_09/rock_09.gltf", 1.0));
     }
 
     #[test]

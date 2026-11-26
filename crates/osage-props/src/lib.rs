@@ -235,6 +235,25 @@ fn flatten<M: Clone>(nodes: &[Node<M>], apart: bool) -> Vec<Vec<(M, Transform)>>
     variants
 }
 
+/// Gives a mesh without texture coordinates coordinates wrapped round its
+/// vertical axis, a texel as tall as wide: a trunk's bark goes round it.
+fn wrap_uvs(mesh: &mut Mesh) {
+    if mesh.contains_attribute(Mesh::ATTRIBUTE_UV_0) {
+        return;
+    }
+    let Some(positions) = mesh.attribute(Mesh::ATTRIBUTE_POSITION).and_then(|a| a.as_float3()) else { return };
+    if positions.is_empty() {
+        return;
+    }
+    let n = positions.len() as f32;
+    let (cx, cz) = positions.iter().fold((0.0, 0.0), |(x, z), p| (x + p[0] / n, z + p[2] / n));
+    let radius = positions.iter().map(|p| (p[0] - cx).hypot(p[2] - cz)).sum::<f32>() / n;
+    let round = (std::f32::consts::TAU * radius).max(1e-3);
+    let uvs: Vec<[f32; 2]> =
+        positions.iter().map(|p| [(p[2] - cz).atan2(p[0] - cx) / std::f32::consts::TAU + 0.5, -p[1] / round]).collect();
+    mesh.insert_attribute(Mesh::ATTRIBUTE_UV_0, uvs);
+}
+
 fn pieces(gltf: &Gltf, nodes: &Assets<GltfNode>, meshes: &Assets<GltfMesh>, using: Use) -> Option<Vec<Vec<Piece>>> {
     let index: HashMap<AssetId<GltfNode>, usize> = gltf.nodes.iter().enumerate().map(|(i, h)| (h.id(), i)).collect();
     let mut tree = Vec::with_capacity(gltf.nodes.len());
@@ -289,6 +308,19 @@ fn scatter(
         else {
             continue;
         };
+        // A textured piece without texture coordinates (a trunk of Poly
+        // Haven's fir_tree_01) would be drawn in the texture's absence,
+        // white: it is given coordinates wrapped round its height.
+        for piece in variants.iter().flatten() {
+            let textured = piece
+                .material
+                .as_ref()
+                .and_then(|m| gltf_materials.get(m))
+                .is_some_and(|m| m.base_color_texture.is_some());
+            if let (true, Some(mut mesh)) = (textured, models.get_mut(&piece.mesh)) {
+                wrap_uvs(&mut mesh);
+            }
+        }
         let far = scatter.within;
         // Each level, from near to far: its mesh index and the range it is seen in.
         let fade = |from: f32, to: f32| VisibilityRange {
@@ -449,6 +481,17 @@ fn scatter(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_mesh_without_coordinates_is_wrapped() {
+        use bevy::asset::RenderAssetUsages;
+        use bevy::mesh::PrimitiveTopology;
+        let mut mesh = Mesh::new(PrimitiveTopology::TriangleList, RenderAssetUsages::default());
+        mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, vec![[1.0, 0.0, 0.0], [-1.0, 2.0, 0.0], [0.0, 1.0, 1.0]]);
+        wrap_uvs(&mut mesh);
+        let uvs = mesh.attribute(Mesh::ATTRIBUTE_UV_0).expect("wrapped");
+        assert_eq!(uvs.len(), 3);
+    }
 
     fn node(place: Transform, children: Vec<usize>, mesh: Option<&'static str>) -> Node<&'static str> {
         Node { place, children, mesh }

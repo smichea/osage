@@ -38,6 +38,7 @@ A Bevy plugin. Each frame it looks at scatters not yet placed whose model has lo
 - Every mesh of every level of a scatter, with its material and its kind of visibility range, is drawn once at the start, in front of the camera and too small to see, so that its pipeline is made then: a pipeline first needed mid-race stalled a bench lap by 0.75 s on the L4 (2026-11-11).
 - A scatter is placed only once its model and textures have loaded: nothing appears white first, and a benchmark can wait for `Waiting` to reach zero to draw the same frames at every run.
 - A model that fails to load is skipped with a warning, never waited for forever.
+- A textured piece without texture coordinates (a trunk of Poly Haven's `fir_tree_01`) is given coordinates wrapped round its vertical axis, rather than drawn white without its texture. Tested.
 - A malformed model (a cycle of nodes, an index out of range) places what it can and never loops.
 - A carpet's window has exactly one instance per cell; moving one cell moves one row of instances; a place is the same at every call, inside its cell, and absent where the ground says nothing grows. Tested.
 - A coarser level has fewer triangles, keeps the mesh's size and unit normals, and never a triangle collapsed to a line or a point; a level that would leave nothing keeps the finer one. Tested.

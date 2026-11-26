@@ -14,7 +14,8 @@
 //! framed the same in every picture, so that a view differs from the next
 //! only by the turn of the viewing angle — under one fixed sun, on a grey
 //! ground colour, or on magenta with `HOLOGRAM_KEY=1` (drawn as nothing
-//! by the hologram's shader). Without a window: the pictures are drawn off screen.
+//! by the hologram's shader). `HOLOGRAM_FRAME_ONLY=1` writes the framing
+//! (`hologram.json`) and takes no view (see `tools/hologram-groups.py`). Without a window: the pictures are drawn off screen.
 
 use std::{path::PathBuf, time::Duration};
 
@@ -403,6 +404,11 @@ fn photograph(
     mut cameras: Query<&mut Camera>,
 ) {
     let Some((centre, radius)) = bake.bounds.filter(|_| bake.loaded && bake.targets_made) else { return };
+    // HOLOGRAM_FRAME_ONLY: the framing written, no view taken — for a scene
+    // too heavy to draw at once, baked in groups framed alike.
+    if std::env::var_os("HOLOGRAM_FRAME_ONLY").is_some() {
+        bake.at = bake.at.max(bake.path.len());
+    }
     if bake.at >= bake.path.len() {
         bake.frames += 1;
         if bake.frames > WIND_DOWN {
