@@ -697,8 +697,8 @@
               "id": "wash",
               "voice": "water",
               "positionM": [0, 0.05, 0],
-              "gainDb": 2.0,
-              "params": {"size": 0.7, "laps": 0.3},
+              "gainDb": -2.0,
+              "params": {"size": 0.7, "laps": 0.1},
               "load": 0.6,
               "reflections": false,
               "maxDistanceM": 250.0
@@ -717,8 +717,8 @@
               "id": "wash",
               "voice": "water",
               "positionM": [0, 0.05, 0],
-              "gainDb": 2.0,
-              "params": {"size": 0.7, "laps": 0.3},
+              "gainDb": -2.0,
+              "params": {"size": 0.7, "laps": 0.1},
               "load": 0.6,
               "reflections": false,
               "maxDistanceM": 250.0
@@ -737,8 +737,7 @@
               "id": "wash",
               "voice": "water",
               "positionM": [0, 0.05, 0],
-              "gainDb": 4.0,
-              "params": {"size": 0.9, "laps": 0.4},
+              "params": {"size": 0.9, "laps": 0.1},
               "load": 0.7,
               "reflections": false,
               "maxDistanceM": 250.0
@@ -757,8 +756,7 @@
               "id": "wash",
               "voice": "water",
               "positionM": [0, 0.05, 0],
-              "gainDb": 4.0,
-              "params": {"size": 0.6, "bed": 0.6, "laps": 0.1},
+              "params": {"size": 0.6, "bed": 0.6, "laps": 0.05},
               "load": 0.4,
               "reflections": false,
               "maxDistanceM": 250.0
@@ -777,8 +775,7 @@
               "id": "wash",
               "voice": "water",
               "positionM": [0, 0.05, 0],
-              "gainDb": 4.0,
-              "params": {"size": 0.6, "bed": 0.6, "laps": 0.1},
+              "params": {"size": 0.6, "bed": 0.6, "laps": 0.05},
               "load": 0.4,
               "reflections": false,
               "maxDistanceM": 250.0
@@ -797,8 +794,7 @@
               "id": "wash",
               "voice": "water",
               "positionM": [0, 0.05, 0],
-              "gainDb": 4.0,
-              "params": {"size": 0.6, "bed": 0.6, "laps": 0.1},
+              "params": {"size": 0.6, "bed": 0.6, "laps": 0.05},
               "load": 0.4,
               "reflections": false,
               "maxDistanceM": 250.0
@@ -817,8 +813,7 @@
               "id": "wash",
               "voice": "water",
               "positionM": [0, 0.05, 0],
-              "gainDb": 4.0,
-              "params": {"size": 0.6, "bed": 0.6, "laps": 0.1},
+              "params": {"size": 0.6, "bed": 0.6, "laps": 0.05},
               "load": 0.4,
               "reflections": false,
               "maxDistanceM": 250.0

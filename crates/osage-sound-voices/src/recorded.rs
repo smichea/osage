@@ -62,6 +62,9 @@ const HOLDS: f32 = 0.45;
 /// How long a change of level, of loops or of layers takes, samples (50 ms).
 const EASE: u32 = RATE / 20;
 
+/// How long a shot making room for a newer one takes to fade out (5 ms).
+const FADE: u32 = RATE / 200;
+
 /// A recorded sound, mono, and its levels of detail: level `k` at
 /// `RATE / 2^k`. A clip given at a lower rate has no level finer than its
 /// own: one made at 12 kHz starts at level 2, and holds a quarter of the
@@ -84,10 +87,20 @@ impl Clip {
     /// rate is at least its own (read between its samples to that rate if
     /// it is not one), and each coarser level made from it. A loop is taken
     /// as seamless: what follows its last sample is its first.
+    /// A clip at a rate above [`RATE`] is low-passed under the engine's
+    /// half rate before it is read at it; one at no rate (0) is silence.
     pub fn new(samples: &[f32], rate: u32, looped: bool) -> Clip {
         let first = (0..LEVELS).rev().find(|&k| RATE >> k >= rate).unwrap_or(0);
-        let own: Vec<f32> =
-            if rate == RATE >> first { samples.to_vec() } else { resample(samples, rate, RATE >> first, looped) };
+        let own: Vec<f32> = if rate == 0 {
+            Vec::new()
+        } else if rate == RATE >> first {
+            samples.to_vec()
+        } else if rate > RATE {
+            let below = filter(samples, &taps(f64::from(HOLDS) * f64::from(RATE) / f64::from(rate)), looped);
+            resample(&below, rate, RATE, looped)
+        } else {
+            resample(samples, rate, RATE >> first, looped)
+        };
         let rms = (own.iter().map(|s| f64::from(*s).powi(2)).sum::<f64>() / own.len().max(1) as f64).sqrt() as f32;
         let mut levels: Vec<Arc<[f32]>> = vec![own.into()];
         for _ in first + 1..LEVELS {
@@ -140,13 +153,12 @@ pub fn level_for(top: f32, ratio: f32) -> usize {
     (0..LEVELS).rev().find(|&k| holds(k) * ratio >= top * MARGIN).unwrap_or(0)
 }
 
-/// The low-pass a level is made with: a windowed sinc (Blackman), 63 taps,
-/// a quarter of the rate above it, so flat to [`HOLDS`] of the new half
-/// rate and 70 dB down past it.
-fn taps() -> [f32; 63] {
+/// A low-pass of 63 taps, a windowed sinc (Blackman) cut at `cut` of the
+/// rate. A level is made with a cut at a quarter of the rate above it, so
+/// flat to [`HOLDS`] of the new half rate and 70 dB down past it.
+fn taps(cut: f64) -> [f32; 63] {
     let mut taps = [0.0f32; 63];
     let centre = 31.0f64;
-    let cut = 0.25f64;
     for (n, tap) in taps.iter_mut().enumerate() {
         let x = n as f64 - centre;
         let sinc =
@@ -162,7 +174,7 @@ fn taps() -> [f32; 63] {
 /// The clip at half its rate: low-passed, every other sample. A loop wraps
 /// round; a shot is silent outside itself.
 fn halve(samples: &[f32], looped: bool) -> Vec<f32> {
-    let taps = taps();
+    let taps = taps(0.25);
     let n = samples.len() as isize;
     let at = |i: isize| -> f32 {
         if looped {
@@ -181,7 +193,22 @@ fn halve(samples: &[f32], looped: bool) -> Vec<f32> {
         .collect()
 }
 
-/// A clip at `rate` brought to `to`, a higher rate, read between its
+/// `samples` through the low-pass `taps`, as many as they are.
+fn filter(samples: &[f32], taps: &[f32; 63], looped: bool) -> Vec<f32> {
+    let n = samples.len() as isize;
+    let at = |i: isize| -> f32 {
+        if looped {
+            samples[i.rem_euclid(n.max(1)) as usize]
+        } else if (0..n).contains(&i) {
+            samples[i as usize]
+        } else {
+            0.0
+        }
+    };
+    (0..n).map(|i| taps.iter().enumerate().map(|(t, tap)| tap * at(i + t as isize - 31)).sum()).collect()
+}
+
+/// A clip at `rate` brought to `to`, read between its
 /// samples by four-point Lagrange interpolation (a recording is given at
 /// the rate it was made at, 44.1 kHz often).
 fn resample(samples: &[f32], rate: u32, to: u32, looped: bool) -> Vec<f32> {
@@ -293,10 +320,12 @@ pub enum Follows {
 
 impl Follows {
     fn of(self, drive: &Drive) -> f32 {
-        match self {
+        let x = match self {
             Follows::Speed => drive.speed.abs(),
             Follows::Load => drive.load,
-        }
+        };
+        // What is not a number is taken for rest.
+        if x.is_finite() { x } else { 0.0 }
     }
 }
 
@@ -449,9 +478,10 @@ pub struct Shot {
     seed: u32,
     /// How many blows it has played: what draws the next clip.
     blows: u64,
-    /// The shots sounding: which clip, how loud, its head, and how many
-    /// samples before it starts in this block.
-    playing: Vec<(usize, f32, Head, usize)>,
+    /// The shots sounding: which clip, how loud, its head, how many samples
+    /// before it starts in this block, and, for one making room for a newer,
+    /// how many samples it has left to fade out.
+    playing: Vec<(usize, f32, Head, usize, Option<u32>)>,
     layer: Option<Layered>,
 }
 
@@ -480,22 +510,40 @@ impl Voice for Shot {
                 seed_for(u64::from(self.seed), &format!("blow {}", self.blows)) as usize % self.clips.len()
             };
             self.blows += 1;
-            // Two at most at once: a third takes the oldest's place.
-            if self.playing.len() == 2 {
-                self.playing.remove(0);
+            // Two at most at once: a third makes the oldest fade out over
+            // 5 ms, and one already fading makes way for it.
+            if self.playing.len() == 3 {
+                let fading = self.playing.iter().position(|shot| shot.4.is_some()).unwrap_or(0);
+                self.playing.remove(fading);
             }
-            self.playing.push((pick, hit.strength.clamp(0.0, 1.0), Head::new(), hit.at.min(out.len())));
+            if self.playing.iter().filter(|shot| shot.4.is_none()).count() == 2
+                && let Some(oldest) = self.playing.iter_mut().find(|shot| shot.4.is_none())
+            {
+                oldest.4 = Some(FADE);
+            }
+            // (Not a number is no blow.)
+            if hit.strength > 0.0 {
+                let at = hit.at.min(out.len().saturating_sub(1));
+                self.playing.push((pick, hit.strength.min(1.0), Head::new(), at, None));
+            }
         }
-        for (pick, strength, head, wait) in &mut self.playing {
+        for (pick, strength, head, wait, fading) in &mut self.playing {
             let (clip, gain) = (&self.clips[*pick], self.gains[*pick]);
             head.ask(level_for(drive.top, 1.0));
             for o in out.iter_mut().skip(*wait) {
-                *o += head.next(clip, 1.0) * *strength * gain;
+                let fade = match fading {
+                    Some(left) => {
+                        *left = left.saturating_sub(1);
+                        *left as f32 / FADE as f32
+                    }
+                    None => 1.0,
+                };
+                *o += head.next(clip, 1.0) * *strength * gain * fade;
             }
             *wait = 0;
         }
         let clips = &self.clips;
-        self.playing.retain(|(pick, _, head, _)| !head.done(&clips[*pick]));
+        self.playing.retain(|(pick, _, head, _, fading)| !head.done(&clips[*pick]) && *fading != Some(0));
         if let Some(layer) = &mut self.layer {
             layer.add(drive, out);
         }
@@ -541,6 +589,60 @@ mod tests {
         assert_eq!(level_for(4_000.0, 1.0), 2);
         assert_eq!(level_for(4_000.0, 0.5), 1);
         assert_eq!(level_for(5_000.0, 1.0), 1);
+    }
+
+    #[test]
+    fn a_state_that_is_not_a_number_is_rest_for_a_block_and_no_more() {
+        // Speed not a number in one block of 750: every sample a number, and after it the loop as before.
+        let mut voice = Loop::new(4, engine(), Follows::Speed, None);
+        let mut out = vec![0.0; 750 * 128];
+        for (b, block) in out.chunks_mut(128).enumerate() {
+            let speed = if b == 10 { f32::NAN } else { 7.0 };
+            voice.render(&Drive { speed, ..Drive::default() }, block);
+        }
+        assert!(out.iter().all(|s| s.is_finite()));
+        assert!((rms(&out[RATE as usize..]) / NOMINAL_RMS - 1.0).abs() < 0.08);
+    }
+
+    #[test]
+    fn a_third_shot_fades_the_oldest_out_instead_of_cutting_it() {
+        // A 200 Hz shot a second long, struck three times 10 blocks apart: no step at the third blow larger than
+        // what two shots make from one sample to the next.
+        let samples: Vec<f32> =
+            (0..48_000).map(|i| 0.5 * (std::f32::consts::TAU * 200.0 * i as f32 / 48_000.0).sin()).collect();
+        let mut voice = Shot::new(1, vec![Arc::new(Clip::new(&samples, RATE, false))], None);
+        let mut out = vec![0.0; 40 * 128];
+        for (b, block) in out.chunks_mut(128).enumerate() {
+            let hit = (b % 10 == 0 && b < 30).then_some(Hit { at: 0, strength: 1.0 });
+            voice.render(&Drive { hit, ..Drive::default() }, block);
+        }
+        let step =
+            |from: usize, to: usize| out[from..to].windows(2).map(|w| (w[1] - w[0]).abs()).fold(0.0f32, f32::max);
+        let (before, at) = (step(1_400, 2_550), step(2_550, 2_900));
+        assert!(at < 1.5 * before, "{at} at the third blow, {before} before it");
+        // A blow not a number, or past the block's end, plays at its last sample at most.
+        let mut late = Shot::new(1, vec![Arc::new(Clip::new(&samples, RATE, false))], None);
+        let mut block = [0.0f32; 128];
+        late.render(&Drive { hit: Some(Hit { at: 0, strength: f32::NAN }), ..Drive::default() }, &mut block);
+        assert!(block.iter().all(|s| *s == 0.0));
+        late.render(&Drive { hit: Some(Hit { at: 100_000, strength: 1.0 }), ..Drive::default() }, &mut block);
+        assert!(block[..127].iter().all(|s| *s == 0.0));
+    }
+
+    #[test]
+    fn a_clip_at_no_rate_is_silence_and_one_above_the_engine_s_does_not_fold_down() {
+        assert_eq!(Clip::new(&[0.5; 100], 0, true).length(), 0);
+        // 30 kHz at 96 kHz is above what 48 kHz holds: nothing of it is left.
+        let high: Vec<f32> = (0..96_000)
+            .map(|i| (std::f64::consts::TAU * 30_000.0 * f64::from(i) / 96_000.0).sin() as f32 * 0.5)
+            .collect();
+        assert!(rms(Clip::new(&high, 96_000, true).level(0)) < 0.001);
+        // 1 kHz at 96 kHz is kept.
+        let low: Vec<f32> = (0..96_000)
+            .map(|i| (std::f64::consts::TAU * 1_000.0 * f64::from(i) / 96_000.0).sin() as f32 * 0.5)
+            .collect();
+        let kept = rms(Clip::new(&low, 96_000, true).level(0));
+        assert!((kept / (0.5 / 2f32.sqrt()) - 1.0).abs() < 0.01, "{kept}");
     }
 
     #[test]

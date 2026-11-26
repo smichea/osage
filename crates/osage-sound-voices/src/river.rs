@@ -21,13 +21,16 @@
 //!   come in gusts: more when the bed swells, many more just after a lap.
 //!   Each is a two-multiply resonator in a pool of 64, the quietest replaced
 //!   when it is full; those that could not be heard are not made;
-//! - **the laps:** every one to four seconds water strikes the stone and
-//!   falls back: a slap (noise in a band at 220 to 420 Hz, 60 to 120 ms to
-//!   swell and three times that to die), three to six large bubbles of about
-//!   one size (5 to 30 mm, 100 to 600 Hz, their pitch rising fast: a gulp),
-//!   then a brighter wash (noise at 0.8 to 3.5 kHz) as the water runs off.
+//! - **the laps:** now and then — every 4 to 16 seconds on an ordinary day,
+//!   twice as often in a wake, never on still water — water strikes the
+//!   stone and falls back: a slap (noise in a band at 220 to 420 Hz, 60 to
+//!   120 ms to swell and three times that to die), three to six large
+//!   bubbles of about one size (5 to 30 mm, 100 to 600 Hz, their pitch
+//!   rising a little), then a brighter wash (noise at 0.8 to 3.5 kHz) as the
+//!   water runs off.
 //!
-//! The sum goes through a limiter that leaves alone everything under 0.7.
+//! The sum goes through a limiter that leaves alone everything under 0.7,
+//! which the water on an ordinary day seldom reaches.
 //!
 //! [`Drive::load`](crate::Drive) is how agitated the water is: 0.5 the river
 //! on an ordinary day, where the level is [`NOMINAL_RMS`] (over half a
@@ -44,7 +47,8 @@
 //! - `bed` (0.45): the share of the sound's power the bed holds, 0.05…1; the
 //!   laps and the bubbles share the rest, as far as the largest bubble can
 //!   swing;
-//! - `laps` (0.4): laps a second: at 0.4, one every 1 to 4 seconds;
+//! - `laps` (0.1): laps a second on an ordinary day: at 0.1, one every 4 to
+//!   16 seconds; as many again in a wake (load 1), none on still water;
 //! - `size` (1): every radius times this, 0.5…2: under 1 a trickle, higher in
 //!   pitch; over 1 a heavy wash.
 //!
@@ -85,8 +89,8 @@ use crate::{
 };
 
 pub const ABOUT: &str =
-    "A broad river against stone: a murmur that swells, bubbles that chirp, a lap every few seconds";
-pub const PARAMS: &[(&str, f32)] = &[("bubbles", 800.0), ("bed", 0.45), ("laps", 0.4), ("size", 1.0)];
+    "A broad river against stone: a murmur that swells, bubbles, a lap now and then as the water stirs";
+pub const PARAMS: &[(&str, f32)] = &[("bubbles", 800.0), ("bed", 0.45), ("laps", 0.1), ("size", 1.0)];
 
 /// Samples between two updates of what changes slowly: the swell, the laps,
 /// the pitch of rising bubbles, the drive.
@@ -110,16 +114,18 @@ const LARGEST: f32 = 6.0e-3;
 /// γ: as many bubbles as r^−γ for each step of the radius in proportion.
 const SPREAD: f32 = 1.0;
 /// The mean of the depth factor squared, rnd^10 squared: 1/21; less what
-/// rising takes from the shallow three quarters of it, 4.5 %.
-const DEPTH_POWER: f32 = 0.965 / 21.0;
-/// ξ: how fast a shallow bubble rises in pitch, and how shallow it must be.
+/// rising takes from the shallowest fifth of it, 1.2 %.
+const DEPTH_POWER: f32 = 0.988 / 21.0;
+/// ξ: how fast a shallow bubble rises in pitch, and how shallow it must be:
+/// 0.9, as the paper suggests for sparse sounds (at 0.5 three quarters of
+/// the bank's power rose, and chirped).
 const RISE: f32 = 0.1;
-const RISES_OVER: f32 = 0.5;
+const RISES_OVER: f32 = 0.9;
 /// The largest of a lap's bubbles, metres, its γ, and the ξ of them all.
 const LAP_SMALLEST: f32 = 5.0e-3;
 const LAP_LARGEST: f32 = 30.0e-3;
 const LAP_SPREAD: f32 = 1.0;
-const LAP_RISE: (f32, f32) = (0.5, 1.0);
+const LAP_RISE: (f32, f32) = (0.1, 0.3);
 /// A lap's bubbles: their radius as a part of the largest of that lap, and
 /// what they swing of what their radius allows.
 const GULP_PART: (f32, f32) = (0.5, 1.0);
@@ -131,12 +137,12 @@ const SLAP_BAND: (f32, f32) = (220.0, 420.0);
 const SLAP_Q: f32 = 1.2;
 /// The largest bubble of a lap, the slap and the wash at a lap's height,
 /// against a swing of 1 for the largest bubble of the bank.
-const GULP: f32 = 0.5;
+const GULP: f32 = 0.3;
 const SLAP: f32 = 0.25;
-const WASH: f32 = 0.15;
+const WASH: f32 = 0.075;
 /// The share of the bank's bubbles that follow the laps rather than the
 /// swell.
-const AFTER_LAPS: f32 = 0.6;
+const AFTER_LAPS: f32 = 0.2;
 /// The swell: one standard deviation in nepers (1.75 dB), and the band of
 /// the noise it follows, Hz: slow, but ten seconds hold several swells.
 const SWELL: f32 = 0.2;
@@ -147,8 +153,9 @@ const GONE: f32 = 1.0e-4;
 /// A lap's noises are not made under this.
 const SILENT: f32 = 1.0e-4;
 /// The largest bubble's swing, at most: the rest of the power goes to the bed
-/// whatever `bed` says.
-const HEADROOM: f32 = 0.85;
+/// whatever `bed` says. At 0.85 the largest bubbles took the sum over the
+/// limiter's knee twenty times a minute; at 0.5, once or not at all.
+const HEADROOM: f32 = 0.5;
 /// The limiter leaves alone everything under this.
 const KNEE: f32 = 0.7;
 /// Seconds for a change of load or detail to be followed.
@@ -168,6 +175,12 @@ fn decay(frequency: f32) -> f32 {
 /// +5 dB in a wake.
 fn agitation(load: f32) -> f32 {
     0.4 + load * (1.02 + 0.36 * load)
+}
+
+/// How often the water laps for a load, against an ordinary day: not at all
+/// on still water, twice as often in a wake.
+fn lapping(load: f32) -> f32 {
+    (2.0 * load).clamp(0.0, 2.0)
 }
 
 /// How many more bubbles agitated water makes.
@@ -631,8 +644,9 @@ impl Water {
         for _ in 0..(5.0 / TICK_S) as u32 {
             water.sway();
         }
-        if laps > 0.0 {
-            water.lap_in = (water.chance.between(0.1, 1.6) / (laps * TICK_S)) as u32 + 1;
+        let lapping = laps * lapping(water.load);
+        if lapping > 0.0 {
+            water.lap_in = (water.chance.between(0.1, 1.6) / (lapping * TICK_S)) as u32 + 1;
         }
         water.gap = -(1.0 - water.bank.unit()).ln();
         water
@@ -704,7 +718,8 @@ impl Water {
         // The mean of two draws: between 0.4 and 1.6 of the mean wait, more
         // often near it.
         let wait = (self.chance.between(0.4, 1.6) + self.chance.between(0.4, 1.6)) / 2.0;
-        self.lap_in = (wait / (self.laps * TICK_S)) as u32 + 1;
+        let rate = self.laps * lapping(self.load);
+        self.lap_in = if rate > 0.0 { (wait / (rate * TICK_S)) as u32 + 1 } else { u32::MAX };
         #[cfg(test)]
         self.tally.laps.push(self.tally.ticks);
     }
@@ -745,6 +760,10 @@ impl Water {
             if self.lap_in == 0 {
                 self.lap_begins();
             }
+        } else if self.laps * lapping(self.load) > 0.0 {
+            // The water stirs again: the next lap is waited for.
+            let rate = self.laps * lapping(self.load);
+            self.lap_in = (self.chance.between(0.4, 1.6) / (rate * TICK_S)) as u32 + 1;
         }
         let ease_lap = 1.0 - self.lap_keep;
         self.lap[0] *= self.lap_keep;
@@ -1169,15 +1188,15 @@ mod tests {
     }
 
     #[test]
-    fn a_lap_comes_every_one_to_four_seconds() {
+    fn a_lap_comes_every_four_to_sixteen_seconds_and_follows_the_water() {
         let mut water = water(12, &[]);
-        let out = sound(&mut water, ordinary(), 120);
+        let out = sound(&mut water, ordinary(), 240);
         let laps = &water.tally.laps;
-        assert!((35..=60).contains(&laps.len()), "{} laps in two minutes", laps.len());
+        assert!((15..=30).contains(&laps.len()), "{} laps in four minutes", laps.len());
         let gaps: Vec<f32> = laps.windows(2).map(|w| (w[1] - w[0]) as f32 * TICK_S).collect();
-        assert!(gaps.iter().all(|gap| (0.99..=4.01).contains(gap)), "{gaps:?}");
+        assert!(gaps.iter().all(|gap| (3.99..=16.01).contains(gap)), "{gaps:?}");
         // Irregular: short waits and long ones.
-        assert!(gaps.iter().any(|gap| *gap < 1.8) && gaps.iter().any(|gap| *gap > 3.2));
+        assert!(gaps.iter().any(|gap| *gap < 7.0) && gaps.iter().any(|gap| *gap > 13.0));
         // A lap is heard: the third of a second after it begins is louder
         // than the half second before.
         let heard = laps.iter().map(|tick| *tick as usize * TICK as usize).filter(|at| {
@@ -1186,6 +1205,37 @@ mod tests {
                 && rms(&out[at + 2_400..at + 16_800]) > rms(&out[at - SECOND / 2..*at])
         });
         assert!(heard.count() * 10 >= laps.len() * 7, "laps are not heard");
+        // Still water does not lap; a wake laps twice as often.
+        let mut still = water_at(12, 0.0);
+        sound(&mut still, Drive { load: 0.0, ..Drive::default() }, 120);
+        assert!(still.tally.laps.is_empty(), "{} laps on still water", still.tally.laps.len());
+        let mut wake = water_at(12, 1.0);
+        sound(&mut wake, Drive { load: 1.0, ..Drive::default() }, 240);
+        let ratio = wake.tally.laps.len() as f32 / laps.len() as f32;
+        assert!((1.5..=2.6).contains(&ratio), "{} laps in a wake for {}", wake.tally.laps.len(), laps.len());
+    }
+
+    /// Water settled at `load` before its first sample.
+    fn water_at(seed: u32, load: f32) -> Water {
+        let mut water = water(seed, &[]);
+        water.load = load;
+        water.load_to = load;
+        let laps = water.laps * lapping(load);
+        water.lap_in =
+            if laps > 0.0 { (water.chance.between(0.1, 1.6) / (laps * TICK_S)) as u32 + 1 } else { u32::MAX };
+        water
+    }
+
+    #[test]
+    fn on_an_ordinary_day_the_limiter_is_seldom_at_work() {
+        // Samples over the knee, counted as events (those within 10 ms of each other are one): a few a minute at
+        // most, over six seeds.
+        for seed in 1..=6 {
+            let out = sound(&mut water(seed, &[]), ordinary(), 60);
+            let over: Vec<usize> = (0..out.len()).filter(|&i| out[i].abs() > KNEE).collect();
+            let events = over.windows(2).filter(|w| w[1] - w[0] > SECOND / 100).count() + usize::from(!over.is_empty());
+            assert!(events <= 5, "seed {seed}: over the knee {events} times in a minute");
+        }
     }
 
     #[test]

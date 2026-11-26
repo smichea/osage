@@ -2,6 +2,8 @@
 
 ## 2026-11-26
 
+* **Update**: [osage-sound-voices](/modules/osage-sound-voices.md) after its independent review ([research 12](https://github.com/smichea/osage/blob/main/research/12-sound-voices-review.md), issue #20). Fourteen findings were fixed with tests or answered: the metro's levels and offset, NaN parameters and blows, a cut contact tail, the recorded voices' edges, the river's laps and chirps, and the car's drone.
+
 * **Creation**: Added the algorithm [recorded voices and their levels of detail](/algorithms/recorded-voices.md). **Update**: [osage-sound-voices](/modules/osage-sound-voices.md) and [osage-sound](/modules/osage-sound.md) play recordings a world gives, and from afar a coarser level of them (issue #22, D-245).
 
 ## 2026-11-25

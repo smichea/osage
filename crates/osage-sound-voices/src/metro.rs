@@ -30,7 +30,7 @@
 //! **A motor car's traction** ([`Motor`]), one emitter each, in order:
 //!
 //! - **two inverters,** a little apart in pitch as two bogies' wheels are in
-//!   size. Each is a tone of six harmonics. Under 13 Hz of motor current the
+//!   size. Each is a tone of four harmonics. Under 13 Hz of motor current the
 //!   tone is a fixed carrier near 400 Hz; above, it is a whole number of
 //!   pulses in a turn of the current — 27, 15, 9, 5, 3, then 1 — so it rises
 //!   with the speed and drops at each change, which lasts 45 ms. The current
@@ -87,7 +87,7 @@
 //!
 //! - The tyres' spectrum and its law with speed are those of a lorry's tyres
 //!   on asphalt (CNOSSOS-EU category 3 rolling noise, Directive (EU)
-//!   2015/996, as transcribed by NoiseModelling), not of a metro's on steel.
+//!   2015/996), not of a metro's on steel.
 //!   The table stops at 20 km/h; the law is carried on below it.
 //! - The body near 100 Hz, its level and its swell with the wheels are
 //!   guesses, as are the guide wheels' ticks: their pitch, rate and level.
@@ -256,7 +256,7 @@ const ROUND: [f32; 2] = [721.0, 2_790.0];
 const BRIGHT: f32 = 1_500.0;
 /// Sets the bogie's level at 40 km/h; the test of the nominal level holds
 /// it.
-const BOGIE_LEVEL: f32 = 0.467;
+const BOGIE_LEVEL: f32 = 0.369;
 /// The body's level beside the tyres'.
 const BODY: f32 = 3.0;
 /// Guide-wheel ticks for each metre run.
@@ -470,7 +470,10 @@ const SECOND: f32 = 0.5;
 const SLIP: f32 = 1.2;
 /// Sets the motor's level at 40 km/h with an effort of 0.5; the test of the
 /// nominal level holds it.
-const MOTOR_LEVEL: f32 = 0.078;
+const MOTOR_LEVEL: f32 = 0.0873;
+/// The share of the way to the output a follower of its slowest part goes
+/// in a sample: 5 Hz.
+const STILL: f32 = std::f32::consts::TAU * 5.0 / crate::RATE as f32;
 /// The gear, at 40 km/h under full effort, beside an inverter.
 const GEAR: f32 = 0.3;
 /// The casing's resonance: how much it adds to a harmonic that falls on
@@ -502,7 +505,10 @@ impl Pulses {
     /// polynomials each turn a sine into one harmonic and nothing else,
     /// where a wave drawn as a shape (a saw, a pulse) would fold its upper
     /// harmonics back under half the rate. Each harmonic is as strong as the
-    /// casing, ringing at `casing`, makes it.
+    /// casing, ringing at `casing`, makes it. [`arch`] is not quite a sine:
+    /// what the polynomial would keep of it on average (its squares average
+    /// 8/15 and its fourth powers 128/315, not 1/2 and 3/8) is taken off,
+    /// so that the tone pushes no way for long.
     fn shape(&self, hertz: f32, casing: f32) -> [f32; 5] {
         let mut h = self.harmonics;
         for (k, harmonic) in h.iter_mut().enumerate() {
@@ -511,7 +517,9 @@ impl Pulses {
             let off = CASING_Q * (x2 - 1.0);
             *harmonic *= 1.0 + CASING * x2 / (x2 + off * off + 1e-9);
         }
-        [-h[1] + h[3], h[0] - 3.0 * h[2], 2.0 * h[1] - 8.0 * h[3], 4.0 * h[2], 8.0 * h[3]]
+        // (For a true sine the constant would be −h₂ + h₄.)
+        let c = [0.0, h[0] - 3.0 * h[2], 2.0 * h[1] - 8.0 * h[3], 4.0 * h[2], 8.0 * h[3]];
+        [-c[2] * 8.0 / 15.0 - c[4] * 128.0 / 315.0, c[1], c[2], c[3], c[4]]
     }
 }
 
@@ -575,6 +583,10 @@ pub struct Motor {
     gear_share: f32,
     until: usize,
     awake: bool,
+    /// What the output holds under 5 Hz, followed: taken off it. Beating
+    /// at three times the current, the tone makes a little of it whenever a
+    /// harmonic of the beat falls on one of the tone's.
+    still: f32,
 }
 
 impl Motor {
@@ -614,6 +626,7 @@ impl Motor {
             gear_share: within(param(params, MOTOR_PARAMS, "gear"), 0.0, 2.0),
             until: 0,
             awake: false,
+            still: 0.0,
         }
     }
 
@@ -710,6 +723,7 @@ impl Motor {
     fn run(&mut self, out: &mut [f32]) {
         if !self.awake {
             out.fill(0.0);
+            self.still = 0.0;
             return;
         }
         let whining = !self.weight.idle();
@@ -744,7 +758,11 @@ impl Motor {
                 self.mesh -= 1.0;
             }
             let mesh = arch(self.mesh);
-            *sample = guard(sum + (mesh + 0.5 * (1.0 - 2.0 * mesh * mesh)) * gear);
+            // The mesh and its second harmonic; the square of an arch
+            // averages 8/15, which is taken off.
+            let made = sum + (mesh + 0.5 * (16.0 / 15.0 - 2.0 * mesh * mesh)) * gear;
+            self.still += (made - self.still) * STILL;
+            *sample = guard(made - self.still);
         }
         (self.turn, self.weight.now) = (turn, weight);
     }
@@ -887,7 +905,8 @@ impl Joint {
 impl Voice for Joint {
     fn render(&mut self, drive: &Drive, out: &mut [f32]) {
         if let Some(hit) = drive.hit {
-            self.strike(hit.at, hit.strength, within(drive.detail, 0.0, 1.0));
+            // When in the block: one told for later is struck at its end.
+            self.strike(hit.at.min(out.len().saturating_sub(1)), hit.strength, within(drive.detail, 0.0, 1.0));
         }
         if self.blows.is_empty() {
             out.fill(0.0);
@@ -1169,7 +1188,7 @@ impl Voice for Span {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{Hit, RATE};
+    use crate::{Hit, NOMINAL_RMS, RATE};
 
     const SECOND: usize = RATE as usize;
 
@@ -1328,6 +1347,93 @@ mod tests {
         const A: [f32; 8] = [87.0, 91.7, 94.1, 100.7, 100.8, 94.3, 87.1, 82.5];
         const B: [f32; 8] = [30.0, 33.5, 31.3, 25.4, 31.8, 37.1, 38.6, 40.6];
         std::array::from_fn(|i| A[i] + B[i] * (kmh / 70.0).log10())
+    }
+
+    // --------------------------------------------------------------- tests
+
+    /// The mean over seeds 1 to 6 of what `make(seed)` gives under `drive`, dB over the nominal RMS.
+    fn level(make: impl Fn(u32) -> Box<dyn Voice>, drive: Drive) -> f32 {
+        let levels: Vec<f32> =
+            (1..=6).map(|seed| over(rms(&steady(&mut *make(seed), 10.0, drive)), NOMINAL_RMS)).collect();
+        levels.iter().sum::<f32>() / 6.0
+    }
+
+    #[test]
+    fn each_voice_is_at_the_nominal_level_where_its_documentation_says() {
+        let bogie = level(|seed| Box::new(bogie(seed)), at(40.0, 0.0));
+        let motor = level(|seed| Box::new(motor(seed)), at(40.0, 0.5));
+        let span = level(|seed| Box::new(span(seed)), at(40.0, 1.0));
+        eprintln!("bogie {bogie:.2} dB, motor {motor:.2} dB, span {span:.2} dB");
+        for (name, db) in [("bogie", bogie), ("motor", motor), ("span", span)] {
+            assert!(db.abs() < 0.5, "{name}: {db:.2} dB from the nominal level");
+        }
+        // A joint crossed at full strength peaks at about a half.
+        let peaks: Vec<f32> = (0..40).map(|seed| peak(&crossed(seed, 0.3, 1.0, 1.0))).collect();
+        let mean_peak = peaks.iter().sum::<f32>() / 40.0;
+        assert!((mean_peak - 0.5).abs() < 0.05, "{mean_peak}");
+    }
+
+    #[test]
+    fn the_motor_pushes_no_way_for_long() {
+        // Its mean against its RMS, at speeds and efforts across its range.
+        for (kmh, effort) in [(5.0, 0.5), (30.0, 0.5), (40.0, 0.5), (70.0, 0.5), (30.0, 1.0), (0.0, 0.7)] {
+            let out = steady(&mut motor(1), 20.0, at(kmh, effort));
+            assert!(
+                mean(&out).abs() < 0.005 * rms(&out).max(1e-6),
+                "{kmh} km/h, effort {effort}: mean {} rms {}",
+                mean(&out),
+                rms(&out)
+            );
+        }
+    }
+
+    #[test]
+    fn at_rest_each_falls_silent_and_the_length_of_the_blocks_changes_nothing() {
+        // Running, then stopped: the bogie and the span go silent, to the sample.
+        let mut going = bogie(2);
+        let out = follow(&mut going, 8.0, 128, |t| if t < 4.0 { at(40.0, 0.0) } else { at(0.0, 0.0) });
+        assert!(out[7 * SECOND..].iter().all(|s| *s == 0.0));
+        let mut loaded = span(2);
+        let out = follow(&mut loaded, 12.0, 128, |t| if t < 4.0 { at(40.0, 1.0) } else { at(40.0, 0.0) });
+        assert!(out[11 * SECOND..].iter().all(|s| *s == 0.0));
+        let mut idle = motor(2);
+        assert!(steady(&mut idle, 2.0, at(0.0, 0.0)).iter().all(|s| *s == 0.0));
+        // Blocks of 7 or of 4 096 give the samples of blocks of 128.
+        for (name, make, drive) in [
+            (
+                "bogie",
+                Box::new(|| Box::new(bogie(3)) as Box<dyn Voice>) as Box<dyn Fn() -> Box<dyn Voice>>,
+                at(40.0, 0.0),
+            ),
+            ("motor", Box::new(|| Box::new(motor(3)) as Box<dyn Voice>), at(30.0, 0.6)),
+            ("span", Box::new(|| Box::new(span(3)) as Box<dyn Voice>), at(40.0, 1.0)),
+        ] {
+            let base = follow(&mut *make(), 2.0, 128, |_| drive);
+            for block in [7, 4_096] {
+                assert!(follow(&mut *make(), 2.0, block, |_| drive) == base, "{name} in blocks of {block}");
+            }
+        }
+    }
+
+    #[test]
+    fn a_joint_told_of_a_blow_past_its_block_strikes_at_its_end_and_never_locks() {
+        // Eight blows told for far past the block, then one a second: each of those is heard.
+        let mut voice = Joint::new(1, &Params::default());
+        let mut block = 0;
+        let out = follow(&mut voice, 3.0, 128, |_| {
+            block += 1;
+            let hit = match block {
+                1..=8 => Some(Hit { at: 96_000, strength: 1.0 }),
+                b if b % 375 == 0 => Some(Hit { at: 5, strength: 1.0 }),
+                _ => None,
+            };
+            Drive { hit, ..Drive::default() }
+        });
+        assert!(peak(&out[..1_024 + 128]) > 0.1, "the eight sound at once");
+        for second in 1..3 {
+            let from = second * SECOND;
+            assert!(peak(&out[from..from + 4_800]) > 0.1, "the blow at {second} s");
+        }
     }
 
     // ------------------------------------------------------------ measures

@@ -185,7 +185,7 @@ struct Trims {
 }
 
 const TRIMS: Trims =
-    Trims { near: [[19.93, 12.62, 11.32, 4.01], [12.44, 4.54, 3.76, 1.74]], far: [[21.70, 8.79], [12.45, 2.98]] };
+    Trims { near: [[19.95, 12.60, 11.29, 3.93], [7.29, 4.92, 3.59, 1.77]], far: [[21.73, 8.74], [12.45, 2.97]] };
 
 /// Gearbox: engine speed in each gear, times that of the gear held at
 /// 30 km/h.
@@ -206,6 +206,10 @@ const FIRING: f32 = 60.0;
 const PUSH: f32 = 0.001_8;
 /// The engine's breath against its pushes.
 const BREATH: f32 = 2.4;
+/// The road's noise in the engine's lowest band, against its firing:
+/// the exhaust's and the intake's rumble. Without it the firing note held two
+/// thirds of the car's power on one line, and droned like a propeller.
+const RUMBLE: f32 = 12.0;
 /// An electric motor's whine: Hz for each km/h, and its level.
 const WHINE: f32 = 64.0;
 const WHINE_LEVEL: f32 = 0.006;
@@ -264,7 +268,12 @@ impl Quad {
     #[inline(always)]
     #[allow(clippy::needless_range_loop)] // Lane by lane, every array alike: what the compiler makes vectors of.
     fn pass(&mut self, first: f32, second: f32) -> f32 {
-        let x = [first, first, second, second];
+        self.pass_each([first, first, second, second])
+    }
+
+    /// The four bands, each of its own input.
+    #[inline(always)]
+    fn pass_each(&mut self, x: [f32; 4]) -> f32 {
         let [x1, x2, y1, y2, w1, w2] = &mut self.z;
         let mut lanes = [0.0f32; 4];
         for i in 0..4 {
@@ -294,11 +303,12 @@ impl Quad {
     }
 
     /// Adds to `out` what the bands make of `mine` and those of `other` of
-    /// `theirs`. Both in one loop: neither waits for the other.
-    fn run_beside(&mut self, other: &mut Quad, mine: &[f32], theirs: &[f32], out: &mut [f32]) {
+    /// `theirs`, the lowest of `other` with `rumble` in it. Both in one loop:
+    /// neither waits for the other.
+    fn run_beside(&mut self, other: &mut Quad, mine: &[f32], theirs: &[f32], rumble: &[f32], out: &mut [f32]) {
         let (mut a, mut b) = (*self, *other);
-        for ((mine, theirs), out) in mine.iter().zip(theirs).zip(out) {
-            *out += a.pass(*mine, *mine) + b.pass(*theirs, *theirs);
+        for (((mine, theirs), rumble), out) in mine.iter().zip(theirs).zip(rumble).zip(out) {
+            *out += a.pass(*mine, *mine) + b.pass_each([*theirs + *rumble, *theirs, *theirs, *theirs]);
         }
         (*self, *other) = (a, b);
     }
@@ -446,6 +456,8 @@ pub struct Car {
     far_wanted: f32,
     far_before: f32,
     sway: Drift,
+    /// Two low-passes at the firing note, for the rumble.
+    rumble: [Low; 2],
     tilt: Drift,
     wander: Drift,
     /// The speed the model was last worked out at, and the level it gave
@@ -540,6 +552,7 @@ impl Car {
             far_wanted: 0.0,
             far_before: 0.0,
             sway: Drift::at(1.5),
+            rumble: [Low::at(FIRING), Low::at(FIRING)],
             tilt: Drift::at(0.8),
             wander: Drift::at(0.6),
             modelled: 0.0,
@@ -637,6 +650,7 @@ impl Car {
         if (note - self.note).abs() > 0.002 * self.note {
             self.note = note;
             self.bank[1].tune(0, note, 1.0);
+            self.rumble.iter_mut().for_each(|low| low.tune(note));
             self.bank[2].tune(2, note, 1.0);
         }
 
@@ -723,7 +737,15 @@ impl Voice for Car {
             let [tyres_near, engine_near, both_far] = &mut self.bank;
             if self.far < 1.0 || self.far_before < 1.0 {
                 if self.engine > 0.0 {
-                    tyres_near.run_beside(engine_near, road, fired, now);
+                    // The rumble: the road's noise kept under the firing
+                    // note, so that it stays in the firing's octave.
+                    let mut rumble = [0.0f32; BLOCK];
+                    let rumble = &mut rumble[..now.len()];
+                    let [first, second] = &mut self.rumble;
+                    for (r, x) in rumble.iter_mut().zip(road.iter()) {
+                        *r = RUMBLE * second.pass(first.pass(*x));
+                    }
+                    tyres_near.run_beside(engine_near, road, fired, rumble, now);
                 } else {
                     tyres_near.run(road, road, now);
                 }
@@ -918,6 +940,40 @@ mod tests {
         (step(&s[from..to]), step(&s[..from]).max(step(&s[to..])))
     }
 
+    /// The share of the power of `s` within 2 Hz of its strongest line between `low` and `high` Hz: a second at a
+    /// time (a Hann window), averaged.
+    fn line_share(s: &[f32], low: usize, high: usize) -> f32 {
+        let n = RATE as usize;
+        let mut power = vec![0.0f64; high + 3];
+        let mut total = 0.0f64;
+        for piece in s.chunks_exact(n) {
+            let window = |i: usize| 0.5 - 0.5 * (std::f64::consts::TAU * i as f64 / n as f64).cos();
+            for (hz, p) in power.iter_mut().enumerate().skip(low.saturating_sub(2)) {
+                let (mut re, mut im) = (0.0f64, 0.0f64);
+                for (i, x) in piece.iter().enumerate() {
+                    let turn = std::f64::consts::TAU * hz as f64 * i as f64 / n as f64;
+                    re += f64::from(*x) * window(i) * turn.cos();
+                    im += f64::from(*x) * window(i) * turn.sin();
+                }
+                // A Hann window keeps 3/8 of the power: brought back to the signal's.
+                *p += (re * re + im * im) * 2.0 / (n as f64 * n as f64 * 0.375);
+            }
+            total += piece.iter().map(|x| f64::from(*x).powi(2)).sum::<f64>() / n as f64;
+        }
+        let peak = (low..high).max_by(|a, b| power[*a].total_cmp(&power[*b])).unwrap();
+        (power[peak - 2..=peak + 2].iter().sum::<f64>() / total) as f32
+    }
+
+    #[test]
+    fn the_firing_note_is_not_a_drone() {
+        // At 30 km/h the firing holds the model's 63 Hz octave, two thirds of the car's power: one line holding most
+        // of it is heard as a propeller's drone. Under a half, over seeds.
+        for seed in 1..=3 {
+            let share = line_share(&run(&mut car(seed), at(30.0), 6.0)[RATE as usize..], 40, 90);
+            assert!(share < 0.5, "seed {seed}: {:.0} % of the power on one line", 100.0 * share);
+        }
+    }
+
     #[test]
     fn the_model_gives_97_decibels_at_30_and_two_more_at_50() {
         let total = |kmh: f32| 10.0 * model(kmh).iter().flatten().map(|l| 10f32.powf(l / 10.0)).sum::<f32>().log10();
@@ -975,7 +1031,8 @@ mod tests {
     fn the_engine_fires_twice_a_turn() {
         for rpm in [1_800.0, 2_400.0] {
             let mut car = Car::new(4, &Params::default().with("rpm", rpm));
-            let s = run(&mut car, at(30.0), 1.0);
+            // Four seconds: the rumble under the firing note blurs a shorter look.
+            let s = run(&mut car, at(30.0), 4.0);
             // The seed moves the revs by a few percent: ask the car.
             let expected = RATE as f32 / (car.revs / 30.0);
             assert!((car.revs / rpm - 1.0).abs() < 0.05, "{} turns a minute for {rpm}", car.revs);

@@ -94,8 +94,16 @@ impl Params {
         }
     }
 
+    /// The value given for `name`, or `default` when none is given — or
+    /// when the one given is not a finite number: a scene is outside data,
+    /// and a voice promises finite samples.
     pub fn get(&self, name: &str, default: f32) -> f32 {
-        self.0.iter().find(|(n, _)| n == name).map_or(default, |(_, value)| *value)
+        self.0
+            .iter()
+            .find(|(n, _)| n == name)
+            .map(|(_, value)| *value)
+            .filter(|value| value.is_finite())
+            .unwrap_or(default)
     }
 
     pub fn names(&self) -> impl Iterator<Item = &str> {
@@ -220,6 +228,28 @@ mod tests {
             "metro-span" => Drive { speed: 40.0 / 3.6, load: 1.0, ..Drive::default() },
             "footsteps" => Drive { speed: 1.3, ..Drive::default() },
             _ => Drive { load: 0.5, ..Drive::default() },
+        }
+    }
+
+    #[test]
+    fn a_parameter_that_is_not_a_finite_number_is_its_default() {
+        // Each parameter of each kind given as NaN, as +∞ and as −∞: the voice is the one with its default,
+        // sample for sample.
+        for kind in KINDS {
+            let alike = ten_seconds(kind.name, 6);
+            for &(name, _) in kind.params {
+                for bad in [f32::NAN, f32::INFINITY, f32::NEG_INFINITY] {
+                    let mut voice = make(kind.name, 6, &Params::default().with(name, bad)).unwrap();
+                    let mut out = vec![0.0; RATE as usize * 10];
+                    let drive = nominal(kind.name);
+                    for (i, block) in out.chunks_mut(128).enumerate() {
+                        let hit = (matches!(kind.name, "metro-joint" | "impact") && i % 188 == 0)
+                            .then_some(Hit { at: 5, strength: 1.0 });
+                        voice.render(&Drive { hit, ..drive }, block);
+                    }
+                    assert!(out == alike, "{} with {name} = {bad}", kind.name);
+                }
+            }
         }
     }
 

@@ -26,7 +26,7 @@
 //! Parameters: `tone` (Hz, the lowest mode), `ring` (s, how long it lasts),
 //! `shape` (0 a slab, 1 a plate, 2 a bar), `hardness` (0…1, of the softer of
 //! the two), `scuff` (0…1), `grain` (0…1). Up to eight blows sound at once.
-//! Peak about 0.5 for a blow of strength 1.
+//! Peak about 0.4 for a blow of strength 1 (0.34 to 0.43 over seeds).
 //!
 //! Both things sound: a hammer on an anvil is the anvil ringing and the
 //! hammer's head ticking, a clog on a paving stone is the stone's thud and
@@ -165,6 +165,14 @@ pub struct Impact {
     grain: f32,
 }
 
+/// How long a scuff takes to fall by a factor of e, s: 7 ms for steel, 14
+/// for a sole — a rub lasts no longer than the push and a little after. (At
+/// 12 + 30 ms per unit of softness, a hiss outlasted the ring of what was
+/// struck and sounded like a sheet.)
+fn scuff_seconds(hardness: f32) -> f32 {
+    0.006 + 0.012 * (1.0 - hardness)
+}
+
 impl Impact {
     pub fn new(seed: u32, params: &Params) -> Self {
         let get = |name: &str| params.get(name, PARAMS.iter().find(|(n, _)| *n == name).map_or(0.0, |(_, d)| *d));
@@ -192,10 +200,11 @@ impl Impact {
     }
 
     fn strike(&mut self, wait: usize, strength: f32) {
-        let strength = strength.clamp(0.0, 1.5);
-        if strength <= 0.0 {
+        // Not a number is no blow, nor is nothing.
+        if strength.is_nan() || strength <= 0.0 {
             return;
         }
+        let strength = strength.min(1.5);
         // The softer thing gives way for longer: 6 ms for a sole, 0.3 ms for
         // steel on steel. A harder blow is a little shorter.
         let seconds = 0.006 * (0.05f32).powf(self.hardness) / (0.7 + 0.3 * strength);
@@ -206,7 +215,7 @@ impl Impact {
             strength,
             scuff: self.scuff * strength * 0.5,
             grain: self.grain * strength,
-            fade: (-DT / (0.012 + 0.03 * (1.0 - self.hardness))).exp(),
+            fade: (-DT / scuff_seconds(self.hardness)).exp(),
             wait: wait as u32,
             ..Blow::default()
         };
@@ -234,7 +243,12 @@ impl Impact {
         for mode in &mut blow.modes[..blow.count] {
             mode.gain *= 0.6 / shares.max(1e-6);
         }
-        blow.left = wait as u32 + push + ((longest.max(0.06) * 1.15) / DT) as u32;
+        // It lasts until its modes, its scuff and its crackle have all died
+        // by 60 dB: a sole's scuff outlasts what rings.
+        let scuffing = if blow.scuff > 0.0 { 8.0 * scuff_seconds(self.hardness) } else { 0.0 };
+        let crackling = if blow.grain > 0.0 { 6.91 * DT / (1.0 - 0.999_17) } else { 0.0 };
+        let lasts = (longest.max(0.06) * 1.15).max(scuffing).max(crackling);
+        blow.left = wait as u32 + push + (lasts / DT) as u32;
         if self.blows.len() == BLOWS {
             // The one nearest its end makes room.
             let oldest = (0..BLOWS).min_by_key(|&i| self.blows[i].left).unwrap_or(0);
@@ -248,6 +262,11 @@ impl Voice for Impact {
     fn render(&mut self, drive: &Drive, out: &mut [f32]) {
         if let Some(hit) = drive.hit {
             self.strike(hit.at.min(out.len().saturating_sub(1)), hit.strength);
+        }
+        if self.blows.is_empty() && self.still == 0.0 {
+            // Nothing sounding, nothing to make.
+            out.fill(0.0);
+            return;
         }
         for sample in out.iter_mut() {
             let mut sum = 0.0f32;
@@ -342,6 +361,34 @@ mod tests {
     const STEEL: &[(&str, f32)] = &[("tone", 210.0), ("ring", 0.9), ("shape", 1.0), ("hardness", 0.9), ("scuff", 0.05)];
     const ASPHALT: &[(&str, f32)] =
         &[("tone", 130.0), ("ring", 0.05), ("shape", 0.0), ("hardness", 0.3), ("scuff", 0.6)];
+
+    #[test]
+    fn a_soft_sole_s_scuff_dies_out_before_the_blow_is_let_go() {
+        // Leather on paving: nothing rings, the scuff is all. Its last sound, before the blow is dropped, is 60 dB
+        // under its peak: no cut.
+        let out = struck(&[("tone", 0.0), ("ring", 0.0), ("hardness", 0.3), ("scuff", 0.5)], 1.0, 2);
+        let peak = out.iter().fold(0.0f32, |m, s| m.max(s.abs()));
+        let end = out.iter().rposition(|s| *s != 0.0).unwrap();
+        let tail = out[end.saturating_sub(48)..=end].iter().fold(0.0f32, |m, s| m.max(s.abs()));
+        assert!(tail < peak * 1e-3, "{} dB at its end, {} ms", 20.0 * (tail / peak).log10(), end as f32 / 48.0);
+    }
+
+    #[test]
+    fn a_blow_that_is_not_a_number_is_no_blow() {
+        // Not a number, then two good blows: they are heard, and every sample is a number.
+        let mut voice = Impact::new(3, &Params::default());
+        let mut out = vec![0.0; RATE as usize];
+        for (i, block) in out.chunks_mut(128).enumerate() {
+            let hit = match i {
+                0 => Some(Hit { at: 0, strength: f32::NAN }),
+                100 | 200 => Some(Hit { at: 3, strength: 1.0 }),
+                _ => None,
+            };
+            voice.render(&Drive { hit, ..Drive::default() }, block);
+        }
+        assert!(out.iter().all(|s| s.is_finite()));
+        assert!(out[..100 * 128].iter().all(|s| *s == 0.0) && rms(&out[100 * 128..]) > 0.01);
+    }
 
     #[test]
     fn nothing_sounds_until_something_is_struck_and_then_it_dies() {

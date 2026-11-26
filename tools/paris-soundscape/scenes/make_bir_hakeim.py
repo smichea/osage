@@ -82,14 +82,16 @@ VEHICLE_GAIN_DB = {"car": 0.0, "scooter": 7.0}
 # bridge's upstream side, and open water further out. (name, x, z, gain dB,
 # load, voice parameters) Louder than a slow river is beside traffic: the
 # brief asks that it stay audible, and a real one is lost under every car.
+# Listened to (issue #20), it was too much: 4 dB down since, and lapping as
+# seldom as the voice's own default (once every 4 to 16 s on an ordinary day).
 WATER = [
-    ("pier-1", -87.0, -13.2, 2.0, 0.6, {"size": 0.7, "laps": 0.3}),
-    ("pier-2", -42.0, -13.2, 2.0, 0.6, {"size": 0.7, "laps": 0.3}),
-    ("island-tip", 0.0, -12.9, 4.0, 0.7, {"size": 0.9, "laps": 0.4}),
-    ("open-water-1", -70.0, -28.0, 4.0, 0.4, {"size": 0.6, "bed": 0.6, "laps": 0.1}),
-    ("open-water-2", -36.0, -34.0, 4.0, 0.4, {"size": 0.6, "bed": 0.6, "laps": 0.1}),
-    ("open-water-3", -4.0, -30.0, 4.0, 0.4, {"size": 0.6, "bed": 0.6, "laps": 0.1}),
-    ("open-water-4", 28.0, -40.0, 4.0, 0.4, {"size": 0.6, "bed": 0.6, "laps": 0.1}),
+    ("pier-1", -87.0, -13.2, -2.0, 0.6, {"size": 0.7, "laps": 0.1}),
+    ("pier-2", -42.0, -13.2, -2.0, 0.6, {"size": 0.7, "laps": 0.1}),
+    ("island-tip", 0.0, -12.9, 0.0, 0.7, {"size": 0.9, "laps": 0.1}),
+    ("open-water-1", -70.0, -28.0, 0.0, 0.4, {"size": 0.6, "bed": 0.6, "laps": 0.05}),
+    ("open-water-2", -36.0, -34.0, 0.0, 0.4, {"size": 0.6, "bed": 0.6, "laps": 0.05}),
+    ("open-water-3", -4.0, -30.0, 0.0, 0.4, {"size": 0.6, "bed": 0.6, "laps": 0.05}),
+    ("open-water-4", 28.0, -40.0, 0.0, 0.4, {"size": 0.6, "bed": 0.6, "laps": 0.05}),
 ]
 
 # A steel plate over an expansion joint of the road deck, at pier 2: the
