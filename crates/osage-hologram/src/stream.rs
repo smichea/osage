@@ -221,6 +221,9 @@ fn receive(
                         size: (0, 0),
                         stale: true,
                         made: 0.0,
+                        reduced: Default::default(),
+                        layers: Vec::new(),
+                        factor: 1,
                     },
                     Stream {
                         packed: Arc::new(packed),

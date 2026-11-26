@@ -261,7 +261,14 @@ impl Plugin for HologramPlugin {
         embedded_asset!(app, "hologram.wesl");
         app.add_plugins(MaterialPlugin::<HologramMaterial>::default())
             .init_resource::<Stacks>()
+            .init_resource::<LayerWrites>()
             .add_systems(Update, (assemble, follow, slide).chain());
+        if let Some(render) = app.get_sub_app_mut(bevy::render::RenderApp) {
+            render
+                .init_resource::<LayerWrites>()
+                .add_systems(bevy::render::ExtractSchedule, extract_layer_writes)
+                .add_systems(bevy::render::Render, write_layers.in_set(bevy::render::RenderSystems::PrepareResources));
+        }
     }
 }
 
@@ -386,6 +393,10 @@ pub(crate) struct Sources {
     /// Views reduced for a wide window, by their view, depth and normal
     /// and how much: made once each.
     pub(crate) reduced: std::collections::HashMap<Reduced, [Handle<Image>; 3]>,
+    /// The views, depths and normals each layer of the arrays holds, and
+    /// by how much they are reduced.
+    pub(crate) layers: Vec<[AssetId<Image>; 3]>,
+    pub(crate) factor: usize,
 }
 
 #[allow(clippy::type_complexity)]
@@ -501,6 +512,8 @@ fn assemble(
                 stale: false,
                 made: 0.0,
                 reduced: Default::default(),
+                layers: Vec::new(),
+                factor: 1,
             });
         }
         let (quad, centre) = stand_in(hologram, &mut meshes);
@@ -596,6 +609,66 @@ pub(crate) fn stack<'a>(views: impl Iterator<Item = &'a Image>) -> Option<Image>
 /// views halved, or quartered, as it is stacked.
 const WINDOW_BUDGET: usize = 768 << 20;
 
+/// Layers of a window's arrays to write on the GPU, in place.
+#[derive(Resource, Default)]
+pub(crate) struct LayerWrites(Vec<LayerWrite>);
+
+pub(crate) struct LayerWrite {
+    array: AssetId<Image>,
+    layer: u32,
+    width: u32,
+    height: u32,
+    data: Vec<u8>,
+    /// Frames it has waited for its array to reach the GPU.
+    tries: u8,
+}
+
+/// The layer writes of the frame, taken from the main world.
+fn extract_layer_writes(mut main: ResMut<bevy::render::MainWorld>, mut pending: ResMut<LayerWrites>) {
+    if let Some(mut writes) = main.get_resource_mut::<LayerWrites>() {
+        pending.0.append(&mut writes.0);
+    }
+}
+
+/// Writes each layer into its array on the GPU; one whose array has not
+/// reached it yet waits a few frames.
+fn write_layers(
+    mut pending: ResMut<LayerWrites>,
+    gpu_images: Res<bevy::render::render_asset::RenderAssets<bevy::render::texture::GpuImage>>,
+    queue: Res<bevy::render::renderer::RenderQueue>,
+) {
+    use bevy::render::render_resource::{
+        Extent3d, Origin3d, TexelCopyBufferLayout, TexelCopyTextureInfo, TextureAspect,
+    };
+    pending.0.retain_mut(|write| {
+        let Some(gpu) = gpu_images.get(write.array) else {
+            write.tries += 1;
+            return write.tries < 8;
+        };
+        if write.layer >= gpu.texture.depth_or_array_layers()
+            || (gpu.texture.width(), gpu.texture.height()) != (write.width, write.height)
+        {
+            return false;
+        }
+        queue.write_texture(
+            TexelCopyTextureInfo {
+                texture: &gpu.texture,
+                mip_level: 0,
+                origin: Origin3d { x: 0, y: 0, z: write.layer },
+                aspect: TextureAspect::All,
+            },
+            &write.data,
+            TexelCopyBufferLayout {
+                offset: 0,
+                bytes_per_row: Some(4 * write.width),
+                rows_per_image: Some(write.height),
+            },
+            Extent3d { width: write.width, height: write.height, depth_or_array_layers: 1 },
+        );
+        false
+    });
+}
+
 /// By how much a window's views are reduced, 1, 2 or 4, for its three
 /// arrays of `weight` bytes to come within `budget`.
 pub(crate) fn reduction(weight: usize, budget: usize) -> usize {
@@ -663,6 +736,7 @@ fn slide(
     mut holograms: Query<(&Hologram, &GlobalTransform, &Drawn, &mut Sources)>,
     mut images: ResMut<Assets<Image>>,
     mut materials: ResMut<Assets<HologramMaterial>>,
+    mut writes: ResMut<LayerWrites>,
 ) {
     // The eye: the active 3D camera drawn last.
     let Some((_, eye)) = cameras.iter().filter(|(c, _)| c.is_active).max_by_key(|(c, _)| c.order) else { return };
@@ -712,7 +786,14 @@ fn slide(
         }
         let first =
             |f: f32, size: usize, n: usize| ((f.floor() as i64 - (size as i64 - 2) / 2).max(0) as usize).min(n - size);
-        let (x, y) = (first(fa, width, columns), first(fe, height, rows));
+        // Views have come into a window still in place: only its layers
+        // whose views changed are written, on the GPU, not the arrays made
+        // again (hundreds of megabytes sent at once).
+        let refresh = inside && sources.size == (width, height) && sources.layers.len() == width * height;
+        let (x, y) = match sources.at {
+            Some(at) if refresh => at,
+            _ => (first(fa, width, columns), first(fe, height, rows)),
+        };
         let pick = |set: &Vec<Option<Handle<Image>>>| window(set, columns, (x, y), (width, height));
         let (Some(views), Some(depths), Some(normals)) =
             (pick(&sources.views), pick(&sources.depths), pick(&sources.normals))
@@ -727,30 +808,25 @@ fn slide(
         let weight: usize =
             [&v, &d, &n].into_iter().flat_map(|set| set.iter()).map(|i| i.data.as_ref().map_or(0, Vec::len)).sum();
         let factor = reduction(weight, WINDOW_BUDGET);
-        let made = if factor == 1 {
-            (stack(v.into_iter()), stack(d.into_iter()), stack(n.into_iter()))
-        } else {
-            // Each view reduced once, when first needed so; a few threads
-            // share those not reduced yet.
-            let key = |i: usize| (views[i].id(), depths[i].id(), normals[i].id(), factor);
-            // A few views a frame, one a thread: the window is made once
-            // all are reduced, without a frame stalled for all of them.
+        // The layers' pictures: the views themselves, or reduced.
+        let key = |i: usize| (views[i].id(), depths[i].id(), normals[i].id(), factor);
+        if factor > 1 {
+            // Each view reduced once, when first needed so; a few a frame,
+            // one a thread: the window is made once all are reduced,
+            // without a frame stalled for all of them.
             let threads = std::thread::available_parallelism().map_or(2, |n| n.get()).min(4);
             let missing: Vec<usize> = (0..views.len()).filter(|&i| !sources.reduced.contains_key(&key(i))).collect();
             let more = missing.len() > threads;
             let missing = &missing[..missing.len().min(threads)];
-            let per = missing.len().div_ceil(threads).max(1);
             let done: Vec<(usize, Option<[Image; 3]>)> = std::thread::scope(|scope| {
                 let parts: Vec<_> = missing
-                    .chunks(per)
-                    .map(|part| {
+                    .iter()
+                    .map(|&i| {
                         let (v, d, n) = (&v, &d, &n);
-                        scope.spawn(move || {
-                            part.iter().map(|&i| (i, reduce(factor, v[i], d[i], n[i]))).collect::<Vec<_>>()
-                        })
+                        scope.spawn(move || (i, reduce(factor, v[i], d[i], n[i])))
                     })
                     .collect();
-                parts.into_iter().flat_map(|p| p.join().unwrap_or_default()).collect()
+                parts.into_iter().filter_map(|p| p.join().ok()).collect()
             });
             for (i, small) in done {
                 let Some([sv, sd, sn]) = small else { continue };
@@ -759,16 +835,50 @@ fn slide(
             if more {
                 continue;
             }
-            let picked: Option<Vec<&[Handle<Image>; 3]>> =
-                (0..views.len()).map(|i| sources.reduced.get(&key(i))).collect();
-            let Some(picked) = picked else { continue };
-            let set = |k: usize| picked.iter().filter_map(|h| images.get(&h[k])).collect::<Vec<_>>();
-            let (sv, sd, sn) = (set(0), set(1), set(2));
-            if sv.len() != picked.len() || sd.len() != picked.len() || sn.len() != picked.len() {
-                continue;
+        }
+        let layers: Vec<[AssetId<Image>; 3]> =
+            (0..views.len()).map(|i| [views[i].id(), depths[i].id(), normals[i].id()]).collect();
+        let pictures: Option<Vec<[&Image; 3]>> = (0..views.len())
+            .map(|i| match factor {
+                1 => Some([images.get(&views[i])?, images.get(&depths[i])?, images.get(&normals[i])?]),
+                _ => {
+                    let [a, b, c] = sources.reduced.get(&key(i))?;
+                    Some([images.get(a)?, images.get(b)?, images.get(c)?])
+                }
+            })
+            .collect();
+        let Some(pictures) = pictures else { continue };
+        let now_arrays = materials.get(material).and_then(|m| {
+            Some([
+                m.extension.views.as_ref()?.id(),
+                m.extension.depths.as_ref()?.id(),
+                m.extension.normals.as_ref()?.id(),
+            ])
+        });
+        if let (true, true, Some(arrays)) = (refresh, factor == sources.factor, now_arrays) {
+            for (layer, (ids, picture)) in layers.iter().zip(&pictures).enumerate() {
+                if sources.layers[layer] == *ids {
+                    continue;
+                }
+                for (array, image) in arrays.iter().zip(picture) {
+                    let Some(data) = image.data.clone() else { continue };
+                    writes.0.push(LayerWrite {
+                        array: *array,
+                        layer: layer as u32,
+                        width: image.width(),
+                        height: image.height(),
+                        data,
+                        tries: 0,
+                    });
+                }
             }
-            (stack(sv.into_iter()), stack(sd.into_iter()), stack(sn.into_iter()))
-        };
+            sources.layers = layers;
+            sources.stale = false;
+            sources.made = now;
+            continue;
+        }
+        let set = |k: usize| pictures.iter().map(move |p| p[k]);
+        let made = (stack(set(0)), stack(set(1)), stack(set(2)));
         let (Some(colour), Some(depth), Some(normal)) = made else { continue };
         let Some(mut material) = materials.get_mut(material) else { continue };
         material.extension.views = Some(images.add(colour));
@@ -777,6 +887,8 @@ fn slide(
         material.extension.window = Vec4::new(x as f32, y as f32, width as f32, height as f32);
         sources.at = Some((x, y));
         sources.size = (width, height);
+        sources.layers = layers;
+        sources.factor = factor;
         sources.stale = false;
         sources.made = now;
     }
