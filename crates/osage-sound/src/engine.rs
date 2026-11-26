@@ -25,7 +25,13 @@
 //! on a joint — wakes a voice from a small pool, placed where the contact is
 //! on the node that was touched.
 
-use osage_sound_voices::{Drive, Hit, Voice, dsp::Noise, dsp::seed_for};
+use std::collections::BTreeMap;
+
+use osage_sound_voices::{
+    Drive, Hit, Params, Voice,
+    dsp::{Noise, seed_for},
+    recorded::{Layer, Loop, Shot},
+};
 
 use crate::{
     decay::{CENTRES, Decay},
@@ -33,7 +39,7 @@ use crate::{
     faces::{Faces, Sheets, sheets},
     field::{Decoder, Far, MOST, far_share, harmonics},
     hrir::{Hrir, Share, Speakers},
-    scene::{Head, Load, Material, Reach, Scene, Touching},
+    scene::{ClipSource, Head, Load, Material, Reach, Recorded, Scene, Touching},
     space::{Placement, Vec3, vec3},
     tree::Motion,
     ways::{Face, SOUND, Scatter, Way, Ways, air_loss, direct, mirrored, mirrored_then, mirrored_twice},
@@ -427,6 +433,8 @@ struct Source {
     speed: f32,
     accel: f32,
     detail: f32,
+    /// The highest frequency worth making, Hz ([`Drive::top`]).
+    highest: f32,
 }
 
 impl Source {
@@ -527,6 +535,59 @@ fn spread_into(send: &mut Send, fed: &[f32; BLOCK], into: &[f32; 8]) {
         }
     }
 }
+
+/// A voice for an emitter (`looping`) or a contact: synthesised, or played
+/// from recordings over its synthesised layer. Recordings not read stand
+/// for nothing: their synthesised voice alone is heard, or silence when
+/// there is none.
+fn voice_for(
+    voice: &str,
+    seed: u32,
+    params: &Params,
+    recorded: Option<&Recorded>,
+    clips: &BTreeMap<String, ClipSource>,
+    looping: bool,
+) -> Box<dyn Voice> {
+    let synthesised = || osage_sound_voices::make(voice, seed, params);
+    let Some(recorded) = recorded else {
+        return synthesised().expect("a scene names voices that exist");
+    };
+    let read: Vec<_> = recorded
+        .clips
+        .iter()
+        .filter_map(|(name, at)| clips.get(name).and_then(|source| source.clip.clone()).map(|clip| (clip, *at)))
+        .collect();
+    if read.len() < recorded.clips.len() {
+        return synthesised().unwrap_or_else(|| Box::new(Loop::new(seed, Vec::new(), recorded.follows, None)));
+    }
+    let layer = recorded.layer.and_then(|gain| synthesised().map(|voice| Layer { voice, gain: gain as f32 }));
+    if looping {
+        Box::new(Loop::new(seed, read, recorded.follows, layer))
+    } else {
+        Box::new(Shot::new(seed, read.into_iter().map(|(clip, _)| clip).collect(), layer))
+    }
+}
+
+/// The highest frequency of `table` (frequencies and what the air takes of
+/// them, dB a metre, rising) at which `metres` of air take less than
+/// [`TOP_DB`]: between two of them, on a scale of octaves.
+fn top_for(table: &[(f32, f64)], metres: f64) -> f32 {
+    let over = |&(_, db): &(f32, f64)| db * metres - TOP_DB;
+    match table.iter().position(|entry| over(entry) > 0.0) {
+        None => 24_000.0,
+        Some(0) => table[0].0,
+        Some(k) => {
+            let (low, high) = (table[k - 1], table[k]);
+            let share = (-over(&low) / (over(&high) - over(&low))).clamp(0.0, 1.0);
+            low.0 * (high.0 / low.0).powf(share as f32)
+        }
+    }
+}
+
+/// Above what the air takes this much on the straight way, dB, a voice
+/// need not make anything: it is given as the highest frequency worth
+/// making ([`Drive::top`]).
+const TOP_DB: f64 = 24.0;
 
 /// How many blocks sound takes from `metres` away, and a few more.
 fn trail_blocks(metres: f64) -> usize {
@@ -831,6 +892,9 @@ pub struct Engine {
     twice_aimed: Vec<(usize, Way)>,
     /// What the air takes at 4 kHz, dB a metre.
     air: f64,
+    /// What it takes at a sixth of an octave apart from 500 Hz to 24 kHz:
+    /// the frequency and dB a metre.
+    air_table: Vec<(f32, f64)>,
     /// The pass of the air's low-pass above which a way is left as it is.
     clear: f32,
     /// The low-passes that part the bands.
@@ -1136,8 +1200,7 @@ impl Engine {
             let ring = ((emitter.max_distance / SOUND * RATE as f64) as usize + 4 * BLOCK).next_power_of_two();
             let seed = seed_for(scene.seed, &name);
             sources.push(Source {
-                voice: osage_sound_voices::make(&emitter.voice, seed, &emitter.params)
-                    .expect("a scene names voices that exist"),
+                voice: voice_for(&emitter.voice, seed, &emitter.params, emitter.recorded.as_ref(), &scene.clips, true),
                 // What is heard from nowhere is near wherever it is.
                 heard: options.hears(&name) && !(part == Part::Far && emitter.reach != Reach::Positional),
                 turn: u64::from(seed),
@@ -1177,6 +1240,7 @@ impl Engine {
                 speed: 0.0,
                 accel: 0.0,
                 detail: 1.0,
+                highest: 24_000.0,
             });
         }
         for slot in 0..options.quality.contacts {
@@ -1218,6 +1282,7 @@ impl Engine {
                 speed: 0.0,
                 accel: 0.0,
                 detail: 1.0,
+                highest: 24_000.0,
             });
         }
         let loading = (0..sources.len())
@@ -1288,6 +1353,12 @@ impl Engine {
             twice_found: Vec::new(),
             twice_aimed: Vec::new(),
             air,
+            air_table: (0..=34)
+                .map(|sixth| {
+                    let hz = 500.0 * 2f64.powf(f64::from(sixth) / 6.0);
+                    (hz.min(24_000.0) as f32, air_loss(hz.min(24_000.0), scene.air.celsius, scene.air.humidity))
+                })
+                .collect(),
             touched,
             send: Box::new([[0.0; BLOCK]; 8]),
             made: vec![0.0; BLOCK],
@@ -1548,9 +1619,9 @@ impl Engine {
         // The softer of the two sets how long the push lasts, for both.
         let hardness = struck.hardness.min(striker.hardness) as f32;
         let gain = struck.gain * striker.gain;
-        let mut sounding = vec![(struck.voice.clone(), struck.params.clone())];
+        let mut sounding = vec![(struck.voice.clone(), struck.params.clone(), struck.recorded.clone())];
         if striker.params.get("tone", 0.0) > 0.0 && striker.params.get("ring", 0.0) > 0.0 {
-            sounding.push((striker.voice.clone(), striker.params.clone()));
+            sounding.push((striker.voice.clone(), striker.params.clone(), striker.recorded.clone()));
         }
         let name = format!(
             "{} : {} : contact with {}",
@@ -1577,7 +1648,7 @@ impl Engine {
         // told to be too faint by how far they are.
         let most = (gain * strength / distance.max(NEAREST)) as f32;
         let mut arrives: Option<f32> = None;
-        for (which, (voice, mut params)) in sounding.into_iter().enumerate() {
+        for (which, (voice, mut params, recorded)) in sounding.into_iter().enumerate() {
             // The voice that matters least: a free one, or the one least
             // heard now — as loud as it arrived, by what its voice still
             // makes of what it made at its loudest (all of it, for one just
@@ -1609,7 +1680,7 @@ impl Engine {
             params.set("hardness", hardness);
             let source = &mut self.sources[slot];
             let seed = seed_for(u64::from(seed), &format!("voice {which}"));
-            source.voice = osage_sound_voices::make(&voice, seed, &params).expect("a contact's voice exists");
+            source.voice = voice_for(&voice, seed, &params, recorded.as_ref(), &self.scene.clips, false);
             source.name.clone_from(&name);
             source.heard = heard;
             source.node = node;
@@ -1904,6 +1975,7 @@ impl Engine {
             source.accel = accel as f32;
             source.load = load;
             source.detail = if quality.full_detail { 1.0 } else { (25.0 / straight.max(1.0)).clamp(0.15, 1.0) as f32 };
+            source.highest = if quality.full_detail { 24_000.0 } else { top_for(&self.air_table, straight) };
             // Its ways are found anew when its turn comes, and at once for a
             // contact; until then they go on to where they were going.
             let every = quality.every.max(1);
@@ -2197,6 +2269,7 @@ impl Engine {
                 load: source.load,
                 hit: source.hit.take(),
                 detail: source.detail,
+                top: source.highest,
             };
             source.voice.render(&drive, &mut self.made);
             self.tally.voices += 1;

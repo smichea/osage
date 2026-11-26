@@ -95,6 +95,24 @@ cargo run --release -p paris-soundscape -- against --reference DIR [--hrir asset
 
 renders the controlled scenes (`scenes/controlled-*.json`, made by `scenes/make_controlled.py`: a noise going round, a tone passing, a tone far away, clicks at a distance, a screen, a floor) raw at reference quality, and reads them beside another engine's captures of the same geometries in `DIR` (`circle.wav`, `passby.wav`, `far.wav`, `click-near.wav`, `click-far.wav`, `screen.wav`, `screen-absent.wav`, `floor.wav`, `floor-absent.wav`; a missing file leaves its column empty). It prints markdown tables: where the ears hear the sound, its pitch, when it arrives, what a surface takes away. The figures against reference A are in [research 11](../../research/11-sound-against-reference.md). A blind listening test of the same takes has its protocol and kit in [listening/](listening/PROTOCOL.md).
 
+## Recorded voices
+
+```sh
+cargo run --release -p paris-soundscape -- render --scene tools/paris-soundscape/scenes/bir-hakeim-recorded.json --out recorded.wav
+cargo run --release -p paris-soundscape -- lod
+```
+
+The first renders the bridge with recorded voices: the scooter's engine from the kart's loops, the plate's knocks from the kart's knocks. Both come from CC0 recordings in the asset manifest (`assets/freesound/kart/`, made by `tools/make-sounds.py` from originals a person downloads). `--assets DIR` says where they are (default: `assets`). The scene is made from the bridge's by `scenes/make_recorded.py`.
+
+The second measures what each level of detail keeps and saves, by third of an octave below what the air leaves:
+
+- the loops' levels and their bytes;
+- what a loop voice costs a sample at each level;
+- a loop going away from 10 m to 880 m beside the same at full detail;
+- the recorded bridge with and without levels of detail.
+
+See [recorded voices](../../knowledge/algorithms/recorded-voices.md).
+
 ## Live
 
 ```sh

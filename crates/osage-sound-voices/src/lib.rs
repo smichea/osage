@@ -1,9 +1,9 @@
 // SPDX-FileCopyrightText: The osage contributors
 // SPDX-License-Identifier: LicenseRef-osage-AGPL-3.0-or-later-with-exceptions
 
-//! Voices for osage-sound, each synthesised sample by sample from the state
-//! of what makes it ([`Drive`]) — no recording. First those of a Paris
-//! bridge:
+//! Voices for osage-sound, each made sample by sample from the state of
+//! what makes it ([`Drive`]): synthesised, or played from recordings a
+//! world gives ([`recorded`]). First those of a Paris bridge:
 //!
 //! - **the Seine** ([`river`]): water washing round a pier, lapping, bubbles;
 //! - **the road** ([`road`]): a car's tyres and engine, a scooter (the
@@ -14,7 +14,9 @@
 //! - **what is around** ([`ambient`]): the listener's own footsteps, the
 //!   city far off;
 //! - **what touches** ([`contact`]): a blow that sets ringing what was
-//!   struck — a sole on asphalt, a tyre on a steel plate.
+//!   struck — a sole on asphalt, a tyre on a steel plate;
+//! - **recordings** ([`recorded`]): loops that follow a state and one-shots
+//!   for blows, over a synthesised layer, at levels of detail for afar.
 //!
 //! A voice gives the sound pressure one metre from its emitter; where it is
 //! heard from, and through what, is not its business. Deterministic: a
@@ -24,6 +26,7 @@ pub mod ambient;
 pub mod contact;
 pub mod dsp;
 pub mod metro;
+pub mod recorded;
 pub mod reference;
 pub mod river;
 pub mod road;
@@ -47,11 +50,14 @@ pub struct Drive {
     /// sound of the same level and colour (fewer bubbles, fewer partials);
     /// it must not click when this changes.
     pub detail: f32,
+    /// The highest frequency still worth making, Hz: what the air has not
+    /// taken on the way to the listener. A voice may make less above it.
+    pub top: f32,
 }
 
 impl Default for Drive {
     fn default() -> Self {
-        Self { speed: 0.0, accel: 0.0, load: 0.0, hit: None, detail: 1.0 }
+        Self { speed: 0.0, accel: 0.0, load: 0.0, hit: None, detail: 1.0, top: RATE as f32 / 2.0 }
     }
 }
 

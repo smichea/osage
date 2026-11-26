@@ -8,7 +8,7 @@ osage's sound is synthesised from the state of what makes it and placed in the o
 
 An object is a tree of nodes, each placed relative to its parent ([06 — objects](06-objects.md)). Sound adds three things to a node, and a listener:
 
-1. **Emitters:** what the node sounds like by itself. A voice — a generator, not a recording — and its parameters, placed at a position local to the node.
+1. **Emitters:** what the node sounds like by itself. A voice — a generator and its parameters, or recordings a world gives as content, over a generator for what was not recorded — placed at a position local to the node.
 2. **Surfaces:** what sound meets. Faces with an acoustic material; they reflect and they hide.
 3. **Touches:** what the node touches as it goes. Feet and wheels, so that a contact sounds as the two materials meeting do.
 
@@ -53,7 +53,9 @@ The prototype writes them in sibling `osageSound` keys, because the engine's rea
 |---|---|
 | `node.extras.osageSound.emitters[]` | `id`; `type`: `positional` or `global` (straight into the ears, with a `pan`); `voice` and `params`: a generator and what it is given; `positionM`: where in the node; `gainDb`; `maxDistanceM`; `load` or `loadedBy` (which other emitters, when near, excite it: a span under a train); `reflections`. The names follow the draft glTF extension `KHR_audio_emitter` (an open pull request on the Khronos glTF repository) where it has one. |
 | `node.extras.osageSound.proxyBeyondM` | From this far from the listener, the node's own emitters stand for its whole branch. The same cut through the tree as `subtreeProxy` makes for the eye and for contact ([06 §2](06-objects.md)): thirteen emitters of a train become two. |
-| `asset.extras.osageSound.contactSounds` | For a key of `collisionMaterials`: `voice` and `params` (`tone`, `ring`, `shape`, `scuff`, `grain`), `hardness`, `gainDb`. |
+| `asset.extras.osageSound.contactSounds` | For a key of `collisionMaterials`: `voice` and `params` (`tone`, `ring`, `shape`, `scuff`, `grain`), `hardness`, `gainDb`; `recorded` (below), whose `clips` are names of one-shots. |
+| `asset.extras.osageSound.clips` | Recordings, by name: `uri` (an Ogg Vorbis or WAV file, from the assets' root; each one in the asset manifest with its source, licence and hash) and `loop`. A clip made at a lower rate (24, 12 or 6 kHz) is kept at that rate: a quarter of the bytes at 12 kHz, for what is only heard from afar. |
+| `node.extras.osageSound.emitters[].recorded`, `contactSounds.*.recorded` | A voice played from recordings ([recorded voices](../knowledge/algorithms/recorded-voices.md), D-245). For an emitter: `clips`, each `{"clip", "at"}`, a loop and the value of what it follows it was recorded at; `follows`: `speed` (m/s) or `load`. For a contact sound: `clips`, names of one-shots, one drawn for each blow. `layerGainDb`: the emitter's or the contact sound's own `voice` sounds under the recordings at that gain; without it, the recordings alone. A recording that was not read leaves the voice alone, or silence. |
 | `node.extras.osageSound.surfaces[]` | Stands for `acoustic[]` and `collision[]` while a scene has no meshes: `quadM` (four corners), `acoustic` and `collision` (material keys), `reflects`, `occludes`, `strikes`. |
 | `node.extras.osageSound.surfaceSound` | For an object with meshes: by the identifier of an `acoustic[]` or `collision[]` surface, `reflects` and `occludes` (true when not said) and `strikes` (false). The faces are the meshes' triangles, two of a flat convex quad taken as one; faces of one plane that share a side are one surface ([sound faces from meshes](../knowledge/algorithms/sound-faces.md)). An acoustic material the format leaves unknown (`{}`) is not met by sound. |
 | `node.extras.osageSound.motion`, `turning`, `touches` | Stand for the [simulation](07-city-scale-quality.md#movement-people-and-vehicles): a node going along a straight way at a speed that changes, a node turning, feet and wheels. |
@@ -95,7 +97,8 @@ What is too quiet to matter is not made:
 - the ways are ranked by how loud they arrive, and only the loudest are rendered; ways as loud as one another at the edge are kept or left out together;
 - a voice none of whose ways is rendered sleeps, unless it is among those that still feed the reverberation;
 - a contact that does not reach the ears takes only a free voice;
-- from afar, a node stands for its branch.
+- from afar, a node stands for its branch;
+- from afar, a voice played from recordings reads a coarser level of them, one that still holds what the air leaves, and drops what can no longer be told: a second loop 25 dB down, the variations of its shots, its synthesised layer ([recorded voices](../knowledge/algorithms/recorded-voices.md), D-245).
 
 On the bridge (41 emitters, 45 s), on one core of an Intel Core i5-1335U held at 1.3 GHz, 2026-11-24, in milliseconds of processor for a second of sound (under 1 000 keeps up with the clock):
 

@@ -5467,6 +5467,7 @@ dependencies = [
  "bevy",
  "crossbeam-channel",
  "gltf",
+ "lewton",
  "osage-dynamics",
  "osage-objects",
  "osage-sound-analysis",

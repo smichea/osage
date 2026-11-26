@@ -61,7 +61,7 @@ fn main() -> std::io::Result<()> {
             Hit { at: 0, strength: 1.0 }
         });
         let accel = (to - from) / seconds;
-        voice.render(&Drive { speed, accel, load, hit, detail }, block);
+        voice.render(&Drive { speed, accel, load, hit, detail, ..Drive::default() }, block);
     }
 
     let rms = |xs: &[f32]| (xs.iter().map(|s| s * s).sum::<f32>() / xs.len().max(1) as f32).sqrt();

@@ -1164,7 +1164,7 @@ made_from = "assets/freesound/originals/175964__kristian321__motocross-bike-star
 licence = "CC0-1.0"
 author = "kristian321 (Freesound)"
 source = "https://freesound.org/people/kristian321/sounds/175964/"
-used_by = "worlds/kart/native: kart sound, engine-idle"
+used_by = "worlds/kart/native: kart sound, engine-idle; tools/paris-soundscape: the recorded bridge (scenes/bir-hakeim-recorded.json)"
 
 [[asset]]
 path = "assets/freesound/kart/engine-mid.ogg"
@@ -1173,7 +1173,7 @@ made_from = "assets/freesound/originals/675214__craigsmith__s22-11-2-stroke-dirt
 licence = "CC0-1.0"
 author = "craigsmith (Freesound)"
 source = "https://freesound.org/people/craigsmith/sounds/675214/"
-used_by = "worlds/kart/native: kart sound, engine-mid"
+used_by = "worlds/kart/native: kart sound, engine-mid; tools/paris-soundscape: the recorded bridge (scenes/bir-hakeim-recorded.json)"
 
 [[asset]]
 path = "assets/freesound/kart/engine-high.ogg"
@@ -1182,7 +1182,7 @@ made_from = "assets/freesound/originals/675214__craigsmith__s22-11-2-stroke-dirt
 licence = "CC0-1.0"
 author = "craigsmith (Freesound)"
 source = "https://freesound.org/people/craigsmith/sounds/675214/"
-used_by = "worlds/kart/native: kart sound, engine-high"
+used_by = "worlds/kart/native: kart sound, engine-high; tools/paris-soundscape: the recorded bridge (scenes/bir-hakeim-recorded.json)"
 
 [[asset]]
 path = "assets/freesound/kart/squeal.ogg"
@@ -1218,7 +1218,7 @@ made_from = "assets/freesound/originals/151470__bellick__plastic-hit-1.wav"
 licence = "CC0-1.0"
 author = "bellick (Freesound)"
 source = "https://freesound.org/people/bellick/sounds/151470/"
-used_by = "worlds/kart/native: kart sound, knock-1"
+used_by = "worlds/kart/native: kart sound, knock-1; tools/paris-soundscape: the recorded bridge (scenes/bir-hakeim-recorded.json)"
 
 [[asset]]
 path = "assets/freesound/kart/knock-2.ogg"
@@ -1227,7 +1227,7 @@ made_from = "assets/freesound/originals/151470__bellick__plastic-hit-1.wav"
 licence = "CC0-1.0"
 author = "bellick (Freesound)"
 source = "https://freesound.org/people/bellick/sounds/151470/"
-used_by = "worlds/kart/native: kart sound, knock-2"
+used_by = "worlds/kart/native: kart sound, knock-2; tools/paris-soundscape: the recorded bridge (scenes/bir-hakeim-recorded.json)"
 
 [[asset]]
 path = "assets/freesound/kart/knock-3.ogg"
@@ -1236,7 +1236,7 @@ made_from = "assets/freesound/originals/151470__bellick__plastic-hit-1.wav"
 licence = "CC0-1.0"
 author = "bellick (Freesound)"
 source = "https://freesound.org/people/bellick/sounds/151470/"
-used_by = "worlds/kart/native: kart sound, knock-3"
+used_by = "worlds/kart/native: kart sound, knock-3; tools/paris-soundscape: the recorded bridge (scenes/bir-hakeim-recorded.json)"
 
 # Music — OpenGameArt, CC0 (each page's "License(s)" field says CC0 alone),
 # downloaded from the file links of the pages below. Their playlist

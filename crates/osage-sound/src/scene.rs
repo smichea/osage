@@ -23,7 +23,10 @@
 
 use std::collections::BTreeMap;
 
-use osage_sound_voices::Params;
+use osage_sound_voices::{
+    Params,
+    recorded::{Clip, Follows},
+};
 use serde_json::Value;
 
 use crate::{
@@ -70,6 +73,9 @@ impl Material {
 pub struct ContactSound {
     pub voice: String,
     pub params: Params,
+    /// One-shots played from recordings instead, the voice then a layer
+    /// under them or nothing.
+    pub recorded: Option<Recorded>,
     /// How hard it is, 0…1: of two things touching, the softer sets how
     /// long the push lasts.
     pub hardness: f64,
@@ -104,6 +110,27 @@ pub enum Reach {
     Global { pan: f64 },
 }
 
+/// A recording a scene's voices may play: where it is, from the assets'
+/// root, whether it loops, and its samples once read
+/// ([`Scene::load_clips`]).
+#[derive(Clone, Debug, PartialEq)]
+pub struct ClipSource {
+    pub uri: String,
+    pub looped: bool,
+    pub clip: Option<std::sync::Arc<Clip>>,
+}
+
+/// A voice played from recordings (`"recorded"` on an emitter or a contact
+/// sound): the clips by name, each with the value of what it follows it was
+/// recorded at (for a loop), and the synthesised voice under it, if any, at
+/// a gain.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Recorded {
+    pub follows: Follows,
+    pub clips: Vec<(String, f32)>,
+    pub layer: Option<f64>,
+}
+
 /// What loads an emitter's voice (`Drive::load`).
 #[derive(Clone, Debug, PartialEq)]
 pub enum Load {
@@ -126,8 +153,12 @@ pub struct Emitter {
     pub node: usize,
     /// Where it is in its node's frame, m.
     pub offset: Vec3,
+    /// Its synthesised voice; empty for one played from recordings alone.
     pub voice: String,
     pub params: Params,
+    /// Loops played from recordings instead, the voice then a layer under
+    /// them or nothing.
+    pub recorded: Option<Recorded>,
     /// Its level one metre away, as a gain on the voice's own.
     pub gain: f64,
     pub reach: Reach,
@@ -187,6 +218,8 @@ pub struct Scene {
     pub emitters: Vec<Emitter>,
     pub touches: Vec<Touch>,
     pub contacts: BTreeMap<String, ContactSound>,
+    /// The recordings its voices play, by name.
+    pub clips: BTreeMap<String, ClipSource>,
     /// The node that hears, and where its head is in it.
     pub listener: usize,
     pub ears: Vec3,
@@ -282,6 +315,39 @@ fn params(at: Option<At>) -> Read<Params> {
         }
     }
     Ok(params)
+}
+
+/// A voice played from recordings, as an emitter (`looping`) or a contact
+/// sound gives it: the clips it names must be the scene's, loops for a
+/// loop and shots for a contact.
+fn recorded(at: Option<At>, clips: &BTreeMap<String, ClipSource>, looping: bool) -> Read<Option<Recorded>> {
+    let Some(at) = at else { return Ok(None) };
+    let follows = match at.get("follows").map_or(Ok("speed"), |f| f.text())? {
+        "speed" => Follows::Speed,
+        "load" => Follows::Load,
+        other => return at.fail(format!("a recording follows the speed or the load, not \"{other}\"")),
+    };
+    let mut named = Vec::new();
+    for clip in at.need("clips")?.list()? {
+        let (name, recorded_at) =
+            if looping { (clip.need("clip")?.text()?, clip.number_or("at", 0.0)? as f32) } else { (clip.text()?, 0.0) };
+        match clips.get(name) {
+            None => return clip.fail(format!("no recording named \"{name}\"")),
+            Some(source) if source.looped != looping => {
+                return clip.fail(if looping {
+                    "an emitter loops its recordings"
+                } else {
+                    "a contact plays its recordings once"
+                });
+            }
+            Some(_) => named.push((name.to_owned(), recorded_at)),
+        }
+    }
+    if named.is_empty() {
+        return at.fail("no recording");
+    }
+    let layer = at.get("layerGainDb").map(|db| db.number()).transpose()?.map(gain);
+    Ok(Some(Recorded { follows, clips: named, layer }))
 }
 
 /// A list of identifiers from a root, found in the tree.
@@ -423,6 +489,14 @@ impl Scene {
         }
 
         let sound = asset.need("osageSound")?;
+        let mut clips = BTreeMap::new();
+        for (key, at) in sound.get("clips").map_or(Ok(Vec::new()), |c| c.entries())? {
+            let uri = at.need("uri")?.text()?.to_owned();
+            if !(uri.ends_with(".ogg") || uri.ends_with(".wav")) {
+                return at.fail("a recording is an Ogg Vorbis or a WAV file");
+            }
+            clips.insert(key.to_owned(), ClipSource { uri, looped: at.flag_or("loop", false)?, clip: None });
+        }
         let mut contacts = BTreeMap::new();
         for (key, at) in sound.need("contactSounds")?.entries()? {
             if !collision.contains(&key) {
@@ -436,7 +510,8 @@ impl Scene {
                 return at.fail(format!("no voice named \"{voice}\""));
             }
             let level = gain(at.number_or("gainDb", 0.0)?);
-            contacts.insert(key.to_owned(), ContactSound { voice, params: given, hardness, gain: level });
+            let recorded = recorded(at.get("recorded"), &clips, false)?;
+            contacts.insert(key.to_owned(), ContactSound { voice, params: given, recorded, hardness, gain: level });
         }
 
         let (mut surfaces, mut emitters, mut touches) = (Vec::new(), Vec::new(), Vec::new());
@@ -520,13 +595,27 @@ impl Scene {
                 });
             }
             for e in extra.get("emitters").map_or(Ok(Vec::new()), |e| e.list())? {
-                let voice = e.need("voice")?.text()?.to_owned();
-                let Some(kind) = osage_sound_voices::kind(&voice) else {
-                    return e.fail(format!("no voice named \"{voice}\""));
+                let recorded = recorded(e.get("recorded"), &clips, true)?;
+                // Played from recordings, an emitter needs no voice: its
+                // voice is then the layer under them.
+                let voice = match (e.get("voice"), &recorded) {
+                    (Some(voice), _) => voice.text()?.to_owned(),
+                    (None, Some(_)) => String::new(),
+                    (None, None) => e.need("voice")?.text()?.to_owned(),
                 };
+                if recorded.as_ref().is_some_and(|r| r.layer.is_some()) && voice.is_empty() {
+                    return e.fail("a layer under recordings needs a voice");
+                }
                 let given = params(e.get("params"))?;
-                if let Some(unknown) = given.names().find(|name| !kind.params.iter().any(|(known, _)| known == name)) {
-                    return e.fail(format!("the voice \"{voice}\" has no parameter \"{unknown}\""));
+                if !voice.is_empty() {
+                    let Some(kind) = osage_sound_voices::kind(&voice) else {
+                        return e.fail(format!("no voice named \"{voice}\""));
+                    };
+                    if let Some(unknown) =
+                        given.names().find(|name| !kind.params.iter().any(|(known, _)| known == name))
+                    {
+                        return e.fail(format!("the voice \"{voice}\" has no parameter \"{unknown}\""));
+                    }
                 }
                 let reach = match e.get("type").map_or(Ok("positional"), |t| t.text())? {
                     "positional" => Reach::Positional,
@@ -542,6 +631,7 @@ impl Scene {
                     offset: e.get("positionM").map_or(Ok(Vec3::ZERO), |p| p.point())?,
                     voice,
                     params: given,
+                    recorded,
                     gain: gain(e.number_or("gainDb", 0.0)?),
                     reach,
                     load: Load::Fixed(e.number_or("load", 0.5)?),
@@ -623,6 +713,7 @@ impl Scene {
             emitters,
             touches,
             contacts,
+            clips,
         })
     }
 

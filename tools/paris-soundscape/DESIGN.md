@@ -33,6 +33,14 @@ With `--hrir assets/sadie/d2-48k.hrir` (D-242, `tools/make-hrir.py`), headphones
 
 The voices are synthesised sample by sample from the state of what makes them (`crates/osage-sound-voices`): the Seine as bubbles, a noise bed and laps ([van den Doel, 2005](http://persianney.com/kvdoelcsubc/publications/tap05.pdf)); cars shaped to the European road-noise model's octave levels (CNOSSOS-EU, Directive (EU) 2015/996); a scooter, which is the kart's two-stroke (`osage-kart-sound`, reused as its card suggests); a rubber-tyred metro as rolling bogies, the stepped whine of its traction, and the steel viaduct rumbling under it; contacts as a short push that sets ringing what was struck. Each lists its own assumptions in its module.
 
+A voice may instead play recordings a world gives as content (issue #22, D-245):
+
+- **Loops** follow a speed or a load, crossfaded between the clips recorded either side of it and played faster or slower to follow it.
+- **One-shots** are drawn from a set for each blow.
+- **A synthesised layer** may sound under either.
+
+`scenes/bir-hakeim-recorded.json` (made by `scenes/make_recorded.py`) is the bridge with recorded voices. The scooter plays the kart's three CC0 engine loops, and the expansion joint's plate plays its three knocks, each over its synthesised voice. Those are borrowed sounds: a dirt bike and plastic. They show the mechanism, not the right sounds. From afar, a recorded voice reads a coarser level of its clips — the clip at a half, a quarter or an eighth of its rate, like a texture's mipmaps — chosen by what the air leaves. It also drops what can no longer be told. See [recorded voices](../../knowledge/algorithms/recorded-voices.md).
+
 ## What an object carries for sound
 
 What an object carries for sound — its acoustic material, its emitters, the sound it makes when touched — the four contacts the `impact` voice makes, and the fields proposed for the [object format](../../design/08-object-format.md#fields) are in [design/09 §2](../../design/09-sound.md#2-what-an-object-carries-for-sound). In the scene the walker's steps change as the ground does (asphalt, then a steel plate over an expansion joint), the cars knock on the same plate, and each axle of the train knocks on the viaduct's joint; here feet and wheels stand for the [physics](../../knowledge/modules/osage-dynamics.md).
@@ -167,3 +175,10 @@ Not there, or weak:
 4. ~~The sound field for what is far, and its stream~~: built and measured (#17): `osage_sound::field`, `paris-soundscape far`, `field`, `decode` and `bench/field_opus.py`; see the card [far sound field](../../knowledge/algorithms/far-sound-field.md). Still to do: a crossfade between two cubes' fields, and the stream itself.
 5. ~~Ears from measured responses~~: done (#18, D-242): SADIE II's KEMAR through 54 virtual loudspeakers, `--hrir`; see the card [measured ears](../../knowledge/algorithms/measured-ears.md). Still to do: the far field's loudspeakers through the same responses, and listening to it.
 6. Against the external reference (#19, D-243): the controlled scenes measured beside its captures, figure for figure (`paris-soundscape against`, [research 11](../../research/11-sound-against-reference.md)): osage is nearer what each geometry asks in every scene both played. The blind listening test, as [design/07](../../design/07-city-scale-quality.md) asks, is written down and its kit made ([listening/PROTOCOL.md](listening/PROTOCOL.md)); it still needs its listeners.
+7. ~~Voices from recordings, and levels of detail~~: done (#22, D-245). Loops, one-shots and layers from clips named as content, read from Ogg Vorbis or WAV. Each clip is kept at four levels of rate, and the coarsest that holds what the air leaves is played from afar. `paris-soundscape lod` measures each level against the whole recording:
+
+    - **Levels of rate:** within 1 dB in every third of an octave the air leaves.
+    - **One loop instead of two, where the other is 25 dB down:** within 2.5 dB.
+    - **What each saves:** no processor time for a level, which saves bytes when a clip is shipped at a lower rate; half a loop voice for one loop instead of two.
+
+    Still to do: steps of a crowd merged into one texture, and recordings of the right things.

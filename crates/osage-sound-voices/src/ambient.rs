@@ -741,8 +741,8 @@ mod tests {
     use super::*;
     use crate::make;
 
-    const WALKING: Drive = Drive { speed: WALK, accel: 0.0, load: 0.0, hit: None, detail: 1.0 };
-    const STILL: Drive = Drive { speed: 0.0, accel: 0.0, load: 0.0, hit: None, detail: 1.0 };
+    const WALKING: Drive = Drive { speed: WALK, accel: 0.0, load: 0.0, hit: None, detail: 1.0, top: 24_000.0 };
+    const STILL: Drive = Drive { speed: 0.0, accel: 0.0, load: 0.0, hit: None, detail: 1.0, top: 24_000.0 };
 
     fn steps(seed: u32) -> Box<dyn Voice> {
         make("footsteps", seed, &Params::default()).unwrap()
@@ -1219,7 +1219,12 @@ mod tests {
     fn the_city_follows_nothing_but_the_detail() {
         let whole = play(&mut *city(14), STILL, 5.0, 128);
         let hit = Some(crate::Hit { at: 3, strength: 1.0 });
-        let driven = play(&mut *city(14), Drive { speed: 14.0, accel: -1.0, load: 1.0, hit, detail: 1.0 }, 5.0, 128);
+        let driven = play(
+            &mut *city(14),
+            Drive { speed: 14.0, accel: -1.0, load: 1.0, hit, detail: 1.0, top: 24_000.0 },
+            5.0,
+            128,
+        );
         assert!(driven == whole);
     }
 

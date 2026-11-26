@@ -1,5 +1,9 @@
 # Knowledge Update Log
 
+## 2026-11-26
+
+* **Creation**: Added the algorithm [recorded voices and their levels of detail](/algorithms/recorded-voices.md). **Update**: [osage-sound-voices](/modules/osage-sound-voices.md) and [osage-sound](/modules/osage-sound.md) play recordings a world gives, and from afar a coarser level of them (issue #22, D-245).
+
 ## 2026-11-25
 
 * **Creation**: Added the algorithm [space decay from rays](/algorithms/space-decay-rays.md). **Update**: [sound ways](/algorithms/sound-ways.md) now go round two edges, mirror twice, and take a moving face's mirror from where it was. [Feedback delay reverberation](/algorithms/feedback-delay-reverb.md) is fed by direction, and also by emitters that are hidden. In [sound delay lines](/algorithms/sound-delay-lines.md), ties at the budget's edge are kept or left out together. In [contact voices](/algorithms/contact-voices.md), a hidden contact rings out for when it is heard. Also updated: [osage-sound](/modules/osage-sound.md) (issue #21, D-244).

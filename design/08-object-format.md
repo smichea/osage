@@ -29,7 +29,7 @@ A collision triangle has an oriented material side. When baking a node's local v
 
 A collision material carries non-negative friction and restitution in [0,1]. For the two current solvers, contact friction uses the geometric mean and restitution uses the larger value. The capsule in the drop test has zero restitution. Acoustic material coefficients describe energy fractions at 250, 1000 and 4000 Hz in that order. Absorption and transmission are triples in [0,1], with a sum at most one in each band. The remaining energy is reflected. A scalar scattering coefficient in [0,1] represents the diffuse fraction of that reflected energy. An empty material `{}` records an unknown response. A probe can still locate its surface. A clip or impact sound is a distinct asset. [Material validation](../crates/osage-objects/src/profile.rs) · [Physics adapters](../crates/osage-dynamics/src/lib.rs)
 
-The sound scene reader accepts emitters and contact definitions in sibling `osageSound` fields. The object profile uses the surface response above. Integrating the emission fields into that profile is proposed in the sound design. [Sound proposal, §2](09-sound.md#2-what-an-object-carries-for-sound)
+The sound scene reader accepts emitters, contact definitions and the recordings they play in sibling `osageSound` fields. The object profile uses the surface response above. Integrating the emission fields into that profile is proposed in the sound design. [Sound proposal, §2](09-sound.md#2-what-an-object-carries-for-sound)
 
 ## Articulated actors
 

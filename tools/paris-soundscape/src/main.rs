@@ -9,6 +9,7 @@
 //! See the README beside this crate.
 
 mod against;
+mod lod;
 
 use std::{path::PathBuf, process::ExitCode, time::Instant};
 
@@ -80,6 +81,10 @@ paris-soundscape: a scene's sound placed in its object tree and carried to two e
              --reference DIR     the captures (circle.wav, passby.wav, far.wav, click-near.wav,
                                  click-far.wav, screen.wav, screen-absent.wav, floor.wav, floor-absent.wav)
              --hrir FILE         also with measured ears
+  lod      what each level of detail of a recorded voice keeps and saves: the kart's engine loops at their
+           levels, what a loop voice costs a sample at each, a loop going away beside the same at its best
+           (by third of an octave below what the air leaves), the recorded bridge with and without levels
+           of detail (takes --assets)
   measure FILE.wav
            what any stereo file tells of where its sounds are: peaks, loudness, octaves, and second
            by second the level and time differences between the ears (--json for a receipt)
@@ -89,7 +94,9 @@ paris-soundscape: a scene's sound placed in its object tree and carried to two e
              --buffer-ms MS      how much the output takes at once (default 10)
              --ahead N           blocks kept made for it (default: the buffer in blocks, and one more)
 
-  --scene FILE on either: another scene than the bridge that comes with the program.
+  --scene FILE on either: another scene than the bridge that comes with the program
+               (scenes/bir-hakeim-recorded.json: the bridge with recorded engines and knocks).
+  --assets DIR the folder the recordings a scene names are read from (default: assets).
 ";
 
 struct Args(Vec<String>);
@@ -128,6 +135,10 @@ fn scene(args: &Args) -> Result<Scene, String> {
     };
     if let Some(seed) = args.number("--seed")? {
         scene.seed = seed as u64;
+    }
+    // The recordings it names, from the assets' folder.
+    if !scene.clips.is_empty() {
+        scene.load_clips(std::path::Path::new(args.value("--assets").unwrap_or("assets")))?;
     }
     let train = scene.tree.find(&TRAIN);
     if let (Some(train), Some(at)) = (train, args.number("--metro-at")?) {
@@ -1265,6 +1276,7 @@ fn main() -> ExitCode {
         "field" => run_field(&args),
         "decode" => run_decode(&args),
         "compare" => run_compare(&args),
+        "lod" => lod::run(std::path::Path::new(args.value("--assets").unwrap_or("assets"))),
         _ => {
             print!("{HELP}");
             return if command.is_empty() || command == "help" || command == "--help" {
