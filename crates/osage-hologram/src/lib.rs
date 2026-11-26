@@ -262,7 +262,7 @@ impl Plugin for HologramPlugin {
         app.add_plugins(MaterialPlugin::<HologramMaterial>::default())
             .init_resource::<Stacks>()
             .init_resource::<LayerWrites>()
-            .add_systems(Update, (assemble, follow, slide).chain());
+            .add_systems(Update, (assemble, follow, slide, fill).chain());
         if let Some(render) = app.get_sub_app_mut(bevy::render::RenderApp) {
             render
                 .init_resource::<LayerWrites>()
@@ -392,7 +392,9 @@ pub(crate) struct Sources {
     pub(crate) made: f64,
     /// Views reduced for a wide window, by their view, depth and normal
     /// and how much: made once each.
-    pub(crate) reduced: std::collections::HashMap<Reduced, [Handle<Image>; 3]>,
+    pub(crate) reduced: std::collections::HashMap<Reduced, std::sync::Arc<Pictures>>,
+    /// A new window being filled on the GPU.
+    pub(crate) filling: Option<Filling>,
     /// The views, depths and normals each layer of the arrays holds, and
     /// by how much they are reduced.
     pub(crate) layers: Vec<[AssetId<Image>; 3]>,
@@ -512,6 +514,7 @@ fn assemble(
                 stale: false,
                 made: 0.0,
                 reduced: Default::default(),
+                filling: None,
                 layers: Vec::new(),
                 factor: 1,
             });
@@ -618,9 +621,11 @@ pub(crate) struct LayerWrite {
     layer: u32,
     width: u32,
     height: u32,
-    data: Vec<u8>,
+    data: std::sync::Arc<Vec<u8>>,
     /// Frames it has waited for its array to reach the GPU.
     tries: u8,
+    /// Writes of a window being filled still to reach the GPU.
+    left: Option<std::sync::Arc<std::sync::atomic::AtomicUsize>>,
 }
 
 /// The layer writes of the frame, taken from the main world.
@@ -640,15 +645,22 @@ fn write_layers(
     use bevy::render::render_resource::{
         Extent3d, Origin3d, TexelCopyBufferLayout, TexelCopyTextureInfo, TextureAspect,
     };
+    // Done with, written or not: a window being filled is told.
+    let done = |write: &LayerWrite| {
+        if let Some(left) = &write.left {
+            left.fetch_sub(1, std::sync::atomic::Ordering::AcqRel);
+        }
+        false
+    };
     pending.0.retain_mut(|write| {
         let Some(gpu) = gpu_images.get(write.array) else {
             write.tries += 1;
-            return write.tries < 8;
+            return write.tries < 8 || done(write);
         };
         if write.layer >= gpu.texture.depth_or_array_layers()
             || (gpu.texture.width(), gpu.texture.height()) != (write.width, write.height)
         {
-            return false;
+            return done(write);
         }
         queue.write_texture(
             TexelCopyTextureInfo {
@@ -665,7 +677,7 @@ fn write_layers(
             },
             Extent3d { width: write.width, height: write.height, depth_or_array_layers: 1 },
         );
-        false
+        done(write)
     });
 }
 
@@ -743,6 +755,10 @@ fn slide(
     let eye = eye.translation();
     for (hologram, at, Drawn(material), mut sources) in &mut holograms {
         let Some((width, height)) = hologram.window else { continue };
+        // A new window still being filled: it is drawn first.
+        if sources.filling.is_some() {
+            continue;
+        }
         let grid = &hologram.grid;
         let (columns, rows) = (grid.azimuths.len(), grid.elevations.len());
         let (width, height) = (width.min(columns).max(1), height.min(rows).max(1));
@@ -813,45 +829,36 @@ fn slide(
         let weight: usize =
             [&v, &d, &n].into_iter().flat_map(|set| set.iter()).map(|i| i.data.as_ref().map_or(0, Vec::len)).sum();
         let factor = reduction(weight, WINDOW_BUDGET);
-        // The layers' pictures: the views themselves, or reduced.
+        // The layers' pictures: the views themselves, or reduced; each
+        // taken once, a few a frame, one a thread, and kept to be written
+        // as often as needed without being copied again.
         let key = |i: usize| (views[i].id(), depths[i].id(), normals[i].id(), factor);
-        if factor > 1 {
-            // Each view reduced once, when first needed so; a few a frame,
-            // one a thread: the window is made once all are reduced,
-            // without a frame stalled for all of them.
-            let threads = std::thread::available_parallelism().map_or(2, |n| n.get()).min(4);
-            let missing: Vec<usize> = (0..views.len()).filter(|&i| !sources.reduced.contains_key(&key(i))).collect();
-            let more = missing.len() > threads;
-            let missing = &missing[..missing.len().min(threads)];
-            let done: Vec<(usize, Option<[Image; 3]>)> = std::thread::scope(|scope| {
-                let parts: Vec<_> = missing
-                    .iter()
-                    .map(|&i| {
-                        let (v, d, n) = (&v, &d, &n);
-                        scope.spawn(move || (i, reduce(factor, v[i], d[i], n[i])))
-                    })
-                    .collect();
-                parts.into_iter().filter_map(|p| p.join().ok()).collect()
-            });
-            for (i, small) in done {
-                let Some([sv, sd, sn]) = small else { continue };
-                sources.reduced.insert(key(i), [images.add(sv), images.add(sd), images.add(sn)]);
+        let threads = std::thread::available_parallelism().map_or(2, |n| n.get()).min(4);
+        let missing: Vec<usize> = (0..views.len()).filter(|&i| !sources.reduced.contains_key(&key(i))).collect();
+        let more = missing.len() > threads;
+        let missing = &missing[..missing.len().min(threads)];
+        let done: Vec<(usize, Option<Pictures>)> = std::thread::scope(|scope| {
+            let parts: Vec<_> = missing
+                .iter()
+                .map(|&i| {
+                    let (v, d, n) = (&v, &d, &n);
+                    scope.spawn(move || (i, Pictures::of(factor, v[i], d[i], n[i])))
+                })
+                .collect();
+            parts.into_iter().filter_map(|p| p.join().ok()).collect()
+        });
+        for (i, pictures) in done {
+            if let Some(pictures) = pictures {
+                sources.reduced.insert(key(i), std::sync::Arc::new(pictures));
             }
-            if more {
-                continue;
-            }
+        }
+        if more {
+            continue;
         }
         let layers: Vec<[AssetId<Image>; 3]> =
             (0..views.len()).map(|i| [views[i].id(), depths[i].id(), normals[i].id()]).collect();
-        let pictures: Option<Vec<[&Image; 3]>> = (0..views.len())
-            .map(|i| match factor {
-                1 => Some([images.get(&views[i])?, images.get(&depths[i])?, images.get(&normals[i])?]),
-                _ => {
-                    let [a, b, c] = sources.reduced.get(&key(i))?;
-                    Some([images.get(a)?, images.get(b)?, images.get(c)?])
-                }
-            })
-            .collect();
+        let pictures: Option<Vec<std::sync::Arc<Pictures>>> =
+            (0..views.len()).map(|i| sources.reduced.get(&key(i)).cloned()).collect();
         let Some(pictures) = pictures else { continue };
         let now_arrays = materials.get(material).and_then(|m| {
             Some([
@@ -862,19 +869,8 @@ fn slide(
         });
         if let (true, true, Some(arrays)) = (refresh, factor == sources.factor, now_arrays) {
             for (layer, (ids, picture)) in layers.iter().zip(&pictures).enumerate() {
-                if sources.layers[layer] == *ids {
-                    continue;
-                }
-                for (array, image) in arrays.iter().zip(picture) {
-                    let Some(data) = image.data.clone() else { continue };
-                    writes.0.push(LayerWrite {
-                        array: *array,
-                        layer: layer as u32,
-                        width: image.width(),
-                        height: image.height(),
-                        data,
-                        tries: 0,
-                    });
+                if sources.layers[layer] != *ids {
+                    writes.0.extend(picture.writes(arrays, layer as u32, None));
                 }
             }
             sources.layers = layers;
@@ -888,20 +884,130 @@ fn slide(
             }
             continue;
         }
-        let set = |k: usize| pictures.iter().map(move |p| p[k]);
-        let made = (stack(set(0)), stack(set(1)), stack(set(2)));
-        let (Some(colour), Some(depth), Some(normal)) = made else { continue };
+        // A new window: its arrays made empty on the GPU and filled a few
+        // layers a frame, the old ones drawn until they are full.
+        let first = &pictures[0];
+        let mut empty = |k: usize| {
+            images.add(Image::new_uninit(
+                bevy::render::render_resource::Extent3d {
+                    width: first.width,
+                    height: first.height,
+                    depth_or_array_layers: pictures.len() as u32,
+                },
+                bevy::render::render_resource::TextureDimension::D2,
+                first.formats[k],
+                bevy::asset::RenderAssetUsages::RENDER_WORLD,
+            ))
+        };
+        sources.filling = Some(Filling {
+            arrays: [empty(0), empty(1), empty(2)],
+            at: (x, y),
+            size: (width, height),
+            factor,
+            layers,
+            pictures,
+            next: 0,
+            left: std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0)),
+        });
+        sources.stale = false;
+        sources.made = now;
+    }
+}
+
+/// How many layers of a new window are sent to the GPU a frame.
+const FILL_PER_FRAME: usize = 4;
+
+/// A new window being filled: its arrays, where it stands, its layers'
+/// pictures, how many have been sent and how many writes are still to
+/// reach the GPU.
+pub(crate) struct Filling {
+    arrays: [Handle<Image>; 3],
+    at: (usize, usize),
+    size: (usize, usize),
+    factor: usize,
+    layers: Vec<[AssetId<Image>; 3]>,
+    pictures: Vec<std::sync::Arc<Pictures>>,
+    next: usize,
+    left: std::sync::Arc<std::sync::atomic::AtomicUsize>,
+}
+
+/// Sends a few more layers of each window being filled and, once all have
+/// reached the GPU, draws the hologram from it.
+fn fill(
+    mut holograms: Query<(&Drawn, &mut Sources)>,
+    mut materials: ResMut<Assets<HologramMaterial>>,
+    mut writes: ResMut<LayerWrites>,
+) {
+    for (Drawn(material), mut sources) in &mut holograms {
+        let Some(filling) = sources.filling.as_mut() else { continue };
+        let arrays = [filling.arrays[0].id(), filling.arrays[1].id(), filling.arrays[2].id()];
+        let end = (filling.next + FILL_PER_FRAME).min(filling.pictures.len());
+        for layer in filling.next..end {
+            filling.left.fetch_add(3, std::sync::atomic::Ordering::AcqRel);
+            writes.0.extend(filling.pictures[layer].writes(arrays, layer as u32, Some(filling.left.clone())));
+        }
+        filling.next = end;
+        if end < filling.pictures.len() || filling.left.load(std::sync::atomic::Ordering::Acquire) > 0 {
+            continue;
+        }
+        let Some(filling) = sources.filling.take() else { continue };
         let Some(mut material) = materials.get_mut(material) else { continue };
-        material.extension.views = Some(images.add(colour));
-        material.extension.depths = Some(images.add(depth));
-        material.extension.normals = Some(images.add(normal));
+        let [views, depths, normals] = filling.arrays;
+        material.extension.views = Some(views);
+        material.extension.depths = Some(depths);
+        material.extension.normals = Some(normals);
+        let (x, y) = filling.at;
+        let (width, height) = filling.size;
         material.extension.window = Vec4::new(x as f32, y as f32, width as f32, height as f32);
         sources.at = Some((x, y));
         sources.size = (width, height);
-        sources.layers = layers;
-        sources.factor = factor;
-        sources.stale = false;
-        sources.made = now;
+        sources.layers = filling.layers;
+        sources.factor = filling.factor;
+    }
+}
+
+/// A view's picture, its depth's and its normals', as a layer of a
+/// window's arrays: the views' own, or reduced.
+pub(crate) struct Pictures {
+    width: u32,
+    height: u32,
+    formats: [bevy::render::render_resource::TextureFormat; 3],
+    data: [std::sync::Arc<Vec<u8>>; 3],
+}
+
+impl Pictures {
+    fn of(factor: usize, view: &Image, depth: &Image, normal: &Image) -> Option<Self> {
+        let formats = [view, depth, normal].map(|i| i.texture_descriptor.format);
+        let ([v, d, n], width, height) = if factor == 1 {
+            let (width, height) = (depth.width(), depth.height());
+            if [view, normal].iter().any(|i| (i.width(), i.height()) != (width, height)) {
+                return None;
+            }
+            ([view.data.clone()?, depth.data.clone()?, normal.data.clone()?], width, height)
+        } else {
+            let [mut v, mut d, mut n] = reduce(factor, view, depth, normal)?;
+            let (width, height) = (d.width(), d.height());
+            ([v.data.take()?, d.data.take()?, n.data.take()?], width, height)
+        };
+        Some(Self { width, height, formats, data: [v, d, n].map(std::sync::Arc::new) })
+    }
+
+    /// Its three writes into `arrays` at `layer`.
+    fn writes(
+        &self,
+        arrays: [AssetId<Image>; 3],
+        layer: u32,
+        left: Option<std::sync::Arc<std::sync::atomic::AtomicUsize>>,
+    ) -> impl Iterator<Item = LayerWrite> + '_ {
+        (0..3).map(move |k| LayerWrite {
+            array: arrays[k],
+            layer,
+            width: self.width,
+            height: self.height,
+            data: self.data[k].clone(),
+            tries: 0,
+            left: left.clone(),
+        })
     }
 }
 

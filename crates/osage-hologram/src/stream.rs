@@ -222,6 +222,7 @@ fn receive(
                         stale: true,
                         made: 0.0,
                         reduced: Default::default(),
+                        filling: None,
                         layers: Vec::new(),
                         factor: 1,
                     },
