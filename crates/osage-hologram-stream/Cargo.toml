@@ -16,6 +16,10 @@ name = "hologram-pack"
 path = "src/bin/hologram-pack.rs"
 
 [[bin]]
+name = "hologram-unpack"
+path = "src/bin/hologram-unpack.rs"
+
+[[bin]]
 name = "hologram-serve"
 path = "src/bin/hologram-serve.rs"
 
