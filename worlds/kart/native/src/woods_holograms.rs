@@ -23,6 +23,8 @@ use osage_hologram::{Framing, Scene, SceneModel};
 use osage_kart_land::{Frame, Land};
 use osage_props::{Use, Woods};
 
+/// The window of views a chunk keeps on the GPU: columns, rows.
+const WINDOW: (usize, usize) = (5, 3);
 /// A chunk's side, m.
 pub const CHUNK: f32 = 60.0;
 /// The fewest trees worth a chunk.
@@ -165,7 +167,9 @@ pub fn draw(commands: &mut Commands, root: &Path, track: &str, woods: &mut [Wood
         w.places.retain(|place| !cells.contains(&cell_of(place.translation)));
     }
     for (folder, _, framing) in &chunks {
-        commands.spawn((crate::scene::Part, framing.hologram(folder), framing.transform()));
+        // Only a window of views on the GPU, slid as the camera moves.
+        let hologram = osage_hologram::Hologram { window: Some(WINDOW), ..framing.hologram(folder) };
+        commands.spawn((crate::scene::Part, hologram, framing.transform()));
     }
     info!(chunks = chunks.len(), track, "woods: chunks drawn as holograms");
     chunks.len()
