@@ -99,6 +99,7 @@ fn show(
     time: Res<Time>,
     course: Option<Res<crate::scene::Course>>,
     waiting: Option<Res<osage_props::Waiting>>,
+    unreached: Option<Res<crate::play::Unreached>>,
     mut splash: Query<(Entity, &mut Splash, &mut BackgroundColor)>,
     mut lines: Query<(&Line, &mut Text, &mut TextColor)>,
     mut images: Query<&mut ImageNode, With<Picture>>,
@@ -113,6 +114,7 @@ fn show(
             (Line::Name, false) => "osage",
             (Line::Name, true) => "osage kart",
             (Line::Under, false) => "an open-source engine for open worlds",
+            (Line::Under, true) if unreached.is_some() => "waiting for the race server",
             (Line::Under, true) => "building the circuit",
         };
         if text.0 != wanted {

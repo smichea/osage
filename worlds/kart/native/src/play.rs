@@ -115,7 +115,13 @@ enum Net {
     Welcome(Box<Welcome>, Transport),
     Message(Box<ServerMessage>),
     Closed(String),
+    /// No world reached yet; tried again.
+    Waiting(String),
 }
+
+/// Present while no world has been reached: the splash says so.
+#[derive(Resource)]
+pub struct Unreached;
 
 #[derive(Resource)]
 struct NetInbox(Receiver<Net>);
@@ -252,9 +258,18 @@ fn network(url: String, tier: v0::Tier, tx: Sender<Net>, mut outbox: UnboundedRe
     let runtime = tokio::runtime::Runtime::new().expect("network runtime");
     runtime.block_on(async move {
         let hello = hello("osage-kart-native", env!("CARGO_PKG_VERSION"), Role::Player, tier);
-        let session = match connect(&url, hello).await {
-            Ok(session) => session,
-            Err(error) => return drop(tx.send(Net::Closed(error.to_string()))),
+        // No world there yet (its server not started): tried again every
+        // two seconds, the splash saying what it waits for.
+        let session = loop {
+            match connect(&url, hello.clone()).await {
+                Ok(session) => break session,
+                Err(error) => {
+                    if tx.send(Net::Waiting(error.to_string())).is_err() {
+                        return;
+                    }
+                    tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+                }
+            }
         };
         let transport = session.transport();
         let (welcome, mut sender, mut receiver) = session.split();
@@ -319,7 +334,13 @@ fn receive(
     }
     for net in inbox.0.try_iter() {
         let message = match net {
+            Net::Waiting(error) => {
+                replica.status = format!("waiting for the world: {error}");
+                commands.insert_resource(Unreached);
+                continue;
+            }
             Net::Welcome(welcome, transport) => {
+                commands.remove_resource::<Unreached>();
                 let world = World::new(&welcome);
                 replica.me = welcome.identity.as_ref().map(|i| i.per_world_id.clone()).unwrap_or_default();
                 replica.controls_type = world.types().id(types::CONTROLS);
