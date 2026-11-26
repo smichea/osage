@@ -374,8 +374,12 @@ pub(crate) struct Sources {
     pub(crate) normals: Vec<Option<Handle<Image>>>,
     pub(crate) at: Option<(usize, usize)>,
     pub(crate) size: (usize, usize),
-    /// Views have come since the window was made: it is made again.
+    /// Views have come since the window was made: it is made again, at
+    /// most once every [`RESTACK`] s (a wide window of large views is
+    /// hundreds of megabytes; streamed blocks come many a second).
     pub(crate) stale: bool,
+    /// When the window was last made, s.
+    pub(crate) made: f64,
 }
 
 #[allow(clippy::type_complexity)]
@@ -489,6 +493,7 @@ fn assemble(
                 at: Some((0, 0)),
                 size: hologram.window.unwrap_or_default(),
                 stale: false,
+                made: 0.0,
             });
         }
         let (quad, centre) = stand_in(hologram, &mut meshes);
@@ -579,10 +584,14 @@ pub(crate) fn stack<'a>(views: impl Iterator<Item = &'a Image>) -> Option<Image>
     Some(image)
 }
 
+/// How often a window is made again for views that have come, at most, s.
+const RESTACK: f64 = 1.0;
+
 /// Slides each windowed hologram's window of views to the direction the
 /// camera sees it from, when the views that direction needs leave it: its
 /// arrays made again from the views on the CPU.
 fn slide(
+    time: Res<Time>,
     cameras: Query<(&Camera, &GlobalTransform), With<Camera3d>>,
     mut holograms: Query<(&Hologram, &GlobalTransform, &Drawn, &mut Sources)>,
     mut images: ResMut<Assets<Image>>,
@@ -630,7 +639,8 @@ fn slide(
         };
         let ((c0, c1), (r0, r1)) = (needed(fa, sa, columns), needed(fe, se, rows));
         let inside = sources.at.is_some_and(|(x, y)| c0 >= x && c1 < x + width && r0 >= y && r1 < y + height);
-        if inside && sources.size == (width, height) && !sources.stale {
+        let now = time.elapsed_secs_f64();
+        if inside && sources.size == (width, height) && (!sources.stale || now - sources.made < RESTACK) {
             continue;
         }
         let first =
@@ -660,6 +670,7 @@ fn slide(
         sources.at = Some((x, y));
         sources.size = (width, height);
         sources.stale = false;
+        sources.made = now;
     }
 }
 

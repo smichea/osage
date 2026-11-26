@@ -15,6 +15,10 @@
 //! - **Drawing:** where a chunk's views are installed under
 //!   `holograms/woods-TRACK/chunk-X-Z` (with their `hologram.json`), it is
 //!   drawn as its hologram, and the cards of its trees are left out.
+//! - **Streaming** (`OSAGE_HOLOGRAM_SERVER=HOST:PORT`, D-134): the chunks
+//!   are streamed instead from `hologram-serve`, which holds them packed by
+//!   `hologram-pack` under `woods-TRACK/chunk-X-Z`, listed one a line in
+//!   `woods-TRACK/chunks.txt`: only the blocks of views near the track come.
 
 use std::path::Path;
 
@@ -23,6 +27,8 @@ use osage_hologram::{Framing, Scene, SceneModel};
 use osage_kart_land::{Frame, Land};
 use osage_props::{Use, Woods};
 
+/// The variable naming the hologram server the chunks are streamed from.
+pub const SERVER: &str = "OSAGE_HOLOGRAM_SERVER";
 /// The window of views a chunk keeps on the GPU: columns, rows.
 const WINDOW: (usize, usize) = (5, 3);
 /// A chunk's side, m.
@@ -192,6 +198,55 @@ pub fn draw(commands: &mut Commands, root: &Path, track: &str, woods: &mut [Wood
     }
     info!(chunks = chunks.len(), track, "woods: chunks drawn as holograms");
     chunks.len()
+}
+
+/// Streams the chunks of `track` that the hologram server at `server` holds
+/// and leaves their trees out of the woods' cards. How many chunks.
+pub fn stream(commands: &mut Commands, server: &str, track: &str, woods: &mut [Woods]) -> usize {
+    let base = format!("woods-{track}");
+    let mut client = osage_hologram_stream::http::Client::new(server);
+    let list = match client.get(&format!("/h/{base}/chunks.txt")) {
+        Ok(list) => String::from_utf8_lossy(&list).into_owned(),
+        Err(error) => {
+            warn!(%error, server, track, "woods: no chunks to stream");
+            return 0;
+        }
+    };
+    let mut cells = std::collections::HashSet::new();
+    for name in list.lines().filter_map(|line| line.split_whitespace().next()) {
+        let Some(cell) = name.strip_prefix("chunk-").and_then(parse_cell) else { continue };
+        let path = format!("{base}/{name}");
+        // Where it stands, from its packing, before its views come.
+        let packed = client
+            .get(&format!("/h/{path}/{}", osage_hologram_stream::Packed::FILE))
+            .ok()
+            .and_then(|bytes| serde_json::from_slice::<osage_hologram_stream::Packed>(&bytes).ok());
+        let Some(packed) = packed else {
+            warn!(path, "woods: a chunk without its packing");
+            continue;
+        };
+        let [x, y, z, qx, qy, qz, qw] = packed.at;
+        let place = Transform::from_xyz(x, y, z).with_rotation(Quat::from_xyzw(qx, qy, qz, qw));
+        // On the box it is drawn on from the disk: over its trees, the track
+        // outside it.
+        let framing = osage_hologram::Framing {
+            centre: packed.centre,
+            radius: packed.radius,
+            aspect: packed.aspect,
+            grid: packed.grid,
+            at: packed.at,
+        };
+        let disk = framing.hologram(&path);
+        let stand = Some((disk.stand, disk.stand_depth));
+        let streamed = osage_hologram::stream::Streamed { server: server.to_owned(), path, window: WINDOW, stand };
+        commands.spawn((crate::scene::Part, streamed, place));
+        cells.insert(cell);
+    }
+    for w in woods.iter_mut() {
+        w.places.retain(|place| !cells.contains(&cell_of(place.translation)));
+    }
+    info!(chunks = cells.len(), track, server, "woods: chunks streamed");
+    cells.len()
 }
 
 #[cfg(test)]

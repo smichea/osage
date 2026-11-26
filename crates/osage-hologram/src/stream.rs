@@ -42,6 +42,11 @@ pub struct Streamed {
     pub server: String,
     pub path: String,
     pub window: (usize, usize),
+    /// The stand-in it is drawn on, as [`Hologram::stand`] and
+    /// [`Hologram::stand_depth`]; none: a box over its whole photographed
+    /// sphere. A camera inside the stand-in sees nothing of it: a chunk of
+    /// woods beside a track stands on a box over its trees only.
+    pub stand: Option<((Vec3, Vec2), f32)>,
 }
 
 /// What has come of a streamed hologram.
@@ -181,13 +186,13 @@ fn hologram_of(packed: &Packed, streamed: &Streamed) -> Hologram {
         centre,
         radius: packed.radius,
         // A box over the photographed sphere, as wide and deep as it.
-        stand: (centre + Vec3::Z * packed.radius, Vec2::splat(packed.radius)),
+        stand: streamed.stand.map_or((centre + Vec3::Z * packed.radius, Vec2::splat(packed.radius)), |s| s.0),
         flat: false,
         lit: packed.lit(),
         fade_in: None,
         aspect: packed.aspect,
         masked: true,
-        stand_depth: packed.radius * 2.0,
+        stand_depth: streamed.stand.map_or(packed.radius * 2.0, |s| s.1),
         window: Some(streamed.window),
     }
 }
@@ -215,6 +220,7 @@ fn receive(
                         at: None,
                         size: (0, 0),
                         stale: true,
+                        made: 0.0,
                     },
                     Stream {
                         packed: Arc::new(packed),

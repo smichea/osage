@@ -76,8 +76,10 @@ fn main() -> anyhow::Result<()> {
         })
         .add_systems(Startup, move |mut commands: Commands, images: ResMut<Assets<Image>>, film: ResMut<Film>| {
             setup(&mut commands, images, film);
-            commands
-                .spawn((Streamed { server: server.clone(), path: path.clone(), window: (5, 3) }, Transform::IDENTITY));
+            commands.spawn((
+                Streamed { server: server.clone(), path: path.clone(), window: (5, 3), stand: None },
+                Transform::IDENTITY,
+            ));
         })
         .add_systems(Update, film)
         .run();

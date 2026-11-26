@@ -273,6 +273,10 @@ fn main() -> Result<()> {
         app.add_plugins(osage_humans::HumansPlugin);
     }
     app.add_plugins(osage_hologram::HologramPlugin);
+    // The woods' chunks streamed from a hologram server (D-134), if named.
+    if std::env::var_os(woods_holograms::SERVER).is_some() {
+        app.add_plugins(osage_hologram::stream::StreamPlugin);
+    }
     if let Some(viewpoint) = viewpoint {
         app.insert_resource(viewpoint);
     }

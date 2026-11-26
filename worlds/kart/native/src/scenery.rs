@@ -649,7 +649,9 @@ fn spawn_woods(
     {
         warn!(%error, "woods: cannot write the chunks");
     }
-    if let Some(root) = osage_content::root() {
+    if let Ok(server) = std::env::var(crate::woods_holograms::SERVER) {
+        crate::woods_holograms::stream(commands, &server, track, &mut woods);
+    } else if let Some(root) = osage_content::root() {
         crate::woods_holograms::draw(commands, &root, track, &mut woods);
     }
     for w in woods {

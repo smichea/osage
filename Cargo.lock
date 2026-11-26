@@ -5218,6 +5218,7 @@ dependencies = [
  "lewton",
  "osage-content",
  "osage-hologram",
+ "osage-hologram-stream",
  "osage-humans",
  "osage-kart-crowd",
  "osage-kart-cup",

@@ -119,7 +119,9 @@ fn march(column: f32, row: f32, q: vec3<f32>, ray: vec3<f32>) -> vec4<f32> {
         return vec4<f32>(q, 0.0);
     }
     let root = sqrt(h);
-    let t0 = -b - root;
+    // Never behind the eye: seen from within the sphere, what stands at
+    // its back is not there.
+    let t0 = max(-b - root, -distance(into_object(view.world_position.xyz - frame.xyz), q));
     let t1 = -b + root;
     let steps = 24;
     let dt = (t1 - t0) / f32(steps);
